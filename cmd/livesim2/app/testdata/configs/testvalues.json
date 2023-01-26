@@ -1,0 +1,8 @@
+{
+    "logformat": "json",
+    "loglevel": "warn",
+    "port": 9999,
+    "livewindowS": 305,
+    "timeoutS": 0,
+    "vodroot" : "../vod2"
+}
