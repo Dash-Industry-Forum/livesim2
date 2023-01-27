@@ -152,6 +152,13 @@ $ ./dashfetcher
 will provide a help text that explains how to use it and will also provide an example URL
 to CTA-WAVE content.
 
+## Deployment
+
+`livesim2` compiles to a standalone binary. It can be run as a `systemd`
+and use structured logging. More information and an example
+service file can be found in the `./deployment` directory.
+
+
 ## License
 
 See [LICENSE.md](LICENSE.md).
