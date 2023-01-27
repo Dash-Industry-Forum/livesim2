@@ -54,7 +54,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	mpd.UTCTimings = []*m.DescriptorType{
 		{
 			SchemeIdUri: "urn:mpeg:dash:utc:http-iso:2014",
-			Value:       "http://time.akamai.com/?iso",
+			Value:       "https://time.akamai.com/?isoms",
 		},
 	}
 
@@ -91,7 +91,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 							WallClockTime:    string(m.ConvertToDateTime(float64(cfg.StartTimeS))),
 							UTCTiming: &m.DescriptorType{
 								SchemeIdUri: "urn:mpeg:dash:utc:http-iso:2014",
-								Value:       "http://time.akamai.com/?iso",
+								Value:       "https://time.akamai.com/?isoms",
 							},
 						},
 					}
