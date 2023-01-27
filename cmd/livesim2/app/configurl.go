@@ -136,7 +136,7 @@ cfgLoop:
 		case "scte35": // Add this many SCTE-35 ad periods every minute
 			cfg.SCTE35PerMinute = sc.AtoiPtr(key, val)
 		case "utc": // Get hyphen-separated list of utc-timing methods and make into list
-			cfg.UTCTimingMethods = append(cfg.UTCTimingMethods, val)
+			cfg.UTCTimingMethods = strings.Split(val, "-")
 		case "snr": // Segment startNumber. -1 means default implicit number which ==  1
 			cfg.StartNr = sc.AtoiPtr(key, val)
 		case "ato": // availabilityTimeOffset
