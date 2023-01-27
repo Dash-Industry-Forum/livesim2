@@ -12,10 +12,12 @@ import (
 )
 
 type Server struct {
-	Router   *chi.Mux
-	logger   *logging.Logger
-	Cfg      *ServerConfig
-	assetMgr *assetMgr
+	Router     *chi.Mux
+	LiveRouter *chi.Mux
+	VodRouter  *chi.Mux
+	logger     *logging.Logger
+	Cfg        *ServerConfig
+	assetMgr   *assetMgr
 }
 
 func (s *Server) healthzHandlerFunc(w http.ResponseWriter, r *http.Request) {
