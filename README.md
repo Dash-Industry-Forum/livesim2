@@ -154,9 +154,12 @@ to CTA-WAVE content.
 
 ## Deployment
 
-`livesim2` compiles to a standalone binary. It can be run as a `systemd`
-and use structured logging. More information and an example
-service file can be found in the `./deployment` directory.
+Both `dashfetcher` and `livesim2` can be compiled to single binaries
+on any target platform for the Go compiler such as Windows, MacOS, and Linux.
+Since the result is a single binary it is easy to start it anywhere.
+
+On Linux, `livesim2` can be run as a `systemd` service.
+ More information and can be found in the `./deployment` directory.
 
 
 ## License
