@@ -32,6 +32,7 @@ type ServerConfig struct {
 	Port        int    `json:"port"`
 	LiveWindowS int    `json:"livewindowS"`
 	TimeoutS    int    `json:"timeoutS"`
+	MaxRequests int    `json:"maxrequests"`
 	VodRoot     string `json:"vodroot"`
 }
 
@@ -41,6 +42,7 @@ var DefaultConfig = ServerConfig{
 	Port:        8888,
 	LiveWindowS: 300,
 	TimeoutS:    60,
+	MaxRequests: 0,
 	VodRoot:     "./vod",
 }
 
@@ -56,7 +58,10 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 	// First set default values
 	k := koanf.New(".")
 	defaults := DefaultConfig
-	k.Load(structs.Provider(defaults, "json"), nil)
+	err := k.Load(structs.Provider(defaults, "json"), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	f := pflag.NewFlagSet("livesim2", pflag.ContinueOnError)
 	f.Usage = func() {
@@ -76,6 +81,7 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 	f.Int("livewindow", k.Int("livewindowS"), "default live window (seconds)")
 	f.String("vodroot", k.String("vodroot"), "VoD root directory")
 	f.Int("timeout", k.Int("timeoutS"), "timeout for all requests (seconds)")
+	f.Int("maxrequests", k.Int("maxrequests"), "max nr of request per IP address per 24 hours")
 	if err := f.Parse(args[1:]); err != nil {
 		return nil, fmt.Errorf("command line parse: %w", err)
 	}
@@ -94,18 +100,24 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 	}
 
 	// Overload with environment variables
-	k.Load(env.Provider("LIVESIM_", ".", func(s string) string {
+	err = k.Load(env.Provider("LIVESIM_", ".", func(s string) string {
 		return strings.Replace(strings.ToLower(
 			strings.TrimPrefix(s, "LIVESIM_")), "_", ".", -1)
 	}), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	// Make vodPath absolute in case it is not already
 	vodRoot := k.String("vodroot")
 	if vodRoot != "" && !path.IsAbs(vodRoot) {
 		vodRoot = path.Join(cwd, vodRoot)
-		k.Load(confmap.Provider(map[string]any{
+		err = k.Load(confmap.Provider(map[string]any{
 			"vodroot": vodRoot,
 		}, "."), nil)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Unmarshal into cfg

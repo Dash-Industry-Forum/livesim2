@@ -26,15 +26,12 @@ func SetupServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 	r.Use(middleware.Recoverer)
 	r.Use(addVersionAndCORSHeaders)
 	prometheusMiddleWare := NewPrometheusMiddleware()
+
+	l := chi.NewRouter()
 	r.Use(prometheusMiddleWare)
 
-	vodFS := os.DirFS(cfg.VodRoot)
-	server := Server{
-		Router:   r,
-		logger:   logger,
-		Cfg:      cfg,
-		assetMgr: newAssetMgr(vodFS),
-	}
+	v := chi.NewRouter()
+	r.Use(prometheusMiddleWare)
 
 	// Set a timeout value on the request context (ctx), that will signal
 	// through ctx.Done() that the request has timed out and further
@@ -45,6 +42,26 @@ func SetupServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 
 	// Add prometheus counters
 	r.Mount("/metrics", promhttp.Handler())
+
+	if cfg.MaxRequests > 0 {
+		ltr := NewIPRequestLimiter("Livesim2-Requests", cfg.MaxRequests, 24*time.Hour)
+		l.Use(ltr)
+		v.Use(ltr)
+	}
+
+	// Mount livesim and vod routers
+	r.Mount("/livesim2", l)
+	r.Mount("/vod", v)
+
+	vodFS := os.DirFS(cfg.VodRoot)
+	server := Server{
+		Router:     r,
+		LiveRouter: l,
+		VodRouter:  v,
+		logger:     logger,
+		Cfg:        cfg,
+		assetMgr:   newAssetMgr(vodFS),
+	}
 
 	err = server.Routes(ctx)
 	if err != nil {
