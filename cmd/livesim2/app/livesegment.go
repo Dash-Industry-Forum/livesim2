@@ -352,3 +352,8 @@ func writeChunk(w http.ResponseWriter, chk chunk) error {
 	flusher.Flush()
 	return nil
 }
+
+// Ptr returns a pointer to a value of any type
+func Ptr[T any](v T) *T {
+	return &v
+}

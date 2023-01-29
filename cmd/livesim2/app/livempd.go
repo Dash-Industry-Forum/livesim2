@@ -13,10 +13,10 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	if err != nil {
 		return nil, err
 	}
-	mpd.Type = m.StringPtr("dynamic")
+	mpd.Type = Ptr("dynamic")
 	mpd.MediaPresentationDuration = nil
 	mpd.AvailabilityStartTime = m.ConvertToDateTime(float64(cfg.StartTimeS))
-	mpd.MinimumUpdatePeriod = m.DurPtr(m.Duration(a.SegmentDurMS * 1_000_000))
+	mpd.MinimumUpdatePeriod = Ptr(m.Duration(a.SegmentDurMS * 1_000_000))
 	if cfg.MinimumUpdatePeriodS != nil {
 		mpd.MinimumUpdatePeriod = m.Seconds2DurPtr(*cfg.MinimumUpdatePeriodS)
 	}
@@ -35,9 +35,9 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 				Latencies: []*m.LatencyType{
 					{
 						ReferenceId: 0,
-						Max:         m.Uint32Ptr(6000),
-						Min:         m.Uint32Ptr(2000),
-						Target:      m.Uint32Ptr(3500),
+						Max:         Ptr[uint32](6000),
+						Min:         Ptr[uint32](2000),
+						Target:      Ptr[uint32](3500),
 					},
 				},
 				PlaybackRates: []*m.PlaybackRateType{
@@ -71,7 +71,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	period := mpd.Periods[0]
 	period.Duration = nil
 	period.Id = "P0" // TODO. set name to reflect start time
-	period.Start = m.DurPtr(0)
+	period.Start = Ptr(m.Duration(0))
 
 	switch cfg.liveMPDType() {
 	case timeLineTime:
@@ -80,7 +80,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 				return nil, fmt.Errorf("no SegmentTemplate in AdapationSet")
 			}
 			if !cfg.AvailabilityTimeCompleteFlag {
-				as.SegmentTemplate.AvailabilityTimeComplete = m.BoolPtr(false)
+				as.SegmentTemplate.AvailabilityTimeComplete = Ptr(false)
 				if cfg.AvailabilityTimeOffsetS != nil {
 					as.SegmentTemplate.AvailabilityTimeOffset = *cfg.AvailabilityTimeOffsetS
 					as.ProducerReferenceTimes = []*m.ProducerReferenceTimeType{
@@ -119,7 +119,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 				return nil, fmt.Errorf("no SegmentTemplate in AdapationSet")
 			}
 			if !cfg.AvailabilityTimeCompleteFlag {
-				as.SegmentTemplate.AvailabilityTimeComplete = m.BoolPtr(false)
+				as.SegmentTemplate.AvailabilityTimeComplete = Ptr(false)
 				if cfg.AvailabilityTimeOffsetS != nil {
 					as.SegmentTemplate.AvailabilityTimeOffset = *cfg.AvailabilityTimeOffsetS
 					as.ProducerReferenceTimes = []*m.ProducerReferenceTimeType{
@@ -141,12 +141,12 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 				rep0 := a.Reps[r0.Id]
 				dur := rep0.duration() / len(rep0.segments)
 				timeScale := rep0.MediaTimescale
-				as.SegmentTemplate.Duration = m.Uint32Ptr(uint32(dur))
-				as.SegmentTemplate.Timescale = m.Uint32Ptr(uint32(timeScale))
+				as.SegmentTemplate.Duration = Ptr(uint32(dur))
+				as.SegmentTemplate.Timescale = Ptr(uint32(timeScale))
 			}
 			as.SegmentTemplate.SegmentTimeline = nil
 			if cfg.StartNr != nil {
-				startNr := m.Uint32Ptr(uint32(*cfg.StartNr))
+				startNr := Ptr(uint32(*cfg.StartNr))
 				as.SegmentTemplate.StartNumber = startNr
 			}
 			as.SegmentTemplate.Media = strings.Replace(as.SegmentTemplate.Media, "$Time$", "$Number$", -1)
