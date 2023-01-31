@@ -307,7 +307,7 @@ func (a *asset) generateTimelineEntry(repID string, startWraps, startRelMS, nowW
 	nowNr := nowWraps*nrSegs + relNowIdx
 	t := uint64(rep.duration()*startWraps) + segs[relStartIdx].startTime
 	d := segs[relStartIdx].dur()
-	s := &m.S{T: m.Uint64Ptr(t), D: d}
+	s := &m.S{T: Ptr(t), D: d}
 	ss = append(ss, s)
 	for nr := startNr + 1; nr <= nowNr; nr++ {
 		relIdx := nr % nrSegs

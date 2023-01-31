@@ -14,8 +14,6 @@ import (
 	"github.com/Eyevinn/mp4ff/mp4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	m "github.com/Eyevinn/dash-mpd/mpd"
 )
 
 func TestLiveSegment(t *testing.T) {
@@ -105,7 +103,7 @@ func TestWriteChunkedSegment(t *testing.T) {
 	require.NoError(t, err)
 	cfg := NewResponseConfig()
 	cfg.AvailabilityTimeCompleteFlag = false
-	cfg.AvailabilityTimeOffsetS = m.Float64Ptr(7.0)
+	cfg.AvailabilityTimeOffsetS = Ptr(7.0)
 	log, err := logging.InitZerolog("debug", "discard")
 	require.NoError(t, err)
 

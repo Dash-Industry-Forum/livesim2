@@ -3,8 +3,6 @@ package app
 import (
 	"fmt"
 	"strings"
-
-	m "github.com/Eyevinn/dash-mpd/mpd"
 )
 
 type liveMPDType int
@@ -51,8 +49,8 @@ func NewResponseConfig() *ResponseConfig {
 	c := ResponseConfig{
 		StartTimeS:                   defaultAvailabilityStartTimeS,
 		AvailabilityTimeCompleteFlag: defaultAvailabilityTimeComplete,
-		TimeShiftBufferDepthS:        m.IntPtr(defaultTimeShiftBufferDepthS),
-		StartNr:                      m.IntPtr(defaultStartNr),
+		TimeShiftBufferDepthS:        Ptr(defaultTimeShiftBufferDepthS),
+		StartNr:                      Ptr(defaultStartNr),
 	}
 	return &c
 }
