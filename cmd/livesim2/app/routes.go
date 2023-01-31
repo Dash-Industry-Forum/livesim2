@@ -19,7 +19,7 @@ func (s *Server) Routes(ctx context.Context) error {
 	s.LiveRouter.MethodFunc("HEAD", "/*", s.livesimHandlerFunc)
 	s.VodRouter.MethodFunc("GET", "/*", s.vodHandlerFunc)
 	s.VodRouter.MethodFunc("HEAD", "/*", s.vodHandlerFunc)
-	s.Router.MethodFunc("OPTIONS", "/", s.optionsHandlerFunc)
+	s.Router.MethodFunc("OPTIONS", "/*", s.optionsHandlerFunc)
 	s.Router.MethodFunc("GET", "/", s.indexHandlerFunc)
 	return nil
 }
