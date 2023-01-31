@@ -38,11 +38,15 @@ as much as possible and adapted to the local path.
 Files already downloaded will not be downloaded again, unless `-f/--force` is
 used. As an example, to download a CTA-WAVE asset one can run
 
-     dashfetcher --auto https://dash.akamaized.net/WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17/stream.mpd
+```sh
+dashfetcher --auto https://dash.akamaized.net/WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17/stream.mpd
+```
 
 which will result in a locally stored DASH VoD asset in the directory
 
-     ./vod/WAVE/vectors/cfhd_sets/12.5_25_0t3/2022-10-17/
+```sh
+./vod/WAVE/vectors/cfhd_sets/12.5_25_0t3/2022-10-17/
+```
 
 with an MPD called `stream.mpd` and the segments stored in subdirectories named after their relative
 URLs. The download URL is added to a file `mpdlist.json` which is read by livesim2, to provide
@@ -109,8 +113,8 @@ all dependencies.
 
 Then run
 
-```
-$ go mod tidy
+```sh
+> go mod tidy
 ```
 
 to fetch and install all dependencies.
@@ -118,10 +122,10 @@ to fetch and install all dependencies.
 To build `dashfetcher` and `livesim2` do
 
 ```sh
-$ cd cmd/dashfetcher
-$ go build .
-$ cd ../../cmd/livesim2
-$ go build .
+> cd cmd/dashfetcher
+> go build .
+> cd ../../cmd/livesim2
+> go build .
 ```
 
 As usual for Go programs, one can also compile and run them directly with `go run .`.
@@ -132,21 +136,29 @@ A few very short test assets are bundled with the code.
 That makes it possible to test the server by running
 
 ```sh
-$ cd cmd/livesim2
-$ ./livesim2 --vodroot=app/testdata/assets
+> cd cmd/livesim2
+> ./livesim2 --vodroot=app/testdata/assets
 ```
 
 The log will list the available assets and the port where the server runs.
 
-and then stream the assets from URLs like:
+The can then be streamed via URLs like:
 
-     http://localhost:8888/livesim2/WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17/stream.mpd
+```link
+http://localhost:8888/livesim2/WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17/stream.mpd
+http://localhost:8888/livesim2/testpic_2s/Manifest.mpd
+http://localhost:8888/livesim2/testpic_8s/Manifest.mpd
+```
+
+The default pattern provides MPDs with SegmentTemplate using `$Number$`. To stream with
+SegmentTimeline with `$Time$`, one should add the parameter `/segtimeline_1` between
+`livesim2` and the start of the asset path. Other parameters are added in a similar way.
 
 ### Testing dashfetcher
 
 ```sh
-$ cd cmd/livesim2
-$ ./dashfetcher
+> cd cmd/livesim2
+> ./dashfetcher
 ```
 
 will provide a help text that explains how to use it and will also provide an example URL
@@ -155,12 +167,11 @@ to CTA-WAVE content.
 ## Deployment
 
 Both `dashfetcher` and `livesim2` can be compiled to single binaries
-on any target platform for the Go compiler such as Windows, MacOS, and Linux.
+on any Go compiler target platform such as Windows, MacOS, and Linux.
 Since the result is a single binary it is easy to start it anywhere.
 
 On Linux, `livesim2` can be run as a `systemd` service.
- More information and can be found in the `./deployment` directory.
-
+More information can be found in the `./deployment` directory.
 
 ## License
 

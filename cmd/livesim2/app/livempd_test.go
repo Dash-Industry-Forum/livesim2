@@ -54,6 +54,7 @@ func TestLiveMPD(t *testing.T) {
 		assert.Equal(t, 30, stl.SegmentTimeline.S[0].R)
 		assert.Nil(t, stl.StartNumber)
 		assert.Equal(t, "1/$Time$.m4s", stl.Media)
+		assert.Equal(t, 1, len(liveMPD.UTCTimings))
 	}
 }
 

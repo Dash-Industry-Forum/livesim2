@@ -17,4 +17,6 @@ See the help text provided with `livesim2 -h` to see the options.
 
 Cross-compilation can be done like (Linux on Mac example)
 
-    $ GOOS=linux GOARCH=amd64 go build .
+```sh
+> GOOS=linux GOARCH=amd64 go build .
+```

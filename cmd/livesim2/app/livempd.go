@@ -50,6 +50,14 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 		}
 	}
 
+	//TODO. Replace this with configured list of different UTCTiming methods
+	mpd.UTCTimings = []*m.DescriptorType{
+		{
+			SchemeIdUri: "urn:mpeg:dash:utc:http-iso:2014",
+			Value:       "https://time.akamai.com/?isoms",
+		},
+	}
+
 	startTimeMS := nowMS - int(*mpd.TimeShiftBufferDepth)/1_000_000
 
 	startWraps := (startTimeMS - cfg.StartTimeS*1000) / a.LoopDurMS
@@ -83,7 +91,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 							WallClockTime:    string(m.ConvertToDateTime(float64(cfg.StartTimeS))),
 							UTCTiming: &m.DescriptorType{
 								SchemeIdUri: "urn:mpeg:dash:utc:http-iso:2014",
-								Value:       "http://time.akamai.com/?iso",
+								Value:       "https://time.akamai.com/?isoms",
 							},
 						},
 					}
