@@ -7,11 +7,22 @@
 
 `livesim2` is a new and improved version of the
 [DASH-IF live source simulator][1].
-This time it is written in Go instead of Python and designed to handle
+
+As the original simulator, the output is a wall-clock (UTC) synchronized
+infinite linear stream of segments. The synchronization is done modulo asset length,
+for example: a 1-hour asset restarts every hour on full hours, and a 30s asset
+restarts every 30s on full and half minutes. If there is a clock in the video, it is
+therefore easy to directly see how long the system delay is from publishing to
+screen presentaiton. The very short example assets bundled with the code are only
+8s long, which means that they restart every time the UTC time is a multiple of 8s,
+relative to the EPOCH start 1970-01-01:00:00:00Z.
+
+The new software is written in Go instead of Python and designed to handle
 content in a more flexible and versatile way.
 
 It is intended to be very easy to install and deploy locally
-since it is compiled into a single binary that serves the content via a built-in performant HTTP/2 server.
+since it is compiled into a single binary that serves the content via a built-in
+performant HTTP/2 server.
 
 There is also a tool called `dashfetcher` that can be used to download
 DASH VoD assets that can serve as sources for the live
@@ -19,11 +30,10 @@ linear outputs.
 
 The sources are looped so that an infinite "live" stream is available.
 
-Similarly to [livesim][1],
-the output is highly configurable by adding parameters inside the URLs.
+Similarly to [livesim][1], the output is highly configurable by adding parameters inside the URLs.
 These parameters are included not only in the MPD requests, but in
 all segment requests allowing the server to be stateless, and
-give the possibility to generate streams with a huge number of
+gives the possibility to generate streams with a huge number of
 parameter variations. Currently, only a small subset of
 all parameters of [livesim][1] are implemented.
 
@@ -34,7 +44,7 @@ There are two main components, the server `livesim2` and the VoD fetcher
 
 ### dashfetcher tool
 
-The tool dashfetcher fetches DASH VoD assets via HTTP given an MPD.
+The tool `dashfetcher` fetches DASH VoD assets via HTTP given an MPD URLs.
 Currently it supports MPDs with SegmentTimeline with `$Time$` and
 SegmentTemplate with `$Number$`. The assets must have no explicit `<BaseURL>` elements to
 work properly. With the `-a/--auto` option, the path to the asset is preserved
@@ -56,12 +66,12 @@ which will result in a locally stored DASH VoD asset in the directory
 with an MPD called `stream.mpd` and the segments stored in subdirectories named after their relative
 URLs. The download URL is added to a file `mpdlist.json` which is read by livesim2, to provide
 information about the asset.
-One can have multiple MPDs for the same asset, which share some representations.
+One can have multiple MPDs in the same asset directory and they may share some representations.
 That is an easy way to have variants with different representation combinations.
 
 ### livesim2 server
 
-The server is configured one or more ways in increasing priority:
+The server is configured in one or more ways in increasing priority:
 
 1. Default values
 2. In a config file
@@ -135,10 +145,10 @@ To build `dashfetcher` and `livesim2` do
 
 As usual for Go programs, one can also compile and run them directly with `go run .`.
 
-### Testing the livesim2 server
+### Bundled test streams with the livesim2 server
 
-A few very short test assets are bundled with the code.
-That makes it possible to test the server by running
+A few very short (8s) test assets are bundled with the code.
+These makes it possible to start the server and get live output by running
 
 ```sh
 > cd cmd/livesim2
@@ -147,7 +157,7 @@ That makes it possible to test the server by running
 
 The log will list the available assets and the port where the server runs.
 
-The can then be streamed via URLs like:
+They can then be streamed via URLs like:
 
 ```link
 http://localhost:8888/livesim2/WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17/stream.mpd
@@ -159,7 +169,10 @@ The default pattern provides MPDs with SegmentTemplate using `$Number$`. To stre
 SegmentTimeline with `$Time$`, one should add the parameter `/segtimeline_1` between
 `livesim2` and the start of the asset path. Other parameters are added in a similar way.
 
-### Testing dashfetcher
+Adding longer assets somewhere under the `vodroot` results in longer loops, since
+the loop start at time modulo duration, and wraps every duration (with default start time = 0).
+
+### Running dashfetcher
 
 ```sh
 > cd cmd/livesim2
@@ -168,6 +181,14 @@ SegmentTimeline with `$Time$`, one should add the parameter `/segtimeline_1` bet
 
 will provide a help text that explains how to use it and will also provide an example URL
 to CTA-WAVE content.
+
+## Running tests
+
+The unit tests can be run from the top directory with the usual recursive Go test command
+
+```sh
+> go test ./...
+```
 
 ## Deployment
 
