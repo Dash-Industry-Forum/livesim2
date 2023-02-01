@@ -1,3 +1,8 @@
+![Test](https://github.com/Dash-Industry-Forum/livesim2/workflows/Go/badge.svg)
+[![golangci-lint](https://github.com/Dash-Industry-Forum/livesim2/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/Dash-Industry-Forum/livesim2/actions/workflows/golangci-lint.yml)
+[![GoDoc](https://godoc.org/github.com/Dash-Industry-Forum/livesim2?status.svg)](http://godoc.org/github.com/Dash-Industry-Forum/livesim2)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Dash-Industry-Forum/livesim2)](https://goreportcard.com/report/github.com/Dash-Industry-Forum/livesim2)
+
 # livesim2 - the second generation DASH Live Source Simulator
 
 `livesim2` is a new and improved version of the
