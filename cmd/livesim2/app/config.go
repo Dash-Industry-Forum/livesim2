@@ -34,6 +34,8 @@ type ServerConfig struct {
 	TimeoutS    int    `json:"timeoutS"`
 	MaxRequests int    `json:"maxrequests"`
 	VodRoot     string `json:"vodroot"`
+	CertPath    string `json:"certpath"`
+	KeyPath     string `json:"keypath"`
 }
 
 var DefaultConfig = ServerConfig{
@@ -82,6 +84,8 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 	f.String("vodroot", k.String("vodroot"), "VoD root directory")
 	f.Int("timeout", k.Int("timeoutS"), "timeout for all requests (seconds)")
 	f.Int("maxrequests", k.Int("maxrequests"), "max nr of request per IP address per 24 hours")
+	f.String("certpath", k.String("certpath"), "path to TLS certificate file (for HTTPS)")
+	f.String("keypath", k.String("keypath"), "path to TLS private key file (for HTTPS")
 	if err := f.Parse(args[1:]); err != nil {
 		return nil, fmt.Errorf("command line parse: %w", err)
 	}
@@ -108,6 +112,11 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 		return nil, err
 	}
 
+	err = checkTLSParams(k)
+	if err != nil {
+		return nil, err
+	}
+
 	// Make vodPath absolute in case it is not already
 	vodRoot := k.String("vodroot")
 	if vodRoot != "" && !path.IsAbs(vodRoot) {
@@ -127,4 +136,17 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 	}
 
 	return &cfg, nil
+}
+
+func checkTLSParams(k *koanf.Koanf) error {
+	certPath := k.String("certpath")
+	keyPath := k.String("keypath")
+	switch {
+	case certPath == "" && keyPath == "":
+		return nil // HTTP
+	case certPath != "" && keyPath != "":
+		return nil // HTTPS
+	default:
+		return fmt.Errorf("certpath and keypath must both be empty or set")
+	}
 }

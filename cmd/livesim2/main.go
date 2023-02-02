@@ -63,13 +63,20 @@ func run() (exitCode int) {
 		}
 		return 1
 	}
+
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", server.Cfg.Port),
 		Handler: server.Router,
 	}
 
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		var err error
+		if cfg.CertPath != "" && cfg.KeyPath != "" { // HTTPS
+			err = srv.ListenAndServeTLS(cfg.CertPath, cfg.KeyPath)
+		} else {
+			err = srv.ListenAndServe()
+		}
+		if err != nil && err != http.ErrServerClosed {
 			logger.Error().Err(err).Msg("")
 			exitCode = 1
 			startIssue <- struct{}{}
