@@ -199,6 +199,13 @@ Since the result is a single binary it is easy to start it anywhere.
 On Linux, `livesim2` can be run as a `systemd` service.
 More information can be found in the `./deployment` directory.
 
+## HTTPS and HTTP/2
+
+HTTPS and HTTP/2 are both supported. To enable TLS encryption, the two parameters
+`certpath` and `keypath` must be set to point to an HLS certificaten and a private
+key file, respectively. It is also recommended to set the port to the default HTTPS
+port 443.
+
 ## License
 
 See [LICENSE.md](LICENSE.md).
