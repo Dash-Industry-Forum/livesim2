@@ -23,28 +23,32 @@ func TestLiveSegment(t *testing.T) {
 	require.NoError(t, err)
 
 	cases := []struct {
-		asset          string
-		initialization string
-		media          string
-		mediaTimescale int
+		asset           string
+		initialization  string
+		media           string
+		segmentMimeType string
+		mediaTimescale  int
 	}{
 		{
-			asset:          "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
-			initialization: "1/init.mp4",
-			media:          "1/$NrOrTime$.m4s",
-			mediaTimescale: 12800,
+			asset:           "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			initialization:  "1/init.mp4",
+			media:           "1/$NrOrTime$.m4s",
+			segmentMimeType: "video/mp4",
+			mediaTimescale:  12800,
 		},
 		{
-			asset:          "testpic_2s",
-			initialization: "V300/init.mp4",
-			media:          "V300/$NrOrTime$.m4s",
-			mediaTimescale: 90000,
+			asset:           "testpic_2s",
+			initialization:  "V300/init.mp4",
+			media:           "V300/$NrOrTime$.m4s",
+			segmentMimeType: "video/mp4",
+			mediaTimescale:  90000,
 		},
 		{
-			asset:          "testpic_2s",
-			initialization: "A48/init.mp4",
-			media:          "A48/$NrOrTime$.m4s",
-			mediaTimescale: 48000,
+			asset:           "testpic_2s",
+			initialization:  "A48/init.mp4",
+			media:           "A48/$NrOrTime$.m4s",
+			segmentMimeType: "audio/mp4",
+			mediaTimescale:  48000,
 		},
 	}
 	for _, tc := range cases {
@@ -85,8 +89,9 @@ func TestLiveSegment(t *testing.T) {
 			default: // "TimelineTime":
 				media = strings.Replace(media, "$NrOrTime$", fmt.Sprintf("%d", mediaTime), -1)
 			}
-			seg, err = LiveSegment(vodFS, asset, cfg, media, nowMS)
+			seg, segmentType, err := LiveSegment(vodFS, asset, cfg, media, nowMS)
 			require.NoError(t, err)
+			require.Equal(t, tc.segmentMimeType, segmentType)
 			sr = bits.NewFixedSliceReader(seg)
 			mp4d, err = mp4.DecodeFileSR(sr)
 			require.NoError(t, err)

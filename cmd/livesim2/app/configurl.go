@@ -95,9 +95,9 @@ cfgLoop:
 			cfg.StopTimeS = sc.AtoiPtr(key, val)
 			*cfg.StopTimeS += nowS
 			cfg.AddLocationFlag = true
-		case "dur": // Add a presentation duration for multiple periods
+		case "dur": // Adds a presentation duration for multiple periods
 			cfg.PeriodDurations = append(cfg.PeriodDurations, sc.Atoi(key, val))
-		case "timeoffset": //Time offset in seconds version epoch
+		case "timeoffset": //Time offset in seconds version NTP
 			cfg.TimeOffsetS = sc.AtoiPtr(key, val)
 		case "init": // Make the init segment available earlier
 			cfg.InitSegAvailOffsetS = sc.AtoiPtr(key, val)
@@ -121,7 +121,7 @@ cfgLoop:
 			cfg.EtpDuration = sc.AtoiPtr(key, val)
 		case "insertad": // insert an ad via xlink
 			cfg.InsertAdFlag = true
-		case "continuous": // Only valid whenperiods_per_hour is set
+		case "continuous": // Only valid when periods_per_hour is set
 			cfg.ContMultiPeriodFlag = true
 		case "segtimeline":
 			cfg.SegTimelineFlag = true

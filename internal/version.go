@@ -23,14 +23,6 @@ func GetVersion() string {
 	return msg
 }
 
-//go:embed favicon.ico
-var favIcon string
-
-// GetFavIcon - return a png image to be used as favicon
-func GetFavIcon() []byte {
-	return []byte(favIcon)
-}
-
 // CheckVersion
 func CheckVersion(printVersion bool) {
 	if printVersion {

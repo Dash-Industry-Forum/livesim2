@@ -1,25 +1,32 @@
 package app
 
 import (
-	"fmt"
+	"io/fs"
 	"net/http"
 	"strconv"
-
-	"github.com/Dash-Industry-Forum/livesim2/internal"
 )
 
 // indexHandlerFunc handles access to /.
 func (s *Server) indexHandlerFunc(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	_, _ = fmt.Fprintf(w, "Welcome to livesim2!")
+	w.Header().Set("Content-Type", "text/html")
+	b, err := fs.ReadFile(content, "templates/welcome.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	w.Header().Set("Content-Length", strconv.Itoa(len(b)))
+	_, _ = w.Write(b)
+
 }
 
 // favIconFunc returns the DASH-IF favicon.
 func (s *Server) favIconFunc(w http.ResponseWriter, r *http.Request) {
-	//w.Header().Set("Content-Type", "image/x-icon")
-	b := internal.GetFavIcon()
+	w.Header().Set("Content-Type", "image/x-icon")
+	b, err := fs.ReadFile(content, "static/favicon.ico")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 	w.Header().Set("Content-Length", strconv.Itoa(len(b)))
-	_, _ = w.Write(internal.GetFavIcon())
+	_, _ = w.Write(b)
 }
 
 // optionsHandlerFunc provides the allowed methods.
