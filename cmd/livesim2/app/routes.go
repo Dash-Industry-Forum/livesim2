@@ -15,6 +15,7 @@ func (s *Server) Routes(ctx context.Context) error {
 	s.Router.MethodFunc("GET", "/favicon.ico", s.favIconFunc)
 	s.Router.MethodFunc("GET", "/config", s.configHandlerFunc)
 	s.Router.MethodFunc("GET", "/assets", s.assetsHandlerFunc)
+	s.Router.MethodFunc("GET", "/static/*", s.embeddedStaticHandlerFunc)
 	s.LiveRouter.MethodFunc("GET", "/*", s.livesimHandlerFunc)
 	s.LiveRouter.MethodFunc("HEAD", "/*", s.livesimHandlerFunc)
 	s.VodRouter.MethodFunc("GET", "/*", s.vodHandlerFunc)

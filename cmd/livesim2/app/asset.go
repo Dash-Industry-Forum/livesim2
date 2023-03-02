@@ -141,7 +141,10 @@ func (am *assetMgr) loadAsset(mpdPath string) error {
 }
 
 func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetType, rep *m.RepresentationType) (*RepData, error) {
-	rp := RepData{ID: rep.Id, MpdTimescale: 1}
+	rp := RepData{ID: rep.Id,
+		ContentType:  string(as.ContentType),
+		Codecs:       as.Codecs,
+		MpdTimescale: 1}
 	st := as.SegmentTemplate
 	if rep.SegmentTemplate != nil {
 		st = rep.SegmentTemplate
@@ -149,6 +152,10 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 	if st == nil {
 		return nil, fmt.Errorf("did not find a SegmentTemplate")
 	}
+	if rep.Codecs != "" {
+		rp.Codecs = rep.Codecs
+	}
+
 	rp.initURI = replaceIdentifiers(rep, st.Initialization)
 	rp.mediaURI = replaceIdentifiers(rep, st.Media)
 	switch {
@@ -340,6 +347,8 @@ const (
 // RepData provides information about a representation
 type RepData struct {
 	ID             string           `json:"id"`
+	ContentType    string           `json:"contentType"`
+	Codecs         string           `json:"codecs"`
 	MpdTimescale   int              `json:"mpdTimescale"`
 	MediaTimescale int              `json:"mediaTimescale"` // Used in the segments
 	initURI        string           `json:"-"`
@@ -362,6 +371,20 @@ func (r RepData) findSegmentIndexFromTime(t uint64) int {
 	return sort.Search(len(r.segments), func(i int) bool {
 		return r.segments[i].startTime >= t
 	})
+}
+
+// SegmentTYpe returns MIME type for MP4 segment.
+func (r RepData) SegmentType() string {
+	var segType string
+	switch r.ContentType {
+	case "audio":
+		segType = "audio/mp4"
+	case "subtitle":
+		segType = "application/mp4"
+	default:
+		segType = "video/mp4"
+	}
+	return segType
 }
 
 func replaceIdentifiers(r *m.RepresentationType, str string) string {

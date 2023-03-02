@@ -116,7 +116,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	case segmentNumber:
 		for _, as := range period.AdaptationSets {
 			if as.SegmentTemplate == nil {
-				return nil, fmt.Errorf("no SegmentTemplate in AdapationSet")
+				return nil, fmt.Errorf("no SegmentTemplate in AdapationSet %d", as.Id)
 			}
 			if !cfg.AvailabilityTimeCompleteFlag {
 				as.SegmentTemplate.AvailabilityTimeComplete = Ptr(false)
