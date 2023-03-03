@@ -167,5 +167,19 @@ cfgLoop:
 	if contentStartIdx == -1 {
 		return nil, 0, fmt.Errorf("no content part")
 	}
+	err = verifyConfig(cfg)
+	if err != nil {
+		return cfg, contentStartIdx, fmt.Errorf("url config: %w", err)
+	}
 	return cfg, contentStartIdx, nil
+}
+
+func verifyConfig(cfg *ResponseConfig) error {
+	if cfg.SegTimelineNrFlag {
+		return fmt.Errorf("mpd type SegmentTimeline with Number not yet supported")
+	}
+	if len(cfg.TimeSubsStpp) > 0 && cfg.SegTimelineFlag {
+		return fmt.Errorf("combination of SegTimeline and generated stpp subtitles not yet supported")
+	}
+	return nil
 }

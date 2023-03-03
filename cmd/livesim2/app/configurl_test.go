@@ -72,12 +72,27 @@ func TestProcessURLCfg(t *testing.T) {
 			}`,
 			err: "",
 		},
+		{
+			url:         "/livesim/segtimeline_1/timesubsstpp_en,sv/asset.mpd",
+			nowS:        0,
+			contentPart: "",
+			cfgJSON:     "",
+			err:         "url config: combination of SegTimeline and generated stpp subtitles not yet supported",
+		},
+		{
+			url:         "/livesim/segtimelinenr_1/asset.mpd",
+			nowS:        0,
+			contentPart: "",
+			cfgJSON:     "",
+			err:         "url config: mpd type SegmentTimeline with Number not yet supported",
+		},
 	}
 
 	for _, c := range cases {
 		urlParts := strings.Split(c.url, "/")
 		cfg, idx, err := processURLCfg(urlParts, c.nowS)
 		if c.err != "" {
+			require.Error(t, err, c.url)
 			require.Equal(t, c.err, err.Error())
 			continue
 		}
