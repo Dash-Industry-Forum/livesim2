@@ -43,6 +43,7 @@ type ResponseConfig struct {
 	SidxFlag                     bool     `json:"SidxFlag,omitempty"`
 	SegTimelineLossFlag          bool     `json:"SegTimelineLossFlag,omitempty"`
 	AvailabilityTimeCompleteFlag bool     `json:"AvailabilityTimeCompleteFlag,omitempty"`
+	TimeSubsStpp                 []string `json:"TimeSubsStppLanguages,omitempty"`
 }
 
 func NewResponseConfig() *ResponseConfig {
@@ -153,6 +154,8 @@ cfgLoop:
 		case "chunkdur": // chunk duration in seconds
 			cfg.ChunkDurS = sc.AtofPosPtr(key, val)
 			cfg.AvailabilityTimeCompleteFlag = false
+		case "timesubsstpp": // comma-separated list of languages
+			cfg.TimeSubsStpp = strings.Split(val, ",")
 		default:
 			contentStartIdx = i
 			break cfgLoop

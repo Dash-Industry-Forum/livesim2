@@ -56,6 +56,22 @@ func TestProcessURLCfg(t *testing.T) {
 			cfgJSON:     "",
 			err:         "no content part",
 		},
+		{
+			url:         "/livesim/timesubsstpp_en,sv/asset.mpd",
+			nowS:        0,
+			contentPart: "asset.mpd",
+			cfgJSON: `{
+				"StartTimeS": 0,
+				"TimeShiftBufferDepthS": 60,
+				"StartNr": 0,
+				"AvailabilityTimeCompleteFlag": true,
+				"TimeSubsStppLanguages": [
+				"en",
+				"sv"
+				]
+			}`,
+			err: "",
+		},
 	}
 
 	for _, c := range cases {

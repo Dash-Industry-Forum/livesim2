@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	m "github.com/Eyevinn/dash-mpd/mpd"
+	"github.com/Eyevinn/dash-mpd/xml"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -57,6 +58,48 @@ func TestLiveMPD(t *testing.T) {
 		assert.Equal(t, 1, len(liveMPD.UTCTimings))
 	}
 }
+
+func TestLiveMPDWithTimeSubs(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS)
+	err := am.discoverAssets()
+	require.NoError(t, err)
+
+	cases := []struct {
+		asset   string
+		mpdName string
+	}{
+		{
+			asset:   "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName: "stream.mpd",
+		},
+	}
+	for _, tc := range cases {
+		asset, ok := am.findAsset(tc.asset)
+		require.True(t, ok)
+		require.NoError(t, err)
+		assert.Equal(t, 8000, asset.LoopDurMS)
+		cfg := NewResponseConfig()
+		cfg.TimeSubsStpp = []string{"en", "sv"}
+		nowMS := 100_000
+		// Number template
+		liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nowMS)
+		assert.NoError(t, err)
+		assert.Equal(t, "dynamic", *liveMPD.Type)
+		aSets := liveMPD.Periods[0].AdaptationSets
+		assert.Equal(t, 3, len(aSets))
+		data, err := xml.MarshalIndent(aSets[1], " ", "")
+		require.NoError(t, err)
+		require.Equal(t, liveSubEn, string(data))
+	}
+}
+
+var liveSubEn = "" +
+	` <AdaptationSetType id="100" lang="en" contentType="text" segmentAlignment="true" mimeType="application/mp4" codecs="stpp">
+ <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle"></Role>
+ <SegmentTemplate media="$RepresentationID$/$Number$.m4s" initialization="$RepresentationID$/init.mp4" duration="2000" startNumber="0" timescale="1000"></SegmentTemplate>
+ <Representation id="timesubs-en" bandwidth="5000" startWithSAP="1"></Representation>
+ </AdaptationSetType>`
 
 func TestSegmentTimes(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")

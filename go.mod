@@ -3,7 +3,7 @@ module github.com/Dash-Industry-Forum/livesim2
 go 1.19
 
 require (
-	github.com/Eyevinn/dash-mpd v0.5.1-0.20230128171440-146a7d065911
+	github.com/Eyevinn/dash-mpd v0.6.0
 	github.com/Eyevinn/mp4ff v0.33.2
 	github.com/go-chi/chi/v5 v5.0.8
 	github.com/knadh/koanf v1.5.0
@@ -11,6 +11,7 @@ require (
 	github.com/rs/zerolog v1.29.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.1
+
 )
 
 require (
