@@ -129,7 +129,7 @@ func writeLiveMPD(log *zerolog.Logger, w http.ResponseWriter, cfg *ResponseConfi
 func writeSegment(ctx context.Context, w http.ResponseWriter, log *zerolog.Logger, cfg *ResponseConfig, vodFS fs.FS, a *asset,
 	segmentPart string, nowMS int) error {
 	// First check if init segment and return
-	isInitSegment, err := writeInitSegment(w, vodFS, a, segmentPart)
+	isInitSegment, err := writeInitSegment(w, cfg, vodFS, a, segmentPart)
 	if err != nil {
 		return fmt.Errorf("writeInitSegment: %w", err)
 	}

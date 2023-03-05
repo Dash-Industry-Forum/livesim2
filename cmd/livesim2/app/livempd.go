@@ -209,7 +209,7 @@ func addTimeSubsStpp(cfg *ResponseConfig, period *m.PeriodType) error {
 	vST := vAS.SegmentTemplate
 	for i, lang := range cfg.TimeSubsStpp {
 		rep := m.NewRepresentation()
-		rep.Id = "timesubs-" + lang
+		rep.Id = SUBS_STPP_PREFIX + lang
 		rep.Bandwidth = 5000
 		rep.StartWithSAP = 1
 		st := m.NewSegmentTemplate()

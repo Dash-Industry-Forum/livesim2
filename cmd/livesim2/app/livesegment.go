@@ -144,7 +144,11 @@ func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, n
 	}, nil
 }
 
-func writeInitSegment(w http.ResponseWriter, vodFS fs.FS, a *asset, segmentPart string) (bool, error) {
+func writeInitSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string) (isInit bool, err error) {
+	isStppInit, err := writeTimeStppInitSegment(w, cfg, a, segmentPart)
+	if isStppInit {
+		return true, err
+	}
 	for _, rep := range a.Reps {
 		if segmentPart == rep.initURI {
 			w.Header().Set("Content-Length", strconv.Itoa(len(rep.initBytes)))
@@ -170,7 +174,7 @@ func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a
 	w.Header().Set("Content-Type", mimeType)
 	_, err = w.Write(data)
 	if err != nil {
-		log.Error().Err(err).Msg("writing response")
+		log.Error().Err(err).Msg("write init response")
 		return err
 	}
 	return nil
