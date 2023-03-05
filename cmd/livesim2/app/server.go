@@ -9,15 +9,20 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
+
+	htmpl "html/template"
+	ttmpl "text/template"
 )
 
 type Server struct {
-	Router     *chi.Mux
-	LiveRouter *chi.Mux
-	VodRouter  *chi.Mux
-	logger     *logging.Logger
-	Cfg        *ServerConfig
-	assetMgr   *assetMgr
+	Router        *chi.Mux
+	LiveRouter    *chi.Mux
+	VodRouter     *chi.Mux
+	logger        *logging.Logger
+	Cfg           *ServerConfig
+	assetMgr      *assetMgr
+	textTemplates *ttmpl.Template
+	htmlTemplates *htmpl.Template
 }
 
 func (s *Server) healthzHandlerFunc(w http.ResponseWriter, r *http.Request) {
@@ -46,4 +51,20 @@ func (s *Server) jsonResponse(w http.ResponseWriter, message interface{}, code i
 			Str("error", err.Error()).
 			Msg("Could not write HTTP response")
 	}
+}
+
+func (s *Server) compileTemplates() error {
+	var err error
+	s.textTemplates, err = compileTextTemplates(content, "templates")
+	if err != nil {
+		return fmt.Errorf("compileTextTemplates: %w", err)
+	}
+	s.logger.Debug().Str("tmpl", s.textTemplates.DefinedTemplates()).Msg("text templates")
+	s.htmlTemplates, err = compileHTMLTemplates(content, "templates")
+	if err != nil {
+		return fmt.Errorf("compileHTMLTemplates: %w", err)
+	}
+	s.logger.Debug().Str("tmpl", s.htmlTemplates.DefinedTemplates()).Msg("html templates")
+
+	return nil
 }

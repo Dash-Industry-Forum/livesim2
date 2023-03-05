@@ -74,3 +74,17 @@ func createSubtitlesStppInitSegment(lang string, timescale uint32) *mp4.InitSegm
 	_ = trak.SetStppDescriptor("http://www.w3.org/ns/ttml", schemaLocation, auxiliaryMimeType)
 	return init
 }
+
+// StppTimeData is iformation for creating an stpp media segment.
+type StppTimeData struct {
+	Lang string
+	Cues []StppTimeCue
+}
+
+// StppTimeCue is cue information to put in template.
+type StppTimeCue struct {
+	Id    string
+	Begin string
+	End   string
+	Msg   string
+}
