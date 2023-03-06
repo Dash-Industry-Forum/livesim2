@@ -330,6 +330,21 @@ func (a *asset) generateTimelineEntry(repID string, startWraps, startRelMS, nowW
 	return ss
 }
 
+// firstVideoRep returns the first (in alphabetical order) video rep if any present.
+func (a *asset) firstVideoRep() (rep *RepData, ok bool) {
+	keys := make([]string, 0, len(a.Reps))
+	for k := range a.Reps {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if a.Reps[key].ContentType == "video" {
+			return a.Reps[key], true
+		}
+	}
+	return nil, false
+}
+
 // findHighestIndex finds highest segment index finished
 func findHighestIndex(segs []segment, t uint64) int {
 	return sort.Search(len(segs), func(i int) bool {

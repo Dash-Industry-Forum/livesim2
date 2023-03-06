@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+	"text/template"
 	"time"
 
 	"github.com/Eyevinn/mp4ff/bits"
@@ -165,7 +166,11 @@ func writeInitSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a
 	return false, nil
 }
 
-func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string, nowMS int) error {
+func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string, nowMS int, tt *template.Template) error {
+	isTimeStppMedia, err := writeTimeStppMediaSegment(w, cfg, a, segmentPart, nowMS, tt)
+	if isTimeStppMedia {
+		return err
+	}
 	data, mimeType, err := adjustLiveSegment(vodFS, a, cfg, segmentPart, nowMS)
 	if err != nil {
 		return fmt.Errorf("convertToLive: %w", err)

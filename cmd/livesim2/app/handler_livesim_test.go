@@ -14,6 +14,41 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const outputPayload = `<?xml version="1.0" encoding="UTF-8"?>
+<tt xmlns:ttp="http://www.w3.org/ns/ttml#parameter" xmlns="http://www.w3.org/ns/ttml"
+    xmlns:tts="http://www.w3.org/ns/ttml#styling" xmlns:ttm="http://www.w3.org/ns/ttml#metadata"
+    xmlns:ebuttm="urn:ebu:metadata" xmlns:ebutts="urn:ebu:style"
+    xml:lang="en" xml:space="default"
+    ttp:timeBase="media"
+    ttp:cellResolution="32 15">
+  <head>
+    <metadata>
+      <ttm:title>DASH-IF Live Simulator 2</ttm:title>
+      <ebuttm:documentMetadata>
+        <ebuttm:conformsToStandard>urn:ebu:distribution:2014-01</ebuttm:conformsToStandard>
+        <ebuttm:authoredFrameRate>30</ebuttm:authoredFrameRate>
+      </ebuttm:documentMetadata>
+    </metadata>
+    <styling>
+      <style xml:id="s0" tts:fontStyle="normal" tts:fontFamily="sansSerif" tts:fontSize="100%" tts:lineHeight="normal"
+      tts:color="#FFFFFF" tts:wrapOption="noWrap" tts:textAlign="center"/>
+      <style xml:id="s1" tts:color="#00FF00" tts:backgroundColor="#000000" ebutts:linePadding="0.5c"/>
+      <style xml:id="s2" tts:color="#ff0000" tts:backgroundColor="#000000" ebutts:linePadding="0.5c"/>
+    </styling>
+    <layout>
+      <region xml:id="r0" tts:origin="15% 80%" tts:extent="70% 20%" tts:overflow="visible" tts:displayAlign="before"/>
+      <region xml:id="r1" tts:origin="15% 20%" tts:extent="70% 20%" tts:overflow="visible" tts:displayAlign="before"/>
+    </layout>
+  </head>
+  <body style="s0">
+<div region="r0">
+<p xml:id="" begin="00:00:00.000" end="00:00:00.900"><span style="s1">1970-01-01T00:00:00Z<br/>en segNr: 0</span></p>
+<p xml:id="" begin="00:00:01.000" end="00:00:01.900"><span style="s1">1970-01-01T00:00:01Z<br/>en segNr: 0</span></p>
+</div>
+  </body>
+</tt>
+`
+
 func TestTimeStppInitSegment(t *testing.T) {
 	cfg := ServerConfig{
 		VodRoot:   "testdata/assets",
@@ -85,4 +120,58 @@ func testFullRequest(t *testing.T, ts *httptest.Server, method, path string, req
 	defer resp.Body.Close()
 
 	return resp, respBody
+}
+
+func TestTimeStppMediaSegment(t *testing.T) {
+	cfg := ServerConfig{
+		VodRoot:   "testdata/assets",
+		TimeoutS:  0,
+		LogFormat: logging.LogDiscard,
+	}
+	_, err := logging.InitZerolog(cfg.LogLevel, cfg.LogFormat)
+	require.NoError(t, err)
+	server, err := SetupServer(context.Background(), &cfg)
+	require.NoError(t, err)
+	ts := httptest.NewServer(server.Router)
+	defer ts.Close()
+	testCases := []struct {
+		desc               string
+		asset              string
+		url                string
+		segmentMimeType    string
+		cues               []string
+		expectedStatusCode int
+	}{
+		{
+			desc:               "mediasegment 0 with matching language",
+			asset:              "testpic_2s",
+			url:                "/livesim2/timesubsstpp_en,sv/testpic_2s/timestpp-en/0.m4s?nowMS=10000",
+			segmentMimeType:    "application/mp4",
+			cues:               nil,
+			expectedStatusCode: http.StatusOK,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			resp, body := testFullRequest(t, ts, "GET", tc.url, nil)
+			require.Equal(t, tc.expectedStatusCode, resp.StatusCode)
+			if tc.expectedStatusCode != http.StatusOK {
+				return
+			}
+			sr := bits.NewFixedSliceReader(body)
+			mp4d, err := mp4.DecodeFileSR(sr)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(mp4d.Segments))
+			seg := mp4d.Segments[0]
+			require.Equal(t, 1, len(seg.Fragments))
+			frag := seg.Fragments[0]
+			require.Equal(t, uint64(0), frag.Moof.Traf.Tfdt.BaseMediaDecodeTime())
+			fss, err := frag.GetFullSamples(nil)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(fss))
+			payload := string(fss[0].Data)
+			require.Equal(t, outputPayload, payload)
+		})
+	}
 }

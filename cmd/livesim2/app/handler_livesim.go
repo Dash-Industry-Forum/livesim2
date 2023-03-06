@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
@@ -79,7 +80,7 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		}
 	case ".mp4", ".m4s", ".cmfv", "cmfa", "cmft":
 		segmentPart := strings.TrimPrefix(contentPart, a.AssetPath) // includes heading /
-		err = writeSegment(r.Context(), w, log, cfg, s.assetMgr.vodFS, a, segmentPart[1:], nowMS)
+		err = writeSegment(r.Context(), w, log, cfg, s.assetMgr.vodFS, a, segmentPart[1:], nowMS, s.textTemplates)
 		if err != nil {
 			var tooEarly errTooEarly
 			switch {
@@ -127,7 +128,7 @@ func writeLiveMPD(log *zerolog.Logger, w http.ResponseWriter, cfg *ResponseConfi
 }
 
 func writeSegment(ctx context.Context, w http.ResponseWriter, log *zerolog.Logger, cfg *ResponseConfig, vodFS fs.FS, a *asset,
-	segmentPart string, nowMS int) error {
+	segmentPart string, nowMS int, tt *template.Template) error {
 	// First check if init segment and return
 	isInitSegment, err := writeInitSegment(w, cfg, vodFS, a, segmentPart)
 	if err != nil {
@@ -137,7 +138,7 @@ func writeSegment(ctx context.Context, w http.ResponseWriter, log *zerolog.Logge
 		return nil
 	}
 	if cfg.AvailabilityTimeCompleteFlag {
-		return writeLiveSegment(w, cfg, vodFS, a, segmentPart, nowMS)
+		return writeLiveSegment(w, cfg, vodFS, a, segmentPart, nowMS, tt)
 	}
 	// Chunked low-latency mode
 	return writeChunkedSegment(ctx, w, log, cfg, vodFS, a, segmentPart, nowMS)
