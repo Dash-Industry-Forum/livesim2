@@ -132,7 +132,7 @@ var liveSubEn = "" +
 	` <AdaptationSetType id="100" lang="en" contentType="text" segmentAlignment="true" mimeType="application/mp4" codecs="stpp">
  <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle"></Role>
  <SegmentTemplate media="$RepresentationID$/$Number$.m4s" initialization="$RepresentationID$/init.mp4" duration="2000" startNumber="0" timescale="1000"></SegmentTemplate>
- <Representation id="timestpp-en" bandwidth="5000" startWithSAP="1"></Representation>
+ <Representation id="timestpp-en" bandwidth="8000" startWithSAP="1"></Representation>
  </AdaptationSetType>`
 
 func TestSegmentTimes(t *testing.T) {

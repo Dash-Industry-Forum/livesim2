@@ -94,7 +94,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	}
 
 	if len(cfg.TimeSubsStpp) > 0 {
-		err = addTimeSubsStpp(cfg, period)
+		err = addTimeSubsStpp(cfg, a, period)
 		if err != nil {
 			return nil, fmt.Errorf("addTimeSubsStpp: %w", err)
 		}
@@ -195,7 +195,7 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 	return nil
 }
 
-func addTimeSubsStpp(cfg *ResponseConfig, period *m.PeriodType) error {
+func addTimeSubsStpp(cfg *ResponseConfig, a *asset, period *m.PeriodType) error {
 	var vAS *m.AdaptationSetType
 	for _, as := range period.AdaptationSets {
 		if as.ContentType == "video" {
@@ -206,11 +206,13 @@ func addTimeSubsStpp(cfg *ResponseConfig, period *m.PeriodType) error {
 	if vAS == nil {
 		return fmt.Errorf("no video adaptation set found")
 	}
+	segDurMS := a.SegmentDurMS
+	typicalStppSegSizeBits := 2000 * 8 // 2kB
 	vST := vAS.SegmentTemplate
 	for i, lang := range cfg.TimeSubsStpp {
 		rep := m.NewRepresentation()
 		rep.Id = SUBS_STPP_PREFIX + lang
-		rep.Bandwidth = 5000
+		rep.Bandwidth = uint32(typicalStppSegSizeBits*1000) / uint32(segDurMS)
 		rep.StartWithSAP = 1
 		st := m.NewSegmentTemplate()
 		st.Initialization = "$RepresentationID$/init.mp4"
