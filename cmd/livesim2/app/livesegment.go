@@ -15,11 +15,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// LiveSegments generates a live media segment for asset dependent on configuration.
-func LiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int) ([]byte, string, error) {
+// adjustLiveSegment adjusts a VoD segment to live parameters dependent on configuration.
+func adjustLiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int) ([]byte, string, error) {
 	seg, segRef, err := findMediaSegment(vodFS, a, cfg, segmentPart, nowMS)
 	if err != nil {
-		return nil, "", fmt.Errorf("findSegment: %w", err)
+		return nil, "", fmt.Errorf("findMediaSegment: %w", err)
 	}
 	timeShift := segRef.newTime - seg.Segments[0].Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
 	for _, frag := range seg.Segments[0].Fragments {
@@ -166,7 +166,7 @@ func writeInitSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a
 }
 
 func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string, nowMS int) error {
-	data, mimeType, err := LiveSegment(vodFS, a, cfg, segmentPart, nowMS)
+	data, mimeType, err := adjustLiveSegment(vodFS, a, cfg, segmentPart, nowMS)
 	if err != nil {
 		return fmt.Errorf("convertToLive: %w", err)
 	}

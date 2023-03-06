@@ -89,7 +89,7 @@ func TestLiveSegment(t *testing.T) {
 			default: // "TimelineTime":
 				media = strings.Replace(media, "$NrOrTime$", fmt.Sprintf("%d", mediaTime), -1)
 			}
-			seg, segmentType, err := LiveSegment(vodFS, asset, cfg, media, nowMS)
+			seg, segmentType, err := adjustLiveSegment(vodFS, asset, cfg, media, nowMS)
 			require.NoError(t, err)
 			require.Equal(t, tc.segmentMimeType, segmentType)
 			sr = bits.NewFixedSliceReader(seg)
