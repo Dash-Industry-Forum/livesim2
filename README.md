@@ -89,7 +89,11 @@ Currently, only VoD assets using SegmentTimeline with `$Time$` and
 SegmentTemplate with `$Number$`  are supported.
 
 Once the server has started, it is possible to find out information about the server and
-the assets using the HTTP endpoints
+the assets using the HTTP endpoint
+
+* /
+
+that in turn points to:
 
 * /config
 * /healthz

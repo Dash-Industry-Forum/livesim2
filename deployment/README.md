@@ -7,7 +7,7 @@ Since the result is a single binary it is easy to start anywhere.
 On Linux, `livesim2` can run as a systemd service and do structured logging
 using the journald API.
 
-An example service file is provided here as `livesim2.service`.
+An example service file is provided here as [livesim2.service][servicefile].
 Make sure that the binary and vod assets are available at the paths used in the service script.
 
 The binary can also be started and log in more console-friendly formats.
@@ -20,3 +20,5 @@ Cross-compilation can be done like (Linux on Mac example)
 ```sh
 > GOOS=linux GOARCH=amd64 go build .
 ```
+
+[servicefile]: livesim2.service
