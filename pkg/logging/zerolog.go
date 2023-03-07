@@ -5,9 +5,7 @@
 package logging
 
 import (
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"runtime/debug"
@@ -15,7 +13,6 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/journald"
 	"github.com/rs/zerolog/log"
 )
 
@@ -48,39 +45,6 @@ func isValidLogFormat(logFormat string) bool {
 		}
 	}
 	return false
-}
-
-// InitZerolog initializes the global zerolog logger.
-//
-// level and logLevel determine where the logs go and what format is used.
-func InitZerolog(level string, logFormat string) (*Logger, error) {
-
-	if !isValidLogFormat(logFormat) {
-		msg := fmt.Sprintf("Unknown log format: %q", logFormat)
-		err := errors.New(msg)
-		return nil, err
-	}
-
-	switch logFormat {
-	case LogJSON:
-		log.Logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
-	case LogConsolePretty:
-		log.Logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}).
-			With().Timestamp().Logger()
-	case LogJournald:
-		log.Logger = zerolog.New(journald.NewJournalDWriter())
-	case LogDiscard:
-		log.Logger = zerolog.New(io.Discard)
-	default:
-		return nil, fmt.Errorf("logFormat %q not known", logFormat)
-	}
-
-	err := SetLogLevel(level)
-	if err != nil {
-		return nil, err
-	}
-
-	return &log.Logger, nil
 }
 
 // GetGlobalLogger returns the global logger instance.

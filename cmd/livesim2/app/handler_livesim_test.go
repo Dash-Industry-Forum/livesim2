@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
@@ -175,6 +176,8 @@ func TestTimeStppMediaSegment(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, 1, len(fss))
 			payload := string(fss[0].Data)
+			// Replace \r\n with \n to handle accidental Windows line endings
+			payload = strings.ReplaceAll(payload, "\r\n", "\n")
 			require.Equal(t, outputPayload, payload)
 		})
 	}
