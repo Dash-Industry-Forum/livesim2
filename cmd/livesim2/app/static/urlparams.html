@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL parameters</title>
+    <link rel="stylesheet" href="table.css" />
+</head>
+<body>
+
+    <h2>Parameters implemented in livesim1 and livesim2</h2>
+
+    <table id="parameters">
+        <tr><th>Parameter</th><th>Values</th><th>Description</th><th>livesim2</th><th>livesim1</th></tr>
+        <tr><td>tsbd</td><td>int</td><td>TimeShiftBufferDepth in seconds</td><td class="yes">Yes</td><td class="yes">Yes</td></tr>
+        <tr><td>segtimeline</td><td>1 (=true)</td><td>Generate live MPD using SegmentTimeline with $Time$</td><td class="yes">Yes</td><td class="yes">Yes</td></tr>
+        <tr><td>ato</td><td>float or "inf"</td><td>availabilityTimeOffset in seconds (inf = infinity, all segments available)</td><td class="yes">Yes</td><td class="yes">Yes</td></tr>
+        <tr><td>chunkdur</td><td>float</td><td>Chunk duration for on-the-fly chunking</td><td class="yes">Yes</td><td class="yes">Yes</td></tr>
+        <tr><td>timesubsstpp</td><td>string</td><td>List of hyphen-separated languages with auto-generated stpp subtitles</td><td class="yes">Yes</td><td class="no">No</td></tr>
+        <tr><td>timesubsdur</td><td>int</td><td>Cue duration of generated time subtitles in ms (default 900)</td><td class="yes">Yes</td><td class="no">No</td></tr>
+        <tr><td>start or ast</td><td>int >= 0</td><td>Sets the availabilityStartTime</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>stop</td><td>int > 0</td><td>Sets the stop time (for time-limited events)</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>startrel</td><td>int</td><td>Sets a relative startTime via Location</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>stoprel</td><td>int</td><td>Sets a relative stopTime via Location</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>dur</td><td>int</td><td>Sets a presentation duration for multiple periods</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>timeoffset</td><td>int</td><td>Sets time offset in second vs NTP</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>init</td><td>int >0 </td><td>Offset time for early init segment availability</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>mup</td><td>int</td><td>MinimumUpdatePeriod in seconds</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>modulo</td><td>int > 0</td><td>Make this number of time-limited sessions every hour</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>tfdt</td><td>1 (=true)</td><td>Use 32-bit tfdt (needs more recent availabilityStartTime</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>cont</td><td>1 (=true)</td><td>Continuous update of MPD AST and segNr</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>periods</td><td>int > 0</td><td>Make this number of periods per hour</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>xlink</td><td>int > 0</td><td>Make this number of xlink periods per hour</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>etp</td><td>int > 0</td><td>Make this number of early terminated periods per hour</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>etpDuration</td><td>int > 0</td><td>Add a presentation duration for multiple periods</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>insertad</td><td>1 (=true)</td><td>Insert an ad via xlink</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>continuous</td><td>1 (=true)</td><td>Insert period continuity signaling (only valid when periods_per_hous is set)</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>segtimelinenr</td><td>1 (=true)</td><td>Generate live MPD using SegmentTimeline with $Number$</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>baseurl</td><td>url string</td><td>Add this top-level BaseURL in all configurations</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>peroff</td><td>int > 0</td><td>Period offset in seconds</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>scte35</td><td>int > 0</td><td>Add these many SCTE-35 splice insert periods every minute</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>utc</td><td>string</td><td>hyphen-separated list of UTCTiming methods and make into list</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>snr</td><td>int</td><td>Set startNumber in MPD. -1 translates to no value in MPD (i.e. default = 1)</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>spd</td><td>int > 0</td><td>suggestedPresentationDelay in seconds</td><td class="no">No</td><td class="yes">Yes</td></tr>
+        <tr><td>sidx</td><td>1 (=true)</td><td>Insert sidx box in every segment</td><td class="no">No</td><td class="yes">Yes</td></tr>
+
+    </table>
+</body>
+</html>

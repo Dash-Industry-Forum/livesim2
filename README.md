@@ -206,6 +206,16 @@ HTTPS and HTTP/2 are both supported. To enable TLS encryption, the two parameter
 key file, respectively. It is also recommended to set the port to the default HTTPS
 port 443.
 
+## List of functionality and options
+
+Start the server and access the root URL like `http://localhost:8888/` to
+get a page with information about URL options available.
+
+## Sponsoring
+
+This project is in need of sponsoring for further development. See the
+[SPONSORING.md](SPONSORING.md) file for more information.
+
 ## License
 
 See [LICENSE.md](LICENSE.md).
