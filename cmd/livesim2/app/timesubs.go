@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,7 +18,6 @@ const (
 	SUBS_STPP_PREFIX    = "timestpp-"
 	SUBS_STPP_INIT      = "init.mp4"
 	SUBS_STPP_TIMESCALE = 1000
-	SUBS_STPP_CUE_DUR   = 900
 )
 
 func stppSegmentParts(segmentPart string) (lang string, segment string, ok bool) {
@@ -146,7 +146,8 @@ func writeTimeStppMediaSegment(w http.ResponseWriter, cfg *ResponseConfig, a *as
 	dur := segMeta.newDur * SUBS_STPP_TIMESCALE / uint32(rep.MediaTimescale)
 
 	utcTimeMS := segMeta.newTime*SUBS_STPP_TIMESCALE/uint64(rep.MediaTimescale) + uint64(cfg.StartTimeS*SUBS_STPP_TIMESCALE)
-	mediaSeg, err := createSubtitlesStppMediaSegment(segMeta.newNr, baseMediaDecodeTime, dur, lang, utcTimeMS, tt)
+	mediaSeg, err := createSubtitlesStppMediaSegment(segMeta.newNr, baseMediaDecodeTime, dur, lang, utcTimeMS,
+		tt, cfg.TimeSubsDurMS)
 	if err != nil {
 		return true, fmt.Errorf("createSubtitleStppMediaSegment: %w", err)
 	}
@@ -164,7 +165,7 @@ func writeTimeStppMediaSegment(w http.ResponseWriter, cfg *ResponseConfig, a *as
 func makeStppMessage(lang string, utcMS, segNr int) string {
 	t := time.UnixMilli(int64(utcMS))
 	utc := t.UTC().Format(time.RFC3339)
-	return fmt.Sprintf("%s<br/>%s segNr: %d", utc, lang, segNr)
+	return fmt.Sprintf("%s<br/>%s # %d", utc, lang, segNr)
 }
 
 // msToTTMLTime returns a time that can be used in TTML.
@@ -183,14 +184,18 @@ type cueItvl struct {
 	startMS, endMS, utcS int
 }
 
-// calcCueItvls calculates intervals from full seconds to full second + subs_cue_dur.
-func calcCueItvls(startMS, dur, utcMS, cueDur int) []cueItvl {
+// calcCueItvls calculates
+// all times in milliseconds.
+func calcCueItvls(segStart, segDur, utcStart, cueDur int) []cueItvl {
 	itvls := make([]cueItvl, 0, 2)
 
-	diff := startMS - utcMS
-	utcEndMS := utcMS + dur
+	diff := segStart - utcStart
+	utcEndMS := utcStart + segDur
 
-	for utcS := utcMS / 1000; utcS <= (utcMS+dur)/1000; utcS++ {
+	cueFullS := int(math.Ceil(float64(cueDur) * 0.001))
+	cueFullMS := cueFullS * 1000
+
+	for utcS := utcStart / cueFullMS; utcS <= (utcStart+segDur)/cueFullMS; utcS += cueFullS {
 		cueStartMS := utcS * 1000
 		if cueStartMS == utcEndMS {
 			break
@@ -200,8 +205,8 @@ func calcCueItvls(startMS, dur, utcMS, cueDur int) []cueItvl {
 			startMS: cueStartMS,
 			endMS:   cueStartMS + cueDur,
 		}
-		if ci.startMS < utcMS {
-			ci.startMS = utcMS
+		if ci.startMS < utcStart {
+			ci.startMS = utcStart
 		}
 		if utcEndMS < ci.endMS {
 			ci.endMS = utcEndMS
@@ -213,21 +218,22 @@ func calcCueItvls(startMS, dur, utcMS, cueDur int) []cueItvl {
 	return itvls
 }
 
-func createSubtitlesStppMediaSegment(nr uint32, baseMediaDecodeTime uint64, dur uint32, lang string, utcTimeMS uint64, tt *template.Template) (*mp4.MediaSegment, error) {
+func createSubtitlesStppMediaSegment(nr uint32, baseMediaDecodeTime uint64, dur uint32, lang string, utcTimeMS uint64,
+	tt *template.Template, timeSubsDurMS int) (*mp4.MediaSegment, error) {
 	seg := mp4.NewMediaSegment()
 	frag, err := mp4.CreateFragment(nr, 1)
 	if err != nil {
 		return nil, err
 	}
 	seg.AddFragment(frag)
-	cueItvls := calcCueItvls(int(baseMediaDecodeTime), int(dur), int(utcTimeMS), SUBS_STPP_CUE_DUR)
+	cueItvls := calcCueItvls(int(baseMediaDecodeTime), int(dur), int(utcTimeMS), timeSubsDurMS)
 	stppd := StppTimeData{
 		Lang: lang,
 		Cues: make([]StppTimeCue, 0, len(cueItvls)),
 	}
-	for _, ci := range cueItvls {
+	for i, ci := range cueItvls {
 		cue := StppTimeCue{
-			Id:    "",
+			Id:    fmt.Sprintf("%d-%d", nr, i),
 			Begin: msToTTMLTime(ci.startMS),
 			End:   msToTTMLTime(ci.endMS),
 			Msg:   makeStppMessage(lang, ci.utcS*1000, int(nr)),

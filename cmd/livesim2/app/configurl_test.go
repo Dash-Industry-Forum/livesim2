@@ -26,7 +26,8 @@ func TestProcessURLCfg(t *testing.T) {
 				"StartTimeS": 0,
 				"TimeShiftBufferDepthS": 1,
 				"StartNr": 0,
-				"AvailabilityTimeCompleteFlag": true
+				"AvailabilityTimeCompleteFlag": true,
+				"TimeSubsDurMS": 900
 				}`,
 			err: "",
 		},
@@ -38,7 +39,8 @@ func TestProcessURLCfg(t *testing.T) {
 				"StartTimeS": 0,
 				"TimeShiftBufferDepthS": 1,
 				"StartNr": 0,
-				"AvailabilityTimeCompleteFlag": true
+				"AvailabilityTimeCompleteFlag": true,
+				"TimeSubsDurMS": 900
 				}`,
 			err: "",
 		},
@@ -68,7 +70,8 @@ func TestProcessURLCfg(t *testing.T) {
 				"TimeSubsStppLanguages": [
 				"en",
 				"sv"
-				]
+				],
+				"TimeSubsDurMS": 900
 			}`,
 			err: "",
 		},

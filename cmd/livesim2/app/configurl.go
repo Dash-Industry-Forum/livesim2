@@ -44,14 +44,17 @@ type ResponseConfig struct {
 	SegTimelineLossFlag          bool     `json:"SegTimelineLossFlag,omitempty"`
 	AvailabilityTimeCompleteFlag bool     `json:"AvailabilityTimeCompleteFlag,omitempty"`
 	TimeSubsStpp                 []string `json:"TimeSubsStppLanguages,omitempty"`
+	TimeSubsDurMS                int      `json:"TimeSubsDurMS,omitempty"`
 }
 
+// NewResponseConfig returns a new ResponseConfig with default values.
 func NewResponseConfig() *ResponseConfig {
 	c := ResponseConfig{
 		StartTimeS:                   defaultAvailabilityStartTimeS,
 		AvailabilityTimeCompleteFlag: defaultAvailabilityTimeComplete,
 		TimeShiftBufferDepthS:        Ptr(defaultTimeShiftBufferDepthS),
 		StartNr:                      Ptr(defaultStartNr),
+		TimeSubsDurMS:                defaultTimeSubsDurMS,
 	}
 	return &c
 }
@@ -156,6 +159,8 @@ cfgLoop:
 			cfg.AvailabilityTimeCompleteFlag = false
 		case "timesubsstpp": // comma-separated list of languages
 			cfg.TimeSubsStpp = strings.Split(val, ",")
+		case "timesubsdur": // duration in milliseconds
+			cfg.TimeSubsDurMS = sc.Atoi(key, val)
 		default:
 			contentStartIdx = i
 			break cfgLoop
@@ -167,6 +172,7 @@ cfgLoop:
 	if contentStartIdx == -1 {
 		return nil, 0, fmt.Errorf("no content part")
 	}
+
 	err = verifyConfig(cfg)
 	if err != nil {
 		return cfg, contentStartIdx, fmt.Errorf("url config: %w", err)
