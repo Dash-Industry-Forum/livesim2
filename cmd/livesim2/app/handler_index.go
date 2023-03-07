@@ -9,7 +9,7 @@ import (
 // indexHandlerFunc handles access to /.
 func (s *Server) indexHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
-	err := s.htmlTemplates.ExecuteTemplate(w, "welcome.gohtml", nil)
+	err := s.htmlTemplates.ExecuteTemplate(w, "welcome.html", s.Cfg.URLPrefix)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}

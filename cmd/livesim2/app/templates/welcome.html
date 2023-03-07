@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to livesim2</title>
+    <link rel="stylesheet" href="static/table.css" />
+</head>
+<body>
+    <h1>Welcome to livesim2</h1>
+
+    <table>
+        <tr><th>The following URLs should work on this server</th></tr>
+        <tr><td><a href="{{.}}/assets">/assets</a> to get a list of assets (each can have multiple MPDs)</td></tr>
+        <tr><td><strong>{{.}}/vod/...</strong> to stream any of the VoD assets directly</td></tr>
+        <tr><td><strong>{{.}}/livesim2/...</strong> to stream the VoD assets as they are converted to "live" with parameters</td></tr>
+        <tr><td><a href="{{.}}/healthz">/healthz</a> to check if server is running</td></tr>
+        <tr><td><a href="{{.}}/config">/config<a> to get the current config of the server</td></tr>
+        <tr><td><a href="{{.}}/metrics">/metrics</a> to get Prometheus metrics for the system and all streaming content requests</td></tr>
+        <tr><td><a href="{{.}}/static/features.html">/static/features.html</a> compares features between livesim2 and livesim1</td></tr>
+        <tr><td><a href="{{.}}/static/urlparams.html">/static/urlparams.html</a> compares url parameters between livesim2 and livesim1</td></tr>
+    </table>
+</body>
+</html>

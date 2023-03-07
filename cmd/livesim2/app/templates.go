@@ -8,9 +8,9 @@ import (
 )
 
 func compileTextTemplates(templateRoot fs.FS, dir string) (*ttmpl.Template, error) {
-	return ttmpl.ParseFS(templateRoot, path.Join(dir, "*.gotxt"))
+	return ttmpl.ParseFS(templateRoot, path.Join(dir, "*.xml"))
 }
 
 func compileHTMLTemplates(templateRoot fs.FS, dir string) (*htmpl.Template, error) {
-	return htmpl.ParseFS(templateRoot, path.Join(dir, "*.gohtml"))
+	return htmpl.ParseFS(templateRoot, path.Join(dir, "*.html"))
 }
