@@ -11,7 +11,6 @@ prepare:
 livesim2 dashfetcher:
 	go build -ldflags "-X github.com/Dash-Industry-Forum/livesim2.internal.commitVersion=$$(git describe --tags HEAD) -X github.com/Dash-Industry-Forum/livesim2.internal.commitDate=$$(git log -1 --format=%ct)" -o out/$@ ./cmd/$@/main.go
 
-
 .PHONY: test
 test: prepare
 	go test ./...
@@ -30,10 +29,15 @@ coverage:
 check: prepare
 	golangci-lint run
 
+.PHONY: clean
 clean:
 	rm -f out/*
 	rm -r examples-out/*
 
+.PHONY: install
 install: all
 	cp out/* $(GOPATH)/bin/
 
+.PHONY: update
+update:
+	go get -t -u ./...

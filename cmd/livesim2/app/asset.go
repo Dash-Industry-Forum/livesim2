@@ -58,7 +58,7 @@ func (am *assetMgr) addAsset(assetPath string) *asset {
 	return &ast
 }
 
-// discoverAssets walks the file tree and finds all directories containg MPD files.
+// discoverAssets walks the file tree and finds all directories containing MPD files.
 func (am *assetMgr) discoverAssets() error {
 	err := fs.WalkDir(am.vodFS, ".", func(p string, d fs.DirEntry, err error) error {
 		if path.Ext(p) == ".mpd" {
