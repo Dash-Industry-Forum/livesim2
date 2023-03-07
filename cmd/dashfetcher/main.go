@@ -1,3 +1,7 @@
+// Copyright 2023, DASH-Industry Forum. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE.md file.
+
 package main
 
 import (
@@ -21,7 +25,7 @@ The -o/--outdir option provides a directory for storing the downloaded MPD and s
 The -a/--auto option adds output subdirectories fromn the URL removing common prefix parts.
 
 Some possible resources are available at https://cta-wave.github.io/Test-Content/.
-To download one of them, try 
+To download one of them, try
 
 $ %s -a https://cta-wave.github.io/Test-Content/https://dash.akamaized.net/WAVE/vectors/cfhd_sets/12.5_25_50/t1/2022-10-17/stream.mpd
 `
