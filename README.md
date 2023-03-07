@@ -8,7 +8,7 @@
 `livesim2` is a new and improved version of the
 [DASH-IF live source simulator][1].
 
-As the original simulator, the output is a wall-clock (UTC) synchronized
+As the original simulator ([livesim1][1]), the output is a wall-clock (UTC) synchronized
 infinite linear stream of segments. The synchronization is done modulo asset length,
 for example: a 1-hour asset restarts every hour on full hours, and a 30s asset
 restarts every 30s on full and half minutes. If there is a clock in the video, it is
@@ -16,6 +16,11 @@ therefore easy to directly see how long the system delay is from publishing to
 screen presentaiton. The very short example assets bundled with the code are only
 8s long, which means that they restart every time the UTC time is a multiple of 8s,
 relative to the EPOCH start 1970-01-01:00:00:00Z.
+
+To provide full time stamps also for short test sequences, and the possibility to test subtitles,
+livesim2 has a new feature for generating subtitles with timestamps for any number of languages.
+This is done by specifying a parameter like `timesubsstpp_en,sv` which will provide one subtitle
+track with language code "en" and another with language code "sv".
 
 The new software is written in Go instead of Python and designed to handle
 content in a more flexible and versatile way.
@@ -33,9 +38,10 @@ The sources are looped so that an infinite "live" stream is available.
 Similarly to [livesim][1], the output is highly configurable by adding parameters inside the URLs.
 These parameters are included not only in the MPD requests, but in
 all segment requests allowing the server to be stateless, and
-gives the possibility to generate streams with a huge number of
+be able to generate streams with a huge number of
 parameter variations. Currently, only a small subset of
-all parameters of [livesim][1] are implemented.
+all parameters of [livesim][1] are implemented, but there are also new
+parameters like the generated subtitles mentioned above.
 
 ## Components
 
@@ -66,6 +72,7 @@ which will result in a locally stored DASH VoD asset in the directory
 with an MPD called `stream.mpd` and the segments stored in subdirectories named after their relative
 URLs. The download URL is added to a file `mpdlist.json` which is read by livesim2, to provide
 information about the asset.
+
 One can have multiple MPDs in the same asset directory and they may share some representations.
 That is an easy way to have variants with different representation combinations.
 
@@ -78,10 +85,11 @@ The server is configured in one or more ways in increasing priority:
 3. Via command-line parameters
 4. With environment variables
 
-Two major values to configure are:
+Major values to configure are:
 
 * the HTTP port being used (default: 8888)
 * the top directory `vodroot` for searching for VoD assets to be used
+* `certpath` and `keypath` is the HTTPS is used
 
 Once the server is started, it will scan the file tree starting from
 `vodroot` and gather metadata about all DASH VoD assets it finds.
@@ -147,6 +155,12 @@ To build `dashfetcher` and `livesim2` do
 > go build .
 ```
 
+You can also use the `Makefile` to test and build:
+
+```sh
+> make
+```
+
 As usual for Go programs, one can also compile and run them directly with `go run .`.
 
 ### Bundled test streams with the livesim2 server
@@ -206,7 +220,7 @@ More information can be found in the `./deployment` directory.
 ## HTTPS and HTTP/2
 
 HTTPS and HTTP/2 are both supported. To enable TLS encryption, the two parameters
-`certpath` and `keypath` must be set to point to an HLS certificaten and a private
+`certpath` and `keypath` must be set to point to a TLS certificate and a private
 key file, respectively. It is also recommended to set the port to the default HTTPS
 port 443.
 
