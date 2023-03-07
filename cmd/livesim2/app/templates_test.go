@@ -62,7 +62,10 @@ func TestTemplates(t *testing.T) {
 	var buf bytes.Buffer
 	err = textTemplates.ExecuteTemplate(&buf, "stpptime.xml", stppData)
 	require.NoError(t, err)
-	require.Equal(t, expectedOutput, buf.String())
+	gotStr := buf.String()
+	// Replace \r\n with \n to handle accidental Windows line endings
+	gotStr = strings.ReplaceAll(gotStr, "\r\n", "\n")
+	require.Equal(t, expectedOutput, gotStr)
 }
 
 func TestHTMLTemplates(t *testing.T) {
