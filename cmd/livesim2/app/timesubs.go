@@ -243,7 +243,7 @@ func createSubtitlesStppMediaSegment(nr uint32, baseMediaDecodeTime uint64, dur 
 	data := make([]byte, 0, 1024)
 	buf := bytes.NewBuffer(data)
 
-	err = tt.ExecuteTemplate(buf, "stpptime.gotxt", stppd)
+	err = tt.ExecuteTemplate(buf, "stpptime.xml", stppd)
 	if err != nil {
 		return nil, fmt.Errorf("execute stpp template: %w", err)
 	}

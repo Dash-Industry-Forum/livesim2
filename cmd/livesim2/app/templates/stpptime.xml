@@ -28,7 +28,7 @@
   <body style="s0">
 <div region="r0">
 {{- range .Cues}}
-{{template "stpptimecue.gotxt" .}}
+{{template "stpptimecue.xml" .}}
 {{- end}}
 </div>
   </body>

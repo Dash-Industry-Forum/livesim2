@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -55,7 +56,7 @@ func TestTemplates(t *testing.T) {
 		},
 	}
 	var buf bytes.Buffer
-	err = textTemplates.ExecuteTemplate(&buf, "stpptime.gotxt", stppData)
+	err = textTemplates.ExecuteTemplate(&buf, "stpptime.xml", stppData)
 	require.NoError(t, err)
 	require.Equal(t, expectedOutput, buf.String())
 }
@@ -64,5 +65,10 @@ func TestHTMLTemplates(t *testing.T) {
 	templateRoot := os.DirFS("templates")
 	textTemplates, err := compileHTMLTemplates(templateRoot, "")
 	require.NoError(t, err)
-	require.Equal(t, `; defined templates are: "welcome.gohtml"`, textTemplates.DefinedTemplates())
+	require.Equal(t, `; defined templates are: "welcome.html"`, textTemplates.DefinedTemplates())
+	var buf bytes.Buffer
+	err = textTemplates.ExecuteTemplate(&buf, "welcome.html", "/prefix")
+	require.NoError(t, err)
+	welcomeStr := buf.String()
+	require.Greater(t, strings.Index(welcomeStr, `href="/prefix/assets"`), 0)
 }
