@@ -52,7 +52,7 @@ func isValidLogFormat(logFormat string) bool {
 func InitZerolog(level string, logFormat string) (*Logger, error) {
 
 	if !isValidLogFormat(logFormat) {
-		msg := fmt.Sprintf("Unknown log format: %s", logFormat)
+		msg := fmt.Sprintf("Unknown log format: %q", logFormat)
 		err := errors.New(msg)
 		return nil, err
 	}

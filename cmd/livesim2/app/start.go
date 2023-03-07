@@ -63,6 +63,11 @@ func SetupServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 		assetMgr:   newAssetMgr(vodFS),
 	}
 
+	err = server.compileTemplates()
+	if err != nil {
+		return nil, err
+	}
+
 	err = server.Routes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("routes: %w", err)

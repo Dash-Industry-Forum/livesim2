@@ -9,13 +9,10 @@ import (
 // indexHandlerFunc handles access to /.
 func (s *Server) indexHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
-	b, err := fs.ReadFile(content, "templates/welcome.html")
+	err := s.htmlTemplates.ExecuteTemplate(w, "welcome.gohtml", nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	w.Header().Set("Content-Length", strconv.Itoa(len(b)))
-	_, _ = w.Write(b)
-
 }
 
 // favIconFunc returns the DASH-IF favicon.

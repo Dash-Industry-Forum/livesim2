@@ -43,14 +43,18 @@ type ResponseConfig struct {
 	SidxFlag                     bool     `json:"SidxFlag,omitempty"`
 	SegTimelineLossFlag          bool     `json:"SegTimelineLossFlag,omitempty"`
 	AvailabilityTimeCompleteFlag bool     `json:"AvailabilityTimeCompleteFlag,omitempty"`
+	TimeSubsStpp                 []string `json:"TimeSubsStppLanguages,omitempty"`
+	TimeSubsDurMS                int      `json:"TimeSubsDurMS,omitempty"`
 }
 
+// NewResponseConfig returns a new ResponseConfig with default values.
 func NewResponseConfig() *ResponseConfig {
 	c := ResponseConfig{
 		StartTimeS:                   defaultAvailabilityStartTimeS,
 		AvailabilityTimeCompleteFlag: defaultAvailabilityTimeComplete,
 		TimeShiftBufferDepthS:        Ptr(defaultTimeShiftBufferDepthS),
 		StartNr:                      Ptr(defaultStartNr),
+		TimeSubsDurMS:                defaultTimeSubsDurMS,
 	}
 	return &c
 }
@@ -153,6 +157,10 @@ cfgLoop:
 		case "chunkdur": // chunk duration in seconds
 			cfg.ChunkDurS = sc.AtofPosPtr(key, val)
 			cfg.AvailabilityTimeCompleteFlag = false
+		case "timesubsstpp": // comma-separated list of languages
+			cfg.TimeSubsStpp = strings.Split(val, ",")
+		case "timesubsdur": // duration in milliseconds
+			cfg.TimeSubsDurMS = sc.Atoi(key, val)
 		default:
 			contentStartIdx = i
 			break cfgLoop
@@ -164,5 +172,20 @@ cfgLoop:
 	if contentStartIdx == -1 {
 		return nil, 0, fmt.Errorf("no content part")
 	}
+
+	err = verifyConfig(cfg)
+	if err != nil {
+		return cfg, contentStartIdx, fmt.Errorf("url config: %w", err)
+	}
 	return cfg, contentStartIdx, nil
+}
+
+func verifyConfig(cfg *ResponseConfig) error {
+	if cfg.SegTimelineNrFlag {
+		return fmt.Errorf("mpd type SegmentTimeline with Number not yet supported")
+	}
+	if len(cfg.TimeSubsStpp) > 0 && cfg.SegTimelineFlag {
+		return fmt.Errorf("combination of SegTimeline and generated stpp subtitles not yet supported")
+	}
+	return nil
 }

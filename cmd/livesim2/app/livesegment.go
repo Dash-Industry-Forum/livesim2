@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+	"text/template"
 	"time"
 
 	"github.com/Eyevinn/mp4ff/bits"
@@ -15,11 +16,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// LiveSegments generates a live media segment for asset dependent on configuration.
-func LiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int) ([]byte, string, error) {
+// adjustLiveSegment adjusts a VoD segment to live parameters dependent on configuration.
+func adjustLiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int) ([]byte, string, error) {
 	seg, segRef, err := findMediaSegment(vodFS, a, cfg, segmentPart, nowMS)
 	if err != nil {
-		return nil, "", fmt.Errorf("findSegment: %w", err)
+		return nil, "", fmt.Errorf("findMediaSegment: %w", err)
 	}
 	timeShift := segRef.newTime - seg.Segments[0].Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
 	for _, frag := range seg.Segments[0].Fragments {
@@ -144,7 +145,11 @@ func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, n
 	}, nil
 }
 
-func writeInitSegment(w http.ResponseWriter, vodFS fs.FS, a *asset, segmentPart string) (bool, error) {
+func writeInitSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string) (isInit bool, err error) {
+	isStppInit, err := writeTimeStppInitSegment(w, cfg, a, segmentPart)
+	if isStppInit {
+		return true, err
+	}
 	for _, rep := range a.Reps {
 		if segmentPart == rep.initURI {
 			w.Header().Set("Content-Length", strconv.Itoa(len(rep.initBytes)))
@@ -161,8 +166,12 @@ func writeInitSegment(w http.ResponseWriter, vodFS fs.FS, a *asset, segmentPart 
 	return false, nil
 }
 
-func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string, nowMS int) error {
-	data, mimeType, err := LiveSegment(vodFS, a, cfg, segmentPart, nowMS)
+func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string, nowMS int, tt *template.Template) error {
+	isTimeStppMedia, err := writeTimeStppMediaSegment(w, cfg, a, segmentPart, nowMS, tt)
+	if isTimeStppMedia {
+		return err
+	}
+	data, mimeType, err := adjustLiveSegment(vodFS, a, cfg, segmentPart, nowMS)
 	if err != nil {
 		return fmt.Errorf("convertToLive: %w", err)
 	}
@@ -170,7 +179,7 @@ func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a
 	w.Header().Set("Content-Type", mimeType)
 	_, err = w.Write(data)
 	if err != nil {
-		log.Error().Err(err).Msg("writing response")
+		log.Error().Err(err).Msg("write init response")
 		return err
 	}
 	return nil

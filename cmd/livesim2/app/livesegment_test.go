@@ -66,11 +66,11 @@ func TestLiveSegment(t *testing.T) {
 			}
 			nowMS := 100_000
 			rr := httptest.NewRecorder()
-			wroteInit, err := writeInitSegment(rr, vodFS, asset, "2/init.mp4")
+			wroteInit, err := writeInitSegment(rr, cfg, vodFS, asset, "2/init.mp4")
 			require.False(t, wroteInit)
 			require.NoError(t, err)
 			rr = httptest.NewRecorder()
-			wroteInit, err = writeInitSegment(rr, vodFS, asset, tc.initialization)
+			wroteInit, err = writeInitSegment(rr, cfg, vodFS, asset, tc.initialization)
 			require.True(t, wroteInit)
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, rr.Code)
@@ -89,7 +89,7 @@ func TestLiveSegment(t *testing.T) {
 			default: // "TimelineTime":
 				media = strings.Replace(media, "$NrOrTime$", fmt.Sprintf("%d", mediaTime), -1)
 			}
-			seg, segmentType, err := LiveSegment(vodFS, asset, cfg, media, nowMS)
+			seg, segmentType, err := adjustLiveSegment(vodFS, asset, cfg, media, nowMS)
 			require.NoError(t, err)
 			require.Equal(t, tc.segmentMimeType, segmentType)
 			sr = bits.NewFixedSliceReader(seg)

@@ -26,7 +26,8 @@ func TestProcessURLCfg(t *testing.T) {
 				"StartTimeS": 0,
 				"TimeShiftBufferDepthS": 1,
 				"StartNr": 0,
-				"AvailabilityTimeCompleteFlag": true
+				"AvailabilityTimeCompleteFlag": true,
+				"TimeSubsDurMS": 900
 				}`,
 			err: "",
 		},
@@ -38,7 +39,8 @@ func TestProcessURLCfg(t *testing.T) {
 				"StartTimeS": 0,
 				"TimeShiftBufferDepthS": 1,
 				"StartNr": 0,
-				"AvailabilityTimeCompleteFlag": true
+				"AvailabilityTimeCompleteFlag": true,
+				"TimeSubsDurMS": 900
 				}`,
 			err: "",
 		},
@@ -56,12 +58,44 @@ func TestProcessURLCfg(t *testing.T) {
 			cfgJSON:     "",
 			err:         "no content part",
 		},
+		{
+			url:         "/livesim/timesubsstpp_en,sv/asset.mpd",
+			nowS:        0,
+			contentPart: "asset.mpd",
+			cfgJSON: `{
+				"StartTimeS": 0,
+				"TimeShiftBufferDepthS": 60,
+				"StartNr": 0,
+				"AvailabilityTimeCompleteFlag": true,
+				"TimeSubsStppLanguages": [
+				"en",
+				"sv"
+				],
+				"TimeSubsDurMS": 900
+			}`,
+			err: "",
+		},
+		{
+			url:         "/livesim/segtimeline_1/timesubsstpp_en,sv/asset.mpd",
+			nowS:        0,
+			contentPart: "",
+			cfgJSON:     "",
+			err:         "url config: combination of SegTimeline and generated stpp subtitles not yet supported",
+		},
+		{
+			url:         "/livesim/segtimelinenr_1/asset.mpd",
+			nowS:        0,
+			contentPart: "",
+			cfgJSON:     "",
+			err:         "url config: mpd type SegmentTimeline with Number not yet supported",
+		},
 	}
 
 	for _, c := range cases {
 		urlParts := strings.Split(c.url, "/")
 		cfg, idx, err := processURLCfg(urlParts, c.nowS)
 		if c.err != "" {
+			require.Error(t, err, c.url)
 			require.Equal(t, c.err, err.Error())
 			continue
 		}

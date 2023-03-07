@@ -24,6 +24,7 @@ const (
 	defaultTimeShiftBufferDepthS    = 60
 	defaultStartNr                  = 0
 	timeShiftBufferDepthMarginS     = 10
+	defaultTimeSubsDurMS            = 900
 )
 
 type ServerConfig struct {
