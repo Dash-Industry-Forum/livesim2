@@ -15,12 +15,12 @@ restarts every 30s on full and half minutes. If there is a clock in the video, i
 therefore easy to directly see how long the system delay is from publishing to
 screen presentaiton. The very short example assets bundled with the code are only
 8s long, which means that they restart every time the UTC time is a multiple of 8s,
-relative to the EPOCH start 1970-01-01:00:00:00Z.
+relative to the Epoch start 1970-01-01:00:00:00Z.
 
-To provide full time stamps also for short test sequences, and the possibility to test subtitles,
-livesim2 has a new feature for generating subtitles with timestamps for any number of languages.
-This is done by specifying a parameter like `timesubsstpp_en,sv` which will provide one subtitle
-track with language code "en" and another with language code "sv".
+To provide full UTC time stamps and the possibility to test subtitles,
+livesim2 has a new feature for generating subtitles for any number of languages.
+This is done by a URL parameter like `/timesubsstpp_en,sv` which will result in
+two subtitle tracks with with language codes "en" and "sv", respectively.
 
 The new software is written in Go instead of Python and designed to handle
 content in a more flexible and versatile way.
@@ -35,12 +35,12 @@ linear outputs.
 
 The sources are looped so that an infinite "live" stream is available.
 
-Similarly to [livesim][1], the output is highly configurable by adding parameters inside the URLs.
+Similarly to [livesim1][1], the output is highly configurable by adding parameters inside the URLs.
 These parameters are included not only in the MPD requests, but in
 all segment requests allowing the server to be stateless, and
 be able to generate streams with a huge number of
 parameter variations. Currently, only a small subset of
-all parameters of [livesim][1] are implemented, but there are also new
+all parameters of [livesim1][1] are implemented, but there are also new
 parameters like the generated subtitles mentioned above.
 
 ## Components
@@ -146,7 +146,15 @@ Then run
 
 to fetch and install all dependencies.
 
-To build `dashfetcher` and `livesim2` do
+To build `dashfetcher` and `livesim2` you can use the `Makefile` like
+
+```sh
+> make build
+```
+
+to create binaries in the /out directory with embedded version numbers.
+
+During development it may be easier to use the usual go commands:
 
 ```sh
 > cd cmd/dashfetcher
@@ -155,13 +163,7 @@ To build `dashfetcher` and `livesim2` do
 > go build .
 ```
 
-You can also use the `Makefile` to test and build:
-
-```sh
-> make
-```
-
-As usual for Go programs, one can also compile and run them directly with `go run .`.
+or compile and run directly with `go run .`.
 
 ### Bundled test streams with the livesim2 server
 
@@ -187,25 +189,30 @@ The default pattern provides MPDs with SegmentTemplate using `$Number$`. To stre
 SegmentTimeline with `$Time$`, one should add the parameter `/segtimeline_1` between
 `livesim2` and the start of the asset path. Other parameters are added in a similar way.
 
-Adding longer assets somewhere under the `vodroot` results in longer loops, since
-the loop start at time modulo duration, and wraps every duration (with default start time = 0).
+Adding longer assets somewhere under the `vodroot` results in longer loops.
+All sources are NTP synchronized (using the host machine clock) with a initial start
+time given by availabilityStartTime and wrap every sequence duration after that.
 
 ### Running dashfetcher
 
+The `dashfetcher` binary can be found in as `out/dashfetcher` after `make build`.
+
 ```sh
-> cd cmd/livesim2
-> ./dashfetcher
+> dashfetcher --help
 ```
 
-will provide a help text that explains how to use it and will also provide an example URL
+will provide a long help text that explains how to use it and will also provide an example URL
 to CTA-WAVE content.
 
 ## Running tests
 
 The unit tests can be run from the top directory with the usual recursive Go test command
+`go test ./...` or with the make targets for testing, linting, and coverage:
 
 ```sh
-> go test ./...
+> make test
+> make check
+> make coverage
 ```
 
 ## Deployment
