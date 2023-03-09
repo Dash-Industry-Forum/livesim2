@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - make `ato=inf` work, i.e. infinite availabilityTimeOffset
 
+### Added
+
+- list of complete MPD paths in /assets response
+
 ## [0.5.0] - 2023-03-07
 
 ### Added
