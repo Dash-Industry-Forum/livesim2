@@ -146,5 +146,67 @@ func TestWriteChunkedSegment(t *testing.T) {
 		require.Equal(t, mediaTime, int(bdt))
 		require.Equal(t, 8, len(mp4d.Segments[0].Fragments))
 	}
+}
 
+func TestAvailabilityTime(t *testing.T) {
+	testCases := []struct {
+		desc       string
+		availTimeS float64
+		nowS       float64
+		tsbd       float64
+		ato        float64
+		wantedErr  string
+	}{
+		{
+			desc:       "too early",
+			availTimeS: 4,
+			nowS:       2,
+			tsbd:       10,
+			ato:        0,
+			wantedErr:  "too early by 2000ms",
+		},
+		{
+			desc:       "ato > 0",
+			availTimeS: 14,
+			nowS:       12,
+			tsbd:       10,
+			ato:        2,
+			wantedErr:  "",
+		},
+		{
+			desc:       "fine",
+			availTimeS: 14,
+			nowS:       15,
+			tsbd:       10,
+			ato:        0,
+			wantedErr:  "",
+		},
+		{
+			desc:       "too late",
+			availTimeS: 140,
+			nowS:       120,
+			tsbd:       10,
+			ato:        0,
+			wantedErr:  "too late",
+		},
+		{
+			desc:       "infinite tsbd",
+			availTimeS: 140,
+			nowS:       120,
+			tsbd:       10,
+			ato:        -1,
+			wantedErr:  "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			err := CheckTimeValidity(tc.availTimeS, tc.nowS, tc.tsbd, tc.ato)
+			if tc.wantedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err, tc.wantedErr)
+			}
+		})
+	}
 }
