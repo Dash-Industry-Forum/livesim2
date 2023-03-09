@@ -256,7 +256,6 @@ func writeChunkedSegment(ctx context.Context, w http.ResponseWriter, log *zerolo
 	if err != nil {
 		return fmt.Errorf("chunkSegment: %w", err)
 	}
-	fmt.Printf("nr segments is %d\n", len(chunks))
 	startUnixMS := unixMS()
 	chunkAvailTime := int(segMeta.newTime) + cfg.StartTimeS*int(segMeta.timescale)
 	for _, chk := range chunks {
