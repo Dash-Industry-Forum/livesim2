@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- nothing yet
+
+## [0.5.1] - 2023-03-09
+
 ### Fixed
 
 - make `ato=inf` work, i.e. infinite availabilityTimeOffset
@@ -28,5 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - features and URLs listed at livesim2 root page
 - configurable generated stpp subtitles with timing info
 
-[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/Dash-Industry-Forum/livesim2/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Dash-Industry-Forum/livesim2/releases/tag/v0.5.0
