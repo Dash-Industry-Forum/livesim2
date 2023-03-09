@@ -57,7 +57,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 		mpd.TimeShiftBufferDepth = m.Seconds2DurPtr(*cfg.TimeShiftBufferDepthS)
 	}
 
-	if cfg.AvailabilityTimeOffsetS != nil {
+	if cfg.getAvailabilityTimeOffsetS() > 0 {
 		mpd.ServiceDescription = createServiceDescription()
 	}
 
@@ -150,8 +150,8 @@ func adjustAdaptationSetForTimelineTime(cfg *ResponseConfig, a *asset, as *m.Ada
 	}
 	if !cfg.AvailabilityTimeCompleteFlag {
 		as.SegmentTemplate.AvailabilityTimeComplete = Ptr(false)
-		if cfg.AvailabilityTimeOffsetS != nil {
-			as.SegmentTemplate.AvailabilityTimeOffset = *cfg.AvailabilityTimeOffsetS
+		if cfg.getAvailabilityTimeOffsetS() > 0 {
+			as.SegmentTemplate.AvailabilityTimeOffset = cfg.getAvailabilityTimeOffsetS()
 			as.ProducerReferenceTimes = createProducerRefenceTimes(cfg.StartTimeS)
 		}
 	}
@@ -177,8 +177,8 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 	}
 	if !cfg.AvailabilityTimeCompleteFlag {
 		as.SegmentTemplate.AvailabilityTimeComplete = Ptr(false)
-		if cfg.AvailabilityTimeOffsetS != nil {
-			as.SegmentTemplate.AvailabilityTimeOffset = *cfg.AvailabilityTimeOffsetS
+		if cfg.getAvailabilityTimeOffsetS() > 0 {
+			as.SegmentTemplate.AvailabilityTimeOffset = cfg.getAvailabilityTimeOffsetS()
 			as.ProducerReferenceTimes = createProducerRefenceTimes(cfg.StartTimeS)
 		}
 	}

@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"math"
 	"net/http"
 	"path"
 	"strconv"
@@ -57,11 +58,13 @@ type segMeta struct {
 	timescale uint32
 }
 
-// findSegMetaFromTime finds the proper segMeta if time is OK. Otherwise error message like TooEarly or Gone
+// findSegMetaFromTime finds the proper segMeta if media time is OK.
+// Otherwise error message like TooEarly or Gone.
+// time is measured relatative to period start + presentationTimeOffset (PTO).
+// Period star is in turn relative to startTime (availabilityStartTime)
+// For now, period and PTO are both zero, but the startTime may be non-zero.
 func findSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseConfig, nowMS int) (segMeta, error) {
-	mediaRef := cfg.StartTimeS * rep.MediaTimescale // TODO. Add period offsets
-	now := nowMS * rep.MediaTimescale / 1000
-	nowRel := now - mediaRef
+	mediaRef := cfg.StartTimeS * rep.MediaTimescale // TODO. Add period + PTO
 	wrapDur := a.LoopDurMS * rep.MediaTimescale / 1000
 	nrWraps := int(time) / wrapDur
 	wrapTime := nrWraps * wrapDur
@@ -76,22 +79,11 @@ func findSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseConfi
 	}
 
 	// Check interval validity
-	// Valid interval [nowRel-cfg.tsbd, nowRel) where end-time must be used
-	segAvailTime := int(seg.endTime) + wrapTime
-	if cfg.AvailabilityTimeOffsetS != nil {
-		segAvailTime -= int(*cfg.AvailabilityTimeOffsetS * float64(rep.MediaTimescale))
-	}
-	if segAvailTime > nowRel {
-		return segMeta{}, newErrTooEarly((segAvailTime - nowRel) * 1000 / rep.MediaTimescale)
-	}
-	if segAvailTime < nowRel-(*cfg.TimeShiftBufferDepthS+timeShiftBufferDepthMarginS)*rep.MediaTimescale {
-		return segMeta{}, errGone
-	}
-
-	// Default startNr is 1, but can be overriddenby actual value set in cfg.
-	outNrOffset := 1
-	if cfg.StartNr != nil {
-		outNrOffset = *cfg.StartNr
+	segAvailTimeS := float64(int(seg.endTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
+	nowS := float64(nowMS) * 0.001
+	err := CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
+	if err != nil {
+		return segMeta{}, err
 	}
 
 	return segMeta{
@@ -99,42 +91,51 @@ func findSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseConfi
 		origTime:  seg.startTime,
 		newTime:   time,
 		origNr:    seg.nr,
-		newNr:     uint32(outNrOffset + idx + nrWraps*len(rep.segments)),
+		newNr:     uint32(cfg.getStartNr() + idx + nrWraps*len(rep.segments)),
 		origDur:   uint32(seg.endTime - seg.startTime),
 		newDur:    uint32(seg.endTime - seg.startTime),
 		timescale: uint32(rep.MediaTimescale),
 	}, nil
 }
 
+// CheckTimeValidity checks if availTimeS is a valid time given current time and parameters.
+// Returns errors if too early, or too late. availabilityTimeOffset < 0 signals always available.
+func CheckTimeValidity(availTimeS, nowS, timeShiftBufferDepthS, availabilityTimeOffsetS float64) error {
+	if availabilityTimeOffsetS < 0 {
+		return nil // Infinite availability time offset
+	}
+	// Valid interval [nowRel-cfg.tsbd, nowRel) where end-time must be used
+
+	if availabilityTimeOffsetS > 0 {
+		availTimeS -= availabilityTimeOffsetS
+	}
+	if availTimeS > nowS {
+		return newErrTooEarly(int(math.Round((availTimeS - nowS) * 1000.0)))
+	}
+	if availTimeS < nowS-(timeShiftBufferDepthS+timeShiftBufferDepthMarginS) {
+		return errGone
+	}
+	return nil
+}
+
 // findSegMetaFromNr returns segMeta if segment is available.
 func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, nowMS int) (segMeta, error) {
 	wrapLen := len(rep.segments)
-	startNr := 1
-	if cfg.StartNr != nil {
-		startNr = *cfg.StartNr
-	}
+	startNr := cfg.getStartNr()
 	nrWraps := (int(nr) - startNr) / wrapLen
 	relNr := int(nr) - nrWraps*wrapLen
 	wrapDur := a.LoopDurMS * rep.MediaTimescale / 1000
 	wrapTime := nrWraps * wrapDur
 	seg := rep.segments[relNr]
 	segTime := wrapTime + int(seg.startTime)
-
-	mediaRef := cfg.StartTimeS * rep.MediaTimescale // TODO. Add period offsets
-	now := nowMS * rep.MediaTimescale / 1000
-	nowRel := now - mediaRef
+	mediaRef := cfg.StartTimeS * rep.MediaTimescale // TODO. Add period offset
 
 	// Check interval validity
-	// Valid interval [nowRel-cfg.tsbd, nowRel) where end-time must be used
-	segAvailTime := int(seg.endTime) + wrapTime
-	if cfg.AvailabilityTimeOffsetS != nil {
-		segAvailTime -= int(*cfg.AvailabilityTimeOffsetS * float64(rep.MediaTimescale))
-	}
-	if segAvailTime > nowRel {
-		return segMeta{}, newErrTooEarly((segAvailTime - nowRel) * 1000 / rep.MediaTimescale)
-	}
-	if segAvailTime < nowRel-(*cfg.TimeShiftBufferDepthS+timeShiftBufferDepthMarginS)*rep.MediaTimescale {
-		return segMeta{}, errGone
+	segAvailTimeS := float64(int(seg.endTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
+	nowS := float64(nowMS) * 0.001
+	err := CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
+	if err != nil {
+		return segMeta{}, err
 	}
 
 	return segMeta{

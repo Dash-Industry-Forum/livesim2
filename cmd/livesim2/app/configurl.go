@@ -74,6 +74,23 @@ func (rc *ResponseConfig) liveMPDType() liveMPDType {
 	}
 }
 
+// getAvailabilityTimeOffset returns a postive value if set to finite, -1 if negative, and 0 if not set.
+func (rc *ResponseConfig) getAvailabilityTimeOffsetS() float64 {
+	if rc.AvailabilityTimeOffsetS == nil {
+		return 0
+	}
+	return *rc.AvailabilityTimeOffsetS
+}
+
+// getStartNr for MPD. Default value if not set is 1.
+func (rc *ResponseConfig) getStartNr() int {
+	// Default startNr is 1, but can be overridden by actual value set in cfg.
+	if rc.StartNr != nil {
+		return *rc.StartNr
+	}
+	return 1
+}
+
 // processURLCfg returns all information that can be extracted from the urlParts
 func processURLCfg(urlParts []string, nowS int) (cfg *ResponseConfig, cntStart int, err error) {
 	// Mimics configprocessor.procss_url
