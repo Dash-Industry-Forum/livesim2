@@ -11,6 +11,11 @@ prepare:
 livesim2 dashfetcher:
 	go build -ldflags "-X github.com/Dash-Industry-Forum/livesim2.internal.commitVersion=$$(git describe --tags HEAD) -X github.com/Dash-Industry-Forum/livesim2.internal.commitDate=$$(git log -1 --format=%ct)" -o out/$@ ./cmd/$@/main.go
 
+forlinux: prepare
+	GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/Dash-Industry-Forum/livesim2.internal.commitVersion=$$(git describe --tags HEAD) -X github.com/Dash-Industry-Forum/livesim2.internal.commitDate=$$(git log -1 --format=%ct)" -o out-linux/livesim2 ./cmd/livesim2/main.go
+	GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/Dash-Industry-Forum/livesim2.internal.commitVersion=$$(git describe --tags HEAD) -X github.com/Dash-Industry-Forum/livesim2.internal.commitDate=$$(git log -1 --format=%ct)" -o out-linux/dashfetcher ./cmd/dashfetcher/main.go
+
+
 .PHONY: test
 test: prepare
 	go test ./...
