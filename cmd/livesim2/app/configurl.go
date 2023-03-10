@@ -49,6 +49,7 @@ type ResponseConfig struct {
 	AvailabilityTimeCompleteFlag bool     `json:"AvailabilityTimeCompleteFlag,omitempty"`
 	TimeSubsStpp                 []string `json:"TimeSubsStppLanguages,omitempty"`
 	TimeSubsDurMS                int      `json:"TimeSubsDurMS,omitempty"`
+	TimeSubsRegion               int      `json:"TimeSubsRegion,omitempty"`
 }
 
 // NewResponseConfig returns a new ResponseConfig with default values.
@@ -182,6 +183,8 @@ cfgLoop:
 			cfg.TimeSubsStpp = strings.Split(val, ",")
 		case "timesubsdur": // duration in milliseconds
 			cfg.TimeSubsDurMS = sc.Atoi(key, val)
+		case "timesubsreg": // retion (0 or 1)
+			cfg.TimeSubsRegion = sc.Atoi(key, val)
 		default:
 			contentStartIdx = i
 			break cfgLoop
@@ -207,6 +210,9 @@ func verifyConfig(cfg *ResponseConfig) error {
 	}
 	if len(cfg.TimeSubsStpp) > 0 && cfg.SegTimelineFlag {
 		return fmt.Errorf("combination of SegTimeline and generated stpp subtitles not yet supported")
+	}
+	if cfg.TimeSubsRegion < 0 || cfg.TimeSubsRegion > 1 {
+		return fmt.Errorf("timesubsreg number must be 0 or 1")
 	}
 	return nil
 }

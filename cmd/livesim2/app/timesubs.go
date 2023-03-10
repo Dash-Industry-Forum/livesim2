@@ -85,8 +85,9 @@ func createSubtitlesStppInitSegment(lang string, timescale uint32) *mp4.InitSegm
 
 // StppTimeData is iformation for creating an stpp media segment.
 type StppTimeData struct {
-	Lang string
-	Cues []StppTimeCue
+	Lang   string
+	Region int
+	Cues   []StppTimeCue
 }
 
 // StppTimeCue is cue information to put in template.
@@ -151,7 +152,7 @@ func writeTimeStppMediaSegment(w http.ResponseWriter, cfg *ResponseConfig, a *as
 
 	utcTimeMS := segMeta.newTime*SUBS_STPP_TIMESCALE/uint64(rep.MediaTimescale) + uint64(cfg.StartTimeS*SUBS_STPP_TIMESCALE)
 	mediaSeg, err := createSubtitlesStppMediaSegment(segMeta.newNr, baseMediaDecodeTime, dur, lang, utcTimeMS,
-		tt, cfg.TimeSubsDurMS)
+		tt, cfg.TimeSubsDurMS, cfg.TimeSubsRegion)
 	if err != nil {
 		return true, fmt.Errorf("createSubtitleStppMediaSegment: %w", err)
 	}
@@ -223,7 +224,7 @@ func calcCueItvls(segStart, segDur, utcStart, cueDur int) []cueItvl {
 }
 
 func createSubtitlesStppMediaSegment(nr uint32, baseMediaDecodeTime uint64, dur uint32, lang string, utcTimeMS uint64,
-	tt *template.Template, timeSubsDurMS int) (*mp4.MediaSegment, error) {
+	tt *template.Template, timeSubsDurMS, region int) (*mp4.MediaSegment, error) {
 	seg := mp4.NewMediaSegment()
 	frag, err := mp4.CreateFragment(nr, 1)
 	if err != nil {
@@ -232,8 +233,9 @@ func createSubtitlesStppMediaSegment(nr uint32, baseMediaDecodeTime uint64, dur 
 	seg.AddFragment(frag)
 	cueItvls := calcCueItvls(int(baseMediaDecodeTime), int(dur), int(utcTimeMS), timeSubsDurMS)
 	stppd := StppTimeData{
-		Lang: lang,
-		Cues: make([]StppTimeCue, 0, len(cueItvls)),
+		Lang:   lang,
+		Region: region,
+		Cues:   make([]StppTimeCue, 0, len(cueItvls)),
 	}
 	for i, ci := range cueItvls {
 		cue := StppTimeCue{
