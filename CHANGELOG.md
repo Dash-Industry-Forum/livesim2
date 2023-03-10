@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- new parameter subsstppreg can can change vertical region
+### Added
+
+- parameter `mup` to set minimumUpdatePeriod in MPD
+- new parameter `subsstppreg` can set vertical region
 
 ## [0.5.1] - 2023-03-09
 
