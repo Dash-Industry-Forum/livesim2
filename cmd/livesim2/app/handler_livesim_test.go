@@ -46,7 +46,7 @@ const outputPayload = `<?xml version="1.0" encoding="UTF-8"?>
     </layout>
   </head>
   <body style="s0">
-<div region="r0">
+<div region="r1">
 <p xml:id="0-0" begin="00:00:00.000" end="00:00:00.600"><span style="s1">1970-01-01T00:00:00Z<br/>en # 0</span></p>
 <p xml:id="0-1" begin="00:00:01.000" end="00:00:01.600"><span style="s1">1970-01-01T00:00:01Z<br/>en # 0</span></p>
 </div>
@@ -150,7 +150,7 @@ func TestTimeStppMediaSegment(t *testing.T) {
 		{
 			desc:               "mediasegment 0 with matching language",
 			asset:              "testpic_2s",
-			url:                "/livesim2/timesubsstpp_en,sv/timesubsdur_600/testpic_2s/timestpp-en/0.m4s?nowMS=10000",
+			url:                "/livesim2/timesubsstpp_en,sv/timesubsdur_600/timesubsreg_1/testpic_2s/timestpp-en/0.m4s?nowMS=10000",
 			segmentMimeType:    "application/mp4",
 			cues:               nil,
 			expectedStatusCode: http.StatusOK,

@@ -27,7 +27,7 @@ The -a/--auto option adds output subdirectories fromn the URL removing common pr
 Some possible resources are available at https://cta-wave.github.io/Test-Content/.
 To download one of them, try
 
-$ %s -a https://cta-wave.github.io/Test-Content/https://dash.akamaized.net/WAVE/vectors/cfhd_sets/12.5_25_50/t1/2022-10-17/stream.mpd
+$ %s -a https://dash.akamaized.net/WAVE/vectors/cfhd_sets/12.5_25_50/t1/2022-10-17/stream.mpd
 `
 
 func parseOptions() *app.Options {
