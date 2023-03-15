@@ -78,7 +78,6 @@ func TestLiveMPD(t *testing.T) {
 			assert.Nil(t, stl.StartNumber)
 			assert.Equal(t, tc.timeMedia, stl.Media)
 		}
-
 		assert.Equal(t, 1, len(liveMPD.UTCTimings))
 	}
 }

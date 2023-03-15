@@ -93,6 +93,27 @@ func TestProcessURLCfg(t *testing.T) {
 			cfgJSON:     "",
 			err:         "url config: mpd type SegmentTimeline with Number not yet supported",
 		},
+		{
+			url:         "/livesim/mup_0/asset.mpd",
+			nowS:        0,
+			contentPart: "asset.mpd",
+			cfgJSON:     "",
+			err:         "url config: minimumUpdatePeriod must be > 0",
+		},
+		{
+			url:         "/livesim/mup_1/asset.mpd",
+			nowS:        0,
+			contentPart: "asset.mpd",
+			cfgJSON: `{
+				"StartTimeS": 0,
+				"TimeShiftBufferDepthS": 60,
+				"MinimumUpdatePeriodS": 1,
+				"StartNr": 0,
+				"AvailabilityTimeCompleteFlag": true,
+				"TimeSubsDurMS": 900
+				}`,
+			err: "",
+		},
 	}
 
 	for _, c := range cases {

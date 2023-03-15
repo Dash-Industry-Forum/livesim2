@@ -214,5 +214,8 @@ func verifyConfig(cfg *ResponseConfig) error {
 	if cfg.TimeSubsRegion < 0 || cfg.TimeSubsRegion > 1 {
 		return fmt.Errorf("timesubsreg number must be 0 or 1")
 	}
+	if cfg.MinimumUpdatePeriodS != nil && *cfg.MinimumUpdatePeriodS <= 0 {
+		return fmt.Errorf("minimumUpdatePeriod must be > 0")
+	}
 	return nil
 }

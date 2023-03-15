@@ -182,3 +182,45 @@ func TestTimeStppMediaSegment(t *testing.T) {
 		})
 	}
 }
+
+func TestParamToMPD(t *testing.T) {
+	cfg := ServerConfig{
+		VodRoot:   "testdata/assets",
+		TimeoutS:  0,
+		LogFormat: logging.LogDiscard,
+	}
+	_, err := logging.InitZerolog(cfg.LogLevel, cfg.LogFormat)
+	require.NoError(t, err)
+	server, err := SetupServer(context.Background(), &cfg)
+	require.NoError(t, err)
+	ts := httptest.NewServer(server.Router)
+	defer ts.Close()
+	testCases := []struct {
+		desc             string
+		mpd              string
+		params           string
+		wantedStatusCode int
+		wantedInMPD      string
+	}{
+		{
+			desc:             "minimumUpdatePeriod",
+			mpd:              "testpic_2s/Manifest.mpd",
+			params:           "mup_1/",
+			wantedStatusCode: http.StatusOK,
+			wantedInMPD:      `minimumUpdatePeriod="PT1S"`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			mpdURL := "/livesim2/" + tc.params + tc.mpd
+			resp, body := testFullRequest(t, ts, "GET", mpdURL, nil)
+			require.Equal(t, tc.wantedStatusCode, resp.StatusCode)
+			if tc.wantedStatusCode != http.StatusOK {
+				return
+			}
+			bodyStr := string(body)
+			require.Greater(t, strings.Index(bodyStr, tc.wantedInMPD), -1)
+		})
+	}
+}
