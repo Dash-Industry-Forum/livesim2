@@ -45,3 +45,7 @@ install: all
 .PHONY: update
 update:
 	go get -t -u ./...
+
+.PHONY: check-licenses
+check-licenses: prepare
+	wwhrd check
