@@ -37,6 +37,7 @@ type ResponseConfig struct {
 	SuggestedPresentationDelayS  *int     `json:"SuggestedPresentationDelayS,omitempty"`
 	AvailabilityTimeOffsetS      *float64 `json:"AvailabilityTimeOffsetS,omitempty"`
 	ChunkDurS                    *float64 `json:"ChunkDurS,omitempty"`
+	LatencyTargetMS              *int     `json:"LatencyTargetMS,omitempty"`
 	AddLocationFlag              bool     `json:"AddLocationFlag,omitempty"`
 	Tfdt32Flag                   bool     `json:"Tfdt32Flag,omitempty"`
 	ContUpdateFlag               bool     `json:"ContUpdateFlag,omitempty"`
@@ -170,6 +171,8 @@ cfgLoop:
 			} else {
 				cfg.AvailabilityTimeOffsetS = sc.AtofPosPtr(key, val)
 			}
+		case "ltgt": // latencyTargetMS
+			cfg.LatencyTargetMS = sc.AtoiPtr(key, val)
 		case "spd": // suggestedPresentationDelay
 			cfg.SuggestedPresentationDelayS = sc.AtoiPtr(key, val)
 		case "sidx": // Insert sidx in each segment
@@ -197,14 +200,14 @@ cfgLoop:
 		return nil, 0, fmt.Errorf("no content part")
 	}
 
-	err = verifyConfig(cfg)
+	err = verifyAndFillConfig(cfg)
 	if err != nil {
 		return cfg, contentStartIdx, fmt.Errorf("url config: %w", err)
 	}
 	return cfg, contentStartIdx, nil
 }
 
-func verifyConfig(cfg *ResponseConfig) error {
+func verifyAndFillConfig(cfg *ResponseConfig) error {
 	if cfg.SegTimelineNrFlag {
 		return fmt.Errorf("mpd type SegmentTimeline with Number not yet supported")
 	}
@@ -216,6 +219,9 @@ func verifyConfig(cfg *ResponseConfig) error {
 	}
 	if cfg.MinimumUpdatePeriodS != nil && *cfg.MinimumUpdatePeriodS <= 0 {
 		return fmt.Errorf("minimumUpdatePeriod must be > 0")
+	}
+	if cfg.getAvailabilityTimeOffsetS() > 0 && cfg.LatencyTargetMS == nil {
+		cfg.LatencyTargetMS = Ptr(defaultLatencyTargetMS)
 	}
 	return nil
 }

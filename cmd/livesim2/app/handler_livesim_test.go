@@ -209,6 +209,20 @@ func TestParamToMPD(t *testing.T) {
 			wantedStatusCode: http.StatusOK,
 			wantedInMPD:      `minimumUpdatePeriod="PT1S"`,
 		},
+		{
+			desc:             "latency target",
+			mpd:              "testpic_2s/Manifest.mpd",
+			params:           "ltgt_2500/ato_1/chunkdur_0.25/",
+			wantedStatusCode: http.StatusOK,
+			wantedInMPD:      `<Latency referenceId="0" target="2500" max="5000" min="1875"></Latency>`,
+		},
+		{
+			desc:             "latency target",
+			mpd:              "testpic_2s/Manifest.mpd",
+			params:           "ato_1/chunkdur_0.25/",
+			wantedStatusCode: http.StatusOK,
+			wantedInMPD:      `<Latency referenceId="0" target="3500" max="7000" min="2625"></Latency>`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -220,7 +234,8 @@ func TestParamToMPD(t *testing.T) {
 				return
 			}
 			bodyStr := string(body)
-			require.Greater(t, strings.Index(bodyStr, tc.wantedInMPD), -1)
+			//fmt.Println(bodyStr)
+			require.Greater(t, strings.Index(bodyStr, tc.wantedInMPD), -1, "no match in MPD")
 		})
 	}
 }

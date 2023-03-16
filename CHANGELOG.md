@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - parameter `mup` to set minimumUpdatePeriod in MPD
 - new parameter `subsstppreg` can set vertical region
+- new parameter `ltgt` sets latency target in milliseconds
 
 ## [0.5.1] - 2023-03-09
 
