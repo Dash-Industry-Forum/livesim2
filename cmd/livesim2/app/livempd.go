@@ -6,7 +6,6 @@ package app
 
 import (
 	"fmt"
-	"math"
 	"strings"
 
 	m "github.com/Eyevinn/dash-mpd/mpd"
@@ -92,7 +91,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 				return nil, fmt.Errorf("adjustASForTimelineTime: %w", err)
 			}
 			if i == 0 {
-				mpd.PublishTime = m.ConvertToDateTimeS(int64(calcPublishTimeS(cfg, lsi)))
+				mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, lsi))
 			}
 		}
 	case timeLineNumber:
@@ -264,15 +263,13 @@ func addTimeSubsStpp(cfg *ResponseConfig, a *asset, period *m.PeriodType) error 
 	return nil
 }
 
-// calcPublishTimeS calculates the last time there was a change in the manifest.
-// An availabilityTimeOffset influences the publishTime to be earlier with the
-// same amount.
-// The result is a rounded integral number of seconds relative to 1970 epoch.
-func calcPublishTimeS(cfg *ResponseConfig, lsi lastSegInfo) int {
+// calcPublishTime calculates the last time there was a change in the manifest in seconds.
+// availabilityTimeOffset > 0 influences the publishTime to be earlier with that value.
+func calcPublishTime(cfg *ResponseConfig, lsi lastSegInfo) float64 {
 	switch cfg.liveMPDType() {
 	case segmentNumber:
 		// For single-period case, nothing change after startTime
-		return cfg.StartTimeS
+		return float64(cfg.StartTimeS)
 	case timeLineTime:
 		// Here we need the publish time of the last segment
 		return lastSegAvailTimeS(cfg, lsi)
@@ -282,12 +279,12 @@ func calcPublishTimeS(cfg *ResponseConfig, lsi lastSegInfo) int {
 }
 
 // lastSegAvailTimeS returns the availabilityTime of the last segment.
-func lastSegAvailTimeS(cfg *ResponseConfig, lsi lastSegInfo) int {
+func lastSegAvailTimeS(cfg *ResponseConfig, lsi lastSegInfo) float64 {
 	availTimeS := float64(lsi.startTime) / float64(lsi.timescale)
 	if cfg.AvailabilityTimeOffsetS != nil {
 		availTimeS -= *cfg.AvailabilityTimeOffsetS
 	} else {
 		availTimeS += float64(lsi.dur) / float64(lsi.timescale)
 	}
-	return int(math.Round(availTimeS))
+	return availTimeS
 }

@@ -291,7 +291,7 @@ func TestPublishTime(t *testing.T) {
 			segTimelineTime:        true,
 			availabilityTimeOffset: 1.5,
 			nowMS:                  3000,
-			wantedPublishTime:      "1970-01-01T00:00:01Z",
+			wantedPublishTime:      "1970-01-01T00:00:00.5Z",
 		},
 		{
 			desc:                   "Timeline with $Time$ 4.25s, ato=1.5, 2 segments available",
@@ -300,7 +300,7 @@ func TestPublishTime(t *testing.T) {
 			segTimelineTime:        true,
 			availabilityTimeOffset: 1.5,
 			nowMS:                  4250,
-			wantedPublishTime:      "1970-01-01T00:00:01Z",
+			wantedPublishTime:      "1970-01-01T00:00:00.5Z",
 		},
 		{
 			desc:                   "Timeline with $Time$ 4.5s, ato=1.5, 3.25 segments available",
@@ -309,7 +309,7 @@ func TestPublishTime(t *testing.T) {
 			segTimelineTime:        true,
 			availabilityTimeOffset: 1.5,
 			nowMS:                  4500,
-			wantedPublishTime:      "1970-01-01T00:00:03Z",
+			wantedPublishTime:      "1970-01-01T00:00:02.5Z",
 		},
 		{
 			desc:              "Timeline with $Time$ 1s after start. No segments",
