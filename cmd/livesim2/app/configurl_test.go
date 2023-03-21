@@ -5,8 +5,6 @@
 package app
 
 import (
-	"encoding/json"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -19,99 +17,110 @@ func TestProcessURLCfg(t *testing.T) {
 		url         string
 		nowS        int
 		contentPart string
-		cfgJSON     string
+		wantedCfg   *ResponseConfig
 		err         string
 	}{
 		{
 			url:         "/livesim/tsbd_1/asset.mpd",
 			nowS:        0,
 			contentPart: "asset.mpd",
-			cfgJSON: `{
-				"StartTimeS": 0,
-				"TimeShiftBufferDepthS": 1,
-				"StartNr": 0,
-				"AvailabilityTimeCompleteFlag": true,
-				"TimeSubsDurMS": 900
-				}`,
+			wantedCfg: &ResponseConfig{
+				StartTimeS:                   0,
+				TimeShiftBufferDepthS:        Ptr(1),
+				StartNr:                      Ptr(0),
+				AvailabilityTimeCompleteFlag: true,
+				TimeSubsDurMS:                defaultTimeSubsDurMS,
+			},
 			err: "",
 		},
 		{
 			url:         "/livesim/tsbd_1/tsb_asset/V300.cmfv",
 			nowS:        0,
 			contentPart: "tsb_asset/V300.cmfv",
-			cfgJSON: `{
-				"StartTimeS": 0,
-				"TimeShiftBufferDepthS": 1,
-				"StartNr": 0,
-				"AvailabilityTimeCompleteFlag": true,
-				"TimeSubsDurMS": 900
-				}`,
+			wantedCfg: &ResponseConfig{
+				StartTimeS:                   0,
+				TimeShiftBufferDepthS:        Ptr(1),
+				StartNr:                      Ptr(0),
+				AvailabilityTimeCompleteFlag: true,
+				TimeSubsDurMS:                defaultTimeSubsDurMS,
+			},
 			err: "",
 		},
 		{
 			url:         "/livesim/tsbd_a/asset.mpd",
 			nowS:        0,
 			contentPart: "",
-			cfgJSON:     "",
+			wantedCfg:   nil,
 			err:         `key=tsbd, err=strconv.Atoi: parsing "a": invalid syntax`,
 		},
 		{
 			url:         "/livesim/tsbd_1",
 			nowS:        0,
 			contentPart: "",
-			cfgJSON:     "",
+			wantedCfg:   nil,
 			err:         "no content part",
 		},
 		{
 			url:         "/livesim/timesubsstpp_en,sv/asset.mpd",
 			nowS:        0,
 			contentPart: "asset.mpd",
-			cfgJSON: `{
-				"StartTimeS": 0,
-				"TimeShiftBufferDepthS": 60,
-				"StartNr": 0,
-				"AvailabilityTimeCompleteFlag": true,
-				"TimeSubsStppLanguages": [
-				"en",
-				"sv"
-				],
-				"TimeSubsDurMS": 900
-			}`,
+			wantedCfg: &ResponseConfig{
+				StartTimeS:                   0,
+				TimeShiftBufferDepthS:        Ptr(60),
+				StartNr:                      Ptr(0),
+				AvailabilityTimeCompleteFlag: true,
+				TimeSubsStpp:                 []string{"en", "sv"},
+				TimeSubsDurMS:                defaultTimeSubsDurMS,
+			},
 			err: "",
 		},
 		{
 			url:         "/livesim/segtimeline_1/timesubsstpp_en,sv/asset.mpd",
 			nowS:        0,
 			contentPart: "",
-			cfgJSON:     "",
+			wantedCfg:   nil,
 			err:         "url config: combination of SegTimeline and generated stpp subtitles not yet supported",
 		},
 		{
 			url:         "/livesim/segtimelinenr_1/asset.mpd",
 			nowS:        0,
 			contentPart: "",
-			cfgJSON:     "",
+			wantedCfg:   nil,
 			err:         "url config: mpd type SegmentTimeline with Number not yet supported",
 		},
 		{
 			url:         "/livesim/mup_0/asset.mpd",
 			nowS:        0,
 			contentPart: "asset.mpd",
-			cfgJSON:     "",
+			wantedCfg:   nil,
 			err:         "url config: minimumUpdatePeriod must be > 0",
 		},
 		{
 			url:         "/livesim/mup_1/asset.mpd",
 			nowS:        0,
 			contentPart: "asset.mpd",
-			cfgJSON: `{
-				"StartTimeS": 0,
-				"TimeShiftBufferDepthS": 60,
-				"MinimumUpdatePeriodS": 1,
-				"StartNr": 0,
-				"AvailabilityTimeCompleteFlag": true,
-				"TimeSubsDurMS": 900
-				}`,
+			wantedCfg: &ResponseConfig{
+				StartTimeS:                   0,
+				TimeShiftBufferDepthS:        Ptr(60),
+				MinimumUpdatePeriodS:         Ptr(1),
+				StartNr:                      Ptr(0),
+				AvailabilityTimeCompleteFlag: true,
+				TimeSubsDurMS:                defaultTimeSubsDurMS,
+			},
+			err: "",
+		},
+		{
+			url:         "/livesim/ltgt_2500/asset.mpd",
+			nowS:        1000,
+			contentPart: "asset.mpd",
+			wantedCfg: &ResponseConfig{
+				StartTimeS:                   0,
+				TimeShiftBufferDepthS:        Ptr(60),
+				StartNr:                      Ptr(0),
+				AvailabilityTimeCompleteFlag: true,
+				LatencyTargetMS:              Ptr(2500),
+				TimeSubsDurMS:                defaultTimeSubsDurMS,
+			},
 			err: "",
 		},
 	}
@@ -127,17 +136,8 @@ func TestProcessURLCfg(t *testing.T) {
 		assert.NoError(t, err)
 		gotContentPart := strings.Join(urlParts[idx:], "/")
 		require.Equal(t, c.contentPart, gotContentPart)
-		jsonBytes, err := json.MarshalIndent(cfg, "", "")
-		assert.NoError(t, err)
-		jsonStr := string(jsonBytes)
-		wantedJSON := dedent(c.cfgJSON)
-		require.Equal(t, wantedJSON, jsonStr)
+		if c.wantedCfg != nil {
+			require.Equal(t, c.wantedCfg, cfg)
+		}
 	}
-}
-
-var whitespaceOnly = regexp.MustCompile("\n[ \t]+")
-
-// dendent removes spaces and tabs right after a newline
-func dedent(str string) string {
-	return whitespaceOnly.ReplaceAllString(str, "\n")
 }

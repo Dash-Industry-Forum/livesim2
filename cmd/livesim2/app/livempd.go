@@ -58,7 +58,11 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	}
 
 	if cfg.getAvailabilityTimeOffsetS() > 0 {
-		mpd.ServiceDescription = createServiceDescription()
+		if cfg.LatencyTargetMS == nil {
+			return nil, fmt.Errorf("latencyTargetMS (ltgt) not set")
+		}
+		latencyTargetMS := uint32(*cfg.LatencyTargetMS)
+		mpd.ServiceDescription = createServiceDescription(latencyTargetMS)
 	}
 
 	//TODO. Replace this with configured list of different UTCTiming methods
@@ -107,16 +111,18 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 }
 
 // createServiceDescription creates a fixed service description for low-latency
-func createServiceDescription() []*m.ServiceDescriptionType {
+func createServiceDescription(latencyTargetMS uint32) []*m.ServiceDescriptionType {
+	minLatency := latencyTargetMS * 3 / 4
+	maxLatency := latencyTargetMS * 2
 	return []*m.ServiceDescriptionType{
 		{
 			Id: 0,
 			Latencies: []*m.LatencyType{
 				{
 					ReferenceId: 0,
-					Max:         Ptr[uint32](6000),
-					Min:         Ptr[uint32](2000),
-					Target:      Ptr[uint32](3500),
+					Max:         Ptr(maxLatency),
+					Min:         Ptr(minLatency),
+					Target:      Ptr(latencyTargetMS),
 				},
 			},
 			PlaybackRates: []*m.PlaybackRateType{
