@@ -290,28 +290,51 @@ func (a *asset) getVodMPD(mpdName string) (*m.MPD, error) {
 	return m.ReadFromString(md.MPDStr)
 }
 
-func (a *asset) generateTimelineEntry(repID string, startWraps, startRelMS, nowWraps, nowRelMS int) []*m.S {
+type lastSegInfo struct {
+	timescale      uint64
+	startTime, dur uint64
+	nr             int
+}
+
+func (a *asset) generateTimelineEntries(repID string, startWraps, startRelMS, nowWraps, nowRelMS, atoMS int) ([]*m.S, lastSegInfo) {
 	var ss []*m.S
 	rep := a.Reps[repID]
 	segs := rep.segments
 	nrSegs := len(segs)
 
+	ato := uint64(atoMS * rep.MpdTimescale / 1000)
+
 	relStartTime := uint64(startRelMS * rep.MediaTimescale / 1000)
 	relStartIdx := 0
-	if relStartTime < segs[0].endTime {
+	if relStartTime+ato < segs[0].endTime {
 		startWraps--
 		relStartIdx = nrSegs - 1
 	} else {
-		relStartIdx = findHighestIndex(segs, relStartTime)
+		relStartIdx = findFirstFinishedSegIdx(segs, relStartTime+ato)
+		if relStartIdx < 0 {
+			startWraps--
+			relStartIdx = nrSegs - 1
+		}
+	}
+	if startWraps < 0 { // Cannot go before start
+		relStartIdx = 0
+		startWraps = 0
 	}
 
 	relNowTime := uint64(nowRelMS * rep.MediaTimescale / 1000)
 	relNowIdx := 0
-	if relNowTime < segs[0].endTime {
+	if relNowTime+ato < segs[0].endTime {
 		nowWraps--
 		relNowIdx = nrSegs - 1
 	} else {
-		relNowIdx = findHighestIndex(segs, relNowTime)
+		relNowIdx = findFirstFinishedSegIdx(segs, relNowTime+ato)
+		if relNowIdx < 0 {
+			nowWraps--
+			relNowIdx = nrSegs - 1
+		}
+	}
+	if nowWraps < 0 { // end is before start.
+		return nil, lastSegInfo{nr: -1, timescale: uint64(rep.MediaTimescale)}
 	}
 
 	startNr := startWraps*nrSegs + relStartIdx
@@ -319,19 +342,29 @@ func (a *asset) generateTimelineEntry(repID string, startWraps, startRelMS, nowW
 	t := uint64(rep.duration()*startWraps) + segs[relStartIdx].startTime
 	d := segs[relStartIdx].dur()
 	s := &m.S{T: Ptr(t), D: d}
+	lsi := lastSegInfo{
+		timescale: uint64(rep.MediaTimescale),
+		startTime: t,
+		dur:       d,
+		nr:        startNr,
+	}
 	ss = append(ss, s)
 	for nr := startNr + 1; nr <= nowNr; nr++ {
+		lsi.startTime += d
 		relIdx := nr % nrSegs
 		seg := segs[relIdx]
 		if seg.dur() == d {
 			s.R++
+			lsi.nr = nr
 			continue
 		}
 		d = seg.dur()
 		s = &m.S{D: d}
 		ss = append(ss, s)
+		lsi.dur = d
+		lsi.nr = nr
 	}
-	return ss
+	return ss, lsi
 }
 
 // firstVideoRep returns the first (in alphabetical order) video rep if any present.
@@ -349,11 +382,13 @@ func (a *asset) firstVideoRep() (rep *RepData, ok bool) {
 	return nil, false
 }
 
-// findHighestIndex finds highest segment index finished
-func findHighestIndex(segs []segment, t uint64) int {
-	return sort.Search(len(segs), func(i int) bool {
-		return segs[i].endTime >= t
+// findFirstFinishedSegIdx finds index of first finished segment.
+// Returns -1 if none is finished
+func findFirstFinishedSegIdx(segs []segment, t uint64) int {
+	unfinishedIdx := sort.Search(len(segs), func(i int) bool {
+		return segs[i].endTime > t
 	})
+	return unfinishedIdx - 1
 }
 
 type mediaURIType int

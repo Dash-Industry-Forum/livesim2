@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	m "github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/Eyevinn/dash-mpd/xml"
@@ -184,5 +185,200 @@ func TestSegmentTimes(t *testing.T) {
 				assert.True(t, 29 <= nrSegs && nrSegs <= 32, "nr segments in interval 29 <= x <= 32")
 			}
 		}
+	}
+}
+
+func TestLastAvailableSegment(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS)
+	err := am.discoverAssets()
+	require.NoError(t, err)
+	cases := []struct {
+		desc                   string
+		asset                  string
+		mpdName                string
+		segTimelineTime        bool
+		availabilityTimeOffset float64
+		nowMS                  int
+		wantedSegNr            int
+	}{
+		{
+			desc:                   "Timeline with $Time$ 1hour+1s with chunkdur 0.5",
+			asset:                  "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:                "stream.mpd",
+			segTimelineTime:        true,
+			availabilityTimeOffset: 1.5,
+			nowMS:                  3_601_000,
+			wantedSegNr:            1800,
+		},
+		{
+			desc:            "Timeline with $Time$ 1s after start. No segments",
+			asset:           "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:         "stream.mpd",
+			segTimelineTime: true,
+			nowMS:           0,
+			wantedSegNr:     -1,
+		},
+		{
+			desc:            "Timeline with $Time$ 5s after start, two segment (0, 1)",
+			asset:           "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:         "stream.mpd",
+			segTimelineTime: true,
+			nowMS:           5000,
+			wantedSegNr:     1,
+		},
+		{
+			desc:            "Timeline with $Time$ 1hour after segment generation",
+			asset:           "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:         "stream.mpd",
+			segTimelineTime: true,
+			nowMS:           3_600_000,
+			wantedSegNr:     1799,
+		},
+		{
+			desc:            "Timeline with $Time$ 1hour+1s after segment generation",
+			asset:           "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:         "stream.mpd",
+			segTimelineTime: true,
+			nowMS:           3_601_000,
+			wantedSegNr:     1799,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			asset, ok := am.findAsset(tc.asset)
+			require.True(t, ok)
+			cfg := NewResponseConfig()
+			if tc.segTimelineTime {
+				cfg.SegTimelineFlag = true
+			}
+			if tc.availabilityTimeOffset > 0 {
+				cfg.AvailabilityTimeOffsetS = Ptr(tc.availabilityTimeOffset)
+				cfg.ChunkDurS = Ptr(2 - tc.availabilityTimeOffset)
+				cfg.AvailabilityTimeCompleteFlag = false
+			}
+			tsbd := m.Duration(60 * time.Second)
+			wTimes := calcWrapTimes(asset, cfg, tc.nowMS, tsbd)
+			mpd, err := asset.getVodMPD(tc.mpdName)
+			require.NoError(t, err)
+			as := mpd.Periods[0].AdaptationSets[0]
+			lsi, err := adjustAdaptationSetForTimelineTime(cfg, asset, as, wTimes)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantedSegNr, lsi.nr)
+		})
+	}
+}
+
+func TestPublishTime(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS)
+	err := am.discoverAssets()
+	require.NoError(t, err)
+
+	cases := []struct {
+		desc                   string
+		asset                  string
+		mpdName                string
+		segTimelineTime        bool
+		availabilityTimeOffset float64
+		nowMS                  int
+		wantedPublishTime      string
+	}{
+		{
+			desc:              "Timeline with $Time$ 1s after start. No segments",
+			asset:             "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:           "stream.mpd",
+			segTimelineTime:   true,
+			nowMS:             0,
+			wantedPublishTime: "1970-01-01T00:00:00Z",
+		},
+		{
+			desc:                   "Timeline with $Time$ 3s, ato=1.5, 1.25 segments available",
+			asset:                  "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:                "stream.mpd",
+			segTimelineTime:        true,
+			availabilityTimeOffset: 1.5,
+			nowMS:                  3000,
+			wantedPublishTime:      "1970-01-01T00:00:00.5Z",
+		},
+		{
+			desc:                   "Timeline with $Time$ 4.25s, ato=1.5, 2 segments available",
+			asset:                  "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:                "stream.mpd",
+			segTimelineTime:        true,
+			availabilityTimeOffset: 1.5,
+			nowMS:                  4250,
+			wantedPublishTime:      "1970-01-01T00:00:00.5Z",
+		},
+		{
+			desc:                   "Timeline with $Time$ 4.5s, ato=1.5, 3.25 segments available",
+			asset:                  "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:                "stream.mpd",
+			segTimelineTime:        true,
+			availabilityTimeOffset: 1.5,
+			nowMS:                  4500,
+			wantedPublishTime:      "1970-01-01T00:00:02.5Z",
+		},
+		{
+			desc:              "Timeline with $Time$ 3s after start, one segment",
+			asset:             "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:           "stream.mpd",
+			segTimelineTime:   true,
+			nowMS:             3000,
+			wantedPublishTime: "1970-01-01T00:00:02Z",
+		},
+		{
+			desc:              "Timeline with $Time$ 1hour after segment generation",
+			asset:             "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:           "stream.mpd",
+			segTimelineTime:   true,
+			nowMS:             3_600_000,
+			wantedPublishTime: "1970-01-01T01:00:00Z",
+		},
+		{
+			desc:              "Timeline with $Time$ 1hour+1s after segment generation",
+			asset:             "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:           "stream.mpd",
+			segTimelineTime:   true,
+			nowMS:             3_601_000,
+			wantedPublishTime: "1970-01-01T01:00:00Z",
+		},
+		{
+			desc:              "SegmentTemplate with $Number$, some segments produced",
+			asset:             "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:           "stream.mpd",
+			segTimelineTime:   false,
+			nowMS:             10000,
+			wantedPublishTime: "1970-01-01T00:00:00Z",
+		},
+		{
+			desc:              "SegmentTemplate with $Number$, at start",
+			asset:             "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:           "stream.mpd",
+			segTimelineTime:   false,
+			nowMS:             0,
+			wantedPublishTime: "1970-01-01T00:00:00Z",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			asset, ok := am.findAsset(tc.asset)
+			require.True(t, ok)
+			assert.Equal(t, 8000, asset.LoopDurMS)
+			cfg := NewResponseConfig()
+			if tc.segTimelineTime {
+				cfg.SegTimelineFlag = true
+			}
+			if tc.availabilityTimeOffset > 0 {
+				cfg.AvailabilityTimeOffsetS = Ptr(tc.availabilityTimeOffset)
+				cfg.ChunkDurS = Ptr(2 - tc.availabilityTimeOffset)
+				cfg.AvailabilityTimeCompleteFlag = false
+			}
+			err := verifyAndFillConfig(cfg)
+			require.NoError(t, err)
+			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
+			assert.NoError(t, err)
+			assert.Equal(t, m.DateTime(tc.wantedPublishTime), liveMPD.PublishTime)
+		})
 	}
 }

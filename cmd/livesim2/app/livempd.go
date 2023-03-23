@@ -25,6 +25,10 @@ type wrapTimes struct {
 func calcWrapTimes(a *asset, cfg *ResponseConfig, nowMS int, tsbd m.Duration) wrapTimes {
 	wt := wrapTimes{nowMS: nowMS}
 	wt.startTimeMS = nowMS - int(tsbd)/1_000_000
+	startTimeMS := cfg.StartTimeS * 1000
+	if wt.startTimeMS < startTimeMS {
+		wt.startTimeMS = startTimeMS
+	}
 	wt.startWraps = (wt.startTimeMS - cfg.StartTimeS*1000) / a.LoopDurMS
 	wt.startWrapMS = wt.startWraps * a.LoopDurMS
 	wt.startRelMS = wt.startTimeMS - wt.startWrapMS
@@ -49,7 +53,6 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	if cfg.MinimumUpdatePeriodS != nil {
 		mpd.MinimumUpdatePeriod = m.Seconds2DurPtr(*cfg.MinimumUpdatePeriodS)
 	}
-	mpd.PublishTime = m.ConvertToDateTimeS(int64(nowMS / 1000)) //TODO. Make this update with change in MPD
 	if cfg.SuggestedPresentationDelayS != nil {
 		mpd.SuggestedPresentationDelay = m.Seconds2DurPtr(*cfg.SuggestedPresentationDelayS)
 	}
@@ -77,15 +80,18 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 
 	period := mpd.Periods[0]
 	period.Duration = nil
-	period.Id = "P0" // TODO. set name to reflect start time
+	period.Id = "P0" // To evolve. Set period name depending on start relative AST.
 	period.Start = Ptr(m.Duration(0))
 
 	switch cfg.liveMPDType() {
 	case timeLineTime:
-		for _, as := range period.AdaptationSets {
-			err := adjustAdaptationSetForTimelineTime(cfg, a, as, wTimes)
+		for i, as := range period.AdaptationSets {
+			lsi, err := adjustAdaptationSetForTimelineTime(cfg, a, as, wTimes)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForTimelineTime: %w", err)
+			}
+			if i == 0 {
+				mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, lsi))
 			}
 		}
 	case timeLineNumber:
@@ -97,6 +103,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 				return nil, fmt.Errorf("adjustASForSegmentNumber: %w", err)
 			}
 		}
+		mpd.PublishTime = mpd.AvailabilityStartTime
 	default:
 		return nil, fmt.Errorf("unknown mpd type")
 	}
@@ -150,14 +157,18 @@ func createProducerRefenceTimes(startTimeS int) []*m.ProducerReferenceTimeType {
 	}
 }
 
-func adjustAdaptationSetForTimelineTime(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType, wt wrapTimes) error {
+func adjustAdaptationSetForTimelineTime(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType, wt wrapTimes) (lastSegInfo, error) {
+	lsi := lastSegInfo{}
 	if as.SegmentTemplate == nil {
-		return fmt.Errorf("no SegmentTemplate in AdapationSet")
+		return lsi, fmt.Errorf("no SegmentTemplate in AdapationSet")
 	}
+	atoMS := 0 //availabilityTimeOffset in ms
 	if !cfg.AvailabilityTimeCompleteFlag {
 		as.SegmentTemplate.AvailabilityTimeComplete = Ptr(false)
-		if cfg.getAvailabilityTimeOffsetS() > 0 {
-			as.SegmentTemplate.AvailabilityTimeOffset = cfg.getAvailabilityTimeOffsetS()
+		ato := cfg.getAvailabilityTimeOffsetS()
+		if ato > 0 {
+			as.SegmentTemplate.AvailabilityTimeOffset = ato
+			atoMS = int(1000 * ato)
 			as.ProducerReferenceTimes = createProducerRefenceTimes(cfg.StartTimeS)
 		}
 	}
@@ -173,8 +184,9 @@ func adjustAdaptationSetForTimelineTime(cfg *ResponseConfig, a *asset, as *m.Ada
 	mediaTimescale := uint32(a.Reps[r.Id].MediaTimescale)
 	as.SegmentTemplate.Timescale = &mediaTimescale
 	stl := as.SegmentTemplate.SegmentTimeline
-	stl.S = a.generateTimelineEntry(r.Id, wt.startWraps, wt.startRelMS, wt.nowWraps, wt.nowRelMS)
-	return nil
+
+	stl.S, lsi = a.generateTimelineEntries(r.Id, wt.startWraps, wt.startRelMS, wt.nowWraps, wt.nowRelMS, atoMS)
+	return lsi, nil
 }
 
 func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType, wt wrapTimes) error {
@@ -249,4 +261,33 @@ func addTimeSubsStpp(cfg *ResponseConfig, a *asset, period *m.PeriodType) error 
 		period.AdaptationSets = append(period.AdaptationSets, as)
 	}
 	return nil
+}
+
+// calcPublishTime calculates the last time there was a change in the manifest in seconds.
+// availabilityTimeOffset > 0 influences the publishTime to be earlier with that value.
+func calcPublishTime(cfg *ResponseConfig, lsi lastSegInfo) float64 {
+	switch cfg.liveMPDType() {
+	case segmentNumber:
+		// For single-period case, nothing change after startTime
+		return float64(cfg.StartTimeS)
+	case timeLineTime:
+		// Here we need the publish time of the last segment
+		return lastSegAvailTimeS(cfg, lsi)
+	default: // timeLineNumber
+		panic("liveMPD type not yet implemented")
+	}
+}
+
+// lastSegAvailTimeS returns the availabilityTime of the last segment.
+func lastSegAvailTimeS(cfg *ResponseConfig, lsi lastSegInfo) float64 {
+	if lsi.nr < 0 {
+		return 0
+	}
+	availTimeS := float64(lsi.startTime) / float64(lsi.timescale)
+	if cfg.AvailabilityTimeOffsetS != nil {
+		availTimeS -= *cfg.AvailabilityTimeOffsetS
+	} else {
+		availTimeS += float64(lsi.dur) / float64(lsi.timescale)
+	}
+	return availTimeS
 }

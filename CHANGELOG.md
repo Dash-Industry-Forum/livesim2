@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - new parameter `subsstppreg` can set vertical region
 - new parameter `ltgt` sets latency target in milliseconds
 
+### Fixed
+
+- PublishTime now reflects the last change in MPD in ms and not current time.
+
 ## [0.5.1] - 2023-03-09
 
 ### Fixed
