@@ -285,6 +285,14 @@ func TestPublishTime(t *testing.T) {
 		wantedPublishTime      string
 	}{
 		{
+			desc:              "Timeline with $Time$ 1s after start. No segments",
+			asset:             "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:           "stream.mpd",
+			segTimelineTime:   true,
+			nowMS:             0,
+			wantedPublishTime: "1970-01-01T00:00:00Z",
+		},
+		{
 			desc:                   "Timeline with $Time$ 3s, ato=1.5, 1.25 segments available",
 			asset:                  "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
 			mpdName:                "stream.mpd",
@@ -310,14 +318,6 @@ func TestPublishTime(t *testing.T) {
 			availabilityTimeOffset: 1.5,
 			nowMS:                  4500,
 			wantedPublishTime:      "1970-01-01T00:00:02.5Z",
-		},
-		{
-			desc:              "Timeline with $Time$ 1s after start. No segments",
-			asset:             "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
-			mpdName:           "stream.mpd",
-			segTimelineTime:   true,
-			nowMS:             0,
-			wantedPublishTime: "1970-01-01T00:00:00Z",
 		},
 		{
 			desc:              "Timeline with $Time$ 3s after start, one segment",
@@ -374,6 +374,8 @@ func TestPublishTime(t *testing.T) {
 				cfg.ChunkDurS = Ptr(2 - tc.availabilityTimeOffset)
 				cfg.AvailabilityTimeCompleteFlag = false
 			}
+			err := verifyAndFillConfig(cfg)
+			require.NoError(t, err)
 			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
 			assert.NoError(t, err)
 			assert.Equal(t, m.DateTime(tc.wantedPublishTime), liveMPD.PublishTime)

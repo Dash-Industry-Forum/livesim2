@@ -280,6 +280,9 @@ func calcPublishTime(cfg *ResponseConfig, lsi lastSegInfo) float64 {
 
 // lastSegAvailTimeS returns the availabilityTime of the last segment.
 func lastSegAvailTimeS(cfg *ResponseConfig, lsi lastSegInfo) float64 {
+	if lsi.nr < 0 {
+		return 0
+	}
 	availTimeS := float64(lsi.startTime) / float64(lsi.timescale)
 	if cfg.AvailabilityTimeOffsetS != nil {
 		availTimeS -= *cfg.AvailabilityTimeOffsetS

@@ -334,7 +334,7 @@ func (a *asset) generateTimelineEntries(repID string, startWraps, startRelMS, no
 		}
 	}
 	if nowWraps < 0 { // end is before start.
-		return nil, lastSegInfo{nr: -1}
+		return nil, lastSegInfo{nr: -1, timescale: uint64(rep.MediaTimescale)}
 	}
 
 	startNr := startWraps*nrSegs + relStartIdx
