@@ -21,6 +21,59 @@ func TestProcessURLCfg(t *testing.T) {
 		err         string
 	}{
 		{
+			url:         "/livesim/utc_direct-ntp-sntp-httpxsdate-httpiso/asset.mpd",
+			nowS:        0,
+			contentPart: "asset.mpd",
+			wantedCfg: &ResponseConfig{
+				StartTimeS:                   0,
+				TimeShiftBufferDepthS:        Ptr(defaultTimeShiftBufferDepthS),
+				StartNr:                      Ptr(0),
+				AvailabilityTimeCompleteFlag: true,
+				TimeSubsDurMS:                defaultTimeSubsDurMS,
+				UTCTimingMethods:             []UTCTimingMethod{"direct", "ntp", "sntp", "httpxsdate", "httpiso"},
+			},
+			err: "",
+		},
+		{
+			url:         "/livesim/utc_unknown/asset.mpd",
+			nowS:        0,
+			contentPart: "asset.mpd",
+			wantedCfg: &ResponseConfig{
+				StartTimeS:                   0,
+				TimeShiftBufferDepthS:        Ptr(defaultTimeShiftBufferDepthS),
+				StartNr:                      Ptr(0),
+				AvailabilityTimeCompleteFlag: true,
+				TimeSubsDurMS:                defaultTimeSubsDurMS,
+			},
+			err: `key="utc", val="unknown" is not a valid UTC timing method`,
+		},
+		{
+			url:         "/livesim/utc_head/asset.mpd",
+			nowS:        0,
+			contentPart: "asset.mpd",
+			wantedCfg: &ResponseConfig{
+				StartTimeS:                   0,
+				TimeShiftBufferDepthS:        Ptr(defaultTimeShiftBufferDepthS),
+				StartNr:                      Ptr(0),
+				AvailabilityTimeCompleteFlag: true,
+				TimeSubsDurMS:                defaultTimeSubsDurMS,
+			},
+			err: `key="utc", val="head", UTC timing method "head" not supported`,
+		},
+		{
+			url:         "/livesim/utc_none/asset.mpd",
+			nowS:        0,
+			contentPart: "asset.mpd",
+			wantedCfg: &ResponseConfig{
+				StartTimeS:                   0,
+				TimeShiftBufferDepthS:        Ptr(defaultTimeShiftBufferDepthS),
+				StartNr:                      Ptr(0),
+				AvailabilityTimeCompleteFlag: true,
+				TimeSubsDurMS:                defaultTimeSubsDurMS,
+				UTCTimingMethods:             []UTCTimingMethod{"none"},
+			},
+		},
+		{
 			url:         "/livesim/tsbd_1/asset.mpd",
 			nowS:        0,
 			contentPart: "asset.mpd",

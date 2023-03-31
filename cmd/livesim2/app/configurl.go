@@ -17,40 +17,59 @@ const (
 	segmentNumber
 )
 
+type UTCTimingMethod string
+
+const (
+	UtcTimingDirect     UTCTimingMethod = "direct"
+	UtcTimingHead       UTCTimingMethod = "head" // Note, not supported
+	UtcTimingNtp        UTCTimingMethod = "ntp"
+	UtcTimingSntp       UTCTimingMethod = "sntp"
+	UtcTimingHttpXSDate UTCTimingMethod = "httpxsdate"
+	UtcTimingHttpISO    UTCTimingMethod = "httpiso"
+	UtcTimingNone       UTCTimingMethod = "none"
+)
+
+const (
+	UtcTimingNtpServer    = "1.de.pool.ntp.org"
+	UtcTimingSntpServer   = "time.kfki.hu"
+	UtcTimingHttpServer   = "http://time.akamai.com/?iso"
+	UtcTimingHttpServerMS = "http://time.akamai.com/?isoms"
+)
+
 type ResponseConfig struct {
-	BaseURLs                     []string `json:"BaseURLs,omitempty"`
-	UTCTimingMethods             []string `json:"UTCTimingMethods,omitempty"`
-	PeriodDurations              []int    `json:"PeriodDurations,omitempty"`
-	StartTimeS                   int      `json:"StartTimeS"`
-	StopTimeS                    *int     `json:"StopTimeS,omitempty"`
-	TimeOffsetS                  *int     `json:"TimeOffsetS,omitempty"`
-	InitSegAvailOffsetS          *int     `json:"InitSegAvailOffsetS,omitempty"`
-	TimeShiftBufferDepthS        *int     `json:"TimeShiftBufferDepthS,omitempty"`
-	MinimumUpdatePeriodS         *int     `json:"MinimumUpdatePeriodS,omitempty"`
-	PeriodsPerHour               *int     `json:"PeriodsPerHour,omitempty"`
-	XlinkPeriodsPerHour          *int     `json:"XlinkPeriodsPerHour,omitempty"`
-	EtpPeriodsPerHour            *int     `json:"EtpPeriodsPerHour,omitempty"`
-	EtpDuration                  *int     `json:"EtpDuration,omitempty"`
-	PeriodOffset                 *int     `json:"PeriodOffset,omitempty"`
-	SCTE35PerMinute              *int     `json:"SCTE35PerMinute,omitempty"`
-	StartNr                      *int     `json:"StartNr,omitempty"`
-	SuggestedPresentationDelayS  *int     `json:"SuggestedPresentationDelayS,omitempty"`
-	AvailabilityTimeOffsetS      *float64 `json:"AvailabilityTimeOffsetS,omitempty"`
-	ChunkDurS                    *float64 `json:"ChunkDurS,omitempty"`
-	LatencyTargetMS              *int     `json:"LatencyTargetMS,omitempty"`
-	AddLocationFlag              bool     `json:"AddLocationFlag,omitempty"`
-	Tfdt32Flag                   bool     `json:"Tfdt32Flag,omitempty"`
-	ContUpdateFlag               bool     `json:"ContUpdateFlag,omitempty"`
-	InsertAdFlag                 bool     `json:"InsertAdFlag,omitempty"`
-	ContMultiPeriodFlag          bool     `json:"ContMultiPeriodFlag,omitempty"`
-	SegTimelineFlag              bool     `json:"SegTimelineFlag,omitempty"`
-	SegTimelineNrFlag            bool     `json:"SegTimelineNrFlag,omitempty"`
-	SidxFlag                     bool     `json:"SidxFlag,omitempty"`
-	SegTimelineLossFlag          bool     `json:"SegTimelineLossFlag,omitempty"`
-	AvailabilityTimeCompleteFlag bool     `json:"AvailabilityTimeCompleteFlag,omitempty"`
-	TimeSubsStpp                 []string `json:"TimeSubsStppLanguages,omitempty"`
-	TimeSubsDurMS                int      `json:"TimeSubsDurMS,omitempty"`
-	TimeSubsRegion               int      `json:"TimeSubsRegion,omitempty"`
+	BaseURLs                     []string          `json:"BaseURLs,omitempty"`
+	UTCTimingMethods             []UTCTimingMethod `json:"UTCTimingMethods,omitempty"`
+	PeriodDurations              []int             `json:"PeriodDurations,omitempty"`
+	StartTimeS                   int               `json:"StartTimeS"`
+	StopTimeS                    *int              `json:"StopTimeS,omitempty"`
+	TimeOffsetS                  *int              `json:"TimeOffsetS,omitempty"`
+	InitSegAvailOffsetS          *int              `json:"InitSegAvailOffsetS,omitempty"`
+	TimeShiftBufferDepthS        *int              `json:"TimeShiftBufferDepthS,omitempty"`
+	MinimumUpdatePeriodS         *int              `json:"MinimumUpdatePeriodS,omitempty"`
+	PeriodsPerHour               *int              `json:"PeriodsPerHour,omitempty"`
+	XlinkPeriodsPerHour          *int              `json:"XlinkPeriodsPerHour,omitempty"`
+	EtpPeriodsPerHour            *int              `json:"EtpPeriodsPerHour,omitempty"`
+	EtpDuration                  *int              `json:"EtpDuration,omitempty"`
+	PeriodOffset                 *int              `json:"PeriodOffset,omitempty"`
+	SCTE35PerMinute              *int              `json:"SCTE35PerMinute,omitempty"`
+	StartNr                      *int              `json:"StartNr,omitempty"`
+	SuggestedPresentationDelayS  *int              `json:"SuggestedPresentationDelayS,omitempty"`
+	AvailabilityTimeOffsetS      *float64          `json:"AvailabilityTimeOffsetS,omitempty"`
+	ChunkDurS                    *float64          `json:"ChunkDurS,omitempty"`
+	LatencyTargetMS              *int              `json:"LatencyTargetMS,omitempty"`
+	AddLocationFlag              bool              `json:"AddLocationFlag,omitempty"`
+	Tfdt32Flag                   bool              `json:"Tfdt32Flag,omitempty"`
+	ContUpdateFlag               bool              `json:"ContUpdateFlag,omitempty"`
+	InsertAdFlag                 bool              `json:"InsertAdFlag,omitempty"`
+	ContMultiPeriodFlag          bool              `json:"ContMultiPeriodFlag,omitempty"`
+	SegTimelineFlag              bool              `json:"SegTimelineFlag,omitempty"`
+	SegTimelineNrFlag            bool              `json:"SegTimelineNrFlag,omitempty"`
+	SidxFlag                     bool              `json:"SidxFlag,omitempty"`
+	SegTimelineLossFlag          bool              `json:"SegTimelineLossFlag,omitempty"`
+	AvailabilityTimeCompleteFlag bool              `json:"AvailabilityTimeCompleteFlag,omitempty"`
+	TimeSubsStpp                 []string          `json:"TimeSubsStppLanguages,omitempty"`
+	TimeSubsDurMS                int               `json:"TimeSubsDurMS,omitempty"`
+	TimeSubsRegion               int               `json:"TimeSubsRegion,omitempty"`
 }
 
 // NewResponseConfig returns a new ResponseConfig with default values.
@@ -161,7 +180,7 @@ cfgLoop:
 		case "scte35": // Add this many SCTE-35 ad periods every minute
 			cfg.SCTE35PerMinute = sc.AtoiPtr(key, val)
 		case "utc": // Get hyphen-separated list of utc-timing methods and make into list
-			cfg.UTCTimingMethods = strings.Split(val, "-")
+			cfg.UTCTimingMethods = sc.SplitUTCTimings(key, val)
 		case "snr": // Segment startNumber. -1 means default implicit number which ==  1
 			cfg.StartNr = sc.AtoiPtr(key, val)
 		case "ato": // availabilityTimeOffset
