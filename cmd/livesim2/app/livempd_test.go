@@ -382,3 +382,66 @@ func TestPublishTime(t *testing.T) {
 		})
 	}
 }
+
+func TestUTCTiming(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS)
+	err := am.discoverAssets()
+	require.NoError(t, err)
+
+	cases := []struct {
+		desc              string
+		asset             string
+		mpdName           string
+		nowMS             int
+		utcTimings        []string
+		wantedPublishTime string
+		wantedUTCTimings  int
+	}{
+		{
+			desc:              "Default with no UTCTiming",
+			asset:             "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:           "stream.mpd",
+			nowMS:             50000,
+			utcTimings:        nil,
+			wantedPublishTime: "1970-01-01T00:00:50Z",
+			wantedUTCTimings:  1,
+		},
+		{
+			desc:              "Default with no UTCTiming",
+			asset:             "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:           "stream.mpd",
+			nowMS:             50000,
+			utcTimings:        []string{"none"},
+			wantedPublishTime: "1970-01-01T00:00:50Z",
+			wantedUTCTimings:  0,
+		},
+		{
+			desc:              "Default with no UTCTiming",
+			asset:             "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:           "stream.mpd",
+			nowMS:             50000,
+			utcTimings:        []string{"httpiso", "ntp", "sntp"},
+			wantedPublishTime: "1970-01-01T00:00:50Z",
+			wantedUTCTimings:  3,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			asset, ok := am.findAsset(tc.asset)
+			require.True(t, ok)
+			assert.Equal(t, 8000, asset.LoopDurMS)
+			cfg := NewResponseConfig()
+			cfg.SegTimelineFlag = true
+			for _, ut := range tc.utcTimings {
+				cfg.UTCTimingMethods = append(cfg.UTCTimingMethods, UTCTimingMethod(ut))
+			}
+			err := verifyAndFillConfig(cfg)
+			require.NoError(t, err)
+			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
+			assert.NoError(t, err)
+			assert.Equal(t, m.DateTime(tc.wantedPublishTime), liveMPD.PublishTime)
+			assert.Equal(t, tc.wantedUTCTimings, len(liveMPD.UTCTimings))
+		})
+	}
+}

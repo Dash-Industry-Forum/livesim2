@@ -7,6 +7,7 @@ package app
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 type strConvAccErr struct {
@@ -52,4 +53,26 @@ func (s *strConvAccErr) AtofPosPtr(key, val string) *float64 {
 		return nil
 	}
 	return &valFloat
+}
+
+// SplitUTCTimings splits a hyphen-separated list of UTC timing methods.
+func (s *strConvAccErr) SplitUTCTimings(key, val string) []UTCTimingMethod {
+	if s.err != nil {
+		return nil
+	}
+	vals := strings.Split(val, "-")
+	utcTimingMethods := make([]UTCTimingMethod, len(vals))
+	for i, val := range vals {
+		utcVal := UTCTimingMethod(val)
+		switch utcVal {
+		case UtcTimingDirect, UtcTimingNtp, UtcTimingSntp, UtcTimingHttpXSDate, UtcTimingHttpISO,
+			UtcTimingNone:
+			utcTimingMethods[i] = utcVal
+		case UtcTimingHead:
+			s.err = fmt.Errorf("key=%q, val=%q, UTC timing method %q not supported", key, val, UtcTimingHead)
+		default:
+			s.err = fmt.Errorf("key=%q, val=%q is not a valid UTC timing method", key, val)
+		}
+	}
+	return utcTimingMethods
 }
