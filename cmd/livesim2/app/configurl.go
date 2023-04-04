@@ -54,7 +54,7 @@ type ResponseConfig struct {
 	SCTE35PerMinute              *int              `json:"SCTE35PerMinute,omitempty"`
 	StartNr                      *int              `json:"StartNr,omitempty"`
 	SuggestedPresentationDelayS  *int              `json:"SuggestedPresentationDelayS,omitempty"`
-	AvailabilityTimeOffsetS      *float64          `json:"AvailabilityTimeOffsetS,omitempty"`
+	AvailabilityTimeOffsetS      float64           `json:"AvailabilityTimeOffsetS,omitempty"`
 	ChunkDurS                    *float64          `json:"ChunkDurS,omitempty"`
 	LatencyTargetMS              *int              `json:"LatencyTargetMS,omitempty"`
 	AddLocationFlag              bool              `json:"AddLocationFlag,omitempty"`
@@ -95,12 +95,9 @@ func (rc *ResponseConfig) liveMPDType() liveMPDType {
 	}
 }
 
-// getAvailabilityTimeOffset returns a postive value if set to finite, -1 if negative, and 0 if not set.
+// getAvailabilityTimeOffset returns the availabilityTimeOffsetS. Note that it can be infinite.
 func (rc *ResponseConfig) getAvailabilityTimeOffsetS() float64 {
-	if rc.AvailabilityTimeOffsetS == nil {
-		return 0
-	}
-	return *rc.AvailabilityTimeOffsetS
+	return rc.AvailabilityTimeOffsetS
 }
 
 // getStartNr for MPD. Default value if not set is 1.
@@ -184,12 +181,7 @@ cfgLoop:
 		case "snr": // Segment startNumber. -1 means default implicit number which ==  1
 			cfg.StartNr = sc.AtoiPtr(key, val)
 		case "ato": // availabilityTimeOffset
-			if val == "inf" {
-				inf := -1.0
-				cfg.AvailabilityTimeOffsetS = &inf // Signals that the value is infinite
-			} else {
-				cfg.AvailabilityTimeOffsetS = sc.AtofPosPtr(key, val)
-			}
+			cfg.AvailabilityTimeOffsetS = sc.AtofInf(key, val)
 		case "ltgt": // latencyTargetMS
 			cfg.LatencyTargetMS = sc.AtoiPtr(key, val)
 		case "spd": // suggestedPresentationDelay

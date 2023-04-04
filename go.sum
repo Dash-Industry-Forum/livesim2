@@ -2,8 +2,8 @@ aqwari.net/xml v0.0.0-20210331023308-d9421b293817 h1:+3Rh5EaTzNLnzWx3/uy/mAaH/dG
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 cloud.google.com/go v0.34.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
-github.com/Eyevinn/dash-mpd v0.6.1 h1:oCARgXs0rvrD59RUF7odxVZA7LPwyAucnuzcmuG4Euw=
-github.com/Eyevinn/dash-mpd v0.6.1/go.mod h1:CuBY8vahrq4cBrEflTU/ujCRlyGjw5ER2us+I2+PZzI=
+github.com/Eyevinn/dash-mpd v0.8.0 h1:YviueeFogmhGGNGor4Xwl3qUo04h8w8EicTXuKcy3l4=
+github.com/Eyevinn/dash-mpd v0.8.0/go.mod h1:CuBY8vahrq4cBrEflTU/ujCRlyGjw5ER2us+I2+PZzI=
 github.com/Eyevinn/mp4ff v0.34.1 h1:Jq3gSKjVTt9sajHv1AGEqcdHbG/6y952xGQ2XWLWzc8=
 github.com/Eyevinn/mp4ff v0.34.1/go.mod h1:w/6GSa5ghZ1VavzJK6McQ2/flx8mKtcrKDr11SsEweA=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
