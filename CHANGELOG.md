@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - PublishTime now reflects the last change in MPD in ms and not current time.
+- availabilityTimeOffset now gives the right PublishTime value for complete segments
+- infinite availabilityTimeOffset for SegmentTimeline now results in an error
 
 ## [0.5.1] - 2023-03-09
 

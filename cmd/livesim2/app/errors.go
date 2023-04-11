@@ -10,8 +10,9 @@ import (
 )
 
 var (
-	errNotFound = errors.New("not found")
-	errGone     = errors.New("gone")
+	errNotFound       = errors.New("not found")
+	errGone           = errors.New("gone")
+	ErrAtoInfTimeline = errors.New("infinite availabilityTimeOffset for SegmentTimeline")
 )
 
 type errTooEarly struct {

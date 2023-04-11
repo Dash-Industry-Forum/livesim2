@@ -6,6 +6,7 @@ package app
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"testing"
 	"time"
@@ -194,54 +195,70 @@ func TestLastAvailableSegment(t *testing.T) {
 	err := am.discoverAssets()
 	require.NoError(t, err)
 	cases := []struct {
-		desc                   string
-		asset                  string
-		mpdName                string
-		segTimelineTime        bool
-		availabilityTimeOffset float64
-		nowMS                  int
-		wantedSegNr            int
+		desc                     string
+		asset                    string
+		mpdName                  string
+		segTimelineTime          bool
+		availabilityTimeOffset   float64
+		availabilityTimeComplete bool
+		nowMS                    int
+		wantedSegNr              int
+		wantedErr                string
 	}{
 		{
-			desc:                   "Timeline with $Time$ 1hour+1s with chunkdur 0.5",
-			asset:                  "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
-			mpdName:                "stream.mpd",
-			segTimelineTime:        true,
-			availabilityTimeOffset: 1.5,
-			nowMS:                  3_601_000,
-			wantedSegNr:            1800,
+			desc:                     "Timeline with $Time$ 1hour+1s with chunkdur 0.5",
+			asset:                    "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:                  "stream.mpd",
+			segTimelineTime:          true,
+			availabilityTimeOffset:   1.5,
+			availabilityTimeComplete: false,
+			nowMS:                    3_601_000,
+			wantedSegNr:              1800,
 		},
 		{
-			desc:            "Timeline with $Time$ 1s after start. No segments",
-			asset:           "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
-			mpdName:         "stream.mpd",
-			segTimelineTime: true,
-			nowMS:           0,
-			wantedSegNr:     -1,
+			desc:                     "Timeline with $Time$ 1s after start. No segments",
+			asset:                    "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:                  "stream.mpd",
+			segTimelineTime:          true,
+			availabilityTimeComplete: true,
+			nowMS:                    0,
+			wantedSegNr:              -1,
 		},
 		{
-			desc:            "Timeline with $Time$ 5s after start, two segment (0, 1)",
-			asset:           "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
-			mpdName:         "stream.mpd",
-			segTimelineTime: true,
-			nowMS:           5000,
-			wantedSegNr:     1,
+			desc:                     "Timeline with $Time$ 5s after start, two segment (0, 1)",
+			asset:                    "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:                  "stream.mpd",
+			segTimelineTime:          true,
+			availabilityTimeComplete: true,
+			nowMS:                    5000,
+			wantedSegNr:              1,
 		},
 		{
-			desc:            "Timeline with $Time$ 1hour after segment generation",
-			asset:           "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
-			mpdName:         "stream.mpd",
-			segTimelineTime: true,
-			nowMS:           3_600_000,
-			wantedSegNr:     1799,
+			desc:                     "Timeline with $Time$ 1hour after segment generation",
+			asset:                    "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:                  "stream.mpd",
+			segTimelineTime:          true,
+			availabilityTimeComplete: true,
+			nowMS:                    3_600_000,
+			wantedSegNr:              1799,
 		},
 		{
-			desc:            "Timeline with $Time$ 1hour+1s after segment generation",
-			asset:           "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
-			mpdName:         "stream.mpd",
-			segTimelineTime: true,
-			nowMS:           3_601_000,
-			wantedSegNr:     1799,
+			desc:                     "Timeline with $Time$ 1hour+1s after segment generation",
+			asset:                    "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:                  "stream.mpd",
+			segTimelineTime:          true,
+			nowMS:                    3_601_000,
+			availabilityTimeComplete: true,
+			wantedSegNr:              1799,
+		},
+		{
+			desc:                     "Timeline with $Time$ and infinite ato => error",
+			asset:                    "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:                  "stream.mpd",
+			availabilityTimeOffset:   math.Inf(1),
+			availabilityTimeComplete: true,
+			segTimelineTime:          true,
+			wantedErr:                ErrAtoInfTimeline.Error(),
 		},
 	}
 	for _, tc := range cases {
@@ -252,8 +269,8 @@ func TestLastAvailableSegment(t *testing.T) {
 			if tc.segTimelineTime {
 				cfg.SegTimelineFlag = true
 			}
-			if tc.availabilityTimeOffset > 0 {
-				cfg.AvailabilityTimeOffsetS = Ptr(tc.availabilityTimeOffset)
+			cfg.AvailabilityTimeOffsetS = tc.availabilityTimeOffset
+			if tc.availabilityTimeOffset > 0 && !tc.availabilityTimeComplete {
 				cfg.ChunkDurS = Ptr(2 - tc.availabilityTimeOffset)
 				cfg.AvailabilityTimeCompleteFlag = false
 			}
@@ -263,8 +280,12 @@ func TestLastAvailableSegment(t *testing.T) {
 			require.NoError(t, err)
 			as := mpd.Periods[0].AdaptationSets[0]
 			lsi, err := adjustAdaptationSetForTimelineTime(cfg, asset, as, wTimes)
-			require.NoError(t, err)
-			assert.Equal(t, tc.wantedSegNr, lsi.nr)
+			if tc.wantedErr != "" {
+				require.EqualError(t, err, tc.wantedErr)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.wantedSegNr, lsi.nr)
+			}
 		})
 	}
 }
@@ -293,13 +314,13 @@ func TestPublishTime(t *testing.T) {
 			wantedPublishTime: "1970-01-01T00:00:00Z",
 		},
 		{
-			desc:                   "Timeline with $Time$ 3s, ato=1.5, 1.25 segments available",
+			desc:                   "Timeline with $Time$ 3s, ato=1.5, 1 1/4 segments available",
 			asset:                  "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
 			mpdName:                "stream.mpd",
 			segTimelineTime:        true,
 			availabilityTimeOffset: 1.5,
 			nowMS:                  3000,
-			wantedPublishTime:      "1970-01-01T00:00:00.5Z",
+			wantedPublishTime:      "1970-01-01T00:00:02.5Z",
 		},
 		{
 			desc:                   "Timeline with $Time$ 4.25s, ato=1.5, 2 segments available",
@@ -308,16 +329,16 @@ func TestPublishTime(t *testing.T) {
 			segTimelineTime:        true,
 			availabilityTimeOffset: 1.5,
 			nowMS:                  4250,
-			wantedPublishTime:      "1970-01-01T00:00:00.5Z",
+			wantedPublishTime:      "1970-01-01T00:00:02.5Z",
 		},
 		{
-			desc:                   "Timeline with $Time$ 4.5s, ato=1.5, 3.25 segments available",
+			desc:                   "Timeline with $Time$ 4.5s, ato=1.5, 3 1/4 segments available",
 			asset:                  "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
 			mpdName:                "stream.mpd",
 			segTimelineTime:        true,
 			availabilityTimeOffset: 1.5,
 			nowMS:                  4500,
-			wantedPublishTime:      "1970-01-01T00:00:02.5Z",
+			wantedPublishTime:      "1970-01-01T00:00:04.5Z",
 		},
 		{
 			desc:              "Timeline with $Time$ 3s after start, one segment",
@@ -370,7 +391,7 @@ func TestPublishTime(t *testing.T) {
 				cfg.SegTimelineFlag = true
 			}
 			if tc.availabilityTimeOffset > 0 {
-				cfg.AvailabilityTimeOffsetS = Ptr(tc.availabilityTimeOffset)
+				cfg.AvailabilityTimeOffsetS = tc.availabilityTimeOffset
 				cfg.ChunkDurS = Ptr(2 - tc.availabilityTimeOffset)
 				cfg.AvailabilityTimeCompleteFlag = false
 			}
@@ -379,6 +400,83 @@ func TestPublishTime(t *testing.T) {
 			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
 			assert.NoError(t, err)
 			assert.Equal(t, m.DateTime(tc.wantedPublishTime), liveMPD.PublishTime)
+		})
+	}
+}
+
+func TestNormalAvailabilityTimeOffset(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS)
+	err := am.discoverAssets()
+	require.NoError(t, err)
+
+	cases := []struct {
+		desc            string
+		asset           string
+		mpdName         string
+		ato             string
+		nowMS           int
+		segTimelineTime bool
+		wantedAtoVal    float64
+		wantedErr       string
+	}{
+		{
+			desc:            "number with ato=10",
+			asset:           "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:         "stream.mpd",
+			ato:             "10",
+			nowMS:           100_000,
+			segTimelineTime: false,
+			wantedAtoVal:    10,
+		},
+		{
+			desc:            "timelines with ato=10",
+			asset:           "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:         "stream.mpd",
+			ato:             "10",
+			nowMS:           100_000,
+			segTimelineTime: true,
+			wantedAtoVal:    10,
+		},
+		{
+			desc:            "number with ato=inf",
+			asset:           "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:         "stream.mpd",
+			ato:             "inf",
+			nowMS:           100_000,
+			segTimelineTime: false,
+			wantedAtoVal:    math.Inf(+1),
+		},
+		{
+			desc:            "timelines with ato=inf",
+			asset:           "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:         "stream.mpd",
+			ato:             "inf",
+			nowMS:           100_000,
+			segTimelineTime: true,
+			wantedErr:       "adjustASForTimelineTime: infinite availabilityTimeOffset for SegmentTimeline",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			asset, ok := am.findAsset(tc.asset)
+			require.True(t, ok)
+			cfg := NewResponseConfig()
+			cfg.AvailabilityTimeCompleteFlag = true
+			cfg.SegTimelineFlag = tc.segTimelineTime
+			sc := strConvAccErr{}
+			cfg.AvailabilityTimeOffsetS = sc.AtofInf("ato", tc.ato)
+			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
+			if tc.wantedErr != "" {
+				assert.EqualError(t, err, tc.wantedErr)
+				return
+			}
+			assert.NoError(t, err)
+			p := liveMPD.Periods[0]
+			for _, as := range p.AdaptationSets {
+				segTemplateATO := float64(as.SegmentTemplate.AvailabilityTimeOffset)
+				require.Equal(t, tc.wantedAtoVal, segTemplateATO)
+			}
 		})
 	}
 }

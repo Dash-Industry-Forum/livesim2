@@ -111,9 +111,9 @@ func start(ctx context.Context, o *Options) (counts, error) {
 				if segTmpl == nil {
 					return cnt, fmt.Errorf("no SegmentTemplate for representation: %s", rep.Id)
 				}
-				initStr, _ := m.GetRepInit(as, rep) // as and rep are both non-nil
+				initStr, _ := rep.GetInit()
 				cnt = downloadInit(ctx, segTmpl, outDir, baseURL, initStr, cnt, o.Force)
-				media, _ := m.GetRepMedia(as, rep) // as and rep are both non-nil
+				media, _ := rep.GetMedia()
 				switch {
 				case segTmpl.SegmentTimeline != nil:
 					stl := segTmpl.SegmentTimeline
@@ -127,7 +127,7 @@ func start(ctx context.Context, o *Options) (counts, error) {
 						return cnt, fmt.Errorf("strange media for SegmentTimeline")
 					}
 				case strings.Contains(segTmpl.Media, "$Number$"):
-					periodDur, err := m.GetPeriodDuration(mpd, period)
+					periodDur, err := period.GetDuration()
 					if err != nil {
 						return cnt, fmt.Errorf("period duration issue: %w", err)
 					}

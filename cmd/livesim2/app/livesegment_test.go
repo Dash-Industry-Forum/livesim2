@@ -112,7 +112,7 @@ func TestWriteChunkedSegment(t *testing.T) {
 	require.NoError(t, err)
 	cfg := NewResponseConfig()
 	cfg.AvailabilityTimeCompleteFlag = false
-	cfg.AvailabilityTimeOffsetS = Ptr(7.0)
+	cfg.AvailabilityTimeOffsetS = 7.0
 	log, err := logging.InitZerolog("debug", "discard")
 	require.NoError(t, err)
 

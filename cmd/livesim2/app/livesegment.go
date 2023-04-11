@@ -252,7 +252,7 @@ func writeChunkedSegment(ctx context.Context, w http.ResponseWriter, log *zerolo
 	// rest as time passes.
 	// In general, we should extract all the samples and build a new one with the right fragment duration.
 	// That fragment/chunk duration is segment_duration-availabilityTimeOffset.
-	chunkDur := (a.SegmentDurMS - int(*cfg.AvailabilityTimeOffsetS*1000)) * int(segMeta.timescale) / 1000
+	chunkDur := (a.SegmentDurMS - int(cfg.AvailabilityTimeOffsetS*1000)) * int(segMeta.timescale) / 1000
 	chunks, err := chunkSegment(segMeta.rep.initSeg, seg, segMeta, chunkDur)
 	if err != nil {
 		return fmt.Errorf("chunkSegment: %w", err)

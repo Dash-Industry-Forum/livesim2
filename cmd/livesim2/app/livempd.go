@@ -6,6 +6,7 @@ package app
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	m "github.com/Eyevinn/dash-mpd/mpd"
@@ -61,11 +62,13 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	}
 
 	if cfg.getAvailabilityTimeOffsetS() > 0 {
-		if cfg.LatencyTargetMS == nil {
-			return nil, fmt.Errorf("latencyTargetMS (ltgt) not set")
+		if !cfg.AvailabilityTimeCompleteFlag {
+			if cfg.LatencyTargetMS == nil {
+				return nil, fmt.Errorf("latencyTargetMS (ltgt) not set")
+			}
+			latencyTargetMS := uint32(*cfg.LatencyTargetMS)
+			mpd.ServiceDescription = createServiceDescription(latencyTargetMS)
 		}
-		latencyTargetMS := uint32(*cfg.LatencyTargetMS)
-		mpd.ServiceDescription = createServiceDescription(latencyTargetMS)
 	}
 
 	addUTCTimings(mpd, cfg)
@@ -156,16 +159,20 @@ func adjustAdaptationSetForTimelineTime(cfg *ResponseConfig, a *asset, as *m.Ada
 	if as.SegmentTemplate == nil {
 		return lsi, fmt.Errorf("no SegmentTemplate in AdapationSet")
 	}
-	atoMS := 0 //availabilityTimeOffset in ms
+	ato := cfg.getAvailabilityTimeOffsetS()
+	if ato == math.Inf(+1) {
+		return lsi, ErrAtoInfTimeline
+	}
 	if !cfg.AvailabilityTimeCompleteFlag {
 		as.SegmentTemplate.AvailabilityTimeComplete = Ptr(false)
-		ato := cfg.getAvailabilityTimeOffsetS()
 		if ato > 0 {
-			as.SegmentTemplate.AvailabilityTimeOffset = ato
-			atoMS = int(1000 * ato)
+			as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(ato)
 			as.ProducerReferenceTimes = createProducerRefenceTimes(cfg.StartTimeS)
 		}
+	} else if ato != 0 {
+		as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(ato)
 	}
+	atoMS := int(1000 * ato)
 	r := as.Representations[0] // Assume that any representation will be fine
 	if as.SegmentTemplate.SegmentTimeline == nil {
 		newST := m.SegmentTimelineType{}
@@ -187,10 +194,14 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 	if as.SegmentTemplate == nil {
 		return fmt.Errorf("no SegmentTemplate in AdapationSet %d", as.Id)
 	}
+	ato := cfg.getAvailabilityTimeOffsetS()
+	if ato != 0 {
+		as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(ato)
+	}
 	if !cfg.AvailabilityTimeCompleteFlag {
 		as.SegmentTemplate.AvailabilityTimeComplete = Ptr(false)
 		if cfg.getAvailabilityTimeOffsetS() > 0 {
-			as.SegmentTemplate.AvailabilityTimeOffset = cfg.getAvailabilityTimeOffsetS()
+			as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(cfg.getAvailabilityTimeOffsetS())
 			as.ProducerReferenceTimes = createProducerRefenceTimes(cfg.StartTimeS)
 		}
 	}
@@ -211,7 +222,7 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 	return nil
 }
 
-func addTimeSubsStpp(cfg *ResponseConfig, a *asset, period *m.PeriodType) error {
+func addTimeSubsStpp(cfg *ResponseConfig, a *asset, period *m.Period) error {
 	var vAS *m.AdaptationSetType
 	for _, as := range period.AdaptationSets {
 		if as.ContentType == "video" {
@@ -251,39 +262,37 @@ func addTimeSubsStpp(cfg *ResponseConfig, a *asset, period *m.PeriodType) error 
 		as.Roles = append(as.Roles,
 			&m.DescriptorType{SchemeIdUri: "urn:mpeg:dash:role:2011", Value: "subtitle"})
 		as.SegmentTemplate = st
-		as.Representations = append(as.Representations, rep)
-		period.AdaptationSets = append(period.AdaptationSets, as)
+		as.AppendRepresentation(rep)
+		period.AppendAdaptationSet(as)
 	}
 	return nil
 }
 
 // calcPublishTime calculates the last time there was a change in the manifest in seconds.
-// availabilityTimeOffset > 0 influences the publishTime to be earlier with that value.
 func calcPublishTime(cfg *ResponseConfig, lsi lastSegInfo) float64 {
 	switch cfg.liveMPDType() {
 	case segmentNumber:
 		// For single-period case, nothing change after startTime
 		return float64(cfg.StartTimeS)
 	case timeLineTime:
-		// Here we need the publish time of the last segment
+		// Here we need the availabilityTime of the last segment
 		return lastSegAvailTimeS(cfg, lsi)
 	default: // timeLineNumber
 		panic("liveMPD type not yet implemented")
 	}
 }
 
-// lastSegAvailTimeS returns the availabilityTime of the last segment.
+// lastSegAvailTimeS returns the availabilityTime of the last segment,
+// including the availabilityTimeOffset.
 func lastSegAvailTimeS(cfg *ResponseConfig, lsi lastSegInfo) float64 {
 	if lsi.nr < 0 {
 		return 0
 	}
-	availTimeS := float64(lsi.startTime) / float64(lsi.timescale)
-	if cfg.AvailabilityTimeOffsetS != nil {
-		availTimeS -= *cfg.AvailabilityTimeOffsetS
-	} else {
-		availTimeS += float64(lsi.dur) / float64(lsi.timescale)
+	availTime := lsi.availabilityTime(cfg.AvailabilityTimeOffsetS)
+	if availTime < float64(cfg.StartTimeS) {
+		return float64(cfg.StartTimeS)
 	}
-	return availTimeS
+	return availTime
 }
 
 // addUTCTimings adds the UTCTiming elements to the MPD.

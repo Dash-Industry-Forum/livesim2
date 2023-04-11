@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/fs"
+	"math"
 	"path"
 	"regexp"
 	"sort"
@@ -294,6 +295,11 @@ type lastSegInfo struct {
 	timescale      uint64
 	startTime, dur uint64
 	nr             int
+}
+
+// availabilityTime returns the availability time of the last segment given ato.
+func (l lastSegInfo) availabilityTime(ato float64) float64 {
+	return math.Round(float64(l.startTime+l.dur)/float64(l.timescale)) - ato
 }
 
 func (a *asset) generateTimelineEntries(repID string, startWraps, startRelMS, nowWraps, nowRelMS, atoMS int) ([]*m.S, lastSegInfo) {

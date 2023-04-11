@@ -6,6 +6,7 @@ package app
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -75,4 +76,20 @@ func (s *strConvAccErr) SplitUTCTimings(key, val string) []UTCTimingMethod {
 		}
 	}
 	return utcTimingMethods
+}
+
+// AtofInf parses a floating point number or the value "inf"
+func (s *strConvAccErr) AtofInf(key, val string) float64 {
+	if s.err != nil {
+		return 0
+	}
+	if val == "inf" {
+		return math.Inf(+1)
+	}
+	valFloat, err := strconv.ParseFloat(val, 64)
+	if err != nil {
+		s.err = fmt.Errorf("key=%s, err=%w", key, err)
+		return 0
+	}
+	return valFloat
 }
