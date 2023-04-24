@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- new parameter segtimelinenr turns on SegmentTimeline with `$Number$` addressing
+
+### Changed
+
+- moved list URL parameters to [livesim2 wiki](https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters)
+
+### Added
+
 - parameter `mup` to set minimumUpdatePeriod in MPD
 - new parameter `subsstppreg` can set vertical region
 - new parameter `ltgt` sets latency target in milliseconds
