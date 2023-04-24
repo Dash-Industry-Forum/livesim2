@@ -219,8 +219,8 @@ cfgLoop:
 }
 
 func verifyAndFillConfig(cfg *ResponseConfig) error {
-	if cfg.SegTimelineNrFlag {
-		return fmt.Errorf("mpd type SegmentTimeline with Number not yet supported")
+	if cfg.SegTimelineNrFlag && cfg.SegTimelineFlag {
+		return fmt.Errorf("SegmentTimelineTime and SegmentTimelineNr cannot be used at same time")
 	}
 	if len(cfg.TimeSubsStpp) > 0 && cfg.SegTimelineFlag {
 		return fmt.Errorf("combination of SegTimeline and generated stpp subtitles not yet supported")

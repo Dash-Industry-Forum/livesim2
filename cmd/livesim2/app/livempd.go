@@ -92,7 +92,15 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 			}
 		}
 	case timeLineNumber:
-		return nil, fmt.Errorf("segmentTimeline with $Number$ not yet supported")
+		for i, as := range period.AdaptationSets {
+			lsi, err := adjustAdaptationSetForTimelineNr(cfg, a, as, wTimes)
+			if err != nil {
+				return nil, fmt.Errorf("adjustASForTimelineNr: %w", err)
+			}
+			if i == 0 {
+				mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, lsi))
+			}
+		}
 	case segmentNumber:
 		for _, as := range period.AdaptationSets {
 			err := adjustAdaptationSetForSegmentNumber(cfg, a, as, wTimes)
@@ -139,7 +147,7 @@ func createServiceDescription(latencyTargetMS uint32) []*m.ServiceDescriptionTyp
 	}
 }
 
-func createProducerRefenceTimes(startTimeS int) []*m.ProducerReferenceTimeType {
+func createProducerReferenceTimes(startTimeS int) []*m.ProducerReferenceTimeType {
 	return []*m.ProducerReferenceTimeType{
 		{
 			Id:               0,
@@ -157,7 +165,7 @@ func createProducerRefenceTimes(startTimeS int) []*m.ProducerReferenceTimeType {
 func adjustAdaptationSetForTimelineTime(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType, wt wrapTimes) (lastSegInfo, error) {
 	lsi := lastSegInfo{}
 	if as.SegmentTemplate == nil {
-		return lsi, fmt.Errorf("no SegmentTemplate in AdapationSet")
+		return lsi, fmt.Errorf("no SegmentTemplate in AdaptationSet")
 	}
 	ato := cfg.getAvailabilityTimeOffsetS()
 	if ato == math.Inf(+1) {
@@ -167,7 +175,7 @@ func adjustAdaptationSetForTimelineTime(cfg *ResponseConfig, a *asset, as *m.Ada
 		as.SegmentTemplate.AvailabilityTimeComplete = Ptr(false)
 		if ato > 0 {
 			as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(ato)
-			as.ProducerReferenceTimes = createProducerRefenceTimes(cfg.StartTimeS)
+			as.ProducerReferenceTimes = createProducerReferenceTimes(cfg.StartTimeS)
 		}
 	} else if ato != 0 {
 		as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(ato)
@@ -186,13 +194,53 @@ func adjustAdaptationSetForTimelineTime(cfg *ResponseConfig, a *asset, as *m.Ada
 	as.SegmentTemplate.Timescale = &mediaTimescale
 	stl := as.SegmentTemplate.SegmentTimeline
 
-	stl.S, lsi = a.generateTimelineEntries(r.Id, wt.startWraps, wt.startRelMS, wt.nowWraps, wt.nowRelMS, atoMS)
+	stl.S, lsi, _ = a.generateTimelineEntries(r.Id, wt.startWraps, wt.startRelMS, wt.nowWraps, wt.nowRelMS, atoMS)
+	return lsi, nil
+}
+
+func adjustAdaptationSetForTimelineNr(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType, wt wrapTimes) (lastSegInfo, error) {
+	lsi := lastSegInfo{}
+	if as.SegmentTemplate == nil {
+		return lsi, fmt.Errorf("no SegmentTemplate in AdaptationSet")
+	}
+	ato := cfg.getAvailabilityTimeOffsetS()
+	if ato == math.Inf(+1) {
+		return lsi, ErrAtoInfTimeline
+	}
+	if !cfg.AvailabilityTimeCompleteFlag {
+		as.SegmentTemplate.AvailabilityTimeComplete = Ptr(false)
+		if ato > 0 {
+			as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(ato)
+			as.ProducerReferenceTimes = createProducerReferenceTimes(cfg.StartTimeS)
+		}
+	} else if ato != 0 {
+		as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(ato)
+	}
+	atoMS := int(1000 * ato)
+	r := as.Representations[0] // Assume that any representation will be fine
+	if as.SegmentTemplate.SegmentTimeline == nil {
+		newST := m.SegmentTimelineType{}
+		as.SegmentTemplate.SegmentTimeline = &newST
+	}
+	as.SegmentTemplate.StartNumber = nil
+	as.SegmentTemplate.Duration = nil
+	as.SegmentTemplate.Media = strings.Replace(as.SegmentTemplate.Media, "$Time$", "$Number$", -1)
+	// Must have timescale from media segments here
+	mediaTimescale := uint32(a.Reps[r.Id].MediaTimescale)
+	as.SegmentTemplate.Timescale = &mediaTimescale
+	stl := as.SegmentTemplate.SegmentTimeline
+
+	var startNr int
+	stl.S, lsi, startNr = a.generateTimelineEntries(r.Id, wt.startWraps, wt.startRelMS, wt.nowWraps, wt.nowRelMS, atoMS)
+	if startNr >= 0 {
+		as.SegmentTemplate.StartNumber = Ptr(uint32(startNr))
+	}
 	return lsi, nil
 }
 
 func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType, wt wrapTimes) error {
 	if as.SegmentTemplate == nil {
-		return fmt.Errorf("no SegmentTemplate in AdapationSet %d", as.Id)
+		return fmt.Errorf("no SegmentTemplate in AdaptationSet %d", as.Id)
 	}
 	ato := cfg.getAvailabilityTimeOffsetS()
 	if ato != 0 {
@@ -202,7 +250,7 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 		as.SegmentTemplate.AvailabilityTimeComplete = Ptr(false)
 		if cfg.getAvailabilityTimeOffsetS() > 0 {
 			as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(cfg.getAvailabilityTimeOffsetS())
-			as.ProducerReferenceTimes = createProducerRefenceTimes(cfg.StartTimeS)
+			as.ProducerReferenceTimes = createProducerReferenceTimes(cfg.StartTimeS)
 		}
 	}
 	if as.SegmentTemplate.Duration == nil {
@@ -274,10 +322,10 @@ func calcPublishTime(cfg *ResponseConfig, lsi lastSegInfo) float64 {
 	case segmentNumber:
 		// For single-period case, nothing change after startTime
 		return float64(cfg.StartTimeS)
-	case timeLineTime:
+	case timeLineTime, timeLineNumber:
 		// Here we need the availabilityTime of the last segment
 		return lastSegAvailTimeS(cfg, lsi)
-	default: // timeLineNumber
+	default:
 		panic("liveMPD type not yet implemented")
 	}
 }

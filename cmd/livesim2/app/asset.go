@@ -302,7 +302,9 @@ func (l lastSegInfo) availabilityTime(ato float64) float64 {
 	return math.Round(float64(l.startTime+l.dur)/float64(l.timescale)) - ato
 }
 
-func (a *asset) generateTimelineEntries(repID string, startWraps, startRelMS, nowWraps, nowRelMS, atoMS int) ([]*m.S, lastSegInfo) {
+// generateTimelineEntries generates timeline entries for the given representation. If nowRelMS is too early,
+// startNr and lastSI.nr will both be -1.
+func (a *asset) generateTimelineEntries(repID string, startWraps, startRelMS, nowWraps, nowRelMS, atoMS int) (entries []*m.S, lastSI lastSegInfo, startNr int) {
 	var ss []*m.S
 	rep := a.Reps[repID]
 	segs := rep.segments
@@ -340,10 +342,10 @@ func (a *asset) generateTimelineEntries(repID string, startWraps, startRelMS, no
 		}
 	}
 	if nowWraps < 0 { // end is before start.
-		return nil, lastSegInfo{nr: -1, timescale: uint64(rep.MediaTimescale)}
+		return nil, lastSegInfo{nr: -1, timescale: uint64(rep.MediaTimescale)}, -1
 	}
 
-	startNr := startWraps*nrSegs + relStartIdx
+	startNr = startWraps*nrSegs + relStartIdx
 	nowNr := nowWraps*nrSegs + relNowIdx
 	t := uint64(rep.duration()*startWraps) + segs[relStartIdx].startTime
 	d := segs[relStartIdx].dur()
@@ -370,7 +372,7 @@ func (a *asset) generateTimelineEntries(repID string, startWraps, startRelMS, no
 		lsi.dur = d
 		lsi.nr = nr
 	}
-	return ss, lsi
+	return ss, lsi, startNr
 }
 
 // firstVideoRep returns the first (in alphabetical order) video rep if any present.

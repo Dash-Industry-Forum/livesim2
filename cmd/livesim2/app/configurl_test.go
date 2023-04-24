@@ -135,13 +135,6 @@ func TestProcessURLCfg(t *testing.T) {
 			err:         "url config: combination of SegTimeline and generated stpp subtitles not yet supported",
 		},
 		{
-			url:         "/livesim/segtimelinenr_1/asset.mpd",
-			nowS:        0,
-			contentPart: "",
-			wantedCfg:   nil,
-			err:         "url config: mpd type SegmentTimeline with Number not yet supported",
-		},
-		{
 			url:         "/livesim/mup_0/asset.mpd",
 			nowS:        0,
 			contentPart: "asset.mpd",
@@ -175,6 +168,13 @@ func TestProcessURLCfg(t *testing.T) {
 				TimeSubsDurMS:                defaultTimeSubsDurMS,
 			},
 			err: "",
+		},
+		{
+			url:         "/livesim/segtimeline_1/segtimelinenr_1/asset.mpd",
+			nowS:        0,
+			contentPart: "",
+			wantedCfg:   nil,
+			err:         "url config: SegmentTimelineTime and SegmentTimelineNr cannot be used at same time",
 		},
 	}
 

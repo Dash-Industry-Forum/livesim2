@@ -5,7 +5,6 @@
 package app
 
 import (
-	"fmt"
 	"math"
 	"os"
 	"testing"
@@ -149,18 +148,28 @@ func TestSegmentTimes(t *testing.T) {
 	cases := []struct {
 		asset      string
 		mpdName    string
+		useTime    bool
 		startTimeS int
 		endTimeS   int
 	}{
 		{
 			asset:      "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
 			mpdName:    "stream.mpd",
+			useTime:    true,
 			startTimeS: 80,
 			endTimeS:   88,
 		},
 		{
 			asset:      "testpic_2s",
 			mpdName:    "Manifest.mpd",
+			useTime:    true,
+			startTimeS: 80,
+			endTimeS:   88,
+		},
+		{
+			asset:      "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:    "stream.mpd",
+			useTime:    false,
 			startTimeS: 80,
 			endTimeS:   88,
 		},
@@ -171,18 +180,25 @@ func TestSegmentTimes(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 8000, asset.LoopDurMS)
 		cfg := NewResponseConfig()
-		cfg.SegTimelineFlag = true
+		if tc.useTime {
+			cfg.SegTimelineFlag = true
+		} else {
+			cfg.SegTimelineNrFlag = true
+		}
 		for nowS := tc.startTimeS; nowS < tc.endTimeS; nowS++ {
 			nowMS := nowS * 1000
 			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nowMS)
+			wantedStartNr := (nowS - 62) / 2 // Sliding window of 60s + one segment
 			assert.NoError(t, err)
 			for _, as := range liveMPD.Periods[0].AdaptationSets {
+				if !tc.useTime {
+					assert.Equal(t, wantedStartNr, int(*as.SegmentTemplate.StartNumber))
+				}
 				stl := as.SegmentTemplate
 				nrSegs := 0
 				for _, s := range stl.SegmentTimeline.S {
 					nrSegs += s.R + 1
 				}
-				fmt.Println(nrSegs)
 				assert.True(t, 29 <= nrSegs && nrSegs <= 32, "nr segments in interval 29 <= x <= 32")
 			}
 		}
