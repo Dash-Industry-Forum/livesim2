@@ -317,17 +317,28 @@ func TestPublishTime(t *testing.T) {
 		asset                  string
 		mpdName                string
 		segTimelineTime        bool
+		availabilityStartTime  int
 		availabilityTimeOffset float64
 		nowMS                  int
 		wantedPublishTime      string
 	}{
 		{
-			desc:              "Timeline with $Time$ 1s after start. No segments",
-			asset:             "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
-			mpdName:           "stream.mpd",
-			segTimelineTime:   true,
-			nowMS:             0,
-			wantedPublishTime: "1970-01-01T00:00:00Z",
+			desc:                  "Timeline with $Time$ 1s after start. No segments",
+			asset:                 "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:               "stream.mpd",
+			segTimelineTime:       true,
+			availabilityStartTime: 0,
+			nowMS:                 0,
+			wantedPublishTime:     "1970-01-01T00:00:00Z",
+		},
+		{
+			desc:                  "Timeline with $Time$ 1s after start. No segments",
+			asset:                 "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:               "stream.mpd",
+			segTimelineTime:       true,
+			availabilityStartTime: 1682341800,
+			nowMS:                 1682341801_000,
+			wantedPublishTime:     "2023-04-24T13:10:00Z",
 		},
 		{
 			desc:                   "Timeline with $Time$ 3s, ato=1.5, 1 1/4 segments available",
@@ -337,6 +348,16 @@ func TestPublishTime(t *testing.T) {
 			availabilityTimeOffset: 1.5,
 			nowMS:                  3000,
 			wantedPublishTime:      "1970-01-01T00:00:02.5Z",
+		},
+		{
+			desc:                   "Timeline with $Time$ 3s, ato=1.5, 1 1/4 segments available",
+			asset:                  "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:                "stream.mpd",
+			segTimelineTime:        true,
+			availabilityTimeOffset: 1.5,
+			availabilityStartTime:  1682341800,
+			nowMS:                  1682341803_000,
+			wantedPublishTime:      "2023-04-24T13:10:02.5Z",
 		},
 		{
 			desc:                   "Timeline with $Time$ 4.25s, ato=1.5, 2 segments available",
@@ -403,6 +424,7 @@ func TestPublishTime(t *testing.T) {
 			require.True(t, ok)
 			assert.Equal(t, 8000, asset.LoopDurMS)
 			cfg := NewResponseConfig()
+			cfg.StartTimeS = tc.availabilityStartTime
 			if tc.segTimelineTime {
 				cfg.SegTimelineFlag = true
 			}
@@ -415,6 +437,7 @@ func TestPublishTime(t *testing.T) {
 			require.NoError(t, err)
 			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
 			assert.NoError(t, err)
+			assert.Equal(t, m.ConvertToDateTimeS(int64(tc.availabilityStartTime)), liveMPD.AvailabilityStartTime)
 			assert.Equal(t, m.DateTime(tc.wantedPublishTime), liveMPD.PublishTime)
 		})
 	}
@@ -427,14 +450,15 @@ func TestNormalAvailabilityTimeOffset(t *testing.T) {
 	require.NoError(t, err)
 
 	cases := []struct {
-		desc            string
-		asset           string
-		mpdName         string
-		ato             string
-		nowMS           int
-		segTimelineTime bool
-		wantedAtoVal    float64
-		wantedErr       string
+		desc                  string
+		asset                 string
+		mpdName               string
+		ato                   string
+		nowMS                 int
+		availabilityStartTime int
+		segTimelineTime       bool
+		wantedAtoVal          float64
+		wantedErr             string
 	}{
 		{
 			desc:            "number with ato=10",
@@ -478,6 +502,7 @@ func TestNormalAvailabilityTimeOffset(t *testing.T) {
 			asset, ok := am.findAsset(tc.asset)
 			require.True(t, ok)
 			cfg := NewResponseConfig()
+			cfg.StartTimeS = tc.availabilityStartTime
 			cfg.AvailabilityTimeCompleteFlag = true
 			cfg.SegTimelineFlag = tc.segTimelineTime
 			sc := strConvAccErr{}

@@ -30,12 +30,12 @@ func calcWrapTimes(a *asset, cfg *ResponseConfig, nowMS int, tsbd m.Duration) wr
 	if wt.startTimeMS < startTimeMS {
 		wt.startTimeMS = startTimeMS
 	}
-	wt.startWraps = (wt.startTimeMS - cfg.StartTimeS*1000) / a.LoopDurMS
-	wt.startWrapMS = wt.startWraps * a.LoopDurMS
+	wt.startWraps = (wt.startTimeMS - startTimeMS) / a.LoopDurMS
+	wt.startWrapMS = wt.startWraps*a.LoopDurMS + startTimeMS
 	wt.startRelMS = wt.startTimeMS - wt.startWrapMS
 
-	wt.nowWraps = (nowMS - cfg.StartTimeS*1000) / a.LoopDurMS
-	wt.nowWrapMS = wt.nowWraps * a.LoopDurMS
+	wt.nowWraps = (nowMS - startTimeMS) / a.LoopDurMS
+	wt.nowWrapMS = wt.nowWraps*a.LoopDurMS + startTimeMS
 	wt.nowRelMS = nowMS - wt.nowWrapMS
 
 	return wt
@@ -194,7 +194,7 @@ func adjustAdaptationSetForTimelineTime(cfg *ResponseConfig, a *asset, as *m.Ada
 	as.SegmentTemplate.Timescale = &mediaTimescale
 	stl := as.SegmentTemplate.SegmentTimeline
 
-	stl.S, lsi, _ = a.generateTimelineEntries(r.Id, wt.startWraps, wt.startRelMS, wt.nowWraps, wt.nowRelMS, atoMS)
+	stl.S, lsi, _ = a.generateTimelineEntries(r.Id, wt, atoMS)
 	return lsi, nil
 }
 
@@ -231,7 +231,7 @@ func adjustAdaptationSetForTimelineNr(cfg *ResponseConfig, a *asset, as *m.Adapt
 	stl := as.SegmentTemplate.SegmentTimeline
 
 	var startNr int
-	stl.S, lsi, startNr = a.generateTimelineEntries(r.Id, wt.startWraps, wt.startRelMS, wt.nowWraps, wt.nowRelMS, atoMS)
+	stl.S, lsi, startNr = a.generateTimelineEntries(r.Id, wt, atoMS)
 	if startNr >= 0 {
 		as.SegmentTemplate.StartNumber = Ptr(uint32(startNr))
 	}
@@ -333,12 +333,13 @@ func calcPublishTime(cfg *ResponseConfig, lsi lastSegInfo) float64 {
 // lastSegAvailTimeS returns the availabilityTime of the last segment,
 // including the availabilityTimeOffset.
 func lastSegAvailTimeS(cfg *ResponseConfig, lsi lastSegInfo) float64 {
+	ast := float64(cfg.StartTimeS)
 	if lsi.nr < 0 {
-		return 0
+		return ast
 	}
-	availTime := lsi.availabilityTime(cfg.AvailabilityTimeOffsetS)
-	if availTime < float64(cfg.StartTimeS) {
-		return float64(cfg.StartTimeS)
+	availTime := lsi.availabilityTime(cfg.AvailabilityTimeOffsetS) + ast
+	if availTime < ast {
+		return ast
 	}
 	return availTime
 }
