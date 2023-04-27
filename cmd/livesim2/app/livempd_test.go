@@ -295,13 +295,15 @@ func TestLastAvailableSegment(t *testing.T) {
 			mpd, err := asset.getVodMPD(tc.mpdName)
 			require.NoError(t, err)
 			as := mpd.Periods[0].AdaptationSets[0]
-			lsi, err := adjustAdaptationSetForTimelineTime(cfg, asset, as, wTimes)
+			se, err := calcSegmentEntriesForAdaptationSet(cfg, asset, as, wTimes)
 			if tc.wantedErr != "" {
 				require.EqualError(t, err, tc.wantedErr)
 			} else {
+				err := adjustAdaptationSetForTimelineTime(cfg, se, as)
 				require.NoError(t, err)
-				assert.Equal(t, tc.wantedSegNr, lsi.nr)
+				assert.Equal(t, tc.wantedSegNr, se.lsi.nr)
 			}
+
 		})
 	}
 }
@@ -494,7 +496,7 @@ func TestNormalAvailabilityTimeOffset(t *testing.T) {
 			ato:             "inf",
 			nowMS:           100_000,
 			segTimelineTime: true,
-			wantedErr:       "adjustASForTimelineTime: infinite availabilityTimeOffset for SegmentTimeline",
+			wantedErr:       "infinite availabilityTimeOffset for SegmentTimeline",
 		},
 	}
 	for _, tc := range cases {
@@ -581,6 +583,119 @@ func TestUTCTiming(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, m.DateTime(tc.wantedPublishTime), liveMPD.PublishTime)
 			assert.Equal(t, tc.wantedUTCTimings, len(liveMPD.UTCTimings))
+		})
+	}
+}
+
+func TestMultiPeriod(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS)
+	err := am.discoverAssets()
+	require.NoError(t, err)
+
+	cases := []struct {
+		desc                          string
+		asset                         string
+		mpdName                       string
+		nowMS                         int
+		nrPeriodsPerHour              int
+		mpdStlType                    string
+		wantedNrPeriods               int
+		wantedStartNrs                []*int // When applicable
+		wantedPresentationTimeOffsets [][]int
+		wantedErr                     string
+	}{
+		{
+			desc:                          "1-min periods with timelineTime",
+			asset:                         "testpic_2s",
+			mpdName:                       "Manifest.mpd",
+			nowMS:                         1001_000,
+			nrPeriodsPerHour:              60,
+			mpdStlType:                    "timelineTime",
+			wantedNrPeriods:               2,
+			wantedStartNrs:                []*int{nil, nil},
+			wantedPresentationTimeOffsets: [][]int{{43200000, 81000000}, {46080000, 86400000}},
+			wantedErr:                     "",
+		},
+		{
+			desc:                          "1-min periods with timelineNumber",
+			asset:                         "testpic_2s",
+			mpdName:                       "Manifest.mpd",
+			nowMS:                         1001_000,
+			nrPeriodsPerHour:              60,
+			mpdStlType:                    "timelineNumber",
+			wantedNrPeriods:               2,
+			wantedStartNrs:                []*int{Ptr(469), Ptr(480)},
+			wantedPresentationTimeOffsets: [][]int{{43200000, 81000000}, {46080000, 86400000}},
+			wantedErr:                     "",
+		},
+		{
+			desc:                          "1-min periods with $Number$",
+			asset:                         "testpic_2s",
+			mpdName:                       "Manifest.mpd",
+			nowMS:                         1001_000,
+			nrPeriodsPerHour:              60,
+			mpdStlType:                    "$Number$",
+			wantedNrPeriods:               2,
+			wantedStartNrs:                []*int{Ptr(450), Ptr(480)},
+			wantedPresentationTimeOffsets: [][]int{{900, 900}, {960, 960}},
+			wantedErr:                     "",
+		},
+		{
+			desc:             "1-min periods is not compatible with 8s segments",
+			asset:            "testpic_8s",
+			mpdName:          "Manifest.mpd",
+			nowMS:            1001_000,
+			nrPeriodsPerHour: 60,
+			mpdStlType:       "$Number$",
+			wantedErr:        "splitPeriods: period duration 60s not a multiple of segment duration 8000ms",
+		},
+		{
+			desc:                          "2-min periods with 8s segments",
+			asset:                         "testpic_8s",
+			mpdName:                       "Manifest.mpd",
+			nowMS:                         1001_000,
+			nrPeriodsPerHour:              30,
+			mpdStlType:                    "$Number$",
+			wantedNrPeriods:               2,
+			wantedStartNrs:                []*int{Ptr(105), Ptr(120)},
+			wantedPresentationTimeOffsets: [][]int{{40320000, 12902400}, {46080000, 14745600}},
+			wantedErr:                     "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			asset, ok := am.findAsset(tc.asset)
+			require.True(t, ok)
+			cfg := NewResponseConfig()
+			cfg.PeriodsPerHour = Ptr(tc.nrPeriodsPerHour)
+			switch tc.mpdStlType {
+			case "timelineTime":
+				cfg.SegTimelineFlag = true
+			case "timelineNumber":
+				cfg.SegTimelineNrFlag = true
+			default: // $Number$
+				// no flag
+			}
+			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
+			if tc.wantedErr != "" {
+				assert.EqualError(t, err, tc.wantedErr)
+				return
+			}
+			// _ = liveMPD.Write(os.Stdout)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.wantedNrPeriods, len(liveMPD.Periods))
+			for pNr, p := range liveMPD.Periods {
+				for asNr, as := range p.AdaptationSets {
+					stl := as.SegmentTemplate
+					if tc.wantedStartNrs[pNr] == nil {
+						assert.Nil(t, stl.StartNumber)
+					} else {
+						assert.Equal(t, *tc.wantedStartNrs[pNr], int(*stl.StartNumber))
+					}
+					assert.Equal(t, tc.wantedPresentationTimeOffsets[pNr][asNr], int(*stl.PresentationTimeOffset))
+				}
+			}
 		})
 	}
 }

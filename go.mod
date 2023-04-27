@@ -37,3 +37,5 @@ require (
 	google.golang.org/protobuf v1.29.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/Eyevinn/dash-mpd => ../../ev/dash-mpd

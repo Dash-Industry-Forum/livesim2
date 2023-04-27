@@ -45,7 +45,7 @@ func (am *assetMgr) findAsset(uri string) (*asset, bool) {
 	return nil, false
 }
 
-// addAssset adds or retrieves an asset.
+// addAsset adds or retrieves an asset.
 func (am *assetMgr) addAsset(assetPath string) *asset {
 	if ast, ok := am.assets[assetPath]; ok {
 		return ast
