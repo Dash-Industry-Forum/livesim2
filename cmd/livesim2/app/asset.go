@@ -45,7 +45,7 @@ func (am *assetMgr) findAsset(uri string) (*asset, bool) {
 	return nil, false
 }
 
-// addAssset adds or retrieves an asset.
+// addAsset adds or retrieves an asset.
 func (am *assetMgr) addAsset(assetPath string) *asset {
 	if ast, ok := am.assets[assetPath]; ok {
 		return ast
@@ -304,7 +304,7 @@ func (l lastSegInfo) availabilityTime(ato float64) float64 {
 
 // generateTimelineEntries generates timeline entries for the given representation. If nowRelMS is too early,
 // startNr and lastSI.nr will both be -1.
-func (a *asset) generateTimelineEntries(repID string, startWraps, startRelMS, nowWraps, nowRelMS, atoMS int) (entries []*m.S, lastSI lastSegInfo, startNr int) {
+func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int) (entries []*m.S, lastSI lastSegInfo, startNr int) {
 	var ss []*m.S
 	rep := a.Reps[repID]
 	segs := rep.segments
@@ -312,42 +312,42 @@ func (a *asset) generateTimelineEntries(repID string, startWraps, startRelMS, no
 
 	ato := uint64(atoMS * rep.MpdTimescale / 1000)
 
-	relStartTime := uint64(startRelMS * rep.MediaTimescale / 1000)
+	relStartTime := uint64(wt.startRelMS * rep.MediaTimescale / 1000)
 	relStartIdx := 0
 	if relStartTime+ato < segs[0].endTime {
-		startWraps--
+		wt.startWraps--
 		relStartIdx = nrSegs - 1
 	} else {
 		relStartIdx = findFirstFinishedSegIdx(segs, relStartTime+ato)
 		if relStartIdx < 0 {
-			startWraps--
+			wt.startWraps--
 			relStartIdx = nrSegs - 1
 		}
 	}
-	if startWraps < 0 { // Cannot go before start
+	if wt.startWraps < 0 { // Cannot go before start
 		relStartIdx = 0
-		startWraps = 0
+		wt.startWraps = 0
 	}
 
-	relNowTime := uint64(nowRelMS * rep.MediaTimescale / 1000)
+	relNowTime := uint64(wt.nowRelMS * rep.MediaTimescale / 1000)
 	relNowIdx := 0
 	if relNowTime+ato < segs[0].endTime {
-		nowWraps--
+		wt.nowWraps--
 		relNowIdx = nrSegs - 1
 	} else {
 		relNowIdx = findFirstFinishedSegIdx(segs, relNowTime+ato)
 		if relNowIdx < 0 {
-			nowWraps--
+			wt.nowWraps--
 			relNowIdx = nrSegs - 1
 		}
 	}
-	if nowWraps < 0 { // end is before start.
+	if wt.nowWraps < 0 { // end is before start.
 		return nil, lastSegInfo{nr: -1, timescale: uint64(rep.MediaTimescale)}, -1
 	}
 
-	startNr = startWraps*nrSegs + relStartIdx
-	nowNr := nowWraps*nrSegs + relNowIdx
-	t := uint64(rep.duration()*startWraps) + segs[relStartIdx].startTime
+	startNr = wt.startWraps*nrSegs + relStartIdx
+	nowNr := wt.nowWraps*nrSegs + relNowIdx
+	t := uint64(rep.duration()*wt.startWraps) + segs[relStartIdx].startTime
 	d := segs[relStartIdx].dur()
 	s := &m.S{T: Ptr(t), D: d}
 	lsi := lastSegInfo{

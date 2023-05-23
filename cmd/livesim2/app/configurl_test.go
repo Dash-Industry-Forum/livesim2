@@ -176,6 +176,20 @@ func TestProcessURLCfg(t *testing.T) {
 			wantedCfg:   nil,
 			err:         "url config: SegmentTimelineTime and SegmentTimelineNr cannot be used at same time",
 		},
+		{
+			url:         "/livesim/periods_60/asset.mpd",
+			nowS:        1000,
+			contentPart: "asset.mpd",
+			wantedCfg: &ResponseConfig{
+				StartTimeS:                   0,
+				TimeShiftBufferDepthS:        Ptr(60),
+				StartNr:                      Ptr(0),
+				AvailabilityTimeCompleteFlag: true,
+				TimeSubsDurMS:                defaultTimeSubsDurMS,
+				PeriodsPerHour:               Ptr(60),
+			},
+			err: "",
+		},
 	}
 
 	for _, c := range cases {

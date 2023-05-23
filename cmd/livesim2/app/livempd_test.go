@@ -295,13 +295,15 @@ func TestLastAvailableSegment(t *testing.T) {
 			mpd, err := asset.getVodMPD(tc.mpdName)
 			require.NoError(t, err)
 			as := mpd.Periods[0].AdaptationSets[0]
-			lsi, err := adjustAdaptationSetForTimelineTime(cfg, asset, as, wTimes)
+			se, err := calcSegmentEntriesForAdaptationSet(cfg, asset, as, wTimes)
 			if tc.wantedErr != "" {
 				require.EqualError(t, err, tc.wantedErr)
 			} else {
+				err := adjustAdaptationSetForTimelineTime(cfg, se, as)
 				require.NoError(t, err)
-				assert.Equal(t, tc.wantedSegNr, lsi.nr)
+				assert.Equal(t, tc.wantedSegNr, se.lsi.nr)
 			}
+
 		})
 	}
 }
@@ -317,17 +319,28 @@ func TestPublishTime(t *testing.T) {
 		asset                  string
 		mpdName                string
 		segTimelineTime        bool
+		availabilityStartTime  int
 		availabilityTimeOffset float64
 		nowMS                  int
 		wantedPublishTime      string
 	}{
 		{
-			desc:              "Timeline with $Time$ 1s after start. No segments",
-			asset:             "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
-			mpdName:           "stream.mpd",
-			segTimelineTime:   true,
-			nowMS:             0,
-			wantedPublishTime: "1970-01-01T00:00:00Z",
+			desc:                  "Timeline with $Time$ 1s after start. No segments",
+			asset:                 "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:               "stream.mpd",
+			segTimelineTime:       true,
+			availabilityStartTime: 0,
+			nowMS:                 0,
+			wantedPublishTime:     "1970-01-01T00:00:00Z",
+		},
+		{
+			desc:                  "Timeline with $Time$ 1s after start. No segments",
+			asset:                 "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:               "stream.mpd",
+			segTimelineTime:       true,
+			availabilityStartTime: 1682341800,
+			nowMS:                 1682341801_000,
+			wantedPublishTime:     "2023-04-24T13:10:00Z",
 		},
 		{
 			desc:                   "Timeline with $Time$ 3s, ato=1.5, 1 1/4 segments available",
@@ -337,6 +350,16 @@ func TestPublishTime(t *testing.T) {
 			availabilityTimeOffset: 1.5,
 			nowMS:                  3000,
 			wantedPublishTime:      "1970-01-01T00:00:02.5Z",
+		},
+		{
+			desc:                   "Timeline with $Time$ 3s, ato=1.5, 1 1/4 segments available",
+			asset:                  "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:                "stream.mpd",
+			segTimelineTime:        true,
+			availabilityTimeOffset: 1.5,
+			availabilityStartTime:  1682341800,
+			nowMS:                  1682341803_000,
+			wantedPublishTime:      "2023-04-24T13:10:02.5Z",
 		},
 		{
 			desc:                   "Timeline with $Time$ 4.25s, ato=1.5, 2 segments available",
@@ -403,6 +426,7 @@ func TestPublishTime(t *testing.T) {
 			require.True(t, ok)
 			assert.Equal(t, 8000, asset.LoopDurMS)
 			cfg := NewResponseConfig()
+			cfg.StartTimeS = tc.availabilityStartTime
 			if tc.segTimelineTime {
 				cfg.SegTimelineFlag = true
 			}
@@ -415,6 +439,7 @@ func TestPublishTime(t *testing.T) {
 			require.NoError(t, err)
 			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
 			assert.NoError(t, err)
+			assert.Equal(t, m.ConvertToDateTimeS(int64(tc.availabilityStartTime)), liveMPD.AvailabilityStartTime)
 			assert.Equal(t, m.DateTime(tc.wantedPublishTime), liveMPD.PublishTime)
 		})
 	}
@@ -427,14 +452,15 @@ func TestNormalAvailabilityTimeOffset(t *testing.T) {
 	require.NoError(t, err)
 
 	cases := []struct {
-		desc            string
-		asset           string
-		mpdName         string
-		ato             string
-		nowMS           int
-		segTimelineTime bool
-		wantedAtoVal    float64
-		wantedErr       string
+		desc                  string
+		asset                 string
+		mpdName               string
+		ato                   string
+		nowMS                 int
+		availabilityStartTime int
+		segTimelineTime       bool
+		wantedAtoVal          float64
+		wantedErr             string
 	}{
 		{
 			desc:            "number with ato=10",
@@ -470,7 +496,7 @@ func TestNormalAvailabilityTimeOffset(t *testing.T) {
 			ato:             "inf",
 			nowMS:           100_000,
 			segTimelineTime: true,
-			wantedErr:       "adjustASForTimelineTime: infinite availabilityTimeOffset for SegmentTimeline",
+			wantedErr:       "infinite availabilityTimeOffset for SegmentTimeline",
 		},
 	}
 	for _, tc := range cases {
@@ -478,6 +504,7 @@ func TestNormalAvailabilityTimeOffset(t *testing.T) {
 			asset, ok := am.findAsset(tc.asset)
 			require.True(t, ok)
 			cfg := NewResponseConfig()
+			cfg.StartTimeS = tc.availabilityStartTime
 			cfg.AvailabilityTimeCompleteFlag = true
 			cfg.SegTimelineFlag = tc.segTimelineTime
 			sc := strConvAccErr{}
@@ -556,6 +583,119 @@ func TestUTCTiming(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, m.DateTime(tc.wantedPublishTime), liveMPD.PublishTime)
 			assert.Equal(t, tc.wantedUTCTimings, len(liveMPD.UTCTimings))
+		})
+	}
+}
+
+func TestMultiPeriod(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS)
+	err := am.discoverAssets()
+	require.NoError(t, err)
+
+	cases := []struct {
+		desc                          string
+		asset                         string
+		mpdName                       string
+		nowMS                         int
+		nrPeriodsPerHour              int
+		mpdStlType                    string
+		wantedNrPeriods               int
+		wantedStartNrs                []*int // When applicable
+		wantedPresentationTimeOffsets [][]int
+		wantedErr                     string
+	}{
+		{
+			desc:                          "1-min periods with timelineTime",
+			asset:                         "testpic_2s",
+			mpdName:                       "Manifest.mpd",
+			nowMS:                         1001_000,
+			nrPeriodsPerHour:              60,
+			mpdStlType:                    "timelineTime",
+			wantedNrPeriods:               2,
+			wantedStartNrs:                []*int{nil, nil},
+			wantedPresentationTimeOffsets: [][]int{{43200000, 81000000}, {46080000, 86400000}},
+			wantedErr:                     "",
+		},
+		{
+			desc:                          "1-min periods with timelineNumber",
+			asset:                         "testpic_2s",
+			mpdName:                       "Manifest.mpd",
+			nowMS:                         1001_000,
+			nrPeriodsPerHour:              60,
+			mpdStlType:                    "timelineNumber",
+			wantedNrPeriods:               2,
+			wantedStartNrs:                []*int{Ptr(469), Ptr(480)},
+			wantedPresentationTimeOffsets: [][]int{{43200000, 81000000}, {46080000, 86400000}},
+			wantedErr:                     "",
+		},
+		{
+			desc:                          "1-min periods with $Number$",
+			asset:                         "testpic_2s",
+			mpdName:                       "Manifest.mpd",
+			nowMS:                         1001_000,
+			nrPeriodsPerHour:              60,
+			mpdStlType:                    "$Number$",
+			wantedNrPeriods:               2,
+			wantedStartNrs:                []*int{Ptr(450), Ptr(480)},
+			wantedPresentationTimeOffsets: [][]int{{900, 900}, {960, 960}},
+			wantedErr:                     "",
+		},
+		{
+			desc:             "1-min periods is not compatible with 8s segments",
+			asset:            "testpic_8s",
+			mpdName:          "Manifest.mpd",
+			nowMS:            1001_000,
+			nrPeriodsPerHour: 60,
+			mpdStlType:       "$Number$",
+			wantedErr:        "splitPeriods: period duration 60s not a multiple of segment duration 8000ms",
+		},
+		{
+			desc:                          "2-min periods with 8s segments",
+			asset:                         "testpic_8s",
+			mpdName:                       "Manifest.mpd",
+			nowMS:                         1001_000,
+			nrPeriodsPerHour:              30,
+			mpdStlType:                    "$Number$",
+			wantedNrPeriods:               2,
+			wantedStartNrs:                []*int{Ptr(105), Ptr(120)},
+			wantedPresentationTimeOffsets: [][]int{{40320000, 12902400}, {46080000, 14745600}},
+			wantedErr:                     "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			asset, ok := am.findAsset(tc.asset)
+			require.True(t, ok)
+			cfg := NewResponseConfig()
+			cfg.PeriodsPerHour = Ptr(tc.nrPeriodsPerHour)
+			switch tc.mpdStlType {
+			case "timelineTime":
+				cfg.SegTimelineFlag = true
+			case "timelineNumber":
+				cfg.SegTimelineNrFlag = true
+			default: // $Number$
+				// no flag
+			}
+			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
+			if tc.wantedErr != "" {
+				assert.EqualError(t, err, tc.wantedErr)
+				return
+			}
+			// _ = liveMPD.Write(os.Stdout)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.wantedNrPeriods, len(liveMPD.Periods))
+			for pNr, p := range liveMPD.Periods {
+				for asNr, as := range p.AdaptationSets {
+					stl := as.SegmentTemplate
+					if tc.wantedStartNrs[pNr] == nil {
+						assert.Nil(t, stl.StartNumber)
+					} else {
+						assert.Equal(t, *tc.wantedStartNrs[pNr], int(*stl.StartNumber))
+					}
+					assert.Equal(t, tc.wantedPresentationTimeOffsets[pNr][asNr], int(*stl.PresentationTimeOffset))
+				}
+			}
 		})
 	}
 }

@@ -30,12 +30,12 @@ func calcWrapTimes(a *asset, cfg *ResponseConfig, nowMS int, tsbd m.Duration) wr
 	if wt.startTimeMS < startTimeMS {
 		wt.startTimeMS = startTimeMS
 	}
-	wt.startWraps = (wt.startTimeMS - cfg.StartTimeS*1000) / a.LoopDurMS
-	wt.startWrapMS = wt.startWraps * a.LoopDurMS
+	wt.startWraps = (wt.startTimeMS - startTimeMS) / a.LoopDurMS
+	wt.startWrapMS = wt.startWraps*a.LoopDurMS + startTimeMS
 	wt.startRelMS = wt.startTimeMS - wt.startWrapMS
 
-	wt.nowWraps = (nowMS - cfg.StartTimeS*1000) / a.LoopDurMS
-	wt.nowWrapMS = wt.nowWraps * a.LoopDurMS
+	wt.nowWraps = (nowMS - startTimeMS) / a.LoopDurMS
+	wt.nowWrapMS = wt.nowWraps*a.LoopDurMS + startTimeMS
 	wt.nowRelMS = nowMS - wt.nowWrapMS
 
 	return wt
@@ -77,49 +77,163 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 
 	period := mpd.Periods[0]
 	period.Duration = nil
-	period.Id = "P0" // To evolve. Set period name depending on start relative AST.
+	period.Id = "P0"
 	period.Start = Ptr(m.Duration(0))
 
-	switch cfg.liveMPDType() {
-	case timeLineTime:
-		for i, as := range period.AdaptationSets {
-			lsi, err := adjustAdaptationSetForTimelineTime(cfg, a, as, wTimes)
+	for i, as := range period.AdaptationSets {
+		se, err := calcSegmentEntriesForAdaptationSet(cfg, a, as, wTimes)
+		if err != nil {
+			return nil, err
+		}
+		switch cfg.liveMPDType() {
+		case timeLineTime:
+			err := adjustAdaptationSetForTimelineTime(cfg, se, as)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForTimelineTime: %w", err)
 			}
 			if i == 0 {
-				mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, lsi))
+				mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, se.lsi))
 			}
-		}
-	case timeLineNumber:
-		for i, as := range period.AdaptationSets {
-			lsi, err := adjustAdaptationSetForTimelineNr(cfg, a, as, wTimes)
+		case timeLineNumber:
+			err := adjustAdaptationSetForTimelineNr(cfg, se, as)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForTimelineNr: %w", err)
 			}
 			if i == 0 {
-				mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, lsi))
+				mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, se.lsi))
 			}
-		}
-	case segmentNumber:
-		for _, as := range period.AdaptationSets {
+		case segmentNumber:
 			err := adjustAdaptationSetForSegmentNumber(cfg, a, as, wTimes)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForSegmentNumber: %w", err)
 			}
+			mpd.PublishTime = mpd.AvailabilityStartTime
+		default:
+			return nil, fmt.Errorf("unknown mpd type")
 		}
-		mpd.PublishTime = mpd.AvailabilityStartTime
-	default:
-		return nil, fmt.Errorf("unknown mpd type")
 	}
-
 	if len(cfg.TimeSubsStpp) > 0 {
 		err = addTimeSubsStpp(cfg, a, period)
 		if err != nil {
 			return nil, fmt.Errorf("addTimeSubsStpp: %w", err)
 		}
 	}
+	if cfg.PeriodsPerHour == nil {
+		return mpd, nil
+	}
+
+	// Split into multiple periods
+	err = splitPeriod(mpd, a, cfg, wTimes)
+	if err != nil {
+		return nil, fmt.Errorf("splitPeriods: %w", err)
+	}
+
 	return mpd, nil
+}
+
+// splitPeriod splits the single-period MPD into multiple periods given cfg.PeriodsPerHour
+func splitPeriod(mpd *m.MPD, a *asset, cfg *ResponseConfig, wTimes wrapTimes) error {
+	if len(mpd.Periods) != 1 {
+		return fmt.Errorf("not exactly one period in the MPD")
+	}
+	if cfg.PeriodsPerHour == nil {
+		return nil
+	}
+	periodDur := 3600 / *cfg.PeriodsPerHour
+	if periodDur*1000%a.SegmentDurMS != 0 {
+		return fmt.Errorf("period duration %ds not a multiple of segment duration %dms", periodDur, a.SegmentDurMS)
+	}
+
+	startPeriodNr := wTimes.startTimeMS / (periodDur * 1000)
+	endPeriodNr := wTimes.nowMS / (periodDur * 1000)
+	inPeriod := mpd.Periods[0]
+	nrPeriods := endPeriodNr - startPeriodNr + 1
+	periods := make([]*m.Period, 0, nrPeriods)
+	for pNr := startPeriodNr; pNr <= endPeriodNr; pNr++ {
+		p := inPeriod.Clone()
+		p.Id = fmt.Sprintf("P%d", pNr)
+		p.Start = m.Seconds2DurPtr(pNr * periodDur)
+		for aNr, as := range p.AdaptationSets {
+			inAS := inPeriod.AdaptationSets[aNr]
+			timeScale := int(as.SegmentTemplate.GetTimescale())
+			pto := Ptr(uint64(pNr * periodDur * timeScale))
+			switch cfg.liveMPDType() {
+			case segmentNumber:
+				as.SegmentTemplate.PresentationTimeOffset = pto
+				segDur := int(*as.SegmentTemplate.Duration)
+				startNr := uint32(pNr * periodDur * timeScale / segDur)
+				as.SegmentTemplate.StartNumber = Ptr(startNr)
+			case timeLineTime:
+				as.SegmentTemplate.PresentationTimeOffset = pto
+				inS := inAS.SegmentTemplate.SegmentTimeline.S
+				periodStart, periodEnd := uint64(pNr*periodDur), uint64((pNr+1)*periodDur)
+				as.SegmentTemplate.SegmentTimeline.S, _ = reduceS(inS, nil, timeScale, periodStart, periodEnd)
+			case timeLineNumber:
+				as.SegmentTemplate.PresentationTimeOffset = pto
+				inS := inAS.SegmentTemplate.SegmentTimeline.S
+				startNr := inAS.SegmentTemplate.StartNumber
+				periodStart, periodEnd := uint64(pNr*periodDur), uint64((pNr+1)*periodDur)
+				as.SegmentTemplate.SegmentTimeline.S, as.SegmentTemplate.StartNumber = reduceS(inS, startNr, timeScale, periodStart, periodEnd)
+			default:
+				return fmt.Errorf("unknown mpd type")
+			}
+		}
+		periods = append(periods, p)
+	}
+	mpd.Periods = nil
+	for _, p := range periods {
+		mpd.AppendPeriod(p)
+	}
+	return nil
+}
+
+func reduceS(entries []*m.S, startNr *uint32, timescale int, periodStartS, periodEndS uint64) ([]*m.S, *uint32) {
+	var t uint64
+	pStart := periodStartS * uint64(timescale)
+	pEnd := periodEndS * uint64(timescale)
+	nr := uint32(0)
+	if startNr != nil {
+		nr = *startNr
+	}
+	outStartNr := nr
+	newS := make([]*m.S, 0, len(entries))
+	var currS *m.S
+	for _, e := range entries {
+		if e.T != nil {
+			t = *e.T
+		}
+		d := e.D
+		for i := 0; i <= e.R; i++ {
+			if t < pStart {
+				t += d
+				nr++
+				continue
+			}
+			if t >= pEnd {
+				return newS, &nr
+			}
+			if currS == nil {
+				currS = &m.S{
+					T: Ptr(t),
+					D: d,
+				}
+				outStartNr = nr
+				newS = append(newS, currS)
+			} else {
+				if d == currS.D {
+					currS.R++
+				} else {
+					currS = &m.S{
+						T: Ptr(t),
+						D: d,
+					}
+					newS = append(newS, currS)
+				}
+			}
+			t += d
+		}
+	}
+	return newS, &outStartNr
 }
 
 // createServiceDescription creates a fixed service description for low-latency
@@ -162,87 +276,24 @@ func createProducerReferenceTimes(startTimeS int) []*m.ProducerReferenceTimeType
 	}
 }
 
-func adjustAdaptationSetForTimelineTime(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType, wt wrapTimes) (lastSegInfo, error) {
-	lsi := lastSegInfo{}
-	if as.SegmentTemplate == nil {
-		return lsi, fmt.Errorf("no SegmentTemplate in AdaptationSet")
-	}
-	ato := cfg.getAvailabilityTimeOffsetS()
-	if ato == math.Inf(+1) {
-		return lsi, ErrAtoInfTimeline
-	}
-	if !cfg.AvailabilityTimeCompleteFlag {
-		as.SegmentTemplate.AvailabilityTimeComplete = Ptr(false)
-		if ato > 0 {
-			as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(ato)
-			as.ProducerReferenceTimes = createProducerReferenceTimes(cfg.StartTimeS)
-		}
-	} else if ato != 0 {
-		as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(ato)
-	}
-	atoMS := int(1000 * ato)
-	r := as.Representations[0] // Assume that any representation will be fine
-	if as.SegmentTemplate.SegmentTimeline == nil {
-		newST := m.SegmentTimelineType{}
-		as.SegmentTemplate.SegmentTimeline = &newST
-	}
-	as.SegmentTemplate.StartNumber = nil
-	as.SegmentTemplate.Duration = nil
-	as.SegmentTemplate.Media = strings.Replace(as.SegmentTemplate.Media, "$Number$", "$Time$", -1)
-	// Must have timescale from media segments here
-	mediaTimescale := uint32(a.Reps[r.Id].MediaTimescale)
-	as.SegmentTemplate.Timescale = &mediaTimescale
-	stl := as.SegmentTemplate.SegmentTimeline
-
-	stl.S, lsi, _ = a.generateTimelineEntries(r.Id, wt.startWraps, wt.startRelMS, wt.nowWraps, wt.nowRelMS, atoMS)
-	return lsi, nil
+type segEntries struct {
+	entries        []*m.S
+	lsi            lastSegInfo
+	startNr        int
+	mediaTimescale uint32
 }
 
-func adjustAdaptationSetForTimelineNr(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType, wt wrapTimes) (lastSegInfo, error) {
-	lsi := lastSegInfo{}
+func calcSegmentEntriesForAdaptationSet(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType, wt wrapTimes) (segEntries, error) {
+	se := segEntries{}
 	if as.SegmentTemplate == nil {
-		return lsi, fmt.Errorf("no SegmentTemplate in AdaptationSet")
+		return se, fmt.Errorf("no SegmentTemplate in AdaptationSet")
 	}
 	ato := cfg.getAvailabilityTimeOffsetS()
-	if ato == math.Inf(+1) {
-		return lsi, ErrAtoInfTimeline
-	}
-	if !cfg.AvailabilityTimeCompleteFlag {
-		as.SegmentTemplate.AvailabilityTimeComplete = Ptr(false)
-		if ato > 0 {
-			as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(ato)
-			as.ProducerReferenceTimes = createProducerReferenceTimes(cfg.StartTimeS)
+	if cfg.liveMPDType() != segmentNumber {
+		if ato == math.Inf(+1) {
+			return se, ErrAtoInfTimeline
 		}
-	} else if ato != 0 {
-		as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(ato)
 	}
-	atoMS := int(1000 * ato)
-	r := as.Representations[0] // Assume that any representation will be fine
-	if as.SegmentTemplate.SegmentTimeline == nil {
-		newST := m.SegmentTimelineType{}
-		as.SegmentTemplate.SegmentTimeline = &newST
-	}
-	as.SegmentTemplate.StartNumber = nil
-	as.SegmentTemplate.Duration = nil
-	as.SegmentTemplate.Media = strings.Replace(as.SegmentTemplate.Media, "$Time$", "$Number$", -1)
-	// Must have timescale from media segments here
-	mediaTimescale := uint32(a.Reps[r.Id].MediaTimescale)
-	as.SegmentTemplate.Timescale = &mediaTimescale
-	stl := as.SegmentTemplate.SegmentTimeline
-
-	var startNr int
-	stl.S, lsi, startNr = a.generateTimelineEntries(r.Id, wt.startWraps, wt.startRelMS, wt.nowWraps, wt.nowRelMS, atoMS)
-	if startNr >= 0 {
-		as.SegmentTemplate.StartNumber = Ptr(uint32(startNr))
-	}
-	return lsi, nil
-}
-
-func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType, wt wrapTimes) error {
-	if as.SegmentTemplate == nil {
-		return fmt.Errorf("no SegmentTemplate in AdaptationSet %d", as.Id)
-	}
-	ato := cfg.getAvailabilityTimeOffsetS()
 	if ato != 0 {
 		as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(ato)
 	}
@@ -253,6 +304,42 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 			as.ProducerReferenceTimes = createProducerReferenceTimes(cfg.StartTimeS)
 		}
 	}
+	atoMS := int(1000 * ato)
+	r := as.Representations[0] // Assume that any representation will be fine
+	se.mediaTimescale = uint32(a.Reps[r.Id].MediaTimescale)
+	se.entries, se.lsi, se.startNr = a.generateTimelineEntries(r.Id, wt, atoMS)
+	return se, nil
+}
+
+func adjustAdaptationSetForTimelineTime(cfg *ResponseConfig, se segEntries, as *m.AdaptationSetType) error {
+	if as.SegmentTemplate.SegmentTimeline == nil {
+		as.SegmentTemplate.SegmentTimeline = &m.SegmentTimelineType{}
+	}
+	as.SegmentTemplate.StartNumber = nil
+	as.SegmentTemplate.Duration = nil
+	as.SegmentTemplate.Media = strings.Replace(as.SegmentTemplate.Media, "$Number$", "$Time$", -1)
+	as.SegmentTemplate.Timescale = Ptr(se.mediaTimescale)
+	as.SegmentTemplate.SegmentTimeline.S = se.entries
+	return nil
+}
+
+func adjustAdaptationSetForTimelineNr(cfg *ResponseConfig, se segEntries, as *m.AdaptationSetType) error {
+	if as.SegmentTemplate.SegmentTimeline == nil {
+		as.SegmentTemplate.SegmentTimeline = &m.SegmentTimelineType{}
+	}
+	as.SegmentTemplate.StartNumber = nil
+	as.SegmentTemplate.Duration = nil
+	as.SegmentTemplate.Media = strings.Replace(as.SegmentTemplate.Media, "$Time$", "$Number$", -1)
+	as.SegmentTemplate.Timescale = Ptr(se.mediaTimescale)
+	as.SegmentTemplate.SegmentTimeline.S = se.entries
+
+	if se.startNr >= 0 {
+		as.SegmentTemplate.StartNumber = Ptr(uint32(se.startNr))
+	}
+	return nil
+}
+
+func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType, wt wrapTimes) error {
 	if as.SegmentTemplate.Duration == nil {
 		r0 := as.Representations[0]
 		rep0 := a.Reps[r0.Id]
@@ -333,12 +420,13 @@ func calcPublishTime(cfg *ResponseConfig, lsi lastSegInfo) float64 {
 // lastSegAvailTimeS returns the availabilityTime of the last segment,
 // including the availabilityTimeOffset.
 func lastSegAvailTimeS(cfg *ResponseConfig, lsi lastSegInfo) float64 {
+	ast := float64(cfg.StartTimeS)
 	if lsi.nr < 0 {
-		return 0
+		return ast
 	}
-	availTime := lsi.availabilityTime(cfg.AvailabilityTimeOffsetS)
-	if availTime < float64(cfg.StartTimeS) {
-		return float64(cfg.StartTimeS)
+	availTime := lsi.availabilityTime(cfg.AvailabilityTimeOffsetS) + ast
+	if availTime < ast {
+		return ast
 	}
 	return availTime
 }

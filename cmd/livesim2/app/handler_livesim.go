@@ -77,7 +77,7 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		err := writeLiveMPD(log, w, cfg, a, mpdName, nowMS)
 		if err != nil {
 			// TODO. Add more granular errors like 404 not found
-			msg := "liveMPD"
+			msg := fmt.Sprintf("liveMPD: %s", err)
 			log.Error().Err(err).Msg(msg)
 			http.Error(w, msg, http.StatusInternalServerError)
 			return

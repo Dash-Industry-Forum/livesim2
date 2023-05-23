@@ -60,7 +60,7 @@ type segMeta struct {
 
 // findSegMetaFromTime finds the proper segMeta if media time is OK.
 // Otherwise error message like TooEarly or Gone.
-// time is measured relatative to period start + presentationTimeOffset (PTO).
+// time is measured relative to period start + presentationTimeOffset (PTO).
 // Period star is in turn relative to startTime (availabilityStartTime)
 // For now, period and PTO are both zero, but the startTime may be non-zero.
 func findSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseConfig, nowMS int) (segMeta, error) {
