@@ -38,6 +38,8 @@ const (
 )
 
 type ResponseConfig struct {
+	URLParts                     []string          `json:"-"`
+	URLContentIdx                int               `json:"-"`
 	BaseURLs                     []string          `json:"BaseURLs,omitempty"`
 	UTCTimingMethods             []UTCTimingMethod `json:"UTCTimingMethods,omitempty"`
 	PeriodDurations              []int             `json:"PeriodDurations,omitempty"`
@@ -110,10 +112,12 @@ func (rc *ResponseConfig) getStartNr() int {
 	return 1
 }
 
-// processURLCfg returns all information that can be extracted from the urlParts
-func processURLCfg(urlParts []string, nowMS int) (cfg *ResponseConfig, cntStart int, err error) {
-	// Mimics configprocessor.procss_url
-	cfg = NewResponseConfig()
+// processURLCfg returns all information that can be extracted from url
+func processURLCfg(url string, nowMS int) (*ResponseConfig, error) {
+	// Mimics configprocessor.process_url
+	urlParts := strings.Split(url, "/")
+	cfg := NewResponseConfig()
+	cfg.URLParts = urlParts
 	sc := strConvAccErr{}
 	contentStartIdx := -1
 	skipStart := 2
@@ -150,7 +154,7 @@ cfgLoop:
 		case "mup": //minimum update period (in s)
 			cfg.MinimumUpdatePeriodS = sc.AtoiPtr(key, val)
 		case "modulo": // Make a number of time-limited sessions every hour
-			return nil, 0, fmt.Errorf("option %q not implemented", key)
+			return nil, fmt.Errorf("option %q not implemented", key)
 		case "tfdt": // Use 32-bit tfdt (which means that AST must be more recent as well)
 			cfg.Tfdt32Flag = true
 		case "cont": // Continuous update of MPD AST and segNr
@@ -206,17 +210,18 @@ cfgLoop:
 		}
 	}
 	if sc.err != nil {
-		return nil, 0, sc.err
+		return nil, sc.err
 	}
 	if contentStartIdx == -1 {
-		return nil, 0, fmt.Errorf("no content part")
+		return nil, fmt.Errorf("no content part")
 	}
 
-	err = verifyAndFillConfig(cfg)
+	err := verifyAndFillConfig(cfg)
 	if err != nil {
-		return cfg, contentStartIdx, fmt.Errorf("url config: %w", err)
+		return cfg, fmt.Errorf("url config: %w", err)
 	}
-	return cfg, contentStartIdx, nil
+	cfg.URLContentIdx = contentStartIdx
+	return cfg, nil
 }
 
 func verifyAndFillConfig(cfg *ResponseConfig) error {
@@ -236,6 +241,10 @@ func verifyAndFillConfig(cfg *ResponseConfig) error {
 		cfg.LatencyTargetMS = Ptr(defaultLatencyTargetMS)
 	}
 	return nil
+}
+
+func (c *ResponseConfig) URLContentPart() string {
+	return strings.Join(c.URLParts[c.URLContentIdx:], "/")
 }
 
 func ms2S(ms int) int {

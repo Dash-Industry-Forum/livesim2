@@ -36,8 +36,6 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, http.StatusInternalServerError)
 		return
 	}
-	str := u.String()
-	urlParts := strings.Split(str, "/")
 
 	var nowMS int // Set from query string or from wall-clock
 	q := r.URL.Query()
@@ -52,14 +50,14 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		nowMS = int(time.Now().UnixMilli())
 	}
 
-	cfg, cntStart, err := processURLCfg(urlParts, nowMS)
+	cfg, err := processURLCfg(u.String(), nowMS)
 	if err != nil {
 		msg := "processURL error"
 		log.Error().Err(err).Msg(msg)
 		http.Error(w, msg, http.StatusInternalServerError)
 		return
 	}
-	contentPart := strings.Join(urlParts[cntStart:], "/")
+	contentPart := cfg.URLContentPart()
 	log.Debug().Str("url", contentPart).Msg("requested content")
 	a, ok := s.assetMgr.findAsset(contentPart)
 	if !ok {
