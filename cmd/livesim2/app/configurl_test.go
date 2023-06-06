@@ -15,14 +15,14 @@ import (
 func TestProcessURLCfg(t *testing.T) {
 	cases := []struct {
 		url         string
-		nowS        int
+		nowMS       int
 		contentPart string
 		wantedCfg   *ResponseConfig
 		err         string
 	}{
 		{
 			url:         "/livesim/utc_direct-ntp-sntp-httpxsdate-httpiso/asset.mpd",
-			nowS:        0,
+			nowMS:       0,
 			contentPart: "asset.mpd",
 			wantedCfg: &ResponseConfig{
 				StartTimeS:                   0,
@@ -36,7 +36,7 @@ func TestProcessURLCfg(t *testing.T) {
 		},
 		{
 			url:         "/livesim/utc_unknown/asset.mpd",
-			nowS:        0,
+			nowMS:       0,
 			contentPart: "asset.mpd",
 			wantedCfg: &ResponseConfig{
 				StartTimeS:                   0,
@@ -49,7 +49,7 @@ func TestProcessURLCfg(t *testing.T) {
 		},
 		{
 			url:         "/livesim/utc_head/asset.mpd",
-			nowS:        0,
+			nowMS:       0,
 			contentPart: "asset.mpd",
 			wantedCfg: &ResponseConfig{
 				StartTimeS:                   0,
@@ -62,7 +62,7 @@ func TestProcessURLCfg(t *testing.T) {
 		},
 		{
 			url:         "/livesim/utc_none/asset.mpd",
-			nowS:        0,
+			nowMS:       0,
 			contentPart: "asset.mpd",
 			wantedCfg: &ResponseConfig{
 				StartTimeS:                   0,
@@ -75,7 +75,7 @@ func TestProcessURLCfg(t *testing.T) {
 		},
 		{
 			url:         "/livesim/tsbd_1/asset.mpd",
-			nowS:        0,
+			nowMS:       0,
 			contentPart: "asset.mpd",
 			wantedCfg: &ResponseConfig{
 				StartTimeS:                   0,
@@ -88,7 +88,7 @@ func TestProcessURLCfg(t *testing.T) {
 		},
 		{
 			url:         "/livesim/tsbd_1/tsb_asset/V300.cmfv",
-			nowS:        0,
+			nowMS:       0,
 			contentPart: "tsb_asset/V300.cmfv",
 			wantedCfg: &ResponseConfig{
 				StartTimeS:                   0,
@@ -101,21 +101,21 @@ func TestProcessURLCfg(t *testing.T) {
 		},
 		{
 			url:         "/livesim/tsbd_a/asset.mpd",
-			nowS:        0,
+			nowMS:       0,
 			contentPart: "",
 			wantedCfg:   nil,
 			err:         `key=tsbd, err=strconv.Atoi: parsing "a": invalid syntax`,
 		},
 		{
 			url:         "/livesim/tsbd_1",
-			nowS:        0,
+			nowMS:       0,
 			contentPart: "",
 			wantedCfg:   nil,
 			err:         "no content part",
 		},
 		{
 			url:         "/livesim/timesubsstpp_en,sv/asset.mpd",
-			nowS:        0,
+			nowMS:       0,
 			contentPart: "asset.mpd",
 			wantedCfg: &ResponseConfig{
 				StartTimeS:                   0,
@@ -129,21 +129,21 @@ func TestProcessURLCfg(t *testing.T) {
 		},
 		{
 			url:         "/livesim/segtimeline_1/timesubsstpp_en,sv/asset.mpd",
-			nowS:        0,
+			nowMS:       0,
 			contentPart: "",
 			wantedCfg:   nil,
 			err:         "url config: combination of SegTimeline and generated stpp subtitles not yet supported",
 		},
 		{
 			url:         "/livesim/mup_0/asset.mpd",
-			nowS:        0,
+			nowMS:       0,
 			contentPart: "asset.mpd",
 			wantedCfg:   nil,
 			err:         "url config: minimumUpdatePeriod must be > 0",
 		},
 		{
 			url:         "/livesim/mup_1/asset.mpd",
-			nowS:        0,
+			nowMS:       0,
 			contentPart: "asset.mpd",
 			wantedCfg: &ResponseConfig{
 				StartTimeS:                   0,
@@ -157,7 +157,7 @@ func TestProcessURLCfg(t *testing.T) {
 		},
 		{
 			url:         "/livesim/ltgt_2500/asset.mpd",
-			nowS:        1000,
+			nowMS:       1000,
 			contentPart: "asset.mpd",
 			wantedCfg: &ResponseConfig{
 				StartTimeS:                   0,
@@ -171,14 +171,28 @@ func TestProcessURLCfg(t *testing.T) {
 		},
 		{
 			url:         "/livesim/segtimeline_1/segtimelinenr_1/asset.mpd",
-			nowS:        0,
+			nowMS:       0,
 			contentPart: "",
 			wantedCfg:   nil,
 			err:         "url config: SegmentTimelineTime and SegmentTimelineNr cannot be used at same time",
 		},
 		{
 			url:         "/livesim/periods_60/asset.mpd",
-			nowS:        1000,
+			nowMS:       1000,
+			contentPart: "asset.mpd",
+			wantedCfg: &ResponseConfig{
+				StartTimeS:                   0,
+				TimeShiftBufferDepthS:        Ptr(60),
+				StartNr:                      Ptr(0),
+				AvailabilityTimeCompleteFlag: true,
+				TimeSubsDurMS:                defaultTimeSubsDurMS,
+				PeriodsPerHour:               Ptr(60),
+			},
+			err: "",
+		},
+		{
+			url:         "/livesim/periods_60/asset.mpd",
+			nowMS:       1_000_000,
 			contentPart: "asset.mpd",
 			wantedCfg: &ResponseConfig{
 				StartTimeS:                   0,
@@ -194,7 +208,7 @@ func TestProcessURLCfg(t *testing.T) {
 
 	for _, c := range cases {
 		urlParts := strings.Split(c.url, "/")
-		cfg, idx, err := processURLCfg(urlParts, c.nowS)
+		cfg, idx, err := processURLCfg(urlParts, c.nowMS)
 		if c.err != "" {
 			require.Error(t, err, c.url)
 			require.Equal(t, c.err, err.Error())

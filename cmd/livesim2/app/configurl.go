@@ -6,6 +6,7 @@ package app
 
 import (
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -110,7 +111,7 @@ func (rc *ResponseConfig) getStartNr() int {
 }
 
 // processURLCfg returns all information that can be extracted from the urlParts
-func processURLCfg(urlParts []string, nowS int) (cfg *ResponseConfig, cntStart int, err error) {
+func processURLCfg(urlParts []string, nowMS int) (cfg *ResponseConfig, cntStart int, err error) {
 	// Mimics configprocessor.procss_url
 	cfg = NewResponseConfig()
 	sc := strConvAccErr{}
@@ -132,11 +133,11 @@ cfgLoop:
 		case "stop":
 			cfg.StopTimeS = sc.AtoiPtr(key, val)
 		case "startrel":
-			cfg.StartTimeS = sc.Atoi(key, val) + nowS
+			cfg.StartTimeS = sc.Atoi(key, val) + ms2S(nowMS)
 			cfg.AddLocationFlag = true
 		case "stoprel":
 			cfg.StopTimeS = sc.AtoiPtr(key, val)
-			*cfg.StopTimeS += nowS
+			*cfg.StopTimeS += ms2S(nowMS)
 			cfg.AddLocationFlag = true
 		case "dur": // Adds a presentation duration for multiple periods
 			cfg.PeriodDurations = append(cfg.PeriodDurations, sc.Atoi(key, val))
@@ -235,4 +236,8 @@ func verifyAndFillConfig(cfg *ResponseConfig) error {
 		cfg.LatencyTargetMS = Ptr(defaultLatencyTargetMS)
 	}
 	return nil
+}
+
+func ms2S(ms int) int {
+	return int(math.Round(float64(ms) * 0.001))
 }
