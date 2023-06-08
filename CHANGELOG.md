@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PublishTime now reflects the last change in MPD in ms and not current time.
 - availabilityTimeOffset now gives the right PublishTime value for complete segments
 - infinite availabilityTimeOffset for SegmentTimeline now results in an error
+- Git version and date inserted properly when running "make build"
+- livesim2 version header inserted in every HTTP response
 
 ## [0.5.1] - 2023-03-09
 
