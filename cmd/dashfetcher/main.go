@@ -22,7 +22,7 @@ var usg = `Usage of %s:
 %s downloads a DASH VoD asset and stores all files in an output directory.
 
 The -o/--outdir option provides a directory for storing the downloaded MPD and segments.
-The -a/--auto option adds output subdirectories fromn the URL removing common prefix parts.
+The -a/--auto option adds output subdirectories from the URL removing common prefix parts.
 
 Some possible resources are available at https://cta-wave.github.io/Test-Content/.
 To download one of them, try

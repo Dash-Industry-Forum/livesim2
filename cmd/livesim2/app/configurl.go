@@ -13,6 +13,10 @@ import (
 type liveMPDType int
 
 const (
+	MAX_TIME_SHIFT_BUFFER_DEPTH_S = 48 * 3600
+)
+
+const (
 	timeLineTime liveMPDType = iota
 	timeLineNumber
 	segmentNumber
@@ -202,7 +206,7 @@ cfgLoop:
 			cfg.TimeSubsStpp = strings.Split(val, ",")
 		case "timesubsdur": // duration in milliseconds
 			cfg.TimeSubsDurMS = sc.Atoi(key, val)
-		case "timesubsreg": // retion (0 or 1)
+		case "timesubsreg": // region (0 or 1)
 			cfg.TimeSubsRegion = sc.Atoi(key, val)
 		default:
 			contentStartIdx = i
@@ -216,7 +220,7 @@ cfgLoop:
 		return nil, fmt.Errorf("no content part")
 	}
 
-	err := verifyAndFillConfig(cfg)
+	err := verifyAndFillConfig(cfg, nowMS)
 	if err != nil {
 		return cfg, fmt.Errorf("url config: %w", err)
 	}
@@ -224,7 +228,7 @@ cfgLoop:
 	return cfg, nil
 }
 
-func verifyAndFillConfig(cfg *ResponseConfig) error {
+func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 	if cfg.SegTimelineNrFlag && cfg.SegTimelineFlag {
 		return fmt.Errorf("SegmentTimelineTime and SegmentTimelineNr cannot be used at same time")
 	}
@@ -240,6 +244,13 @@ func verifyAndFillConfig(cfg *ResponseConfig) error {
 	if cfg.getAvailabilityTimeOffsetS() > 0 && cfg.LatencyTargetMS == nil {
 		cfg.LatencyTargetMS = Ptr(defaultLatencyTargetMS)
 	}
+	if cfg.TimeShiftBufferDepthS != nil {
+		tsbd := *cfg.TimeShiftBufferDepthS
+		if tsbd < 0 || tsbd > MAX_TIME_SHIFT_BUFFER_DEPTH_S {
+			return fmt.Errorf("timeShiftBufferDepth %ds is not less than %ds", tsbd, MAX_TIME_SHIFT_BUFFER_DEPTH_S)
+		}
+	}
+
 	return nil
 }
 

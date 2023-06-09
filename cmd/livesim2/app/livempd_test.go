@@ -436,7 +436,7 @@ func TestPublishTime(t *testing.T) {
 				cfg.ChunkDurS = Ptr(2 - tc.availabilityTimeOffset)
 				cfg.AvailabilityTimeCompleteFlag = false
 			}
-			err := verifyAndFillConfig(cfg)
+			err := verifyAndFillConfig(cfg, tc.nowMS)
 			require.NoError(t, err)
 			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
 			assert.NoError(t, err)
@@ -578,7 +578,7 @@ func TestUTCTiming(t *testing.T) {
 			for _, ut := range tc.utcTimings {
 				cfg.UTCTimingMethods = append(cfg.UTCTimingMethods, UTCTimingMethod(ut))
 			}
-			err := verifyAndFillConfig(cfg)
+			err := verifyAndFillConfig(cfg, tc.nowMS)
 			require.NoError(t, err)
 			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
 			assert.NoError(t, err)

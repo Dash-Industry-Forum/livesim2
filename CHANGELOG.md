@@ -46,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `dashfetcher` tool to fetch a DASH asset online
 - `livesim2` server to stream simulated DASH live
 - supports SegmentTimeline with $Time$
-- supports SegmentTempalte with $Number$
+- supports SegmentTemplate with $Number$
 - supports low-latency mode with on-the-fly chunking
 - features and URLs listed at livesim2 root page
 - configurable generated stpp subtitles with timing info

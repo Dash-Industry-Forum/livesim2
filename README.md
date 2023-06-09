@@ -13,7 +13,7 @@ infinite linear stream of segments. The synchronization is done modulo asset len
 for example: a 1-hour asset restarts every hour on full hours, and a 30s asset
 restarts every 30s on full and half minutes. If there is a clock in the video, it is
 therefore easy to directly see how long the system delay is from publishing to
-screen presentaiton. The very short example assets bundled with the code are only
+screen presentation. The very short example assets bundled with the code are only
 8s long, which means that they restart every time the UTC time is a multiple of 8s,
 relative to the Epoch start 1970-01-01:00:00:00Z.
 

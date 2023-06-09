@@ -62,6 +62,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	}
 	if cfg.AddLocationFlag {
 		var strBuf strings.Builder
+		//strBuf.WriteString("http://localhost:8888")
 		for i := 1; i < len(cfg.URLParts); i++ {
 			strBuf.WriteString("/")
 			switch {
@@ -88,7 +89,17 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 
 	addUTCTimings(mpd, cfg)
 
-	wTimes := calcWrapTimes(a, cfg, nowMS, *mpd.TimeShiftBufferDepth)
+	afterStop := false
+	endTimeMS := nowMS
+	if cfg.StopTimeS != nil {
+		stopTimeMS := *cfg.StopTimeS * 1000
+		if stopTimeMS < nowMS {
+			endTimeMS = stopTimeMS
+			afterStop = true
+		}
+	}
+
+	wTimes := calcWrapTimes(a, cfg, endTimeMS, *mpd.TimeShiftBufferDepth)
 
 	period := mpd.Periods[0]
 	period.Duration = nil
@@ -134,6 +145,10 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 		}
 	}
 	if cfg.PeriodsPerHour == nil {
+		if afterStop {
+			mpdDurS := *cfg.StopTimeS - cfg.StartTimeS
+			makeMPDStatic(mpd, mpdDurS)
+		}
 		return mpd, nil
 	}
 
@@ -143,7 +158,20 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 		return nil, fmt.Errorf("splitPeriods: %w", err)
 	}
 
+	if afterStop {
+		mpdDurS := *cfg.StopTimeS - cfg.StartTimeS
+		makeMPDStatic(mpd, mpdDurS)
+	}
+
 	return mpd, nil
+}
+
+func makeMPDStatic(mpd *m.MPD, mpdDurS int) {
+	mpd.Type = Ptr(m.StaticMPDType)
+	mpd.TimeShiftBufferDepth = nil
+	mpd.MinimumUpdatePeriod = nil
+	mpd.SuggestedPresentationDelay = nil
+	mpd.MediaPresentationDuration = m.Seconds2DurPtr(mpdDurS)
 }
 
 // splitPeriod splits the single-period MPD into multiple periods given cfg.PeriodsPerHour
