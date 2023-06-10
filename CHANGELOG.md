@@ -13,12 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- new parameter `periods` provides multiple periods (n <= 60 per hours, segment and period durations must be compatible)
-- new parameter `segtimelinenr` turns on SegmentTimeline with `$Number$` addressing
-- parameter `mup` to set minimumUpdatePeriod in MPD
-- new parameter `subsstppreg` can set vertical region
-- new parameter `ltgt` sets latency target in milliseconds
-- parameter `utc` to set one, multiple, or zero UTCTiming methods
+- new URL parameter `periods` provides multiple periods (n <= 60 per hours, segment and period durations must be compatible)
+- new URL parameter `segtimelinenr` turns on SegmentTimeline with `$Number$` addressing
+- new URL parameter `mup` to set minimumUpdatePeriod in MPD
+- new URL parameter `subsstppreg` can set vertical region
+- new URL parameter `ltgt` sets latency target in milliseconds
+- new URL parameter `utc` to set one, multiple, or zero UTCTiming methods
+- new functionality to handle relative start and stop times by generating a Location element
+- new config parameters `scheme` and `host` to be used in generated Location and BaseURL elements
 
 ### Fixed
 
@@ -27,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - infinite availabilityTimeOffset for SegmentTimeline now results in an error
 - Git version and date inserted properly when running "make build"
 - livesim2 version header inserted in every HTTP response
+- start-over case with `start` and `stop` time now provides proper dynamic and static MPDs
 
 ## [0.5.1] - 2023-03-09
 
@@ -46,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `dashfetcher` tool to fetch a DASH asset online
 - `livesim2` server to stream simulated DASH live
 - supports SegmentTimeline with $Time$
-- supports SegmentTempalte with $Number$
+- supports SegmentTemplate with $Number$
 - supports low-latency mode with on-the-fly chunking
 - features and URLs listed at livesim2 root page
 - configurable generated stpp subtitles with timing info

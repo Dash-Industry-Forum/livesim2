@@ -7,6 +7,7 @@ package app
 import (
 	"math"
 	"os"
+	"path"
 	"testing"
 	"time"
 
@@ -435,7 +436,7 @@ func TestPublishTime(t *testing.T) {
 				cfg.ChunkDurS = Ptr(2 - tc.availabilityTimeOffset)
 				cfg.AvailabilityTimeCompleteFlag = false
 			}
-			err := verifyAndFillConfig(cfg)
+			err := verifyAndFillConfig(cfg, tc.nowMS)
 			require.NoError(t, err)
 			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
 			assert.NoError(t, err)
@@ -577,7 +578,7 @@ func TestUTCTiming(t *testing.T) {
 			for _, ut := range tc.utcTimings {
 				cfg.UTCTimingMethods = append(cfg.UTCTimingMethods, UTCTimingMethod(ut))
 			}
-			err := verifyAndFillConfig(cfg)
+			err := verifyAndFillConfig(cfg, tc.nowMS)
 			require.NoError(t, err)
 			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
 			assert.NoError(t, err)
@@ -697,5 +698,42 @@ func TestMultiPeriod(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRelStartStopTimeIntoLocation(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS)
+	err := am.discoverAssets()
+	require.NoError(t, err)
+
+	cases := []struct {
+		url            string
+		nowMS          int
+		wantedLocation string
+		scheme         string
+		host           string
+	}{
+		{
+			url:            "/livesim2/startrel_-20/mup_3/stoprel_20/testpic_2s/Manifest.mpd",
+			nowMS:          1_000_000,
+			wantedLocation: "http://localhost:8888/livesim2/start_980/mup_3/stop_1020/testpic_2s/Manifest.mpd",
+			scheme:         "http",
+			host:           "localhost:8888",
+		},
+	}
+
+	for _, c := range cases {
+		cfg, err := processURLCfg(c.url, c.nowMS)
+		require.NoError(t, err)
+		cfg.SetScheme(c.scheme, nil)
+		cfg.SetHost(c.host, nil)
+		contentPart := cfg.URLContentPart()
+		asset, ok := am.findAsset(contentPart)
+		require.True(t, ok)
+		_, mpdName := path.Split(contentPart)
+		liveMPD, err := LiveMPD(asset, mpdName, cfg, c.nowMS)
+		require.NoError(t, err)
+		require.Equal(t, c.wantedLocation, string(liveMPD.Location[0]), "the right location element is not inserted")
 	}
 }

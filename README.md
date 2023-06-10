@@ -13,7 +13,7 @@ infinite linear stream of segments. The synchronization is done modulo asset len
 for example: a 1-hour asset restarts every hour on full hours, and a 30s asset
 restarts every 30s on full and half minutes. If there is a clock in the video, it is
 therefore easy to directly see how long the system delay is from publishing to
-screen presentaiton. The very short example assets bundled with the code are only
+screen presentation. The very short example assets bundled with the code are only
 8s long, which means that they restart every time the UTC time is a multiple of 8s,
 relative to the Epoch start 1970-01-01:00:00:00Z.
 
@@ -224,17 +224,20 @@ Since the result is a single binary it is easy to start it anywhere.
 On Linux, `livesim2` can be run as a `systemd` service.
 More information can be found in the `./deployment` directory.
 
+To get information about the available assets and other information
+access the server's root URL.
+
 ## HTTPS and HTTP/2
 
 HTTPS and HTTP/2 are both supported. To enable TLS encryption, the two parameters
 `certpath` and `keypath` must be set to point to a TLS certificate and a private
 key file, respectively. It is also recommended to set the port to the default HTTPS
-port 443.
+port 443. Automatic TLS configuration using Let's Encrypt is a future enhancement.
 
 ## List of functionality and options
 
-Start the server and access the root URL like `http://localhost:8888/` to
-get a page with information about URL options available.
+The URL parameters are now listed on this project's Wiki page:
+https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters
 
 ## Sponsoring
 
