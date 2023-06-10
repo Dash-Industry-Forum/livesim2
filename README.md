@@ -236,8 +236,8 @@ port 443. Automatic TLS configuration using Let's Encrypt is a future enhancemen
 
 ## List of functionality and options
 
-The URL parameters are now listed on this project's Wiki page:
-https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters
+The URL parameters are now listed on this project's Wiki page
+[URL-parameters](https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters).
 
 ## Sponsoring
 

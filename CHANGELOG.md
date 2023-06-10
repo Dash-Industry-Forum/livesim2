@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- nothing yet
+
+## [0.6.0] - 2023-06-10
+
 ### Changed
 
 - moved list URL parameters to [livesim2 wiki](https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters)
@@ -54,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - features and URLs listed at livesim2 root page
 - configurable generated stpp subtitles with timing info
 
-[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/Dash-Industry-Forum/livesim2/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Dash-Industry-Forum/livesim2/releases/tag/v0.5.0
