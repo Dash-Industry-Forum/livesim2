@@ -3,14 +3,14 @@ module github.com/Dash-Industry-Forum/livesim2
 go 1.19
 
 require (
-	github.com/Eyevinn/dash-mpd v0.9.1
-	github.com/Eyevinn/mp4ff v0.35.0
+	github.com/Eyevinn/dash-mpd v0.10.0
+	github.com/Eyevinn/mp4ff v0.36.0
 	github.com/go-chi/chi/v5 v5.0.8
 	github.com/knadh/koanf v1.5.0
 	github.com/prometheus/client_golang v1.15.1
 	github.com/rs/zerolog v1.29.1
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.8.3
+	github.com/stretchr/testify v1.8.4
 
 )
 
@@ -32,7 +32,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.4.0 // indirect
 	github.com/prometheus/common v0.44.0 // indirect
-	github.com/prometheus/procfs v0.10.0 // indirect
+	github.com/prometheus/procfs v0.10.1 // indirect
 	golang.org/x/sys v0.8.0 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

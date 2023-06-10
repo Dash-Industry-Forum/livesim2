@@ -169,7 +169,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 }
 
 func makeMPDStatic(mpd *m.MPD, mpdDurS int) {
-	mpd.Type = Ptr(m.StaticMPDType)
+	mpd.Type = Ptr(m.STATIC_TYPE)
 	mpd.TimeShiftBufferDepth = nil
 	mpd.MinimumUpdatePeriod = nil
 	mpd.SuggestedPresentationDelay = nil

@@ -113,7 +113,7 @@ func writeLiveMPD(log *zerolog.Logger, w http.ResponseWriter, cfg *ResponseConfi
 	if err != nil {
 		return fmt.Errorf("convertToLive: %w", err)
 	}
-	size, err := lMPD.Write(buf)
+	size, err := lMPD.Write(buf, "  ", true)
 	if err != nil {
 		return err
 	}
