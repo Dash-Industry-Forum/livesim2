@@ -72,6 +72,8 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	switch ext {
 	case ".mpd":
 		_, mpdName := path.Split(contentPart)
+		cfg.SetScheme(s.Cfg.Scheme, r)
+		cfg.SetHost(s.Cfg.Host, r)
 		err := writeLiveMPD(log, w, cfg, a, mpdName, nowMS)
 		if err != nil {
 			// TODO. Add more granular errors like 404 not found

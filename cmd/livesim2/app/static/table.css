@@ -13,6 +13,10 @@ td, th {
     background-color:green
 }
 
+.not-yet {
+    background-color:yellow}
+
+
 .no {
     background-color:red
 }

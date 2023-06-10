@@ -7,6 +7,7 @@ package app
 import (
 	"fmt"
 	"math"
+	"net/http"
 	"strings"
 )
 
@@ -77,6 +78,8 @@ type ResponseConfig struct {
 	TimeSubsStpp                 []string          `json:"TimeSubsStppLanguages,omitempty"`
 	TimeSubsDurMS                int               `json:"TimeSubsDurMS,omitempty"`
 	TimeSubsRegion               int               `json:"TimeSubsRegion,omitempty"`
+	Scheme                       string            `json:"Scheme,omitempty"`
+	Host                         string            `json:"Host,omitempty"`
 }
 
 // NewResponseConfig returns a new ResponseConfig with default values.
@@ -256,6 +259,28 @@ func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 
 func (c *ResponseConfig) URLContentPart() string {
 	return strings.Join(c.URLParts[c.URLContentIdx:], "/")
+}
+
+// SetScheme sets Scheme to non-trivial cfgValue or tries to detect from request.
+func (c *ResponseConfig) SetScheme(cfgValue string, r *http.Request) {
+	if cfgValue != "" {
+		c.Scheme = cfgValue
+		return
+	}
+	if r.TLS == nil {
+		c.Scheme = "http"
+	} else {
+		c.Scheme = "https"
+	}
+}
+
+// SetHost sets Host to non-trivial cfgValue or tries to detect from request.
+func (c *ResponseConfig) SetHost(cfgValue string, r *http.Request) {
+	if cfgValue != "" {
+		c.Host = cfgValue
+		return
+	}
+	c.Host = r.Host
 }
 
 func ms2S(ms int) int {

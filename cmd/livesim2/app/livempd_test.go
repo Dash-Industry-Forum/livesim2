@@ -711,17 +711,23 @@ func TestRelStartStopTimeIntoLocation(t *testing.T) {
 		url            string
 		nowMS          int
 		wantedLocation string
+		scheme         string
+		host           string
 	}{
 		{
 			url:            "/livesim2/startrel_-20/mup_3/stoprel_20/testpic_2s/Manifest.mpd",
 			nowMS:          1_000_000,
-			wantedLocation: "/livesim2/start_980/mup_3/stop_1020/testpic_2s/Manifest.mpd",
+			wantedLocation: "http://localhost:8888/livesim2/start_980/mup_3/stop_1020/testpic_2s/Manifest.mpd",
+			scheme:         "http",
+			host:           "localhost:8888",
 		},
 	}
 
 	for _, c := range cases {
 		cfg, err := processURLCfg(c.url, c.nowMS)
 		require.NoError(t, err)
+		cfg.SetScheme(c.scheme, nil)
+		cfg.SetHost(c.host, nil)
 		contentPart := cfg.URLContentPart()
 		asset, ok := am.findAsset(contentPart)
 		require.True(t, ok)

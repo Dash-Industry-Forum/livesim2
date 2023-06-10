@@ -62,7 +62,9 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	}
 	if cfg.AddLocationFlag {
 		var strBuf strings.Builder
-		//strBuf.WriteString("http://localhost:8888")
+		strBuf.WriteString(cfg.Scheme)
+		strBuf.WriteString("://")
+		strBuf.WriteString(cfg.Host)
 		for i := 1; i < len(cfg.URLParts); i++ {
 			strBuf.WriteString("/")
 			switch {
