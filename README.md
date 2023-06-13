@@ -39,9 +39,10 @@ Similarly to [livesim1][1], the output is highly configurable by adding paramete
 These parameters are included not only in the MPD requests, but in
 all segment requests allowing the server to be stateless, and
 be able to generate streams with a huge number of
-parameter variations. Currently, only a small subset of
+parameter variations. Currently, not all
 all parameters of [livesim1][1] are implemented, but there are also new
 parameters like the generated subtitles mentioned above.
+The [URL wiki page][urlparams] lists what is available.
 
 ## Components
 
@@ -237,7 +238,13 @@ port 443. Automatic TLS configuration using Let's Encrypt is a future enhancemen
 ## List of functionality and options
 
 The URL parameters are now listed on this project's Wiki page
-[URL-parameters](https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters).
+[URL-parameters][urlparams].
+
+## Project and plan for new features/enhancement
+
+On the [livesim2 project page](https://github.com/orgs/Dash-Industry-Forum/projects/7)
+the status of issues and proposed new ideas are listed. Draft ideas can
+be changed into [livesim2 issues](https://github.com/Dash-Industry-Forum/livesim2/issues).
 
 ## Sponsoring
 
@@ -249,3 +256,4 @@ This project is in need of sponsoring for further development. See the
 See [LICENSE.md](LICENSE.md).
 
 [1]: (https://github.com/Dash-Industry-Forum/dash-live-source-simulator)
+[urlparams]: (https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters)
