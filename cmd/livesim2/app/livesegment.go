@@ -61,7 +61,7 @@ type segMeta struct {
 // findSegMetaFromTime finds the proper segMeta if media time is OK.
 // Otherwise error message like TooEarly or Gone.
 // time is measured relative to period start + presentationTimeOffset (PTO).
-// Period star is in turn relative to startTime (availabilityStartTime)
+// Period start is in turn relative to startTime (availabilityStartTime)
 // For now, period and PTO are both zero, but the startTime may be non-zero.
 func findSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseConfig, nowMS int) (segMeta, error) {
 	mediaRef := cfg.StartTimeS * rep.MediaTimescale // TODO. Add period + PTO
@@ -151,8 +151,8 @@ func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, n
 }
 
 func writeInitSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string) (isInit bool, err error) {
-	isStppInit, err := writeTimeStppInitSegment(w, cfg, a, segmentPart)
-	if isStppInit {
+	isTimeSubsInit, err := writeTimeSubsInitSegment(w, cfg, a, segmentPart)
+	if isTimeSubsInit {
 		return true, err
 	}
 	for _, rep := range a.Reps {
@@ -172,8 +172,8 @@ func writeInitSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a
 }
 
 func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string, nowMS int, tt *template.Template) error {
-	isTimeStppMedia, err := writeTimeStppMediaSegment(w, cfg, a, segmentPart, nowMS, tt)
-	if isTimeStppMedia {
+	isTimeSubsMedia, err := writeTimeSubsMediaSegment(w, cfg, a, segmentPart, nowMS, tt)
+	if isTimeSubsMedia {
 		return err
 	}
 	data, mimeType, err := adjustLiveSegment(vodFS, a, cfg, segmentPart, nowMS)
