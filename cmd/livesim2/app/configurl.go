@@ -76,6 +76,7 @@ type ResponseConfig struct {
 	SegTimelineLossFlag          bool              `json:"SegTimelineLossFlag,omitempty"`
 	AvailabilityTimeCompleteFlag bool              `json:"AvailabilityTimeCompleteFlag,omitempty"`
 	TimeSubsStpp                 []string          `json:"TimeSubsStppLanguages,omitempty"`
+	TimeSubsWvtt                 []string          `json:"TimeSubsWvttLanguages,omitempty"`
 	TimeSubsDurMS                int               `json:"TimeSubsDurMS,omitempty"`
 	TimeSubsRegion               int               `json:"TimeSubsRegion,omitempty"`
 	Scheme                       string            `json:"Scheme,omitempty"`
@@ -207,6 +208,8 @@ cfgLoop:
 			cfg.AvailabilityTimeCompleteFlag = false
 		case "timesubsstpp": // comma-separated list of languages
 			cfg.TimeSubsStpp = strings.Split(val, ",")
+		case "timesubswvtt": // comma-separated list of languages
+			cfg.TimeSubsWvtt = strings.Split(val, ",")
 		case "timesubsdur": // duration in milliseconds
 			cfg.TimeSubsDurMS = sc.Atoi(key, val)
 		case "timesubsreg": // region (0 or 1)
@@ -234,9 +237,6 @@ cfgLoop:
 func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 	if cfg.SegTimelineNrFlag && cfg.SegTimelineFlag {
 		return fmt.Errorf("SegmentTimelineTime and SegmentTimelineNr cannot be used at same time")
-	}
-	if len(cfg.TimeSubsStpp) > 0 && cfg.SegTimelineFlag {
-		return fmt.Errorf("combination of SegTimeline and generated stpp subtitles not yet supported")
 	}
 	if cfg.TimeSubsRegion < 0 || cfg.TimeSubsRegion > 1 {
 		return fmt.Errorf("timesubsreg number must be 0 or 1")

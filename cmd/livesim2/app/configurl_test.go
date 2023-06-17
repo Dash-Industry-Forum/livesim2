@@ -137,13 +137,6 @@ func TestProcessURLCfg(t *testing.T) {
 			err: "",
 		},
 		{
-			url:         "/livesim2/segtimeline_1/timesubsstpp_en,sv/asset.mpd",
-			nowMS:       0,
-			contentPart: "",
-			wantedCfg:   nil,
-			err:         "url config: combination of SegTimeline and generated stpp subtitles not yet supported",
-		},
-		{
 			url:         "/livesim2/mup_0/asset.mpd",
 			nowMS:       0,
 			contentPart: "asset.mpd",

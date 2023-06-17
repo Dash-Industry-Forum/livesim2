@@ -19,50 +19,68 @@ import (
 )
 
 const (
-	SUBS_STPP_PREFIX    = "timestpp-"
-	SUBS_STPP_INIT      = "init.mp4"
-	SUBS_STPP_TIMESCALE = 1000
+	SUBS_STPP_PREFIX    = "timestpp"
+	SUBS_WVTT_PREFIX    = "timewvtt"
+	SUBS_TIME_INIT      = "init.mp4"
+	SUBS_TIME_TIMESCALE = 1000
 )
 
-func stppSegmentParts(segmentPart string) (lang string, segment string, ok bool) {
+func timeSubsSegmentParts(prefix, segmentPart string) (lang string, segment string, ok bool) {
 	rep, seg, ok := strings.Cut(segmentPart, "/")
 	if !ok {
 		return "", "", false
 	}
-	_, lang, ok = strings.Cut(rep, "-")
+	pfx, lang, ok := strings.Cut(rep, "-")
 	if !ok {
+		return "", "", false
+	}
+	if pfx != prefix {
 		return "", "", false
 	}
 	return lang, seg, true
 }
 
-func isTimeStppInitSegment(segmentPart string) (lang string, ok bool) {
-	lang, seg, ok := stppSegmentParts(segmentPart)
+func isTimeSubsInitSegment(prefix, segmentPart string) (lang string, ok bool) {
+	lang, seg, ok := timeSubsSegmentParts(prefix, segmentPart)
 	if !ok {
 		return "", false
 	}
-	if seg == SUBS_STPP_INIT {
+	if seg == SUBS_TIME_INIT {
 		return lang, true
 	}
 	return "", false
 }
 
-func writeTimeStppInitSegment(w http.ResponseWriter, cfg *ResponseConfig, a *asset, segmentPart string) (bool, error) {
-	lang, ok := isTimeStppInitSegment(segmentPart)
-	if !ok {
+func writeTimeSubsInitSegment(w http.ResponseWriter, cfg *ResponseConfig, a *asset, segmentPart string) (bool, error) {
+	prefix := ""
+	var langs []string
+	lang, ok := isTimeSubsInitSegment(SUBS_STPP_PREFIX, segmentPart)
+	if ok {
+		prefix = SUBS_STPP_PREFIX
+		langs = cfg.TimeSubsStpp
+	} else {
+		lang, ok = isTimeSubsInitSegment(SUBS_WVTT_PREFIX, segmentPart)
+		if ok {
+			prefix = SUBS_WVTT_PREFIX
+			langs = cfg.TimeSubsWvtt
+		}
+	}
+
+	if prefix == "" {
 		return false, nil
 	}
+
 	matchingLang := false
-	for _, mpdLang := range cfg.TimeSubsStpp {
+	for _, mpdLang := range langs {
 		if mpdLang == lang {
 			matchingLang = true
 			break
 		}
 	}
 	if !matchingLang {
-		return true, fmt.Errorf("stpp language %q does not match config: %w", lang, errNotFound)
+		return true, fmt.Errorf("time subs language %q does not match config: %w", lang, errNotFound)
 	}
-	init := createSubtitlesStppInitSegment(lang, SUBS_STPP_TIMESCALE)
+	init := createTimeSubsInitSegment(prefix, lang, SUBS_TIME_TIMESCALE)
 	w.Header().Set("Content-Type", "application/mp4")
 	w.Header().Set("Content-Length", strconv.Itoa(int(init.Size())))
 	err := init.Encode(w)
@@ -71,6 +89,15 @@ func writeTimeStppInitSegment(w http.ResponseWriter, cfg *ResponseConfig, a *ass
 		return true, err
 	}
 	return true, nil
+}
+
+func createTimeSubsInitSegment(prefix, lang string, timescale uint32) *mp4.InitSegment {
+	switch prefix {
+	case SUBS_STPP_PREFIX:
+		return createSubtitlesStppInitSegment(lang, timescale)
+	default: //SUBS_WVTT_PREFIX:
+		return createSubtitlesWvttInitSegment(lang, timescale)
+	}
 }
 
 func createSubtitlesStppInitSegment(lang string, timescale uint32) *mp4.InitSegment {
@@ -83,7 +110,7 @@ func createSubtitlesStppInitSegment(lang string, timescale uint32) *mp4.InitSegm
 	return init
 }
 
-// StppTimeData is iformation for creating an stpp media segment.
+// StppTimeData is information for creating an stpp media segment.
 type StppTimeData struct {
 	Lang   string
 	Region int
@@ -99,20 +126,33 @@ type StppTimeCue struct {
 }
 
 // writeTimeStppMediaSegment return true and tries to write a stpp time subtitle segment if URL matches
-func writeTimeStppMediaSegment(w http.ResponseWriter, cfg *ResponseConfig, a *asset, segmentPart string, nowMS int, tt *template.Template) (bool, error) {
-	lang, seg, ok := stppSegmentParts(segmentPart)
-	if !ok {
+func writeTimeSubsMediaSegment(w http.ResponseWriter, cfg *ResponseConfig, a *asset, segmentPart string, nowMS int, tt *template.Template) (bool, error) {
+	prefix := ""
+	var langs []string
+	lang, seg, ok := timeSubsSegmentParts(SUBS_STPP_PREFIX, segmentPart)
+	if ok {
+		prefix = SUBS_STPP_PREFIX
+		langs = cfg.TimeSubsStpp
+	} else {
+		lang, seg, ok = timeSubsSegmentParts(SUBS_WVTT_PREFIX, segmentPart)
+		if ok {
+			prefix = SUBS_WVTT_PREFIX
+			langs = cfg.TimeSubsWvtt
+		}
+	}
+
+	if prefix == "" {
 		return false, nil
 	}
 	matchingLang := false
-	for _, mpdLang := range cfg.TimeSubsStpp {
+	for _, mpdLang := range langs {
 		if mpdLang == lang {
 			matchingLang = true
 			break
 		}
 	}
 	if !matchingLang {
-		return true, fmt.Errorf("stpp language %q does not match config: %w", lang, errNotFound)
+		return true, fmt.Errorf("time subs language %q does not match config: %w", lang, errNotFound)
 	}
 	nrStr, ext, ok := strings.Cut(seg, ".")
 	if !ok {
@@ -129,30 +169,38 @@ func writeTimeStppMediaSegment(w http.ResponseWriter, cfg *ResponseConfig, a *as
 	// This is done by looking up a corresponding video segment.
 	// That segments also gives the right time range
 
-	var segMeta segMeta
-	rep, ok := a.firstVideoRep()
+	var videoSegMeta segMeta
+	videoRep, ok := a.firstVideoRep()
 	if !ok {
 		return true, fmt.Errorf("no video rep. Cannot generate subtitle")
 	}
 	switch cfg.liveMPDType() {
 	case segmentNumber, timeLineNumber:
 		nr := uint32(nrOrTime)
-		segMeta, err = findSegMetaFromNr(a, rep, nr, cfg, nowMS)
+		videoSegMeta, err = findSegMetaFromNr(a, videoRep, nr, cfg, nowMS)
 	case timeLineTime:
-		time := uint64(nrOrTime)
-		segMeta, err = findSegMetaFromTime(a, rep, time, cfg, nowMS)
+		videoTime := uint64(nrOrTime * videoRep.MediaTimescale / SUBS_TIME_TIMESCALE)
+		videoSegMeta, err = findSegMetaFromTime(a, videoRep, videoTime, cfg, nowMS)
 	default:
 		return true, fmt.Errorf("unknown liveMPDtype")
 	}
 	if err != nil {
 		return true, fmt.Errorf("findSegMeta: %w", err)
 	}
-	baseMediaDecodeTime := segMeta.newTime * SUBS_STPP_TIMESCALE / uint64(rep.MediaTimescale)
-	dur := segMeta.newDur * SUBS_STPP_TIMESCALE / uint32(rep.MediaTimescale)
+	log.Debug().Uint32("nr", videoSegMeta.newNr).Msg("segMeta")
+	baseMediaDecodeTime := rep2SubsTime(videoSegMeta.newTime, videoRep.MediaTimescale)
+	dur := uint32(rep2SubsTime(uint64(videoSegMeta.newDur), videoRep.MediaTimescale))
 
-	utcTimeMS := segMeta.newTime*SUBS_STPP_TIMESCALE/uint64(rep.MediaTimescale) + uint64(cfg.StartTimeS*SUBS_STPP_TIMESCALE)
-	mediaSeg, err := createSubtitlesStppMediaSegment(segMeta.newNr, baseMediaDecodeTime, dur, lang, utcTimeMS,
-		tt, cfg.TimeSubsDurMS, cfg.TimeSubsRegion)
+	utcTimeMS := baseMediaDecodeTime + uint64(cfg.StartTimeS*SUBS_TIME_TIMESCALE)
+	var mediaSeg *mp4.MediaSegment
+	switch prefix {
+	case SUBS_STPP_PREFIX:
+		mediaSeg, err = createSubtitlesStppMediaSegment(videoSegMeta.newNr, baseMediaDecodeTime, dur, lang, utcTimeMS,
+			tt, cfg.TimeSubsDurMS, cfg.TimeSubsRegion)
+	default: // SUBS_WVTT_PREFIX
+		mediaSeg, err = createSubtitlesWvttMediaSegment(videoSegMeta.newNr, baseMediaDecodeTime, dur, lang, utcTimeMS,
+			tt, cfg.TimeSubsDurMS, cfg.TimeSubsRegion)
+	}
 	if err != nil {
 		return true, fmt.Errorf("createSubtitleStppMediaSegment: %w", err)
 	}
@@ -189,8 +237,7 @@ type cueItvl struct {
 	startMS, endMS, utcS int
 }
 
-// calcCueItvls calculates
-// all times in milliseconds.
+// calcCueItvls calculates all times in milliseconds.
 func calcCueItvls(segStart, segDur, utcStart, cueDur int) []cueItvl {
 	itvls := make([]cueItvl, 0, 2)
 
@@ -266,4 +313,8 @@ func createSubtitlesStppMediaSegment(nr uint32, baseMediaDecodeTime uint64, dur 
 	}
 	frag.AddFullSample(fs)
 	return seg, nil
+}
+
+func rep2SubsTime(repTime uint64, timescale int) uint64 {
+	return uint64(math.Round(float64(repTime*SUBS_TIME_TIMESCALE) / float64(timescale)))
 }

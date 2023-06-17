@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- nothing yet
+### Added
+
+- new URL parameter `timesubswvtt` provides generated timing wvtt subtitles
+- `timesubsstpp` and `timesubswvtt` now work with SegmentTimeline
 
 ## [0.6.0] - 2023-06-10
 

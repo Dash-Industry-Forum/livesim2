@@ -141,9 +141,15 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 		}
 	}
 	if len(cfg.TimeSubsStpp) > 0 {
-		err = addTimeSubsStpp(cfg, a, period)
+		err = addTimeSubs(cfg, a, period, cfg.TimeSubsStpp, "stpp")
 		if err != nil {
-			return nil, fmt.Errorf("addTimeSubsStpp: %w", err)
+			return nil, fmt.Errorf("addTimeSubs stpp: %w", err)
+		}
+	}
+	if len(cfg.TimeSubsWvtt) > 0 {
+		err = addTimeSubs(cfg, a, period, cfg.TimeSubsWvtt, "wvtt")
+		if err != nil {
+			return nil, fmt.Errorf("addTimeSubs wvtt: %w", err)
 		}
 	}
 	if cfg.PeriodsPerHour == nil {
@@ -402,7 +408,7 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 	return nil
 }
 
-func addTimeSubsStpp(cfg *ResponseConfig, a *asset, period *m.Period) error {
+func addTimeSubs(cfg *ResponseConfig, a *asset, period *m.Period, languages []string, kind string) error {
 	var vAS *m.AdaptationSetType
 	for _, as := range period.AdaptationSets {
 		if as.ContentType == "video" {
@@ -415,16 +421,19 @@ func addTimeSubsStpp(cfg *ResponseConfig, a *asset, period *m.Period) error {
 	}
 	segDurMS := a.SegmentDurMS
 	typicalStppSegSizeBits := 2000 * 8 // 2kB
+	typicalWvttSegSizeBits := 200 * 8
 	vST := vAS.SegmentTemplate
-	for i, lang := range cfg.TimeSubsStpp {
+	for i, lang := range languages {
 		rep := m.NewRepresentation()
-		rep.Id = SUBS_STPP_PREFIX + lang
-		rep.Bandwidth = uint32(typicalStppSegSizeBits*1000) / uint32(segDurMS)
 		rep.StartWithSAP = 1
 		st := m.NewSegmentTemplate()
 		st.Initialization = "$RepresentationID$/init.mp4"
-		st.Media = "$RepresentationID$/$Number$.m4s"
-		st.SetTimescale(1000)
+		if cfg.SegTimelineFlag {
+			st.Media = "$RepresentationID$/$Time$.m4s"
+		} else {
+			st.Media = "$RepresentationID$/$Number$.m4s"
+		}
+		st.SetTimescale(SUBS_TIME_TIMESCALE)
 
 		if vST.Duration != nil {
 			st.Duration = Ptr(*vST.Duration * 1000 / vST.GetTimescale())
@@ -432,13 +441,26 @@ func addTimeSubsStpp(cfg *ResponseConfig, a *asset, period *m.Period) error {
 		if vST.StartNumber != nil {
 			st.StartNumber = vST.StartNumber
 		}
+		if vST.SegmentTimeline != nil {
+			// Create segmentTimeline for subtitles from vST
+			st.SegmentTimeline = changeTimelineTimescale(vST.SegmentTimeline, int(*vST.Timescale), SUBS_TIME_TIMESCALE)
+		}
 		as := m.NewAdaptationSet()
 		as.Id = Ptr(uint32(100 + i))
 		as.Lang = lang
 		as.ContentType = "text"
 		as.MimeType = "application/mp4"
 		as.SegmentAlignment = true
-		as.Codecs = "stpp"
+		switch kind {
+		case "stpp":
+			rep.Id = SUBS_STPP_PREFIX + "-" + lang
+			rep.Bandwidth = uint32(typicalStppSegSizeBits*1000) / uint32(segDurMS)
+			as.Codecs = "stpp"
+		case "wvtt":
+			rep.Id = SUBS_WVTT_PREFIX + "-" + lang
+			rep.Bandwidth = uint32(typicalWvttSegSizeBits*1000) / uint32(segDurMS)
+			as.Codecs = "wvtt"
+		}
 		as.Roles = append(as.Roles,
 			&m.DescriptorType{SchemeIdUri: "urn:mpeg:dash:role:2011", Value: "subtitle"})
 		as.SegmentTemplate = st
@@ -522,4 +544,24 @@ func addUTCTimings(mpd *m.MPD, cfg *ResponseConfig) {
 		}
 		mpd.UTCTimings = append(mpd.UTCTimings, ut)
 	}
+}
+
+func changeTimelineTimescale(inSTL *m.SegmentTimelineType, oldTimescale, newTimescale int) *m.SegmentTimelineType {
+	factor := float64(newTimescale) / float64(oldTimescale)
+	round := func(t uint64) uint64 {
+		return uint64(math.Round(float64(t) * factor))
+	}
+	o := m.SegmentTimelineType{}
+	o.S = make([]*m.S, 0, len(inSTL.S))
+	for _, s := range inSTL.S {
+		outS := m.S{
+			T: m.Ptr(round(*s.T)),
+			N: nil,
+			D: round(s.D),
+			R: s.R,
+			K: nil,
+		}
+		o.S = append(o.S, &outS)
+	}
+	return &o
 }
