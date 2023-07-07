@@ -253,6 +253,9 @@ func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 			return fmt.Errorf("timeShiftBufferDepth %ds is not less than %ds", tsbd, MAX_TIME_SHIFT_BUFFER_DEPTH_S)
 		}
 	}
+	if cfg.ContMultiPeriodFlag && cfg.PeriodsPerHour == nil {
+		return fmt.Errorf("period continuity set, but not multiple periods per hour")
+	}
 
 	return nil
 }

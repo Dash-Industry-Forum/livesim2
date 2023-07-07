@@ -215,6 +215,23 @@ func TestProcessURLCfg(t *testing.T) {
 			err: "",
 		},
 		{
+			url:         "/livesim2/periods_60/continuous_1/asset.mpd",
+			nowMS:       1_000_000,
+			contentPart: "asset.mpd",
+			wantedCfg: &ResponseConfig{
+				URLParts:                     []string{"", "livesim2", "periods_60", "continuous_1", "asset.mpd"},
+				URLContentIdx:                4,
+				StartTimeS:                   0,
+				TimeShiftBufferDepthS:        Ptr(60),
+				StartNr:                      Ptr(0),
+				AvailabilityTimeCompleteFlag: true,
+				TimeSubsDurMS:                defaultTimeSubsDurMS,
+				PeriodsPerHour:               Ptr(60),
+				ContMultiPeriodFlag:          true,
+			},
+			err: "",
+		},
+		{
 			url:         "/livesim2/startrel_-20/stoprel_20/asset.mpd",
 			nowMS:       1_000_000,
 			contentPart: "asset.mpd",

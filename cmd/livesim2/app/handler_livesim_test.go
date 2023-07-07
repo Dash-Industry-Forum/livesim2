@@ -55,6 +55,13 @@ func TestParamToMPD(t *testing.T) {
 			wantedStatusCode: http.StatusOK,
 			wantedInMPD:      `<Latency referenceId="0" target="3500" max="7000" min="2625"></Latency>`,
 		},
+		{
+			desc:             "period continuity",
+			mpd:              "testpic_2s/Manifest.mpd",
+			params:           "periods_60/continuous_1/",
+			wantedStatusCode: http.StatusOK,
+			wantedInMPD:      `<SupplementalProperty schemeIdUri="urn:mpeg:dash:period-continuity:2015" value="1"></SupplementalProperty>`,
+		},
 	}
 
 	for _, tc := range testCases {
