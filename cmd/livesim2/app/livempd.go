@@ -183,6 +183,7 @@ func makeMPDStatic(mpd *m.MPD, mpdDurS int) {
 }
 
 // splitPeriod splits the single-period MPD into multiple periods given cfg.PeriodsPerHour
+// continuity is signalled if configured.
 func splitPeriod(mpd *m.MPD, a *asset, cfg *ResponseConfig, wTimes wrapTimes) error {
 	if len(mpd.Periods) != 1 {
 		return fmt.Errorf("not exactly one period in the MPD")
@@ -227,6 +228,13 @@ func splitPeriod(mpd *m.MPD, a *asset, cfg *ResponseConfig, wTimes wrapTimes) er
 				as.SegmentTemplate.SegmentTimeline.S, as.SegmentTemplate.StartNumber = reduceS(inS, startNr, timeScale, periodStart, periodEnd)
 			default:
 				return fmt.Errorf("unknown mpd type")
+			}
+			if cfg.ContMultiPeriodFlag {
+				periodContinuity := m.DescriptorType{
+					SchemeIdUri: "urn:mpeg:dash:period-continuity:2015",
+					Value:       "1",
+				}
+				as.SupplementalProperties = append(as.SupplementalProperties, &periodContinuity)
 			}
 		}
 		periods = append(periods, p)
