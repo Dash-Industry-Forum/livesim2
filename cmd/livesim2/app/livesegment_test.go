@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"strings"
 	"testing"
 
@@ -78,8 +79,8 @@ func TestLiveSegment(t *testing.T) {
 			require.True(t, wroteInit)
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, rr.Code)
-			seg := rr.Body.Bytes()
-			sr := bits.NewFixedSliceReader(seg)
+			initSeg := rr.Body.Bytes()
+			sr := bits.NewFixedSliceReader(initSeg)
 			mp4d, err := mp4.DecodeFileSR(sr)
 			require.NoError(t, err)
 			mediaTimescale := int(mp4d.Moov.Trak.Mdia.Mdhd.Timescale)
@@ -93,14 +94,68 @@ func TestLiveSegment(t *testing.T) {
 			default: // "TimelineTime":
 				media = strings.Replace(media, "$NrOrTime$", fmt.Sprintf("%d", mediaTime), -1)
 			}
-			seg, segmentType, err := adjustLiveSegment(vodFS, asset, cfg, media, nowMS)
+			segData, err := adjustLiveSegment(vodFS, asset, cfg, media, nowMS)
 			require.NoError(t, err)
-			require.Equal(t, tc.segmentMimeType, segmentType)
-			sr = bits.NewFixedSliceReader(seg)
+			require.Equal(t, tc.segmentMimeType, segData.contentType)
+			sr = bits.NewFixedSliceReader(segData.data)
 			mp4d, err = mp4.DecodeFileSR(sr)
 			require.NoError(t, err)
+			require.Equal(t, 1, len(mp4d.Segments), "nr segments should be 1")
 			bdt := mp4d.Segments[0].Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
 			require.Equal(t, mediaTime, int(bdt))
+		}
+	}
+}
+
+func TestLiveThumbSegment(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS)
+	err := am.discoverAssets()
+	require.NoError(t, err)
+
+	cases := []struct {
+		asset           string
+		media           string
+		segmentMimeType string
+		mediaTimescale  int
+		origPath        string
+		reqNr           int
+		nrSegs          int
+	}{
+		{
+			asset:           "testpic_2s",
+			media:           "thumbs/$NrOrTime$.jpg",
+			segmentMimeType: "image/jpeg",
+			mediaTimescale:  1,
+			origPath:        "testdata/assets/testpic_2s/thumbs",
+			reqNr:           43,
+			nrSegs:          4,
+		},
+	}
+	for _, tc := range cases {
+		for _, mpdType := range []string{"Number", "TimelineTime"} {
+			asset, ok := am.findAsset(tc.asset)
+			require.True(t, ok)
+			require.NoError(t, err)
+			cfg := NewResponseConfig()
+			switch mpdType {
+			case "Number":
+			case "TimelineTime":
+				cfg.SegTimelineFlag = true
+			case "TimelineNumber":
+				cfg.SegTimelineNrFlag = true
+			}
+			nowMS := 100_000
+			media := tc.media
+			// Always number, even if MPD is timelinetime
+			media = strings.Replace(media, "$NrOrTime$", fmt.Sprintf("%d", tc.reqNr), -1)
+			segData, err := adjustLiveSegment(vodFS, asset, cfg, media, nowMS)
+			require.NoError(t, err)
+			origNr := tc.reqNr%tc.nrSegs + 1 // one-based
+			require.Equal(t, tc.segmentMimeType, segData.contentType)
+			origSeg, err := os.ReadFile(path.Join(tc.origPath, fmt.Sprintf("%d.jpg", origNr)))
+			require.NoError(t, err)
+			require.Equal(t, origSeg, segData.data)
 		}
 	}
 }

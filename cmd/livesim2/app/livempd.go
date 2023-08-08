@@ -113,7 +113,11 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 		if err != nil {
 			return nil, err
 		}
-		switch cfg.liveMPDType() {
+		templateType := cfg.liveMPDType()
+		if as.ContentType == "image" {
+			templateType = segmentNumber
+		}
+		switch templateType {
 		case timeLineTime:
 			err := adjustAdaptationSetForTimelineTime(cfg, se, as)
 			if err != nil {
@@ -209,7 +213,11 @@ func splitPeriod(mpd *m.MPD, a *asset, cfg *ResponseConfig, wTimes wrapTimes) er
 			inAS := inPeriod.AdaptationSets[aNr]
 			timeScale := int(as.SegmentTemplate.GetTimescale())
 			pto := Ptr(uint64(pNr * periodDur * timeScale))
-			switch cfg.liveMPDType() {
+			templateType := cfg.liveMPDType()
+			if as.ContentType == "image" {
+				templateType = segmentNumber
+			}
+			switch templateType {
 			case segmentNumber:
 				as.SegmentTemplate.PresentationTimeOffset = pto
 				segDur := int(*as.SegmentTemplate.Duration)

@@ -120,7 +120,7 @@ func (am *assetMgr) loadAsset(mpdPath string) error {
 				return fmt.Errorf("getRep: %w", err)
 			}
 			if len(r.segments) == 0 {
-				return fmt.Errorf("rep %s has no segments", rep.Id)
+				return fmt.Errorf("rep %s of type %s has no segments", rep.Id, r.ContentType)
 			}
 			asset.Reps[r.ID] = r
 			avgSegDurMS := (r.duration() * 1000) / (r.MediaTimescale * len(r.segments))
@@ -179,27 +179,12 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 		rp.MpdTimescale = int(*st.Timescale)
 	}
 
-	data, err := fs.ReadFile(am.vodFS, path.Join(assetPath, rp.initURI))
-	if err != nil {
-		return nil, err
+	if rp.ContentType != "image" {
+		err := rp.readInit(am.vodFS, assetPath)
+		if err != nil {
+			return nil, err
+		}
 	}
-	sr := bits.NewFixedSliceReader(data)
-	initFile, err := mp4.DecodeFileSR(sr)
-	if err != nil {
-		return nil, fmt.Errorf("decode init: %w", err)
-	}
-	rp.initSeg = initFile.Init
-	b := make([]byte, 0, rp.initSeg.Size())
-	buf := bytes.NewBuffer(b)
-	err = rp.initSeg.Encode(buf)
-	if err != nil {
-		return nil, fmt.Errorf("encode init seg: %w", err)
-	}
-	rp.initBytes = buf.Bytes()
-
-	rp.MediaTimescale = int(rp.initSeg.Moov.Trak.Mdia.Mdhd.Timescale)
-	trex := rp.initSeg.Moov.Mvex.Trex
-	defaultSampleDuration := trex.DefaultSampleDuration
 
 	switch {
 	case st.SegmentTimeline != nil && rp.typeURI == timeURI:
@@ -227,45 +212,41 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 		if st.StartNumber != nil {
 			startNr = *st.StartNumber
 		}
-		endNr := startNr
+		endNr := startNr - 1
 		if st.EndNumber != nil {
 			endNr = *st.EndNumber
 		}
 		nr := startNr
-		var seg *mp4.File
+		var seg segment
+		var err error
+		var segDur uint64
+		if rp.ContentType == "image" && as.SegmentTemplate.Duration != nil {
+			segDur = uint64(*as.SegmentTemplate.Duration)
+			rp.MediaTimescale = int(as.SegmentTemplate.GetTimescale())
+		}
 		for {
-			uri := replaceTimeAndNr(rp.mediaURI, 0, nr)
-			repPath := path.Join(assetPath, uri)
-			data, err := fs.ReadFile(am.vodFS, repPath)
-			if err != nil {
-				break // No more files
+			if rp.ContentType != "image" {
+				seg, err = rp.readMP4Segment(am.vodFS, assetPath, nr)
+			} else {
+				seg, err = rp.readThumbSegment(am.vodFS, assetPath, nr, startNr, segDur)
 			}
-			sr := bits.NewFixedSliceReader(data)
-			seg, err = mp4.DecodeFileSR(sr)
 			if err != nil {
-				return nil, fmt.Errorf("decode %s: %w", repPath, err)
+				endNr = nr - 1
+				break
 			}
-			t := seg.Segments[0].Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
 			if nr > startNr {
-				rp.segments[len(rp.segments)-1].endTime = t
+				rp.segments[len(rp.segments)-1].endTime = seg.startTime
 			}
-			rp.segments = append(rp.segments, segment{uri, t, 0, nr})
-			nr++
+			rp.segments = append(rp.segments, seg)
 
 			if nr == endNr { // This only happens if endNumber is set
 				break
 			}
+			nr++
 		}
-		if nr == startNr {
+		if endNr < startNr {
 			return nil, fmt.Errorf("no segments read for rep %s", path.Join(assetPath, rp.mediaURI))
 		}
-		nf := len(seg.Segments[0].Fragments)
-		lastFragTraf := seg.Segments[0].Fragments[nf-1].Moof.Traf
-		if lastFragTraf.Tfhd.HasDefaultSampleDuration() {
-			defaultSampleDuration = lastFragTraf.Tfhd.DefaultSampleDuration
-		}
-		endTime := lastFragTraf.Tfdt.BaseMediaDecodeTime() + lastFragTraf.Trun.Duration(defaultSampleDuration)
-		rp.segments[len(rp.segments)-1].endTime = endTime
 	default:
 		return nil, fmt.Errorf("unknown type of representation")
 	}
@@ -408,18 +389,19 @@ const (
 
 // RepData provides information about a representation
 type RepData struct {
-	ID             string           `json:"id"`
-	ContentType    string           `json:"contentType"`
-	Codecs         string           `json:"codecs"`
-	MpdTimescale   int              `json:"mpdTimescale"`
-	MediaTimescale int              `json:"mediaTimescale"` // Used in the segments
-	initURI        string           `json:"-"`
-	mediaURI       string           `json:"-"`
-	typeURI        mediaURIType     `json:"-"`
-	mediaRegexp    *regexp.Regexp   `json:"-"`
-	initSeg        *mp4.InitSegment `json:"-"`
-	initBytes      []byte           `json:"-"`
-	segments       []segment        `json:"-"`
+	ID                    string           `json:"id"`
+	ContentType           string           `json:"contentType"`
+	Codecs                string           `json:"codecs"`
+	MpdTimescale          int              `json:"mpdTimescale"`
+	MediaTimescale        int              `json:"mediaTimescale"` // Used in the segments
+	initURI               string           `json:"-"`
+	mediaURI              string           `json:"-"`
+	typeURI               mediaURIType     `json:"-"`
+	mediaRegexp           *regexp.Regexp   `json:"-"`
+	initSeg               *mp4.InitSegment `json:"-"`
+	initBytes             []byte           `json:"-"`
+	defaultSampleDuration uint32           `json:"-"`
+	segments              []segment        `json:"-"`
 }
 
 func (r RepData) duration() int {
@@ -435,7 +417,7 @@ func (r RepData) findSegmentIndexFromTime(t uint64) int {
 	})
 }
 
-// SegmentTYpe returns MIME type for MP4 segment.
+// SegmentType returns MIME type for MP4 segment.
 func (r RepData) SegmentType() string {
 	var segType string
 	switch r.ContentType {
@@ -443,10 +425,79 @@ func (r RepData) SegmentType() string {
 		segType = "audio/mp4"
 	case "subtitle":
 		segType = "application/mp4"
-	default:
+	case "video":
 		segType = "video/mp4"
+	case "image":
+		segType = "image/jpeg"
+	default:
+		segType = "unknown_content_type"
 	}
 	return segType
+}
+
+func (r *RepData) readInit(vodFS fs.FS, assetPath string) error {
+	data, err := fs.ReadFile(vodFS, path.Join(assetPath, r.initURI))
+	if err != nil {
+		return fmt.Errorf("read initURI %q: %w", r.initURI, err)
+	}
+	sr := bits.NewFixedSliceReader(data)
+	initFile, err := mp4.DecodeFileSR(sr)
+	if err != nil {
+		return fmt.Errorf("decode init: %w", err)
+	}
+	r.initSeg = initFile.Init
+	b := make([]byte, 0, r.initSeg.Size())
+	buf := bytes.NewBuffer(b)
+	err = r.initSeg.Encode(buf)
+	if err != nil {
+		return fmt.Errorf("encode init seg: %w", err)
+	}
+	r.initBytes = buf.Bytes()
+
+	r.MediaTimescale = int(r.initSeg.Moov.Trak.Mdia.Mdhd.Timescale)
+	trex := r.initSeg.Moov.Mvex.Trex
+	r.defaultSampleDuration = trex.DefaultSampleDuration
+	return nil
+}
+
+func (r *RepData) readMP4Segment(vodFS fs.FS, assetPath string, nr uint32) (segment, error) {
+	var seg segment
+	uri := replaceTimeAndNr(r.mediaURI, 0, nr)
+	repPath := path.Join(assetPath, uri)
+
+	data, err := fs.ReadFile(vodFS, repPath)
+	if err != nil {
+		return seg, err
+	}
+	sr := bits.NewFixedSliceReader(data)
+	mp4Seg, err := mp4.DecodeFileSR(sr)
+	if err != nil {
+		return seg, fmt.Errorf("decode %s: %w", repPath, err)
+	}
+
+	t := mp4Seg.Segments[0].Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
+	nf := len(mp4Seg.Segments[0].Fragments)
+	lastFragTraf := mp4Seg.Segments[0].Fragments[nf-1].Moof.Traf
+	if lastFragTraf.Tfhd.HasDefaultSampleDuration() {
+		r.defaultSampleDuration = lastFragTraf.Tfhd.DefaultSampleDuration
+	}
+	endTime := lastFragTraf.Tfdt.BaseMediaDecodeTime() + lastFragTraf.Trun.Duration(r.defaultSampleDuration)
+	return segment{uri, t, endTime, nr}, nil
+}
+
+func (r *RepData) readThumbSegment(vodFS fs.FS, assetPath string, nr, startNr uint32, dur uint64) (segment, error) {
+	var seg segment
+	uri := replaceTimeAndNr(r.mediaURI, 0, nr)
+	repPath := path.Join(assetPath, uri)
+
+	info, err := fs.Stat(vodFS, repPath)
+	if err != nil {
+		fmt.Printf("%v\n", info)
+		return seg, err
+	}
+	deltaNr := nr - startNr
+	startTime := uint64(deltaNr) * dur
+	return segment{uri, startTime, startTime + dur, nr}, nil
 }
 
 func replaceIdentifiers(r *m.RepresentationType, str string) string {
