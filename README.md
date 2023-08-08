@@ -44,40 +44,10 @@ all parameters of [livesim1][1] are implemented, but there are also new
 parameters like the generated subtitles mentioned above.
 The [URL wiki page][urlparams] lists what is available.
 
-## Components
-
 There are two main components, the server `livesim2` and the VoD fetcher
 `dashfetcher`.
 
-### dashfetcher tool
-
-The tool `dashfetcher` fetches DASH VoD assets via HTTP given an MPD URLs.
-Currently it supports MPDs with SegmentTimeline with `$Time$` and
-SegmentTemplate with `$Number$`. The assets must have no explicit `<BaseURL>` elements to
-work properly. With the `-a/--auto` option, the path to the asset is preserved
-as much as possible and adapted to the local path.
-
-Files already downloaded will not be downloaded again, unless `-f/--force` is
-used. As an example, to download a CTA-WAVE asset one can run
-
-```sh
-dashfetcher --auto https://dash.akamaized.net/WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17/stream.mpd
-```
-
-which will result in a locally stored DASH VoD asset in the directory
-
-```sh
-./vod/WAVE/vectors/cfhd_sets/12.5_25_0t3/2022-10-17/
-```
-
-with an MPD called `stream.mpd` and the segments stored in subdirectories named after their relative
-URLs. The download URL is added to a file `mpdlist.json` which is read by livesim2, to provide
-information about the asset.
-
-One can have multiple MPDs in the same asset directory and they may share some representations.
-That is an easy way to have variants with different representation combinations.
-
-### livesim2 server
+## livesim2 server
 
 The server is configured in one or more ways in increasing priority:
 
@@ -88,9 +58,10 @@ The server is configured in one or more ways in increasing priority:
 
 Major values to configure are:
 
-* the HTTP port being used (default: 8888)
 * the top directory `vodroot` for searching for VoD assets to be used
-* `certpath` and `keypath` is the HTTPS is used
+* the HTTPS `domains` if Let's Encrypt automatic certificates are used
+    - `certpath` and `keypath` if HTTPS is used with manually downloaded certificates
+    - the HTTP `port` if HTTPs is not being used (default: 8888)
 
 Once the server is started, it will scan the file tree starting from
 `vodroot` and gather metadata about all DASH VoD assets it finds.
@@ -109,12 +80,14 @@ that in turn points to:
 * /assets
 * /metrics
 
+and links to the Wiki page for more information.
+
 It is also possible to explore the file tree and play Vod assets by starting at
 
 * /vod/...
 
 Finally, any VoD MPD like `/vod/cfhd/stream.mpd` is available as a live stream by
-replacing `/vod/` with `livesim2`as like `/livesim2/cfhd/stream.mpd`.
+replacing `/vod/` with `livesim2` e.g. `/livesim2/cfhd/stream.mpd`.
 
 ### MPD Restrictions
 
@@ -166,6 +139,25 @@ During development it may be easier to use the usual go commands:
 
 or compile and run directly with `go run .`.
 
+### HTTPS with automatic certificates
+To enable HTTPS in an easy manner, make sure that you have DNS pointing to your machine,
+and that ports 80 and 443 are forwarded. Then use the parameter
+`--domains=your.domain.com,second.domain.com` to automatically fetch TLS certificates
+from Let's Encrypt for your machine.
+
+#### HTTPS with manual certificates
+
+The old-fashioned way of using manually acquiered TLS certificates is also supported.
+Use the two parameters `certpath` and `keypath` to point to the respective files,
+and set the `port` to 443.`
+
+## Content
+
+There are multiple ways to get content to the livesim2 server.
+From start, there is some bundled test content.
+You can also fetch content that was used with [livesim1][1] from
+github at [livesim-content][livesim-content].
+
 ### Bundled test streams with the livesim2 server
 
 A few very short (8s) test assets are bundled with the code.
@@ -194,7 +186,60 @@ Adding longer assets somewhere under the `vodroot` results in longer loops.
 All sources are NTP synchronized (using the host machine clock) with a initial start
 time given by availabilityStartTime and wrap every sequence duration after that.
 
-### Running dashfetcher
+### livesim-content at Github
+
+In the repo [livesim-content][livesim-content], the content that was used for the livesim1
+online service is being gathered to make it easy to reproduce the use cases of livesim1.
+
+All content and features are not yet (2023-08-08) in place, but should be so before end
+of October 2023.
+
+To download and use that content, run
+
+```sh
+$ git clone https://github.com/Dash-Industry-Forum/livesim-content.git
+```
+
+and then set `--vodroot` to the `livesim-content` top directory or include that in
+a bigger file tree.
+
+### dashfetcher tool
+
+The tool `dashfetcher` fetches DASH VoD assets via HTTP given an MPD URLs.
+Currently it supports MPDs with SegmentTimeline with `$Time$` and
+SegmentTemplate with `$Number$`. The assets must have no explicit `<BaseURL>` elements to
+work properly. With the `-a/--auto` option, the path to the asset is preserved
+as much as possible and adapted to the local path.
+
+Files already downloaded will not be downloaded again, unless `-f/--force` is
+used. As an example, to download a CTA-WAVE asset one can run
+
+```sh
+dashfetcher --auto https://dash.akamaized.net/WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17/stream.mpd
+```
+
+which will result in a locally stored DASH VoD asset in the directory
+
+```sh
+./vod/WAVE/vectors/cfhd_sets/12.5_25_0t3/2022-10-17/
+```
+
+with an MPD called `stream.mpd` and the segments stored in subdirectories named after their relative
+URLs. The download URL is added to a file `mpdlist.json` which is read by livesim2, to provide
+information about the asset.
+
+One can have multiple MPDs in the same asset directory and they may share some representations.
+That is an easy way to have variants with different representation combinations.
+
+#### Running dashfetcher
+
+`dashfetcher` was created to facilitate download of
+DASH assets with lots of small segment files. One particular
+such source was the CTA-WAVE test content. However,
+that content is now also available as zip-files,
+so it is more efficient to download an unzip these
+files instead of making individual downloads of
+the segments.
 
 The `dashfetcher` binary can be found in as `out/dashfetcher` after `make build`.
 
@@ -228,13 +273,6 @@ More information can be found in the `./deployment` directory.
 To get information about the available assets and other information
 access the server's root URL.
 
-## HTTPS and HTTP/2
-
-HTTPS and HTTP/2 are both supported. To enable TLS encryption, the two parameters
-`certpath` and `keypath` must be set to point to a TLS certificate and a private
-key file, respectively. It is also recommended to set the port to the default HTTPS
-port 443. Automatic TLS configuration using Let's Encrypt is a future enhancement.
-
 ## List of functionality and options
 
 The URL parameters are now listed on this project's Wiki page
@@ -257,3 +295,4 @@ See [LICENSE.md](LICENSE.md).
 
 [1]: (https://github.com/Dash-Industry-Forum/dash-live-source-simulator)
 [urlparams]: (https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters)
+[livesim-content](https://github.com/Dash-Industry-Forum/livesim-content)
