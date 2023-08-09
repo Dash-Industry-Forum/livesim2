@@ -16,6 +16,9 @@ See the help text provided with `livesim2 -h` to see the options.
 For Linode, there is a nice `stackscript` for a full machine setup available at
 [https://cloud.linode.com/stackscripts/1189972](https://cloud.linode.com/stackscripts/1189972).
 
+Deploying with HTTPS and TLS certificates from Let's Encrypt is also possible. Use the
+`domains` parameter.
+
 ## Cross compilation
 
 Cross-compilation can be done like (Linux on Mac example)
