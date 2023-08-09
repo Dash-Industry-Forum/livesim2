@@ -40,8 +40,12 @@ type ServerConfig struct {
 	TimeoutS    int    `json:"timeoutS"`
 	MaxRequests int    `json:"maxrequests"`
 	VodRoot     string `json:"vodroot"`
-	CertPath    string `json:"certpath"`
-	KeyPath     string `json:"keypath"`
+	// Domains is a comma-separated list of domains for Let's Encrypt
+	Domains string `json:"domains"`
+	// CertPath is a path to a valid TLS certificate
+	CertPath string `json:"certpath"`
+	// KeyPath is a path to a valid private TLS key
+	KeyPath string `json:"keypath"`
 	// Scheme should be http or https if set. Otherwise the scheme is auto-detected as far as possible.
 	Scheme string `json:"scheme"`
 	// If Host is set, it will be used instead of autodetected value.
@@ -96,6 +100,7 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 	f.String("vodroot", k.String("vodroot"), "VoD root directory")
 	f.Int("timeout", k.Int("timeoutS"), "timeout for all requests (seconds)")
 	f.Int("maxrequests", k.Int("maxrequests"), "max nr of request per IP address per 24 hours")
+	f.String("domains", k.String("domains"), "One or more DNS domains (comma-separated) for auto certificate from Let's Encrypt")
 	f.String("certpath", k.String("certpath"), "path to TLS certificate file (for HTTPS)")
 	f.String("keypath", k.String("keypath"), "path to TLS private key file (for HTTPS")
 	f.String("scheme", k.String("scheme"), "scheme used in Location and BaseURL elements. If empty, it is attempted to be auto-detected")
@@ -154,9 +159,15 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 }
 
 func checkTLSParams(k *koanf.Koanf) error {
+	domains := k.String("domains")
 	certPath := k.String("certpath")
 	keyPath := k.String("keypath")
 	switch {
+	case domains != "":
+		if certPath != "" || keyPath != "" {
+			return fmt.Errorf("cannot use certpath and keypath together with Let's Encrypt domains")
+		}
+		return nil
 	case certPath == "" && keyPath == "":
 		return nil // HTTP
 	case certPath != "" && keyPath != "":

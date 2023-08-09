@@ -10,15 +10,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
-	"time"
+
+	"github.com/caddyserver/certmagic"
 
 	"github.com/Dash-Industry-Forum/livesim2/cmd/livesim2/app"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
-)
-
-const (
-	gracefulShutdownWait = 2 * time.Second
 )
 
 func main() {
@@ -68,17 +66,17 @@ func run() (exitCode int) {
 		return 1
 	}
 
-	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", server.Cfg.Port),
-		Handler: server.Router,
-	}
-
 	go func() {
 		var err error
-		if cfg.CertPath != "" && cfg.KeyPath != "" { // HTTPS
-			err = srv.ListenAndServeTLS(cfg.CertPath, cfg.KeyPath)
-		} else {
-			err = srv.ListenAndServe()
+
+		switch {
+		case cfg.Domains != "":
+			domains := strings.Split(cfg.Domains, ",")
+			err = certmagic.HTTPS(domains, server.Router)
+		case cfg.CertPath != "" && cfg.KeyPath != "":
+			err = http.ListenAndServeTLS(fmt.Sprintf(":%d", server.Cfg.Port), cfg.CertPath, cfg.KeyPath, server.Router)
+		default:
+			err = http.ListenAndServe(fmt.Sprintf(":%d", server.Cfg.Port), server.Router)
 		}
 		if err != nil && err != http.ErrServerClosed {
 			logger.Error().Err(err).Msg("")
@@ -88,17 +86,7 @@ func run() (exitCode int) {
 	}()
 
 	<-stopServer // Wait here for stop signal
-	logger.Info().Msg("Server to be stopped")
+	logger.Info().Msg("Server  stopped")
 
-	timeoutCtx, cancelTimeout := context.WithTimeout(context.Background(), 5*time.Second)
-	defer func() {
-		logger.Info().Msg("Server stopped")
-		cancelTimeout()
-		time.Sleep(gracefulShutdownWait)
-	}()
-
-	if err := srv.Shutdown(timeoutCtx); err != nil {
-		logger.Error().Err(err).Msg("Server shutdown failed")
-	}
 	return exitCode
 }
