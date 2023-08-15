@@ -78,3 +78,54 @@ func TestParamToMPD(t *testing.T) {
 		})
 	}
 }
+
+// TestFetches tests fetching of segments and other content.
+func TestFetches(t *testing.T) {
+	cfg := ServerConfig{
+		VodRoot:   "testdata/assets",
+		TimeoutS:  0,
+		LogFormat: logging.LogDiscard,
+	}
+	_, err := logging.InitZerolog(cfg.LogLevel, cfg.LogFormat)
+	require.NoError(t, err)
+	server, err := SetupServer(context.Background(), &cfg)
+	require.NoError(t, err)
+	ts := httptest.NewServer(server.Router)
+	defer ts.Close()
+	testCases := []struct {
+		desc              string
+		url               string
+		params            string
+		wantedStatusCode  int
+		wantedContentType string
+	}{
+		{
+			desc:              "mpd",
+			url:               "testpic_2s_thumbs/Manifest.mpd",
+			params:            "",
+			wantedStatusCode:  http.StatusOK,
+			wantedContentType: `application/dash+xml`,
+		},
+		{
+			desc:              "thumbnail image",
+			url:               "testpic_2s_thumbs/thumbs/300.jpg?nowMS=610000",
+			params:            "",
+			wantedStatusCode:  http.StatusOK,
+			wantedContentType: `image/jpeg`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			totURL := "/livesim2/" + tc.params + tc.url
+			resp, body := testFullRequest(t, ts, "GET", totURL, nil)
+			require.Equal(t, tc.wantedStatusCode, resp.StatusCode)
+			if tc.wantedStatusCode != http.StatusOK {
+				return
+			}
+			require.Greater(t, len(body), 0, "no body")
+			gotContentType := resp.Header.Get("Content-Type")
+			require.Equal(t, tc.wantedContentType, gotContentType)
+		})
+	}
+}
