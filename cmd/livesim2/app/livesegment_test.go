@@ -265,3 +265,33 @@ func TestAvailabilityTime(t *testing.T) {
 		})
 	}
 }
+
+func TestTTMLTimeShifts(t *testing.T) {
+	cases := []struct {
+		desc       string
+		ttml       string
+		offsetMS   uint64
+		wantedTTML string
+	}{
+		{
+			desc:       "timestamps with fraction",
+			ttml:       `begin="00:00:00.000" end="00:00:00.500"`,
+			offsetMS:   3600000500,
+			wantedTTML: `begin="1000:00:00.500" end="1000:00:01.000"`,
+		},
+		{
+			desc:       "no fraction",
+			ttml:       `begin="00:00:00" end="00:00:01"`,
+			offsetMS:   500,
+			wantedTTML: `begin="00:00:00.500" end="00:00:01.500"`,
+		},
+	}
+
+	for _, c := range cases {
+		gotTTMLBytes, err := shiftTTMLTimestamps([]byte(c.ttml), c.offsetMS)
+		require.NoError(t, err)
+		gotTTML := string(gotTTMLBytes)
+		assert.Equal(t, c.wantedTTML, gotTTML)
+	}
+
+}

@@ -423,7 +423,7 @@ func (r RepData) SegmentType() string {
 	switch r.ContentType {
 	case "audio":
 		segType = "audio/mp4"
-	case "subtitle":
+	case "subtitle", "text":
 		segType = "application/mp4"
 	case "video":
 		segType = "video/mp4"
