@@ -9,9 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- support DASH-IF thumbnails including multi-period. New test sequence added
 - new URL parameter `timesubswvtt` provides generated timing wvtt subtitles
 - `timesubsstpp` and `timesubswvtt` now work with SegmentTimeline
-- `continous_1` URL parameter to signal multiperiod continuity
+- `continuous_1` URL parameter to signal multiperiod continuity
 - Automatic Let's Encrypt certificates for HTTPS for one or more domains via `domains` parameter
 
 ## [0.6.0] - 2023-06-10

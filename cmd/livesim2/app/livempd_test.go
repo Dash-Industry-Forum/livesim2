@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,6 +31,13 @@ func TestLiveMPD(t *testing.T) {
 		timeMedia string
 		timescale int
 	}{
+		{
+			asset:     "testpic_2s",
+			mpdName:   "Manifest_thumbs.mpd",
+			nrMedia:   "$RepresentationID$/$Number$.m4s",
+			timeMedia: "$RepresentationID$/$Time$.m4s",
+			timescale: 1,
+		},
 		{
 			asset:     "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
 			mpdName:   "stream.mpd",
@@ -61,7 +69,13 @@ func TestLiveMPD(t *testing.T) {
 			stl := as.SegmentTemplate
 			assert.Nil(t, stl.SegmentTimeline)
 			assert.Equal(t, uint32(0), *stl.StartNumber)
-			assert.Equal(t, tc.nrMedia, stl.Media)
+			if as.ContentType != "image" {
+				assert.Equal(t, tc.nrMedia, stl.Media)
+			} else {
+				tcMedia := strings.Replace(tc.nrMedia, ".m4s", ".jpg", 1)
+				assert.Equal(t, tcMedia, stl.Media)
+			}
+
 			require.NotNil(t, stl.Duration)
 			require.Equal(t, tc.timescale, int(stl.GetTimescale()))
 			assert.Equal(t, 2, int(*stl.Duration)/int(stl.GetTimescale()))
@@ -77,8 +91,13 @@ func TestLiveMPD(t *testing.T) {
 			if as.ContentType == "video" {
 				require.Greater(t, stl.SegmentTimeline.S[0].R, 0)
 			}
-			assert.Nil(t, stl.StartNumber)
-			assert.Equal(t, tc.timeMedia, stl.Media)
+			if as.ContentType != "image" {
+				assert.Nil(t, stl.StartNumber)
+				assert.Equal(t, tc.timeMedia, stl.Media)
+			} else {
+				tcMedia := strings.Replace(tc.nrMedia, ".m4s", ".jpg", 1)
+				assert.Equal(t, tcMedia, stl.Media)
+			}
 		}
 		assert.Equal(t, 1, len(liveMPD.UTCTimings))
 	}
@@ -736,4 +755,8 @@ func TestRelStartStopTimeIntoLocation(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, c.wantedLocation, string(liveMPD.Location[0]), "the right location element is not inserted")
 	}
+}
+
+func TestThumbnailAS(t *testing.T) {
+
 }

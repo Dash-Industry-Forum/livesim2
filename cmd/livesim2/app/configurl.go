@@ -106,6 +106,15 @@ func (rc *ResponseConfig) liveMPDType() liveMPDType {
 	}
 }
 
+// getRepType returns the live representation type depending on MPD and segment name (type).
+// Normally follows the MPD type, but for image (thumbnails), always returns segmentNumber.
+func (rc *ResponseConfig) getRepType(segName string) liveMPDType {
+	if isImage(segName) {
+		return segmentNumber
+	}
+	return rc.liveMPDType()
+}
+
 // getAvailabilityTimeOffset returns the availabilityTimeOffsetS. Note that it can be infinite.
 func (rc *ResponseConfig) getAvailabilityTimeOffsetS() float64 {
 	return rc.AvailabilityTimeOffsetS
@@ -113,7 +122,7 @@ func (rc *ResponseConfig) getAvailabilityTimeOffsetS() float64 {
 
 // getStartNr for MPD. Default value if not set is 1.
 func (rc *ResponseConfig) getStartNr() int {
-	// Default startNr is 1, but can be overridden by actual value set in cfg.
+	// Default startNr is 1 according to spec, but can be overridden by actual value set in cfg.
 	if rc.StartNr != nil {
 		return *rc.StartNr
 	}

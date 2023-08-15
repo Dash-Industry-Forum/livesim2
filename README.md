@@ -63,8 +63,8 @@ Major values to configure are:
 
 * the top directory `vodroot` for searching for VoD assets to be used
 * the HTTPS `domains` if Let's Encrypt automatic certificates are used
-    - `certpath` and `keypath` if HTTPS is used with manually downloaded certificates
-    - the HTTP/HTTPS `port` if `domains` is not being used (default: 8888)
+  * `certpath` and `keypath` if HTTPS is used with manually downloaded certificates
+  * the HTTP/HTTPS `port` if `domains` is not being used (default: 8888)
 
 Once the server is started, it will scan the file tree starting from
 `vodroot` and gather metadata about all DASH VoD assets it finds.
