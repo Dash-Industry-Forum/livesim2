@@ -82,7 +82,7 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, msg, http.StatusInternalServerError)
 			return
 		}
-	case ".mp4", ".m4s", ".cmfv", "cmfa", "cmft":
+	case ".mp4", ".m4s", ".cmfv", ".cmfa", ".cmft", ".jpg", ".jpeg", ".m4v", ".m4a":
 		segmentPart := strings.TrimPrefix(contentPart, a.AssetPath) // includes heading /
 		err = writeSegment(r.Context(), w, log, cfg, s.assetMgr.vodFS, a, segmentPart[1:], nowMS, s.textTemplates)
 		if err != nil {
