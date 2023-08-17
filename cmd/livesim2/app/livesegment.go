@@ -11,7 +11,9 @@ import (
 	"math"
 	"net/http"
 	"path"
+	"regexp"
 	"strconv"
+	"strings"
 	"text/template"
 	"time"
 
@@ -43,15 +45,19 @@ func adjustLiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart s
 	}
 
 	timeShift := rawSeg.meta.newTime - seg.Segments[0].Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
-	for _, frag := range seg.Segments[0].Fragments {
-		frag.Moof.Mfhd.SequenceNumber = rawSeg.meta.newNr
-		oldTime := frag.Moof.Traf.Tfdt.BaseMediaDecodeTime()
-		frag.Moof.Traf.Tfdt.SetBaseMediaDecodeTime(oldTime + timeShift)
+	if strings.HasPrefix(rawSeg.meta.rep.Codecs, "stpp") {
+		// Shift segment and TTML timestamps inside segment
+		err = shiftStppTimes(seg, rawSeg.meta.timescale, timeShift, rawSeg.meta.newNr)
+		if err != nil {
+			return sd, fmt.Errorf("shiftStppTimes: %w", err)
+		}
+	} else {
+		for _, frag := range seg.Segments[0].Fragments {
+			frag.Moof.Mfhd.SequenceNumber = rawSeg.meta.newNr
+			oldTime := frag.Moof.Traf.Tfdt.BaseMediaDecodeTime()
+			frag.Moof.Traf.Tfdt.SetBaseMediaDecodeTime(oldTime + timeShift)
+		}
 	}
-
-	// TODO in future.
-	// In case of stpp subtitles, we need to shift the time stamps inside the segment with
-	// the same amount as we shift the segment.
 
 	out := make([]byte, seg.Size())
 	sw := bits.NewFixedSliceWriterFromSlice(out)
@@ -78,8 +84,8 @@ type segMeta struct {
 	timescale uint32
 }
 
-// findSegMetaFromTime finds the proper segMeta if media time is OK.
-// Otherwise error message like TooEarly or Gone.
+// findSegMetaFromTime finds the proper segMeta if media time is OK, or returns error.
+// Time-related errors are TooEarly or Gone.
 // time is measured relative to period start + presentationTimeOffset (PTO).
 // Period start is in turn relative to startTime (availabilityStartTime)
 // For now, period and PTO are both zero, but the startTime may be non-zero.
@@ -284,8 +290,8 @@ func writeChunkedSegment(ctx context.Context, w http.ResponseWriter, log *zerolo
 		return fmt.Errorf("mp4Decode: %w", err)
 	}
 
-	// Some part of the segment should be available, so we need to deliver that part and then return the
-	// rest as time passes.
+	// Some part of the segment should be available, and is delivered directly.
+	// The rest are returned HTTP chunks as time passes.
 	// In general, we should extract all the samples and build a new one with the right fragment duration.
 	// That fragment/chunk duration is segment_duration-availabilityTimeOffset.
 	chunkDur := (a.SegmentDurMS - int(cfg.AvailabilityTimeOffsetS*1000)) * int(meta.timescale) / 1000
@@ -412,4 +418,112 @@ func writeChunk(w http.ResponseWriter, chk chunk) error {
 // Ptr returns a pointer to a value of any type
 func Ptr[T any](v T) *T {
 	return &v
+}
+
+// shiftStppTime shifts the baseMediaDecodeTime and the TTML timestamps in an stpp segment.
+// Both stpp text and stpp image with embedded images as sub samples are supported.
+// Note that other "timestamps" that matches the pattern hh:mm:ss[.mmm] will also be shifted.
+func shiftStppTimes(segFile *mp4.File, timescale uint32, timeShift uint64, newNr uint32) error {
+	nrSegments := len(segFile.Segments)
+	if nrSegments != 1 {
+		return fmt.Errorf("not 1 but %d segments", nrSegments)
+	}
+	nrFrags := len(segFile.Segments[0].Fragments)
+	if nrFrags != 1 {
+		return fmt.Errorf("not 1 but %d fragments", nrFrags)
+	}
+	seg := segFile.Segments[0]
+	frag := seg.Fragments[0]
+	frag.Moof.Mfhd.SequenceNumber = newNr
+	traf := frag.Moof.Traf
+	oldTime := traf.Tfdt.BaseMediaDecodeTime()
+	traf.Tfdt.SetBaseMediaDecodeTime(oldTime + timeShift)
+	samples, err := frag.GetFullSamples(nil)
+	if err != nil {
+		return fmt.Errorf("getFullSamples: %w", err)
+	}
+	if len(samples) != 1 {
+		return fmt.Errorf("not 1 but %d samples in stpp file", len(samples))
+	}
+	data := samples[0].Data
+	timeShiftMS := uint64(math.Round(float64(timeShift) / float64(timescale) * 1000.0))
+	var subs *mp4.SubsBox
+	for _, c := range traf.Children {
+		if c.Type() == "subs" {
+			subs = c.(*mp4.SubsBox)
+		}
+	}
+	var newData []byte
+	if subs != nil {
+		if len(subs.Entries) != 1 {
+			return fmt.Errorf("not 1 but %d subs entries in stpp file", len(subs.Entries))
+		}
+		ttmlSize := subs.Entries[0].SubSamples[0].SubsampleSize
+		ttmlData := data[:ttmlSize]
+		newTTMLData, err := shiftTTMLTimestamps(ttmlData, timeShiftMS)
+		if err != nil {
+			return fmt.Errorf("shiftTTMLTimestamps: %w", err)
+		}
+		subs.Entries[0].SubSamples[0].SubsampleSize = uint32(len(newTTMLData))
+		newData = append(newTTMLData, data[ttmlSize:]...)
+	} else {
+		newData, err = shiftTTMLTimestamps(data, timeShiftMS)
+		if err != nil {
+			return fmt.Errorf("shiftTTMLTimestamps: %w", err)
+		}
+	}
+	newSize := uint32(len(newData))
+	tfhd := frag.Moof.Traf.Tfhd
+	if tfhd.HasDefaultSampleSize() {
+		tfhd.DefaultSampleSize = newSize
+	}
+	trun := frag.Moof.Traf.Trun
+	if trun.HasSampleSize() {
+		trun.Samples[0].Size = newSize
+	}
+	mdat := frag.Mdat
+	mdat.Data = []byte(newData)
+	return nil
+}
+
+var timeExp = regexp.MustCompile(`(?P<hours>\d\d+):(?P<minutes>\d\d):(?P<seconds>\d\d)(?P<milliseconds>\.\d\d\d)?`)
+
+// shiftTTMLTimestamps shifts the begin and end timestamps in a TTML file.
+func shiftTTMLTimestamps(data []byte, timeShiftMS uint64) ([]byte, error) {
+	str := string(data)
+	idxMatches := timeExp.FindAllStringIndex(str, -1)
+	if len(idxMatches) == 0 {
+		return data, nil
+	}
+	b := strings.Builder{}
+	b.WriteString(str[:idxMatches[0][0]])
+	for i, idxPair := range idxMatches {
+		if i > 0 {
+			b.WriteString(str[idxMatches[i-1][1]:idxPair[0]])
+		}
+		newTimestamp := shiftTimestamp(str[idxPair[0]:idxPair[1]], timeShiftMS)
+		b.WriteString(newTimestamp)
+	}
+	b.WriteString(str[idxMatches[len(idxMatches)-1][1]:])
+	return []byte(b.String()), nil
+}
+
+// shiftTimestamp shifts a timestamp of the form hh:mm:ss.mmm by milliseconds.
+// The millisecond part of timestamp is optional, but will always be present in the output.
+func shiftTimestamp(timestamp string, timeshiftMS uint64) string {
+	match := timeExp.FindStringSubmatch(timestamp)
+	hours, _ := strconv.Atoi(match[1])
+	minutes, _ := strconv.Atoi(match[2])
+	seconds, _ := strconv.Atoi(match[3])
+	milliseconds := 0
+	if match[4] != "" {
+		milliseconds, _ = strconv.Atoi(match[4][1:]) // Skip the fraction "." start
+	}
+	totalMS := uint64(hours)*3600000 + uint64(minutes)*60000 + uint64(seconds)*1000 + uint64(milliseconds)
+	newTotalMS := totalMS + timeshiftMS
+	newHours := newTotalMS / 3600000
+	newMinutes := (newTotalMS % 3600000) / 60000
+	newSeconds := (newTotalMS % 60000) / 1000
+	newMilliseconds := newTotalMS % 1000
+	return fmt.Sprintf("%02d:%02d:%02d.%03d", newHours, newMinutes, newSeconds, newMilliseconds)
 }

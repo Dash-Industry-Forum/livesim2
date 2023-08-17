@@ -19,7 +19,7 @@ func TestLoadAsset(t *testing.T) {
 	require.NoError(t, err)
 	asset, ok := am.findAsset("assets/testpic_2s")
 	require.True(t, ok)
-	require.Equal(t, 3, len(asset.Reps))
+	require.Equal(t, 5, len(asset.Reps))
 	rep := asset.Reps["V300"]
 	assert.Equal(t, "V300/init.mp4", rep.initURI)
 	assert.Equal(t, 4, len(rep.segments))

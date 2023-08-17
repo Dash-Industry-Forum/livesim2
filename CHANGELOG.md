@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- support DASH-IF thumbnails including multi-period. New test sequence added
+- support assets with stpp subtitles in both text and image format. New test content added
+- support DASH-IF thumbnails including multi-period. New test content added
 - new URL parameter `timesubswvtt` provides generated timing wvtt subtitles
 - `timesubsstpp` and `timesubswvtt` now work with SegmentTimeline
 - `continuous_1` URL parameter to signal multiperiod continuity

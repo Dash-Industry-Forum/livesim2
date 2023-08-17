@@ -113,6 +113,20 @@ func TestFetches(t *testing.T) {
 			wantedStatusCode:  http.StatusOK,
 			wantedContentType: `image/jpeg`,
 		},
+		{
+			desc:              "imsc1 image subtitle",
+			url:               "testpic_2s_imsc1/imsc1_img_en/300.cmft?nowMS=610000",
+			params:            "",
+			wantedStatusCode:  http.StatusOK,
+			wantedContentType: `application/mp4`,
+		},
+		{
+			desc:              "imsc1 text subtitle",
+			url:               "testpic_2s_imsc1/imsc1_txt_sv/300.m4s?nowMS=610000",
+			params:            "",
+			wantedStatusCode:  http.StatusOK,
+			wantedContentType: `application/mp4`,
+		},
 	}
 
 	for _, tc := range testCases {
