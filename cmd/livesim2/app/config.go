@@ -40,6 +40,10 @@ type ServerConfig struct {
 	TimeoutS    int    `json:"timeoutS"`
 	MaxRequests int    `json:"maxrequests"`
 	VodRoot     string `json:"vodroot"`
+	// RepDataRoot is the root directory for representation metadata
+	RepDataRoot string `json:"repdataroot"`
+	// WriteRepData is true if representation metadata should be written if not present
+	WriteRepData bool `json:"writerepdata"`
 	// Domains is a comma-separated list of domains for Let's Encrypt
 	Domains string `json:"domains"`
 	// CertPath is a path to a valid TLS certificate
@@ -62,6 +66,9 @@ var DefaultConfig = ServerConfig{
 	TimeoutS:    60,
 	MaxRequests: 0,
 	VodRoot:     "./vod",
+	// MetaRoot + means follow VodRoot, _ means no metadata
+	RepDataRoot:  "+",
+	WriteRepData: false,
 }
 
 type Config struct {
@@ -98,11 +105,13 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 	f.String("loglevel", k.String("loglevel"), fmt.Sprintf("log level [%s]", ll))
 	f.Int("livewindow", k.Int("livewindowS"), "default live window (seconds)")
 	f.String("vodroot", k.String("vodroot"), "VoD root directory")
+	f.String("repdataroot", k.String("repdataroot"), `Representation metadata root directory. "+" copies vodroot value. "-" disables usage.`)
+	f.Bool("writerepdata", k.Bool("writerepdata"), "Write representation metadata if not present")
 	f.Int("timeout", k.Int("timeoutS"), "timeout for all requests (seconds)")
 	f.Int("maxrequests", k.Int("maxrequests"), "max nr of request per IP address per 24 hours")
 	f.String("domains", k.String("domains"), "One or more DNS domains (comma-separated) for auto certificate from Let's Encrypt")
-	f.String("certpath", k.String("certpath"), "path to TLS certificate file (for HTTPS)")
-	f.String("keypath", k.String("keypath"), "path to TLS private key file (for HTTPS")
+	f.String("certpath", k.String("certpath"), "path to TLS certificate file (for HTTPS). Use domains instead if possible")
+	f.String("keypath", k.String("keypath"), "path to TLS private key file (for HTTPS). Use domains instead if possible.")
 	f.String("scheme", k.String("scheme"), "scheme used in Location and BaseURL elements. If empty, it is attempted to be auto-detected")
 	f.String("host", k.String("host"), "host used in Location and BaseURL elements. If empty, it is attempted to be auto-detected")
 	f.String("urlprefix", k.String("urlprefix"), "prefix when paths are not mounted at root")
@@ -143,6 +152,43 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 		vodRoot = path.Join(cwd, vodRoot)
 		err = k.Load(confmap.Provider(map[string]any{
 			"vodroot": vodRoot,
+		}, "."), nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// Update repDataRoot to consistent value including absolute path
+	repDataRoot := k.String("repdataroot")
+	switch repDataRoot {
+	case "+":
+		// Copy repdataroot value from vodroot
+		repDataRoot = vodRoot
+		err = k.Load(confmap.Provider(map[string]any{
+			"repdataroot": repDataRoot,
+		}, "."), nil)
+		if err != nil {
+			return nil, err
+		}
+	case "-":
+		// Set repdataroot to empty string, and disable writerepdata
+		repDataRoot = ""
+		err = k.Load(confmap.Provider(map[string]any{
+			"repdataroot": "",
+		}, "."), nil)
+		if err != nil {
+			return nil, err
+		}
+		err = k.Load(confmap.Provider(map[string]any{
+			"writerepdata": false,
+		}, "."), nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if repDataRoot != "" && !path.IsAbs(repDataRoot) {
+		repDataRoot = path.Join(cwd, repDataRoot)
+		err = k.Load(confmap.Provider(map[string]any{
+			"repdataroot": repDataRoot,
 		}, "."), nil)
 		if err != nil {
 			return nil, err

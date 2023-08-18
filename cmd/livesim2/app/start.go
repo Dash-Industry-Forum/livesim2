@@ -64,7 +64,7 @@ func SetupServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 		VodRouter:  v,
 		logger:     logger,
 		Cfg:        cfg,
-		assetMgr:   newAssetMgr(vodFS),
+		assetMgr:   newAssetMgr(vodFS, cfg.RepDataRoot, cfg.WriteRepData),
 	}
 
 	err = server.compileTemplates()
@@ -77,15 +77,18 @@ func SetupServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 		return nil, fmt.Errorf("routes: %w", err)
 	}
 
+	start := time.Now()
 	err = server.assetMgr.discoverAssets()
 	if err != nil {
 		return nil, fmt.Errorf("findAssets: %w", err)
 	}
-	logger.Info().Int("count", len(server.assetMgr.assets)).Msg("VoD assets found")
+	elapsedSeconds := fmt.Sprintf("%.3fs", time.Since(start).Seconds())
+
+	logger.Info().Int("count", len(server.assetMgr.assets)).Str("elapsed", elapsedSeconds).Msg("VoD assets found")
 	for name := range server.assetMgr.assets {
 		a := server.assetMgr.assets[name]
 		for mpdName := range a.MPDs {
-			logger.Info().Str("assetPath", name).Str("mpdName", mpdName).Msg("VoD asset")
+			logger.Info().Str("assetPath", name).Str("mpdName", mpdName).Msg("Available MPD")
 		}
 	}
 

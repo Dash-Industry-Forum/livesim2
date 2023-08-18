@@ -96,16 +96,16 @@ func findSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseConfi
 	wrapTime := nrWraps * wrapDur
 	timeAfterWrap := int(time) - wrapTime
 	idx := rep.findSegmentIndexFromTime(uint64(timeAfterWrap))
-	if idx == len(rep.segments) {
+	if idx == len(rep.Segments) {
 		return segMeta{}, fmt.Errorf("no matching segment")
 	}
-	seg := rep.segments[idx]
-	if seg.startTime != uint64(timeAfterWrap) {
-		return segMeta{}, fmt.Errorf("segment time mismatch %d <-> %d", timeAfterWrap, seg.startTime)
+	seg := rep.Segments[idx]
+	if seg.StartTime != uint64(timeAfterWrap) {
+		return segMeta{}, fmt.Errorf("segment time mismatch %d <-> %d", timeAfterWrap, seg.StartTime)
 	}
 
 	// Check interval validity
-	segAvailTimeS := float64(int(seg.endTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
+	segAvailTimeS := float64(int(seg.EndTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
 	nowS := float64(nowMS) * 0.001
 	err := CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
 	if err != nil {
@@ -114,12 +114,12 @@ func findSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseConfi
 
 	return segMeta{
 		rep:       rep,
-		origTime:  seg.startTime,
+		origTime:  seg.StartTime,
 		newTime:   time,
-		origNr:    seg.nr,
-		newNr:     uint32(cfg.getStartNr() + idx + nrWraps*len(rep.segments)),
-		origDur:   uint32(seg.endTime - seg.startTime),
-		newDur:    uint32(seg.endTime - seg.startTime),
+		origNr:    seg.Nr,
+		newNr:     uint32(cfg.getStartNr() + idx + nrWraps*len(rep.Segments)),
+		origDur:   uint32(seg.EndTime - seg.StartTime),
+		newDur:    uint32(seg.EndTime - seg.StartTime),
 		timescale: uint32(rep.MediaTimescale),
 	}, nil
 }
@@ -146,18 +146,18 @@ func CheckTimeValidity(availTimeS, nowS, timeShiftBufferDepthS, availabilityTime
 
 // findSegMetaFromNr returns segMeta if segment is available.
 func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, nowMS int) (segMeta, error) {
-	wrapLen := len(rep.segments)
+	wrapLen := len(rep.Segments)
 	startNr := cfg.getStartNr()
 	nrWraps := (int(nr) - startNr) / wrapLen
 	relNr := int(nr) - nrWraps*wrapLen
 	wrapDur := a.LoopDurMS * rep.MediaTimescale / 1000
 	wrapTime := nrWraps * wrapDur
-	seg := rep.segments[relNr]
-	segTime := wrapTime + int(seg.startTime)
+	seg := rep.Segments[relNr]
+	segTime := wrapTime + int(seg.StartTime)
 	mediaRef := cfg.StartTimeS * rep.MediaTimescale // TODO. Add period offset
 
 	// Check interval validity
-	segAvailTimeS := float64(int(seg.endTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
+	segAvailTimeS := float64(int(seg.EndTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
 	nowS := float64(nowMS) * 0.001
 	err := CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
 	if err != nil {
@@ -166,12 +166,12 @@ func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, n
 
 	return segMeta{
 		rep:       rep,
-		origTime:  seg.startTime,
+		origTime:  seg.StartTime,
 		newTime:   uint64(segTime),
-		origNr:    seg.nr,
+		origNr:    seg.Nr,
 		newNr:     nr,
-		origDur:   uint32(seg.endTime - seg.startTime),
-		newDur:    uint32(seg.endTime - seg.startTime),
+		origDur:   uint32(seg.EndTime - seg.StartTime),
+		newDur:    uint32(seg.EndTime - seg.StartTime),
 		timescale: uint32(rep.MediaTimescale),
 	}, nil
 }
@@ -182,7 +182,7 @@ func writeInitSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a
 		return true, err
 	}
 	for _, rep := range a.Reps {
-		if segmentPart == rep.initURI {
+		if segmentPart == rep.InitURI {
 			w.Header().Set("Content-Length", strconv.Itoa(len(rep.initBytes)))
 
 			w.Header().Set("Content-Type", rep.SegmentType())
@@ -245,12 +245,12 @@ func findRawSeg(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, 
 			time := uint64(idNr)
 			r.meta, err = findSegMetaFromTime(a, rep, time, cfg, nowMS)
 		default:
-			return r, fmt.Errorf("unknown liveMPDtype")
+			return r, fmt.Errorf("unknown liveMPD type")
 		}
 		if err != nil {
 			return r, err
 		}
-		segPath = path.Join(a.AssetPath, replaceTimeAndNr(rep.mediaURI, r.meta.origTime, r.meta.origNr))
+		segPath = path.Join(a.AssetPath, replaceTimeAndNr(rep.MediaURI, r.meta.origTime, r.meta.origNr))
 		break // segPath found
 	}
 	if segPath == "" {

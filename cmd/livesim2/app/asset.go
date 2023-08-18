@@ -6,9 +6,13 @@ package app
 
 import (
 	"bytes"
+	"compress/gzip"
+	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"math"
+	"os"
 	"path"
 	"regexp"
 	"sort"
@@ -22,17 +26,21 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func newAssetMgr(vodFS fs.FS) *assetMgr {
+func newAssetMgr(vodFS fs.FS, repDataDir string, writeRepData bool) *assetMgr {
 	am := assetMgr{
-		vodFS:  vodFS,
-		assets: make(map[string]*asset),
+		vodFS:        vodFS,
+		assets:       make(map[string]*asset),
+		repDataDir:   repDataDir,
+		writeRepData: writeRepData,
 	}
 	return &am
 }
 
 type assetMgr struct {
-	vodFS  fs.FS
-	assets map[string]*asset
+	vodFS        fs.FS
+	assets       map[string]*asset
+	repDataDir   string
+	writeRepData bool
 }
 
 // findAsset finds the asset by matching the uri with all assets paths.
@@ -115,15 +123,19 @@ func (am *assetMgr) loadAsset(mpdPath string) error {
 			if rep.SegmentTemplate != nil {
 				return fmt.Errorf("segmentTemplate on Representation level. Only supported on AdaptationSet level.ß")
 			}
+			if _, ok := asset.Reps[rep.Id]; ok {
+				log.Debug().Str("rep", rep.Id).Str("asset", mpdPath).Msg("Representation already loaded")
+				continue
+			}
 			r, err := am.loadRep(assetPath, mpd, as, rep)
 			if err != nil {
 				return fmt.Errorf("getRep: %w", err)
 			}
-			if len(r.segments) == 0 {
+			if len(r.Segments) == 0 {
 				return fmt.Errorf("rep %s of type %s has no segments", rep.Id, r.ContentType)
 			}
 			asset.Reps[r.ID] = r
-			avgSegDurMS := (r.duration() * 1000) / (r.MediaTimescale * len(r.segments))
+			avgSegDurMS := (r.duration() * 1000) / (r.MediaTimescale * len(r.Segments))
 			if asset.SegmentDurMS == 0 || avgSegDurMS < asset.SegmentDurMS {
 				asset.SegmentDurMS = avgSegDurMS
 			}
@@ -136,9 +148,8 @@ func (am *assetMgr) loadAsset(mpdPath string) error {
 		}
 		asset.LoopDurMS = repDurMS
 	}
+	log.Info().Str("mpdName", mpdPath).Msg("Asset MPD loaded")
 	//TODO
-	// Read init segment
-	// Read all media segments and store metadata
 	// Compare with MPD for segment timeline
 	// Calculate loop duration
 	// Finally fix
@@ -149,7 +160,13 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 	rp := RepData{ID: rep.Id,
 		ContentType:  string(as.ContentType),
 		Codecs:       as.Codecs,
-		MpdTimescale: 1}
+		MpdTimescale: 1,
+	}
+	ok, err := rp.readFromJSON(am.vodFS, am.repDataDir, assetPath)
+	if ok {
+		return &rp, err
+	}
+	log.Debug().Str("rep", rp.ID).Str("asset", assetPath).Msg("Loading full representation")
 	st := as.SegmentTemplate
 	if rep.SegmentTemplate != nil {
 		st = rep.SegmentTemplate
@@ -160,34 +177,17 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 	if rep.Codecs != "" {
 		rp.Codecs = rep.Codecs
 	}
-
-	rp.initURI = replaceIdentifiers(rep, st.Initialization)
-	rp.mediaURI = replaceIdentifiers(rep, st.Media)
-	switch {
-	case strings.Contains(rp.mediaURI, "$Number$"):
-		rp.typeURI = numberURI
-		rexStr := strings.ReplaceAll(rp.mediaURI, "$Number$", `(\d+)`)
-		rp.mediaRegexp = regexp.MustCompile(rexStr)
-	case strings.Contains(rp.mediaURI, "$Time$"):
-		rp.typeURI = timeURI
-		rexStr := strings.ReplaceAll(rp.mediaURI, "$Time$", `(\d+)`)
-		rp.mediaRegexp = regexp.MustCompile(rexStr)
-	default:
-		return nil, fmt.Errorf("neither $Number$, nor $Time$ found in media")
-	}
+	rp.InitURI = replaceIdentifiers(rep, st.Initialization)
+	rp.MediaURI = replaceIdentifiers(rep, st.Media)
 	if st.Timescale != nil {
 		rp.MpdTimescale = int(*st.Timescale)
 	}
-
-	if rp.ContentType != "image" {
-		err := rp.readInit(am.vodFS, assetPath)
-		if err != nil {
-			return nil, err
-		}
+	err = rp.addRegExpAndInit(am.vodFS, assetPath)
+	if err != nil {
+		return nil, fmt.Errorf("addRegExpAndInit: %w", err)
 	}
-
 	switch {
-	case st.SegmentTimeline != nil && rp.typeURI == timeURI:
+	case st.SegmentTimeline != nil && rp.typeURI() == timeURI:
 		var t uint64
 		nr := uint32(1)
 		for _, s := range st.SegmentTimeline.S {
@@ -195,19 +195,17 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 				t = *s.T
 			}
 			d := s.D
-			uri := replaceTimeAndNr(rp.mediaURI, t, nr)
-			rp.segments = append(rp.segments, segment{uri, t, t + d, nr})
+			rp.Segments = append(rp.Segments, Segment{StartTime: t, EndTime: t + d, Nr: nr})
 			t += d
 			for i := 0; i < s.R; i++ {
 				nr++
-				uri := replaceTimeAndNr(rp.mediaURI, t, nr)
-				rp.segments = append(rp.segments, segment{uri, t, t + d, nr})
+				rp.Segments = append(rp.Segments, Segment{StartTime: t, EndTime: t + d, Nr: nr})
 				t += d
 			}
 		}
-	case st.SegmentTimeline != nil && rp.typeURI == numberURI:
+	case st.SegmentTimeline != nil && rp.typeURI() == numberURI:
 		return nil, fmt.Errorf("SegmentTimeline with $Number$ not yet supported")
-	case rp.typeURI == numberURI: // SegmentTemplate with Number$
+	case rp.typeURI() == numberURI: // SegmentTemplate with Number$
 		startNr := uint32(1)
 		if st.StartNumber != nil {
 			startNr = *st.StartNumber
@@ -217,7 +215,7 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 			endNr = *st.EndNumber
 		}
 		nr := startNr
-		var seg segment
+		var seg Segment
 		var err error
 		var segDur uint64
 		if rp.ContentType == "image" && as.SegmentTemplate.Duration != nil {
@@ -225,6 +223,7 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 			rp.MediaTimescale = int(as.SegmentTemplate.GetTimescale())
 		}
 		for {
+			// Loop until we get an error when reading the segment
 			if rp.ContentType != "image" {
 				seg, err = rp.readMP4Segment(am.vodFS, assetPath, nr)
 			} else {
@@ -235,9 +234,9 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 				break
 			}
 			if nr > startNr {
-				rp.segments[len(rp.segments)-1].endTime = seg.startTime
+				rp.Segments[len(rp.Segments)-1].EndTime = seg.StartTime
 			}
-			rp.segments = append(rp.segments, seg)
+			rp.Segments = append(rp.Segments, seg)
 
 			if nr == endNr { // This only happens if endNumber is set
 				break
@@ -245,12 +244,127 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 			nr++
 		}
 		if endNr < startNr {
-			return nil, fmt.Errorf("no segments read for rep %s", path.Join(assetPath, rp.mediaURI))
+			return nil, fmt.Errorf("no segments read for rep %s", path.Join(assetPath, rp.MediaURI))
 		}
 	default:
 		return nil, fmt.Errorf("unknown type of representation")
 	}
-	return &rp, nil
+	if !am.writeRepData {
+		return &rp, nil
+	}
+	err = rp.writeToJSON(am.repDataDir, assetPath)
+	return &rp, err
+}
+
+// readFromJSON reads the representation data from a gzipped  or plain JSON file.
+func (rp *RepData) readFromJSON(vodFS fs.FS, repDataDir, assetPath string) (bool, error) {
+	if repDataDir == "" {
+		return false, nil
+	}
+	repDataPath := path.Join(repDataDir, assetPath, rp.repDataName())
+	gzipPath := repDataPath + ".gz"
+	var data []byte
+	_, err := os.Stat(gzipPath)
+	if err == nil {
+		fh, err := os.Open(gzipPath)
+		if err != nil {
+			return true, err
+		}
+		defer fh.Close()
+		gzr, err := gzip.NewReader(fh)
+		if err != nil {
+			return true, err
+		}
+		defer gzr.Close()
+		data, err = io.ReadAll(gzr)
+		if err != nil {
+			return true, err
+		}
+		log.Debug().Str("path", gzipPath).Msg("Read repData")
+	}
+	if len(data) == 0 {
+		_, err := os.Stat(repDataPath)
+		if err == nil {
+			data, err = os.ReadFile(repDataPath)
+			if err != nil {
+				return true, err
+			}
+			log.Debug().Str("path", repDataPath).Msg("Read repData")
+		}
+	}
+	if len(data) == 0 {
+		return false, nil
+	}
+	if err := json.Unmarshal(data, &rp); err != nil {
+		return true, err
+	}
+	err = rp.addRegExpAndInit(vodFS, assetPath)
+	if err != nil {
+		return true, fmt.Errorf("addRegExpAndInit: %w", err)
+	}
+	return true, nil
+}
+
+func (rp *RepData) addRegExpAndInit(vodFS fs.FS, assetPath string) error {
+	switch {
+	case strings.Contains(rp.MediaURI, "$Number$"):
+		rexStr := strings.ReplaceAll(rp.MediaURI, "$Number$", `(\d+)`)
+		rp.mediaRegexp = regexp.MustCompile(rexStr)
+	case strings.Contains(rp.MediaURI, "$Time$"):
+		rexStr := strings.ReplaceAll(rp.MediaURI, "$Time$", `(\d+)`)
+		rp.mediaRegexp = regexp.MustCompile(rexStr)
+	default:
+		return fmt.Errorf("neither $Number$, nor $Time$ found in media")
+	}
+
+	if rp.ContentType != "image" {
+		err := rp.readInit(vodFS, assetPath)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeToJSON writes the representation data to a gzipped JSON file.
+func (rp *RepData) writeToJSON(repDataDir, assetPath string) error {
+	if repDataDir == "" {
+		return nil
+	}
+	data, err := json.Marshal(rp)
+	if err != nil {
+		return err
+	}
+	outDir := path.Join(repDataDir, assetPath)
+	if dirDoesNotExist(outDir) {
+		err := os.MkdirAll(outDir, 0755)
+		if err != nil {
+			return fmt.Errorf("mkdir %s: %w", outDir, err)
+		}
+	}
+	gzipPath := path.Join(outDir, rp.repDataName()+".gz")
+	fh, err := os.Create(gzipPath)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+	gzw := gzip.NewWriter(fh)
+	defer gzw.Close()
+	_, err = gzw.Write(data)
+	if err != nil {
+		return err
+	}
+	log.Debug().Str("path", gzipPath).Msg("Wrote repData")
+	return nil
+}
+
+func (rp *RepData) repDataName() string {
+	return fmt.Sprintf("%s_data.json", rp.ID)
+}
+
+func dirDoesNotExist(dir string) bool {
+	_, err := os.Stat(dir)
+	return os.IsNotExist(err)
 }
 
 // An asset is a directory with at least one MPD file
@@ -288,14 +402,14 @@ func (l lastSegInfo) availabilityTime(ato float64) float64 {
 func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int) (entries []*m.S, lastSI lastSegInfo, startNr int) {
 	var ss []*m.S
 	rep := a.Reps[repID]
-	segs := rep.segments
+	segs := rep.Segments
 	nrSegs := len(segs)
 
 	ato := uint64(atoMS * rep.MpdTimescale / 1000)
 
 	relStartTime := uint64(wt.startRelMS * rep.MediaTimescale / 1000)
 	relStartIdx := 0
-	if relStartTime+ato < segs[0].endTime {
+	if relStartTime+ato < segs[0].EndTime {
 		wt.startWraps--
 		relStartIdx = nrSegs - 1
 	} else {
@@ -312,7 +426,7 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int) (
 
 	relNowTime := uint64(wt.nowRelMS * rep.MediaTimescale / 1000)
 	relNowIdx := 0
-	if relNowTime+ato < segs[0].endTime {
+	if relNowTime+ato < segs[0].EndTime {
 		wt.nowWraps--
 		relNowIdx = nrSegs - 1
 	} else {
@@ -328,7 +442,7 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int) (
 
 	startNr = wt.startWraps*nrSegs + relStartIdx
 	nowNr := wt.nowWraps*nrSegs + relNowIdx
-	t := uint64(rep.duration()*wt.startWraps) + segs[relStartIdx].startTime
+	t := uint64(rep.duration()*wt.startWraps) + segs[relStartIdx].StartTime
 	d := segs[relStartIdx].dur()
 	s := &m.S{T: Ptr(t), D: d}
 	lsi := lastSegInfo{
@@ -373,9 +487,9 @@ func (a *asset) firstVideoRep() (rep *RepData, ok bool) {
 
 // findFirstFinishedSegIdx finds index of first finished segment.
 // Returns -1 if none is finished
-func findFirstFinishedSegIdx(segs []segment, t uint64) int {
+func findFirstFinishedSegIdx(segs []Segment, t uint64) int {
 	unfinishedIdx := sort.Search(len(segs), func(i int) bool {
-		return segs[i].endTime > t
+		return segs[i].EndTime > t
 	})
 	return unfinishedIdx - 1
 }
@@ -394,26 +508,25 @@ type RepData struct {
 	Codecs                string           `json:"codecs"`
 	MpdTimescale          int              `json:"mpdTimescale"`
 	MediaTimescale        int              `json:"mediaTimescale"` // Used in the segments
-	initURI               string           `json:"-"`
-	mediaURI              string           `json:"-"`
-	typeURI               mediaURIType     `json:"-"`
+	InitURI               string           `json:"initURI"`
+	MediaURI              string           `json:"mediaURI"`
 	mediaRegexp           *regexp.Regexp   `json:"-"`
 	initSeg               *mp4.InitSegment `json:"-"`
 	initBytes             []byte           `json:"-"`
-	defaultSampleDuration uint32           `json:"-"`
-	segments              []segment        `json:"-"`
+	DefaultSampleDuration uint32           `json:"defaultSampleDuration"`
+	Segments              []Segment        `json:"segments"`
 }
 
 func (r RepData) duration() int {
-	if len(r.segments) == 0 {
+	if len(r.Segments) == 0 {
 		return 0
 	}
-	return int(r.segments[len(r.segments)-1].endTime - r.segments[0].startTime)
+	return int(r.Segments[len(r.Segments)-1].EndTime - r.Segments[0].StartTime)
 }
 
 func (r RepData) findSegmentIndexFromTime(t uint64) int {
-	return sort.Search(len(r.segments), func(i int) bool {
-		return r.segments[i].startTime >= t
+	return sort.Search(len(r.Segments), func(i int) bool {
+		return r.Segments[i].StartTime >= t
 	})
 }
 
@@ -435,10 +548,21 @@ func (r RepData) SegmentType() string {
 	return segType
 }
 
+func (r RepData) typeURI() mediaURIType {
+	switch {
+	case strings.Contains(r.MediaURI, "$Number$"):
+		return numberURI
+	case strings.Contains(r.MediaURI, "$Time$"):
+		return timeURI
+	default:
+		panic("unknown type of media URI")
+	}
+}
+
 func (r *RepData) readInit(vodFS fs.FS, assetPath string) error {
-	data, err := fs.ReadFile(vodFS, path.Join(assetPath, r.initURI))
+	data, err := fs.ReadFile(vodFS, path.Join(assetPath, r.InitURI))
 	if err != nil {
-		return fmt.Errorf("read initURI %q: %w", r.initURI, err)
+		return fmt.Errorf("read initURI %q: %w", r.InitURI, err)
 	}
 	sr := bits.NewFixedSliceReader(data)
 	initFile, err := mp4.DecodeFileSR(sr)
@@ -454,15 +578,20 @@ func (r *RepData) readInit(vodFS fs.FS, assetPath string) error {
 	}
 	r.initBytes = buf.Bytes()
 
+	if r.MediaTimescale != 0 {
+		return nil // Already set
+	}
+
 	r.MediaTimescale = int(r.initSeg.Moov.Trak.Mdia.Mdhd.Timescale)
 	trex := r.initSeg.Moov.Mvex.Trex
-	r.defaultSampleDuration = trex.DefaultSampleDuration
+	r.DefaultSampleDuration = trex.DefaultSampleDuration
 	return nil
 }
 
-func (r *RepData) readMP4Segment(vodFS fs.FS, assetPath string, nr uint32) (segment, error) {
-	var seg segment
-	uri := replaceTimeAndNr(r.mediaURI, 0, nr)
+// readMP4Segment extracts segment data and returns an error if file does not exist.
+func (r *RepData) readMP4Segment(vodFS fs.FS, assetPath string, nr uint32) (Segment, error) {
+	var seg Segment
+	uri := replaceTimeAndNr(r.MediaURI, 0, nr)
 	repPath := path.Join(assetPath, uri)
 
 	data, err := fs.ReadFile(vodFS, repPath)
@@ -479,25 +608,25 @@ func (r *RepData) readMP4Segment(vodFS fs.FS, assetPath string, nr uint32) (segm
 	nf := len(mp4Seg.Segments[0].Fragments)
 	lastFragTraf := mp4Seg.Segments[0].Fragments[nf-1].Moof.Traf
 	if lastFragTraf.Tfhd.HasDefaultSampleDuration() {
-		r.defaultSampleDuration = lastFragTraf.Tfhd.DefaultSampleDuration
+		r.DefaultSampleDuration = lastFragTraf.Tfhd.DefaultSampleDuration
 	}
-	endTime := lastFragTraf.Tfdt.BaseMediaDecodeTime() + lastFragTraf.Trun.Duration(r.defaultSampleDuration)
-	return segment{uri, t, endTime, nr}, nil
+	endTime := lastFragTraf.Tfdt.BaseMediaDecodeTime() + lastFragTraf.Trun.Duration(r.DefaultSampleDuration)
+	return Segment{StartTime: t, EndTime: endTime, Nr: nr}, nil
 }
 
-func (r *RepData) readThumbSegment(vodFS fs.FS, assetPath string, nr, startNr uint32, dur uint64) (segment, error) {
-	var seg segment
-	uri := replaceTimeAndNr(r.mediaURI, 0, nr)
+// readThumbSegment reads a thumbnail segment, and returns an error if file does not exist.
+func (r *RepData) readThumbSegment(vodFS fs.FS, assetPath string, nr, startNr uint32, dur uint64) (Segment, error) {
+	var seg Segment
+	uri := replaceTimeAndNr(r.MediaURI, 0, nr)
 	repPath := path.Join(assetPath, uri)
 
-	info, err := fs.Stat(vodFS, repPath)
+	_, err := fs.Stat(vodFS, repPath)
 	if err != nil {
-		fmt.Printf("%v\n", info)
 		return seg, err
 	}
 	deltaNr := nr - startNr
 	startTime := uint64(deltaNr) * dur
-	return segment{uri, startTime, startTime + dur, nr}, nil
+	return Segment{StartTime: startTime, EndTime: startTime + dur, Nr: nr}, nil
 }
 
 func replaceIdentifiers(r *m.RepresentationType, str string) string {
@@ -512,13 +641,12 @@ func replaceTimeAndNr(str string, time uint64, nr uint32) string {
 	return str
 }
 
-type segment struct {
-	path      string
-	startTime uint64
-	endTime   uint64
-	nr        uint32
+type Segment struct {
+	StartTime uint64 `json:"startTime"`
+	EndTime   uint64 `json:"endTime"`
+	Nr        uint32 `json:"nr"`
 }
 
-func (s segment) dur() uint64 {
-	return s.endTime - s.startTime
+func (s Segment) dur() uint64 {
+	return s.EndTime - s.StartTime
 }

@@ -410,7 +410,7 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 	if as.SegmentTemplate.Duration == nil {
 		r0 := as.Representations[0]
 		rep0 := a.Reps[r0.Id]
-		dur := rep0.duration() / len(rep0.segments)
+		dur := rep0.duration() / len(rep0.Segments)
 		timeScale := rep0.MediaTimescale
 		as.SegmentTemplate.Duration = Ptr(uint32(dur))
 		as.SegmentTemplate.Timescale = Ptr(uint32(timeScale))

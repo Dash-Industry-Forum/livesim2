@@ -20,7 +20,8 @@ import (
 
 func TestLiveMPD(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS)
+	tmpDir := t.TempDir()
+	am := newAssetMgr(vodFS, tmpDir, false)
 	err := am.discoverAssets()
 	require.NoError(t, err)
 
@@ -105,7 +106,7 @@ func TestLiveMPD(t *testing.T) {
 
 func TestLiveMPDWithTimeSubs(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS)
+	am := newAssetMgr(vodFS, "", false)
 	err := am.discoverAssets()
 	require.NoError(t, err)
 
@@ -161,7 +162,7 @@ var liveSubEn = "" +
 
 func TestSegmentTimes(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS)
+	am := newAssetMgr(vodFS, "", false)
 	err := am.discoverAssets()
 	require.NoError(t, err)
 
@@ -227,7 +228,8 @@ func TestSegmentTimes(t *testing.T) {
 
 func TestLastAvailableSegment(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS)
+	tmpDir := t.TempDir()
+	am := newAssetMgr(vodFS, tmpDir, true)
 	err := am.discoverAssets()
 	require.NoError(t, err)
 	cases := []struct {
@@ -330,7 +332,8 @@ func TestLastAvailableSegment(t *testing.T) {
 
 func TestPublishTime(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS)
+	tmpDir := t.TempDir()
+	am := newAssetMgr(vodFS, tmpDir, false)
 	err := am.discoverAssets()
 	require.NoError(t, err)
 
@@ -467,7 +470,7 @@ func TestPublishTime(t *testing.T) {
 
 func TestNormalAvailabilityTimeOffset(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS)
+	am := newAssetMgr(vodFS, "", false)
 	err := am.discoverAssets()
 	require.NoError(t, err)
 
@@ -546,7 +549,7 @@ func TestNormalAvailabilityTimeOffset(t *testing.T) {
 
 func TestUTCTiming(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS)
+	am := newAssetMgr(vodFS, "", false)
 	err := am.discoverAssets()
 	require.NoError(t, err)
 
@@ -609,7 +612,7 @@ func TestUTCTiming(t *testing.T) {
 
 func TestMultiPeriod(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS)
+	am := newAssetMgr(vodFS, "", false)
 	err := am.discoverAssets()
 	require.NoError(t, err)
 
@@ -722,7 +725,7 @@ func TestMultiPeriod(t *testing.T) {
 
 func TestRelStartStopTimeIntoLocation(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS)
+	am := newAssetMgr(vodFS, "", false)
 	err := am.discoverAssets()
 	require.NoError(t, err)
 
