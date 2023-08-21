@@ -135,7 +135,7 @@ func (am *assetMgr) loadAsset(mpdPath string) error {
 				return fmt.Errorf("rep %s of type %s has no segments", rep.Id, r.ContentType)
 			}
 			asset.Reps[r.ID] = r
-			avgSegDurMS := (r.duration() * 1000) / (r.MediaTimescale * len(r.Segments))
+			avgSegDurMS := int(math.Round(float64(r.duration()*1000.0)) / float64((r.MediaTimescale * len(r.Segments))))
 			if asset.SegmentDurMS == 0 || avgSegDurMS < asset.SegmentDurMS {
 				asset.SegmentDurMS = avgSegDurMS
 			}
