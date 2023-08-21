@@ -127,11 +127,11 @@ func findSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseConfi
 // CheckTimeValidity checks if availTimeS is a valid time given current time and parameters.
 // Returns errors if too early, or too late. availabilityTimeOffset < 0 signals always available.
 func CheckTimeValidity(availTimeS, nowS, timeShiftBufferDepthS, availabilityTimeOffsetS float64) error {
-	if availabilityTimeOffsetS < 0 {
+	if availabilityTimeOffsetS == +math.Inf(1) {
 		return nil // Infinite availability time offset
 	}
-	// Valid interval [nowRel-cfg.tsbd, nowRel) where end-time must be used
 
+	// Valid interval [nowRel-cfg.tsbd, nowRel) where end-time must be used
 	if availabilityTimeOffsetS > 0 {
 		availTimeS -= availabilityTimeOffsetS
 	}

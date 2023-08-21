@@ -11,13 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - server startup boost by loading (and writing) previously generated gzipped tar files with representation metadata
   - new configuration parameters `repdataroot` and `writerepdata` to control this
-- HTTP redirect from /livesim to /livesim2 and /dash/vod to /vod for compatibility with livesim1
+- HTTP redirect from `/livesim` to `/livesim2` and `/dash/vod` to `/vod` for compatibility with livesim1
 - support assets with stpp subtitles in both text and image format. New test content added
 - support DASH-IF thumbnails including multi-period. New test content added
 - new URL parameter `timesubswvtt` provides generated timing wvtt subtitles
 - `timesubsstpp` and `timesubswvtt` now work with SegmentTimeline
 - `continuous_1` URL parameter to signal multiperiod continuity
 - Automatic Let's Encrypt certificates for HTTPS for one or more domains via `domains` parameter
+
+### Fixed
+
+- `/ato_inf` (infinite availability offset) now makes all segments in past and future available
 
 ## [0.6.0] - 2023-06-10
 

@@ -7,6 +7,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -245,11 +246,19 @@ func TestAvailabilityTime(t *testing.T) {
 			wantedErr:  "too late",
 		},
 		{
-			desc:       "infinite tsbd",
+			desc:       "infinite ato future",
 			availTimeS: 140,
 			nowS:       120,
 			tsbd:       10,
-			ato:        -1,
+			ato:        math.Inf(1),
+			wantedErr:  "",
+		},
+		{
+			desc:       "infinite ato past",
+			availTimeS: 5,
+			nowS:       120,
+			tsbd:       10,
+			ato:        math.Inf(1),
 			wantedErr:  "",
 		},
 	}
