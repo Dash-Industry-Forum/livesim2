@@ -11,32 +11,26 @@
 As the original simulator ([livesim1][1]), the output is a wall-clock (UTC) synchronized
 infinite linear stream of segments. This achieved by looping input VoD DASH assets,
 and changing time stamps so that an infinite "live" stream is available.
-The synchronization is done modulo asset length,
+The synchronization is done modulo asset duration,
 for example: a 1-hour asset restarts every hour on full hours, and a 30s asset
-restarts every 30s on full and half minutes. If there is a clock in the video, and
+restarts every 30s on full and half minutes. If there is a clock display in the video, and
 the length is full minutes or similar, it is
 therefore easy to directly see how long the system delay is from publishing to
 screen presentation. The very short example assets bundled with the code are only
 8s long, which means that they restart every time the UTC time is a multiple of 8s,
 relative to the Epoch start 1970-01-01:00:00:00Z.
 
-To provide full UTC time stamps and the possibility to test subtitles,
+To provide full UTC time stamps on-screen and the possibility to test subtitles,
 livesim2 has a new feature for generating subtitles for any number of languages.
 This is done by a URL parameter like `/timesubsstpp_en,sv` which will result in
-two subtitle tracks with with language codes "en" and "sv", respectively.
-There is a corresponding setting for wvtt subtitles using `/timesubswvtt_en,sv`.
+two `stpp` (segmented TTML) subtitle tracks with with language codes "en" and "sv", respectively.
+There is a corresponding setting for `wvtt` (segmented WebVTT) subtitles using `/timesubswvtt_en,sv`.
 
 The new `livesim2` software is written in Go instead of Python and designed to handle
 content in a more flexible and versatile way. It is intended to be very easy to install and deploy locally
 since it is compiled into a single binary that serves the content via a built-in
 performant HTTP/2 server. There is also a very simple way of setting up HTTPS
 using Let´s Encrypt.
-
-There is also a tool called `dashfetcher` that can be used to download
-DASH VoD assets that can serve as sources for the live
-linear outputs.
-
-The sources are looped so that an infinite "live" stream is available.
 
 Similarly to [livesim1][1], the output is highly configurable by adding parameters inside the URLs.
 These parameters are included not only in the MPD requests, but in
@@ -47,8 +41,8 @@ but there are also new parameters like the generated subtitles mentioned above.
 
 The [URL wiki page][urlparams] lists what is available.
 
-There are two main components in this repo, the server `livesim2` and the VoD fetcher
-`dashfetcher`.
+Beside `livesim2` there is a tool called `dashfetcher` in this repo.
+That tool can be used to download the MPD and all segments of a DASH VoD asset.
 
 ## livesim2 server
 
@@ -71,8 +65,19 @@ Once the server is started, it will scan the file tree starting from
 Currently, only source VoD assets using SegmentTimeline with `$Time$` and
 SegmentTemplate with `$Number$`  are supported.
 
+### Quicker load by using metadata files
+
+For assets with many segments, the scanning process can take a considerable time.
+The possibility to generate and read extra representation metadata files has
+therefore been added. For representation `repX`, the corresponding metadata file
+is `repX_data.json.gz`. As the file extensions indicates, these files are gzipped
+JSON files. To generate such files, the option `writerepdata` must be on.
+The root directory for such files is by default the same as the VoD root directory,
+meaning that the metadata files will be in the same directories as the corresponding
+MPDs. However, it is possible to use another path, by specifying `repdataroot`.
+
 Once the server has started, it is possible to find out information about the server and
-the assets using the HTTP endpoint
+the assets using the root HTTP endpoint
 
 * /
 
@@ -92,6 +97,15 @@ It is also possible to explore the file tree and play Vod assets by starting at
 Finally, any VoD MPD like `/vod/cfhd/stream.mpd` is available as a live stream by
 replacing `/vod/` with `livesim2` e.g. `/livesim2/cfhd/stream.mpd`.
 
+### Backwards compatibility with livesim
+
+For backwards compatibility with the first version of `livesim` where `/livesim` was used
+as a prefix for simulated live output, and `/dash/vod` was the path to the VoD assets,
+these two paths are redirected by the server with an HTTP 302 response as:
+
+    /livesim/* -> /livesim2/*
+    /dash/vod/* -> /vod/*
+
 ### MPD Restrictions
 
 The following restrictions apply to the VoD manifest to be used with livesim2
@@ -102,7 +116,7 @@ The following restrictions apply to the VoD manifest to be used with livesim2
 * no Location elements
 * initialization and media attributes in SegmentTemplate on AdaptationSet level
 
-### Test parameters
+### Special Time Test Parameter `nowMS`
 
 The query string parameter `?nowMS=...` can be used in any request
 to set the wall-clock time that `livesim2` uses as reference time. The time is measured with respect to
@@ -181,7 +195,7 @@ They can then be streamed via URLs like:
 
 ```link
 http://localhost:8888/livesim2/WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17/stream.mpd
-http://localhost:8888/livesim2/testpic_2s/Manifest.mpd
+http://localhost:8888/livesim2/testpic_2s/Manifest_thumbs.mpd
 http://localhost:8888/livesim2/testpic_8s/Manifest.mpd
 ```
 
@@ -206,7 +220,7 @@ of October 2023.
 To download and use that content, run
 
 ```sh
-$ git clone https://github.com/Dash-Industry-Forum/livesim-content.git
+git clone https://github.com/Dash-Industry-Forum/livesim-content.git
 ```
 
 and then set `--vodroot` to the `livesim-content` top directory or include that in
@@ -305,4 +319,3 @@ See [LICENSE.md](LICENSE.md).
 [l2-project]: https://github.com/orgs/Dash-Industry-Forum/projects/7
 [l2-issues]: https://github.com/Dash-Industry-Forum/livesim2/issues
 [l2-status]: https://github.com/Dash-Industry-Forum/livesim2/wiki/Sponsored-transition-from-livesim1-to-livesim2
-

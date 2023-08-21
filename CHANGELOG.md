@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- server startup boost by loading (and writing) previously generated gzipped tar files with representation metadata
+  - new configuration parameters `repdataroot` and `writerepdata` to control this
 - HTTP redirect from /livesim to /livesim2 and /dash/vod to /vod for compatibility with livesim1
 - support assets with stpp subtitles in both text and image format. New test content added
 - support DASH-IF thumbnails including multi-period. New test content added

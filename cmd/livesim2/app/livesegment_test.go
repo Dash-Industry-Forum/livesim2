@@ -23,7 +23,7 @@ import (
 
 func TestLiveSegment(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS)
+	am := newAssetMgr(vodFS, "", false)
 	err := am.discoverAssets()
 	require.NoError(t, err)
 
@@ -109,7 +109,7 @@ func TestLiveSegment(t *testing.T) {
 
 func TestLiveThumbSegment(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS)
+	am := newAssetMgr(vodFS, "", false)
 	err := am.discoverAssets()
 	require.NoError(t, err)
 
@@ -162,7 +162,7 @@ func TestLiveThumbSegment(t *testing.T) {
 
 func TestWriteChunkedSegment(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS)
+	am := newAssetMgr(vodFS, "", false)
 	err := am.discoverAssets()
 	require.NoError(t, err)
 	cfg := NewResponseConfig()

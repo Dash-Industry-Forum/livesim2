@@ -176,7 +176,7 @@ cfgLoop:
 			cfg.Tfdt32Flag = true
 		case "cont": // Continuous update of MPD AST and segNr
 			cfg.ContUpdateFlag = true
-		case "periods": // Make multiple periods
+		case "periods": // Make n periods per hour
 			cfg.PeriodsPerHour = sc.AtoiPtr(key, val)
 		case "xlink": // Make periods access via xlink
 			cfg.XlinkPeriodsPerHour = sc.AtoiPtr(key, val)

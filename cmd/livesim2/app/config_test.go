@@ -18,6 +18,7 @@ func TestDefaults(t *testing.T) {
 	assert.NoError(t, err)
 	c := DefaultConfig
 	c.VodRoot = "/root/vod"
+	c.RepDataRoot = c.VodRoot
 	assert.Equal(t, c, *cfg)
 }
 
@@ -31,6 +32,7 @@ func TestConfigFile(t *testing.T) {
 	assert.NoError(t, err)
 	err = json.Unmarshal(data, &extCfg)
 	extCfg.VodRoot = "/vod2"
+	extCfg.RepDataRoot = extCfg.VodRoot
 	assert.NoError(t, err)
 	assert.Equal(t, extCfg, *cfg)
 
@@ -42,6 +44,7 @@ func TestCommandLine(t *testing.T) {
 	assert.NoError(t, err)
 	c := DefaultConfig
 	c.VodRoot = "/root/vod"
+	c.RepDataRoot = c.VodRoot
 	c.LogLevel = "debug"
 	assert.Equal(t, c, *cfg)
 }
@@ -53,6 +56,7 @@ func TestEnv(t *testing.T) {
 	assert.NoError(t, err)
 	c := DefaultConfig
 	c.VodRoot = "/root/vod"
+	c.RepDataRoot = c.VodRoot
 	c.LogLevel = "warn"
 	assert.Equal(t, c, *cfg)
 }
