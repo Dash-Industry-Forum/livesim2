@@ -6,6 +6,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,12 +16,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIndexPageWithPrefix(t *testing.T) {
+func TestIndexPageWithHost(t *testing.T) {
 	cfg := ServerConfig{
 		VodRoot:   "testdata/assets",
 		TimeoutS:  0,
 		LogFormat: logging.LogDiscard,
-		URLPrefix: "/livesim2",
+		Host:      "https://example.com/subfolder",
 	}
 	_, err := logging.InitZerolog(cfg.LogLevel, cfg.LogFormat)
 	require.NoError(t, err)
@@ -31,10 +32,10 @@ func TestIndexPageWithPrefix(t *testing.T) {
 
 	resp, body := testFullRequest(t, ts, "GET", "/", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	require.Greater(t, strings.Index(string(body), `href="/livesim2/assets"`), 0)
+	require.Greater(t, strings.Index(string(body), `href="https://example.com/subfolder/assets"`), 0)
 }
 
-func TestIndexPageWithoutPrefix(t *testing.T) {
+func TestIndexPageWithoutHost(t *testing.T) {
 	cfg := ServerConfig{
 		VodRoot:   "testdata/assets",
 		TimeoutS:  0,
@@ -49,5 +50,5 @@ func TestIndexPageWithoutPrefix(t *testing.T) {
 
 	resp, body := testFullRequest(t, ts, "GET", "/", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	require.Greater(t, strings.Index(string(body), `href="/assets"`), 0)
+	require.Greater(t, strings.Index(string(body), fmt.Sprintf(`href="%s/assets"`, ts.URL)), 0)
 }

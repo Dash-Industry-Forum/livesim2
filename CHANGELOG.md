@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - moved list URL parameters to [livesim2 wiki](https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters)
+- removed `scheme` and `urlprefix` configuration. Now replaced with `host` which overrides `scheme://host` in all generated URLs
 
 ### Added
 

@@ -80,10 +80,8 @@ func (s *strConvAccErr) SplitUTCTimings(key, val string) []UTCTimingMethod {
 		utcVal := UTCTimingMethod(val)
 		switch utcVal {
 		case UtcTimingDirect, UtcTimingNtp, UtcTimingSntp, UtcTimingHttpXSDate, UtcTimingHttpISO,
-			UtcTimingNone:
+			UtcTimingNone, UtcTimingHead:
 			utcTimingMethods[i] = utcVal
-		case UtcTimingHead:
-			s.err = fmt.Errorf("key=%q, val=%q, UTC timing method %q not supported", key, val, UtcTimingHead)
 		default:
 			s.err = fmt.Errorf("key=%q, val=%q is not a valid UTC timing method", key, val)
 		}
