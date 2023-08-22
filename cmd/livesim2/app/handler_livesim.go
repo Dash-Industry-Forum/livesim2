@@ -36,7 +36,6 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, http.StatusInternalServerError)
 		return
 	}
-	fullHost := getSchemeAndHost(r, s.Cfg)
 
 	var nowMS int // Set from query string or from wall-clock
 	q := r.URL.Query()
@@ -59,6 +58,8 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cfg.SetHost(s.Cfg.Host, r)
+
 	if cfg.TimeOffsetS != nil {
 		offsetMS := int(*cfg.TimeOffsetS * 1000)
 		nowMS += offsetMS
@@ -80,7 +81,7 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	case ".mpd":
 		_, mpdName := path.Split(contentPart)
 		cfg.SetHost(s.Cfg.Host, r)
-		err := writeLiveMPD(log, w, cfg, a, mpdName, fullHost, nowMS)
+		err := writeLiveMPD(log, w, cfg, a, mpdName, nowMS)
 		if err != nil {
 			// TODO. Add more granular errors like 404 not found
 			msg := fmt.Sprintf("liveMPD: %s", err)
@@ -112,21 +113,10 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getSchemeAndHost(r *http.Request, cfg *ServerConfig) string {
-	if cfg.Host != "" {
-		return cfg.Host
-	}
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	return fmt.Sprintf("%s://%s", scheme, r.Host)
-}
-
-func writeLiveMPD(log *zerolog.Logger, w http.ResponseWriter, cfg *ResponseConfig, a *asset, mpdName, host string, nowMS int) error {
+func writeLiveMPD(log *zerolog.Logger, w http.ResponseWriter, cfg *ResponseConfig, a *asset, mpdName string, nowMS int) error {
 	work := make([]byte, 0, 1024)
 	buf := bytes.NewBuffer(work)
-	lMPD, err := LiveMPD(a, mpdName, cfg, host, nowMS)
+	lMPD, err := LiveMPD(a, mpdName, cfg, nowMS)
 	if err != nil {
 		return fmt.Errorf("convertToLive: %w", err)
 	}
