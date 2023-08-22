@@ -12,8 +12,7 @@ import (
 )
 
 type assetsInfo struct {
-	MPDs   []string
-	Assets []*asset
+	MPDs []string
 }
 
 // assetHandlerFunc returns information about assets
@@ -32,7 +31,6 @@ func (s *Server) assetsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 			fullURL := path.Join(asset.AssetPath, m)
 			mpds = append(mpds, fullURL)
 		}
-		aInfo.Assets = append(aInfo.Assets, asset)
 	}
 	sort.Strings(mpds)
 	aInfo.MPDs = append(aInfo.MPDs, mpds...)
