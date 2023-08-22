@@ -39,8 +39,9 @@ func (s *Server) Routes(ctx context.Context) error {
 	s.VodRouter.MethodFunc("HEAD", "/*", s.vodHandlerFunc)
 	s.Router.MethodFunc("OPTIONS", "/*", s.optionsHandlerFunc)
 	s.Router.MethodFunc("GET", "/", s.indexHandlerFunc)
-	// Redirect /livesim to /livesim2 for backwards compatibility
+	// Redirect /livesim to /livesim2 and /livesim-chunked for backwards compatibility
 	s.Router.MethodFunc("GET", "/livesim/*", redirect("/livesim", "/livesim2"))
+	s.Router.MethodFunc("GET", "/livesim-chunked/*", redirect("/livesim-chunked", "/livesim2"))
 	// Redirect /dash/vod to /vod for backwards compatibility
 	s.Router.MethodFunc("GET", "/dash/vod/*", redirect("/dash/vod", "/vod"))
 	s.Router.MethodFunc("HEAD", "/dash/vod/*", redirect("/dash/vod", "/vod"))
