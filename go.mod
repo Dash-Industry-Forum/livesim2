@@ -3,6 +3,7 @@ module github.com/Dash-Industry-Forum/livesim2
 go 1.19
 
 require (
+	github.com/Comcast/gots v1.0.4
 	github.com/Eyevinn/dash-mpd v0.10.0
 	github.com/Eyevinn/mp4ff v0.36.0
 	github.com/caddyserver/certmagic v0.19.1

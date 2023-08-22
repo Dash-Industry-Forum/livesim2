@@ -17,6 +17,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/Dash-Industry-Forum/livesim2/pkg/scte35"
 	"github.com/Eyevinn/mp4ff/bits"
 	"github.com/Eyevinn/mp4ff/mp4"
 	"github.com/rs/zerolog"
@@ -39,12 +40,16 @@ func adjustLiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart s
 		return segData{rawSeg.data, rawSeg.meta.rep.SegmentType()}, nil
 	}
 	sr := bits.NewFixedSliceReader(rawSeg.data)
-	seg, err := mp4.DecodeFileSR(sr)
+	segFile, err := mp4.DecodeFileSR(sr)
 	if err != nil {
 		return sd, fmt.Errorf("mp4Decode: %w", err)
 	}
 
-	timeShift := rawSeg.meta.newTime - seg.Segments[0].Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
+	if len(segFile.Segments) != 1 {
+		return sd, fmt.Errorf("not 1 but %d segments", len(segFile.Segments))
+	}
+	seg := segFile.Segments[0]
+	timeShift := rawSeg.meta.newTime - seg.Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
 	if strings.HasPrefix(rawSeg.meta.rep.Codecs, "stpp") {
 		// Shift segment and TTML timestamps inside segment
 		err = shiftStppTimes(seg, rawSeg.meta.timescale, timeShift, rawSeg.meta.newNr)
@@ -52,14 +57,29 @@ func adjustLiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart s
 			return sd, fmt.Errorf("shiftStppTimes: %w", err)
 		}
 	} else {
-		for _, frag := range seg.Segments[0].Fragments {
+		for _, frag := range seg.Fragments {
 			frag.Moof.Mfhd.SequenceNumber = rawSeg.meta.newNr
 			oldTime := frag.Moof.Traf.Tfdt.BaseMediaDecodeTime()
 			frag.Moof.Traf.Tfdt.SetBaseMediaDecodeTime(oldTime + timeShift)
 		}
 	}
 
+	if cfg.SCTE35PerMinute != nil && rawSeg.meta.rep.ContentType == "video" {
+		startTime := uint64(rawSeg.meta.newTime)
+		endTime := startTime + uint64(rawSeg.meta.newDur)
+		timescale := uint64(rawSeg.meta.timescale)
+		emsg, err := scte35.CreateEmsgAhead(startTime, endTime, timescale, *cfg.SCTE35PerMinute)
+		if err != nil {
+			return sd, fmt.Errorf("insertSCTE35: %w", err)
+		}
+		if emsg != nil {
+			seg.Fragments[0].AddEmsg(emsg)
+			log.Debug().Str("asset", a.AssetPath).Str("segment", segmentPart).Msg("added SCTE-35 emsg message")
+		}
+	}
+
 	out := make([]byte, seg.Size())
+
 	sw := bits.NewFixedSliceWriterFromSlice(out)
 	err = seg.EncodeSW(sw)
 	if err != nil {
@@ -423,16 +443,11 @@ func Ptr[T any](v T) *T {
 // shiftStppTime shifts the baseMediaDecodeTime and the TTML timestamps in an stpp segment.
 // Both stpp text and stpp image with embedded images as sub samples are supported.
 // Note that other "timestamps" that matches the pattern hh:mm:ss[.mmm] will also be shifted.
-func shiftStppTimes(segFile *mp4.File, timescale uint32, timeShift uint64, newNr uint32) error {
-	nrSegments := len(segFile.Segments)
-	if nrSegments != 1 {
-		return fmt.Errorf("not 1 but %d segments", nrSegments)
-	}
-	nrFrags := len(segFile.Segments[0].Fragments)
+func shiftStppTimes(seg *mp4.MediaSegment, timescale uint32, timeShift uint64, newNr uint32) error {
+	nrFrags := len(seg.Fragments)
 	if nrFrags != 1 {
 		return fmt.Errorf("not 1 but %d fragments", nrFrags)
 	}
-	seg := segFile.Segments[0]
 	frag := seg.Fragments[0]
 	frag.Moof.Mfhd.SequenceNumber = newNr
 	traf := frag.Moof.Traf
