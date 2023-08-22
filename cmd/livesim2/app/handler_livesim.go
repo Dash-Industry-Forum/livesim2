@@ -36,7 +36,7 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, http.StatusInternalServerError)
 		return
 	}
-	fullHost := getSchemeAndHost(r)
+	fullHost := getSchemeAndHost(r, s.Cfg)
 
 	var nowMS int // Set from query string or from wall-clock
 	q := r.URL.Query()
@@ -79,7 +79,6 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	switch ext {
 	case ".mpd":
 		_, mpdName := path.Split(contentPart)
-		cfg.SetScheme(s.Cfg.Scheme, r)
 		cfg.SetHost(s.Cfg.Host, r)
 		err := writeLiveMPD(log, w, cfg, a, mpdName, fullHost, nowMS)
 		if err != nil {
@@ -113,7 +112,10 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getSchemeAndHost(r *http.Request) string {
+func getSchemeAndHost(r *http.Request, cfg *ServerConfig) string {
+	if cfg.Host != "" {
+		return cfg.Host
+	}
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
