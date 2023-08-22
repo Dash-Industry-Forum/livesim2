@@ -43,7 +43,7 @@ func calcWrapTimes(a *asset, cfg *ResponseConfig, nowMS int, tsbd m.Duration) wr
 }
 
 // LiveMPD generates a dynamic configured MPD for a VoD asset.
-func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, error) {
+func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, host string, nowMS int) (*m.MPD, error) {
 	mpd, err := a.getVodMPD(mpdName)
 	if err != nil {
 		return nil, err
@@ -90,7 +90,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 		}
 	}
 
-	addUTCTimings(mpd, cfg)
+	addUTCTimings(mpd, cfg, host)
 
 	afterStop := false
 	endTimeMS := nowMS
@@ -525,7 +525,7 @@ func lastSegAvailTimeS(cfg *ResponseConfig, lsi lastSegInfo) float64 {
 }
 
 // addUTCTimings adds the UTCTiming elements to the MPD.
-func addUTCTimings(mpd *m.MPD, cfg *ResponseConfig) {
+func addUTCTimings(mpd *m.MPD, cfg *ResponseConfig, host string) {
 	if len(cfg.UTCTimingMethods) == 0 {
 		// default if none is set. Use HTTP with ms precision.
 		mpd.UTCTimings = []*m.DescriptorType{
@@ -563,6 +563,11 @@ func addUTCTimings(mpd *m.MPD, cfg *ResponseConfig) {
 			ut = &m.DescriptorType{
 				SchemeIdUri: "urn:mpeg:dash:utc:http-iso:2014",
 				Value:       UtcTimingHttpServerMS,
+			}
+		case UtcTimingHead:
+			ut = &m.DescriptorType{
+				SchemeIdUri: "urn:mpeg:dash:utc:http-head:2014",
+				Value:       fmt.Sprintf("%s%s", host, UtcTimingHeadAsset),
 			}
 		case UtcTimingNone:
 			cfg.UTCTimingMethods = nil

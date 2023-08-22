@@ -30,6 +30,7 @@ func (s *Server) Routes(ctx context.Context) error {
 	s.Router.MethodFunc("GET", "/config", s.configHandlerFunc)
 	s.Router.MethodFunc("GET", "/assets", s.assetsHandlerFunc)
 	s.Router.MethodFunc("GET", "/static/*", s.embeddedStaticHandlerFunc)
+	s.Router.MethodFunc("HEAD", "/static/*", s.embeddedStaticHandlerFunc)
 	// LiveRouter is mounted at /livesim2
 	s.LiveRouter.MethodFunc("GET", "/*", s.livesimHandlerFunc)
 	s.LiveRouter.MethodFunc("HEAD", "/*", s.livesimHandlerFunc)

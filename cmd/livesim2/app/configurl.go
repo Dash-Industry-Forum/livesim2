@@ -29,7 +29,7 @@ type UTCTimingMethod string
 
 const (
 	UtcTimingDirect     UTCTimingMethod = "direct"
-	UtcTimingHead       UTCTimingMethod = "head" // Note, not supported
+	UtcTimingHead       UTCTimingMethod = "head"
 	UtcTimingNtp        UTCTimingMethod = "ntp"
 	UtcTimingSntp       UTCTimingMethod = "sntp"
 	UtcTimingHttpXSDate UTCTimingMethod = "httpxsdate"
@@ -42,6 +42,7 @@ const (
 	UtcTimingSntpServer   = "time.kfki.hu"
 	UtcTimingHttpServer   = "http://time.akamai.com/?iso"
 	UtcTimingHttpServerMS = "http://time.akamai.com/?isoms"
+	UtcTimingHeadAsset    = "/static/time.txt"
 )
 
 type ResponseConfig struct {

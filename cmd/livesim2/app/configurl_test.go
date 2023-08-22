@@ -20,18 +20,18 @@ func TestProcessURLCfg(t *testing.T) {
 		err         string
 	}{
 		{
-			url:         "/livesim2/utc_direct-ntp-sntp-httpxsdate-httpiso/asset/x.mpd",
+			url:         "/livesim2/utc_direct-ntp-sntp-httpxsdate-httpiso-head/asset/x.mpd",
 			nowMS:       0,
 			contentPart: "asset/x.mpd",
 			wantedCfg: &ResponseConfig{
-				URLParts:                     []string{"", "livesim2", "utc_direct-ntp-sntp-httpxsdate-httpiso", "asset", "x.mpd"},
+				URLParts:                     []string{"", "livesim2", "utc_direct-ntp-sntp-httpxsdate-httpiso-head", "asset", "x.mpd"},
 				URLContentIdx:                3,
 				StartTimeS:                   0,
 				TimeShiftBufferDepthS:        Ptr(defaultTimeShiftBufferDepthS),
 				StartNr:                      Ptr(0),
 				AvailabilityTimeCompleteFlag: true,
 				TimeSubsDurMS:                defaultTimeSubsDurMS,
-				UTCTimingMethods:             []UTCTimingMethod{"direct", "ntp", "sntp", "httpxsdate", "httpiso"},
+				UTCTimingMethods:             []UTCTimingMethod{"direct", "ntp", "sntp", "httpxsdate", "httpiso", "head"},
 			},
 			err: "",
 		},
@@ -47,19 +47,6 @@ func TestProcessURLCfg(t *testing.T) {
 				TimeSubsDurMS:                defaultTimeSubsDurMS,
 			},
 			err: `key="utc", val="unknown" is not a valid UTC timing method`,
-		},
-		{
-			url:         "/livesim/utc_head/asset.mpd",
-			nowMS:       0,
-			contentPart: "asset.mpd",
-			wantedCfg: &ResponseConfig{
-				StartTimeS:                   0,
-				TimeShiftBufferDepthS:        Ptr(defaultTimeShiftBufferDepthS),
-				StartNr:                      Ptr(0),
-				AvailabilityTimeCompleteFlag: true,
-				TimeSubsDurMS:                defaultTimeSubsDurMS,
-			},
-			err: `key="utc", val="head", UTC timing method "head" not supported`,
 		},
 		{
 			url:         "/livesim2/utc_none/asset.mpd",
