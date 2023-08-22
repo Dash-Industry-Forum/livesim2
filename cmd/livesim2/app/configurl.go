@@ -82,7 +82,6 @@ type ResponseConfig struct {
 	TimeSubsWvtt                 []string          `json:"TimeSubsWvttLanguages,omitempty"`
 	TimeSubsDurMS                int               `json:"TimeSubsDurMS,omitempty"`
 	TimeSubsRegion               int               `json:"TimeSubsRegion,omitempty"`
-	Scheme                       string            `json:"Scheme,omitempty"`
 	Host                         string            `json:"Host,omitempty"`
 }
 
@@ -282,26 +281,21 @@ func (c *ResponseConfig) URLContentPart() string {
 	return strings.Join(c.URLParts[c.URLContentIdx:], "/")
 }
 
-// SetScheme sets Scheme to non-trivial cfgValue or tries to detect from request.
-func (c *ResponseConfig) SetScheme(cfgValue string, r *http.Request) {
-	if cfgValue != "" {
-		c.Scheme = cfgValue
-		return
+// fullHost uses non-empty cfgHost or extracts from requests scheme://host from request.
+func fullHost(cfgHost string, r *http.Request) string {
+	if cfgHost != "" {
+		return cfgHost
 	}
-	if r.TLS == nil {
-		c.Scheme = "http"
-	} else {
-		c.Scheme = "https"
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
 	}
+	return fmt.Sprintf("%s://%s", scheme, r.Host)
 }
 
-// SetHost sets Host to non-trivial cfgValue or tries to detect from request.
+// SetHost sets scheme://host to non-trivial cfgValue or tries to detect from request.
 func (c *ResponseConfig) SetHost(cfgValue string, r *http.Request) {
-	if cfgValue != "" {
-		c.Host = cfgValue
-		return
-	}
-	c.Host = r.Host
+	c.Host = fullHost(cfgValue, r)
 }
 
 func ms2S(ms int) int {
