@@ -39,6 +39,19 @@ func (s *strConvAccErr) AtoiPtr(key, val string) *int {
 	return &valInt
 }
 
+// Atof parses a non-infinite floating point number
+func (s *strConvAccErr) Atof(key, val string) *float64 {
+	if s.err != nil {
+		return nil
+	}
+	valFloat, err := strconv.ParseFloat(val, 64)
+	if err != nil {
+		s.err = fmt.Errorf("key=%s, err=%w", key, err)
+		return nil
+	}
+	return &valFloat
+}
+
 // AtofPos parses a non-negative floating point number
 func (s *strConvAccErr) AtofPosPtr(key, val string) *float64 {
 	if s.err != nil {

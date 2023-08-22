@@ -57,6 +57,12 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, http.StatusInternalServerError)
 		return
 	}
+
+	if cfg.TimeOffsetS != nil {
+		offsetMS := int(*cfg.TimeOffsetS * 1000)
+		nowMS += offsetMS
+	}
+
 	contentPart := cfg.URLContentPart()
 	log.Debug().Str("url", contentPart).Msg("requested content")
 	a, ok := s.assetMgr.findAsset(contentPart)
