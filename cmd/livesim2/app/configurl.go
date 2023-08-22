@@ -9,6 +9,8 @@ import (
 	"math"
 	"net/http"
 	"strings"
+
+	"github.com/Dash-Industry-Forum/livesim2/pkg/scte35"
 )
 
 type liveMPDType int
@@ -196,7 +198,7 @@ cfgLoop:
 			cfg.BaseURLs = append(cfg.BaseURLs, val)
 		case "peroff": // Set the period offset
 			cfg.PeriodOffset = sc.AtoiPtr(key, val)
-		case "scte35": // Add this many SCTE-35 ad periods every minute
+		case "scte35": // Signal this many SCTE-35 ad periods inband (emsg messages) every minute
 			cfg.SCTE35PerMinute = sc.AtoiPtr(key, val)
 		case "utc": // Get hyphen-separated list of utc-timing methods and make into list
 			cfg.UTCTimingMethods = sc.SplitUTCTimings(key, val)
@@ -264,6 +266,12 @@ func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 	}
 	if cfg.ContMultiPeriodFlag && cfg.PeriodsPerHour == nil {
 		return fmt.Errorf("period continuity set, but not multiple periods per hour")
+	}
+	if cfg.SCTE35PerMinute != nil {
+		err := scte35.IsValidSCTE35Interval(*cfg.SCTE35PerMinute)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

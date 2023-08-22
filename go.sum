@@ -2,6 +2,8 @@ aqwari.net/xml v0.0.0-20210331023308-d9421b293817 h1:+3Rh5EaTzNLnzWx3/uy/mAaH/dG
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 cloud.google.com/go v0.34.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
+github.com/Comcast/gots v1.0.4 h1:OBxaTTM2kEjZZ9QTYsEVIUkaY3hAmy4spJOjpcgJk+A=
+github.com/Comcast/gots v1.0.4/go.mod h1:/EieJXsI8HTyAAGPoardzq/OY+jL+RiyG+sq0cZgkyk=
 github.com/Eyevinn/dash-mpd v0.10.0 h1:Pdaw41SDaytYkugct9XMDYfhVigDfGmDjJZtzLksXZs=
 github.com/Eyevinn/dash-mpd v0.10.0/go.mod h1:CuBY8vahrq4cBrEflTU/ujCRlyGjw5ER2us+I2+PZzI=
 github.com/Eyevinn/mp4ff v0.36.0 h1:NMPx0GCzWJFkdKrLlKyXsYcTjlaFruFvo6jqQ3JCzWw=

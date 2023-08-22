@@ -9,6 +9,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/Dash-Industry-Forum/livesim2/pkg/scte35"
 	m "github.com/Eyevinn/dash-mpd/mpd"
 )
 
@@ -109,6 +110,15 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	period.Start = Ptr(m.Duration(0))
 
 	for i, as := range period.AdaptationSets {
+		if as.ContentType == "video" && cfg.SCTE35PerMinute != nil {
+			// Add SCTE35 signaling
+			as.InbandEventStreams = append(as.InbandEventStreams,
+				&m.EventStreamType{
+					SchemeIdUri: scte35.SchemeIDURI,
+					Value:       "",
+				})
+		}
+
 		se, err := calcSegmentEntriesForAdaptationSet(cfg, a, as, wTimes)
 		if err != nil {
 			return nil, err
