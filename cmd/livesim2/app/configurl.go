@@ -52,7 +52,7 @@ type ResponseConfig struct {
 	PeriodDurations              []int             `json:"PeriodDurations,omitempty"`
 	StartTimeS                   int               `json:"StartTimeS"`
 	StopTimeS                    *int              `json:"StopTimeS,omitempty"`
-	TimeOffsetS                  *int              `json:"TimeOffsetS,omitempty"`
+	TimeOffsetS                  *float64          `json:"TimeOffsetS,omitempty"`
 	InitSegAvailOffsetS          *int              `json:"InitSegAvailOffsetS,omitempty"`
 	TimeShiftBufferDepthS        *int              `json:"TimeShiftBufferDepthS,omitempty"`
 	MinimumUpdatePeriodS         *int              `json:"MinimumUpdatePeriodS,omitempty"`
@@ -165,7 +165,7 @@ cfgLoop:
 		case "dur": // Adds a presentation duration for multiple periods
 			cfg.PeriodDurations = append(cfg.PeriodDurations, sc.Atoi(key, val))
 		case "timeoffset": //Time offset in seconds version NTP
-			cfg.TimeOffsetS = sc.AtoiPtr(key, val)
+			cfg.TimeOffsetS = sc.Atof(key, val)
 		case "init": // Make the init segment available earlier
 			cfg.InitSegAvailOffsetS = sc.AtoiPtr(key, val)
 		case "tsbd": // Timeshift Buffer Depth
