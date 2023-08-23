@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- much improved information web pages. Extracts MPD information from `ProgramInformation` inside MPDs.
+- Full URLs to assets is listed and can be copied to clipboard from pages `/assets` and `/vod`
 - support for `/scte35_x` URL config to insert periodic SCTE-35 emsg message (1, 2, or 3 per minute)
 - server startup boost by loading (and writing) previously generated gzipped tar files with representation metadata
   - new configuration parameters `repdataroot` and `writerepdata` to control this

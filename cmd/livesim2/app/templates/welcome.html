@@ -1,25 +1,51 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to livesim2</title>
-    <link rel="stylesheet" href="static/table.css" />
-</head>
-<body>
-    <h1>Welcome to livesim2</h1>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <title>livesim2</title>
+  </head>
+  <body>
+    <main class="container">
+    <hgroup>
+        <h1>Welcome to livesim2!</h1>
+        <p>Running at {{.}}</p>
+    </hgroup>
 
-    <table>
-        <tr><th>The following URLs should work on this server</th></tr>
-        <tr><td><a href="{{.}}/assets">/assets</a> to get a list of assets (each can have multiple MPDs)</td></tr>
-        <tr><td><strong>{{.}}/vod/...</strong> to stream any of the VoD assets directly</td></tr>
-        <tr><td><strong>{{.}}/livesim2/...</strong> to stream the VoD assets as they are converted to "live" with parameters</td></tr>
-        <tr><td><a href="{{.}}/healthz">/healthz</a> to check if server is running</td></tr>
-        <tr><td><a href="{{.}}/config">/config<a> to get the current config of the server</td></tr>
-        <tr><td><a href="{{.}}/metrics">/metrics</a> to get Prometheus metrics for the system and all streaming content requests</td></tr>
-        <tr><td><a href="{{.}}/static/features.html">/static/features.html</a> compares features between livesim2 and livesim1</td></tr>
-        <tr><td><a href="https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters">livesim2-wiki</a> compares url parameters between livesim2 and livesim1</td></tr>
-    </table>
-</body>
+
+      <p>livesim2 is a simulator for MPEG-DASH live streaming developed by DASH-IF. It uses VoD assets
+      and converts them to wall-clock synchronized "live" streams, by rewriting
+      timestamps, segment numbers, and segment URLs.<p>
+
+      <p>In addition, a plethora of properties of the stream can be changed by specifying
+      <a href="https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters" target="_blank">parameters</a> in the URLs.</p>
+
+      <h4>Local URLs</h4>
+
+      The following URLs should work at {{.Host}}:<br>
+      <ul>
+        <li><a href="{{.Host}}/assets">/assets</a> provides a list with assets and their MPDs with easy URL copying</li>
+        <li><a href="https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters">livesim2-wiki</a> compares url parameters between livesim2 and livesim1</li>
+        <li><strong>/livesim2/</strong> is the correct URL start to live stream an asset. Add parameters before the MPD.</li>
+        <li><a href="{{.Host}}/vod">/vod</a> provides a list of VoD assets and MPDs with easy URL copying</li>
+        <li><a href="{{.Host}}/healthz">/healthz</a> to check if server is running</li>
+        <li><a href="{{.Host}}/config">/config</a> to get the current config of the server</li>
+        <li><a href="{{.Host}}/metrics">/metrics</a> to get Prometheus metrics for the system and all streaming content requests</li>
+        <li><a href="{{.Host}}/static/features.html">/static/features.html</a> compares features between livesim2 and livesim1</li>
+      </ul>
+
+      <h4>Further information</h4>
+
+      For more information about the project, see
+
+      <ul>
+        <li><a href="https://github.com/Dash-Industry-Forum/livesim2"  target="_blank">livesim2 Github project</a></li>
+        <li><a href="https://github.com/Dash-Industry-Forum/livesim2/wiki" target="_blank">livesim2 Github Wiki</a></li>
+        <li><a href="https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters" target="_blank">wiki list of url parameters</a></li>
+      </ul>
+
+      <p>Version: {{.Version}}</p>
+    </main>
+  </body>
 </html>

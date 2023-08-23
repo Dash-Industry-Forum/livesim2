@@ -38,7 +38,7 @@ func newAssetMgr(vodFS fs.FS, repDataDir string, writeRepData bool) *assetMgr {
 
 type assetMgr struct {
 	vodFS        fs.FS
-	assets       map[string]*asset
+	assets       map[string]*asset // the key is the asset path
 	repDataDir   string
 	writeRepData bool
 }
@@ -100,7 +100,6 @@ func (am *assetMgr) loadAsset(mpdPath string) error {
 		return fmt.Errorf("read MPD: %w", err)
 	}
 	md.MPDStr = string(data)
-	asset.MPDs[mpdName] = md
 
 	mpd, err := m.ReadFromString(md.MPDStr)
 	if err != nil {
@@ -114,6 +113,15 @@ func (am *assetMgr) loadAsset(mpdPath string) error {
 	if *mpd.Type != "static" {
 		return fmt.Errorf("mpd type is not static")
 	}
+
+	if len(mpd.ProgramInformation) > 0 {
+		pi := mpd.ProgramInformation[0]
+		if pi.Title != "" {
+			md.Title = pi.Title
+		}
+	}
+	md.Dur = mpd.MediaPresentationDuration.String()
+	asset.MPDs[mpdName] = md
 
 	for _, as := range mpd.Periods[0].AdaptationSets {
 		if as.SegmentTemplate == nil {

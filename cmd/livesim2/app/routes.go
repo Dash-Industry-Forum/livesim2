@@ -29,6 +29,7 @@ func (s *Server) Routes(ctx context.Context) error {
 	s.Router.MethodFunc("GET", "/favicon.ico", s.favIconFunc)
 	s.Router.MethodFunc("GET", "/config", s.configHandlerFunc)
 	s.Router.MethodFunc("GET", "/assets", s.assetsHandlerFunc)
+	s.Router.MethodFunc("GET", "/vod", s.assetsHandlerFunc)
 	s.Router.MethodFunc("GET", "/static/*", s.embeddedStaticHandlerFunc)
 	s.Router.MethodFunc("HEAD", "/static/*", s.embeddedStaticHandlerFunc)
 	// LiveRouter is mounted at /livesim2

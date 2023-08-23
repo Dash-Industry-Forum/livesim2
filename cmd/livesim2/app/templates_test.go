@@ -72,10 +72,11 @@ func TestHTMLTemplates(t *testing.T) {
 	templateRoot := os.DirFS("templates")
 	textTemplates, err := compileHTMLTemplates(templateRoot, "")
 	require.NoError(t, err)
-	require.Equal(t, `; defined templates are: "welcome.html"`, textTemplates.DefinedTemplates())
+	require.Equal(t, 3, len(textTemplates.Templates()))
 	var buf bytes.Buffer
-	err = textTemplates.ExecuteTemplate(&buf, "welcome.html", "/prefix")
+	wi := welcomeInfo{Host: "http://localhost:8888", Version: "1.2.3"}
+	err = textTemplates.ExecuteTemplate(&buf, "welcome.html", wi)
 	require.NoError(t, err)
 	welcomeStr := buf.String()
-	require.Greater(t, strings.Index(welcomeStr, `href="/prefix/assets"`), 0)
+	require.Greater(t, strings.Index(welcomeStr, `href="http://localhost:8888/assets"`), 0)
 }

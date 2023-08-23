@@ -19,7 +19,10 @@ const (
 type MPDData struct {
 	Name    string `json:"name"`
 	OrigURI string `json:"originURI"`
-	MPDStr  string `json:"-"`
+	Title   string `json:"-"`
+	// Dur is MediaPresentationDuration
+	Dur    string `json:"-"`
+	MPDStr string `json:"-"`
 }
 
 // WriteMPDData to file on disk.
@@ -41,7 +44,7 @@ func WriteMPDData(dirPath string, name, uri string) error {
 			return err
 		}
 	}
-	mpds = append(mpds, MPDData{name, uri, ""})
+	mpds = append(mpds, MPDData{Name: name, OrigURI: uri})
 	outData, err := json.MarshalIndent(mpds, "", "  ")
 	if err != nil {
 		return err
