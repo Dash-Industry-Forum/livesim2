@@ -190,6 +190,15 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 		}
 	}
 
+	if k.String("domains") != "" {
+		err = k.Load(confmap.Provider(map[string]any{
+			"port": 443,
+		}, "."), nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Unmarshal into cfg
 	var cfg ServerConfig
 	if err := k.Unmarshal("", &cfg); err != nil {
