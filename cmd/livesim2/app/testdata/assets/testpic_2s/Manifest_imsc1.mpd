@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011" xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd" profiles="urn:mpeg:dash:profile:isoff-live:2011,http://dashif.org/guidelines/dash-if-simple" maxSegmentDuration="PT2S" minBufferTime="PT2S" type="static" mediaPresentationDuration="PT8S">
    <ProgramInformation>
-      <Title>Media Presentation Description from DASH-IF live simulator 2</Title>
+      <Title>640x360@30 video, 48kHz audio, two imsc1 subtitle tracks, 2s segments</Title>
    </ProgramInformation>
    <Period id="one" start="PT0S">
       <AdaptationSet contentType="audio" mimeType="audio/mp4" lang="en" segmentAlignment="true" startWithSAP="1">

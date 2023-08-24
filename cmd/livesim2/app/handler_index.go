@@ -8,12 +8,20 @@ import (
 	"io/fs"
 	"net/http"
 	"strconv"
+
+	"github.com/Dash-Industry-Forum/livesim2/internal"
 )
+
+type welcomeInfo struct {
+	Host    string
+	Version string
+}
 
 // indexHandlerFunc handles access to /.
 func (s *Server) indexHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
-	err := s.htmlTemplates.ExecuteTemplate(w, "welcome.html", fullHost(s.Cfg.Host, r))
+	wi := welcomeInfo{Host: fullHost(s.Cfg.Host, r), Version: internal.GetVersion()}
+	err := s.htmlTemplates.ExecuteTemplate(w, "welcome.html", wi)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}

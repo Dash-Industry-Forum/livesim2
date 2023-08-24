@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <title>Local livesim2 assets</title>
+  </head>
+  <body>
+    <main class="container">
+        {{$h := .Host}}
+    <hgroup>
+        <h1>Available livesim2 live assets!</h1>
+        <p>host={{$h}}</p>
+    </hgroup>
+
+
+      <p>The following is a list of assets and MPDs of these assets.<br>
+        They can be streamed with URLs like {{(print $h "/livesim2/<asset>/<mpd>")}}</p>
+
+        {{range $a := .Assets}}
+        <section>
+            <hgroup>
+                <p><strong>{{$a.Path}}</strong><p>
+                </p>loop: {{$a.LoopDurMS}}ms</p>
+            </hgroup>
+
+        <table role="grid">
+            <tr><th>MPD URL</th><th>Description</th><th>Duration</th></tr>
+            {{range $m := $a.MPDs}}
+            <tr>
+                {{$url := (print $h "/livesim2/" $a.Path "/" $m.Path)}}
+                <td><span data-tooltip="Copy to clipboard" onclick="navigator.clipboard.writeText({{$url}})">{{$m.Path}}</span></td>
+                <td>{{$m.Desc}}</td>
+                <td>{{$m.Dur}}</td>
+            </tr>
+            {{end}}
+        </table>
+        </section>
+        {{end}}
+    </main>
+  </body>
+</html>
