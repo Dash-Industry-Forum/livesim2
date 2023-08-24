@@ -39,13 +39,15 @@ func TestConfigFile(t *testing.T) {
 }
 
 func TestCommandLine(t *testing.T) {
-	osArgs := []string{"/path/livesim2", "--loglevel", "debug"}
+	osArgs := []string{"/path/livesim2", "--loglevel", "debug", "--domains", "livesim2.dashif.org"}
 	cfg, err := LoadConfig(osArgs, "/root")
 	assert.NoError(t, err)
 	c := DefaultConfig
 	c.VodRoot = "/root/vod"
 	c.RepDataRoot = c.VodRoot
 	c.LogLevel = "debug"
+	c.Port = 443
+	c.Domains = "livesim2.dashif.org"
 	assert.Equal(t, c, *cfg)
 }
 
