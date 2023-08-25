@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Nothing yet
+### Added
+
+- Prometheus counters and histograms for request timing
 
 ## [0.7.0] - 2023-08-24
 
@@ -17,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full URLs to assets is listed and can be copied to clipboard from pages `/assets` and `/vod`
 - support for `/scte35_x` URL config to insert periodic SCTE-35 emsg message (1, 2, or 3 per minute)
 - server startup boost by loading (and writing) previously generated gzipped tar files with representation metadata
-  - new configuration parameters `repdataroot` and `writerepdata` to control this
+- new configuration parameters `repdataroot` and `writerepdata` to control this
 - HTTP redirect from `/livesim` to `/livesim2` and `/dash/vod` to `/vod` for compatibility with livesim1
 - support assets with stpp subtitles in both text and image format. New test content added
 - support DASH-IF thumbnails including multi-period. New test content added

@@ -1,7 +1,3 @@
-// Copyright 2023, DASH-Industry Forum. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE.md file.
-
 package app
 
 import (
@@ -20,30 +16,37 @@ var (
 )
 
 const (
-	mpdReqsName    = "mpd_requests_total"
-	mpdLatencyName = "mpd_request_duration_milliseconds"
-	segReqsName    = "segment_requests_total"
-	segLatencyName = "segment_request_duration_milliseconds"
-	service        = "livesim2"
+	segmentReqsName    = "segment_requests_total"
+	segmentLatencyName = "segment_request_duration_milliseconds"
+	mpdReqsName        = "mpd_requests_total"
+	mpdLatencyName     = "mpd_request_duration_milliseconds"
+	otherReqsName      = "other_requests_total"
+	otherLatencyName   = "other_request_duration_milliseconds"
 )
 
 // prometheusMiddleware provides a handler that exposes prometheus metrics for various requests
 type prometheusMiddleware struct {
-	mpdReqs    *prometheus.CounterVec
-	mpdLatency *prometheus.HistogramVec
-	segReqs    *prometheus.CounterVec
-	segLatency *prometheus.HistogramVec
+	segmentReqs    *prometheus.CounterVec
+	segmentLatency *prometheus.HistogramVec
+	mpdReqs        *prometheus.CounterVec
+	mpdLatency     *prometheus.HistogramVec
+	otherReqs      *prometheus.CounterVec
+	otherLatency   *prometheus.HistogramVec
 }
 
 func init() {
+	prometheusMW.segmentReqs = newCounter(segmentReqsName,
+		"Number segment requests processed, partitioned by status code.", "livesim2")
+	prometheusMW.segmentLatency = newHistogram(segmentLatencyName,
+		"segment response latency.", "livesim2", defaultBuckets)
 	prometheusMW.mpdReqs = newCounter(mpdReqsName,
-		"Number MPD requests processed, partitioned by status code.", service)
+		"Number MPD requests processed, partitioned by status code.", "livesim2")
 	prometheusMW.mpdLatency = newHistogram(mpdLatencyName,
-		"MPD response latency.", service, defaultBuckets)
-	prometheusMW.segReqs = newCounter(segReqsName,
-		"Number segment requests processed, partitioned by status code.", service)
-	prometheusMW.segLatency = newHistogram(segLatencyName,
-		"Segment response latency.", service, defaultBuckets)
+		"MPD response latency.", "livesim2", defaultBuckets)
+	prometheusMW.otherReqs = newCounter(otherReqsName,
+		"Number other requests processed, partitioned by status code.", "livesim2")
+	prometheusMW.otherLatency = newHistogram(otherLatencyName,
+		"Other response latency.", "livesim2", defaultBuckets)
 }
 
 // NewPrometheusMiddleware returns a new prometheus Middleware handler.
@@ -59,18 +62,17 @@ func (mw prometheusMiddleware) handler(next http.Handler) http.Handler {
 		next.ServeHTTP(ww, r)
 		status := strconv.Itoa(ww.Status())
 		latencyMS := float64(time.Since(start).Nanoseconds()) * 1e-6
-		extIdx := strings.LastIndex(path, ".")
-		if extIdx < 0 {
-			return
-		}
-
-		switch ext := path[extIdx:]; ext {
+		ext := strings.ToLower(path[strings.LastIndex(path, "."):])
+		switch ext {
 		case ".mpd":
 			mw.mpdReqs.WithLabelValues(status).Inc()
 			mw.mpdLatency.WithLabelValues(status).Observe(latencyMS)
-		case ".m4s", ".cmfv", ".cmfa", ".cmft":
-			mw.segReqs.WithLabelValues(status).Inc()
-			mw.segLatency.WithLabelValues(status).Observe(latencyMS)
+		case ".cmfv", ".cmfa", ".cmft", ".mp4", ".m4s", ".m4a", ".m4t", ".m4v", ".jpg":
+			mw.segmentReqs.WithLabelValues(status).Inc()
+			mw.segmentLatency.WithLabelValues(status).Observe(latencyMS)
+		default:
+			mw.otherReqs.WithLabelValues(status).Inc()
+			mw.otherLatency.WithLabelValues(status).Observe(latencyMS)
 		}
 	}
 	return http.HandlerFunc(fn)
