@@ -11,8 +11,9 @@ import (
 )
 
 type AssetsInfo struct {
-	Host   string
-	Assets []*AssetInfo
+	Host    string
+	PlayURL string
+	Assets  []*AssetInfo
 }
 
 type AssetInfo struct {
@@ -37,9 +38,16 @@ func (s *Server) assetsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(assets, func(i, j int) bool {
 		return assets[i].AssetPath < assets[j].AssetPath
 	})
+	fh := fullHost(s.Cfg.Host, r)
+	schemePrefix := "http://"
+	if strings.HasPrefix(fh, "https://") {
+		schemePrefix = "https://"
+	}
+	playURL := schemePrefix + s.Cfg.PlayURL
 	aInfo := AssetsInfo{
-		Host:   fullHost(s.Cfg.Host, r),
-		Assets: make([]*AssetInfo, 0, len(assets)),
+		Host:    fh,
+		PlayURL: playURL,
+		Assets:  make([]*AssetInfo, 0, len(assets)),
 	}
 	for _, asset := range assets {
 		mpds := make([]MPDInfo, 0, len(asset.MPDs))
