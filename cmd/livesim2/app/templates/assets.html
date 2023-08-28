@@ -9,6 +9,7 @@
   <body>
     <main class="container">
         {{$h := .Host}}
+        {{$purl := .PlayURL}}
     <hgroup>
         <h1>Available livesim2 live assets!</h1>
         <p>host={{$h}}</p>
@@ -30,7 +31,8 @@
             {{range $m := $a.MPDs}}
             <tr>
                 {{$url := (print $h "/livesim2/" $a.Path "/" $m.Path)}}
-                <td><span data-tooltip="Copy to clipboard" onclick="navigator.clipboard.writeText({{$url}})">{{$m.Path}}</span></td>
+                <td>{{$m.Path}} <span data-tooltip="Copy" onclick="navigator.clipboard.writeText({{$url}})">Copy</span>
+                 <a data-tooltip="Play" href="{{(printf $purl $url)}}" target="_blank">Play</a></td>
                 <td>{{$m.Desc}}</td>
                 <td>{{$m.Dur}}</td>
             </tr>

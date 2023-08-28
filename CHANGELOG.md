@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Prometheus counters and histograms for request timing
+- Direct links to play assets mapped to latest dash.js with http or https scheme
 
 ## [0.7.0] - 2023-08-24
 

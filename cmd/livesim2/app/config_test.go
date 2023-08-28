@@ -33,6 +33,7 @@ func TestConfigFile(t *testing.T) {
 	err = json.Unmarshal(data, &extCfg)
 	extCfg.VodRoot = "/vod2"
 	extCfg.RepDataRoot = extCfg.VodRoot
+	extCfg.PlayURL = defaultPlayURL
 	assert.NoError(t, err)
 	assert.Equal(t, extCfg, *cfg)
 
