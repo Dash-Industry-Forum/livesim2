@@ -31,8 +31,8 @@
             {{range $m := $a.MPDs}}
             <tr>
                 {{$url := (print $h "/livesim2/" $a.Path "/" $m.Path)}}
-                <td>{{$m.Path}} <span data-tooltip="Copy" onclick="navigator.clipboard.writeText({{$url}})">Copy</span>
-                 <a data-tooltip="Play" href="{{(printf $purl $url)}}" target="_blank">Play</a></td>
+                <td>{{$m.Path}} <span role="button" onclick="navigator.clipboard.writeText({{$url}})">Copy</span>
+                 <a role="button" href="{{(printf $purl $url)}}" target="_blank">Play</a></td>
                 <td>{{$m.Desc}}</td>
                 <td>{{$m.Dur}}</td>
             </tr>
