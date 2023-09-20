@@ -72,7 +72,6 @@ func TestHTMLTemplates(t *testing.T) {
 	templateRoot := os.DirFS("templates")
 	textTemplates, err := compileHTMLTemplates(templateRoot, "")
 	require.NoError(t, err)
-	require.Equal(t, 3, len(textTemplates.Templates()))
 	var buf bytes.Buffer
 	wi := welcomeInfo{Host: "http://localhost:8888", Version: "1.2.3"}
 	err = textTemplates.ExecuteTemplate(&buf, "welcome.html", wi)

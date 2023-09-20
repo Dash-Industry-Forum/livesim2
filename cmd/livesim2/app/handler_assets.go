@@ -39,11 +39,7 @@ func (s *Server) assetsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		return assets[i].AssetPath < assets[j].AssetPath
 	})
 	fh := fullHost(s.Cfg.Host, r)
-	schemePrefix := "http://"
-	if strings.HasPrefix(fh, "https://") {
-		schemePrefix = "https://"
-	}
-	playURL := schemePrefix + s.Cfg.PlayURL
+	playURL := schemePrefix(fh) + s.Cfg.PlayURL
 	aInfo := AssetsInfo{
 		Host:    fh,
 		PlayURL: playURL,
@@ -77,4 +73,12 @@ func (s *Server) assetsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func schemePrefix(host string) string {
+	schemePrefix := "http://"
+	if strings.HasPrefix(host, "https://") {
+		schemePrefix = "https://"
+	}
+	return schemePrefix
 }

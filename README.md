@@ -83,9 +83,10 @@ the assets using the root HTTP endpoint
 
 that in turn points to:
 
+* /urlgen
+* /assets
 * /config
 * /healthz
-* /assets
 * /metrics
 
 and links to the Wiki page for more information.
