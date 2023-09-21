@@ -8,6 +8,11 @@
 `livesim2` is a new and improved version of the
 [DASH-IF live source simulator][1].
 
+*Test it at [https://livesim2.dashif.org](https://livesim2.dashif.org) or set up your own server
+using your own DASH content or test content available
+at [livesim-content](https://github.com/Dash-Industry-Forum/livesim-content).
+See the [wiki](https://github.com/Dash-Industry-Forum/livesim2/wiki) for more info.*
+
 As the original simulator ([livesim1][1]), the output is a wall-clock (UTC) synchronized
 infinite linear stream of segments. This achieved by looping input VoD DASH assets,
 and changing time stamps so that an infinite "live" stream is available.
@@ -39,7 +44,8 @@ be able to generate streams with a huge number of
 parameter variations. Currently, not all parameters of [livesim1][1] are implemented,
 but there are also new parameters like the generated subtitles mentioned above.
 
-The [URL wiki page][urlparams] lists what is available.
+The [URL wiki page][urlparams] lists what is available and the served page `/urlgen`
+makes it easy to construct URLs to play the content with specific parameters set.
 
 Beside `livesim2` there is a tool called `dashfetcher` in this repo.
 That tool can be used to download the MPD and all segments of a DASH VoD asset.
@@ -83,9 +89,10 @@ the assets using the root HTTP endpoint
 
 that in turn points to:
 
+* /urlgen
+* /assets
 * /config
 * /healthz
-* /assets
 * /metrics
 
 and links to the Wiki page for more information.

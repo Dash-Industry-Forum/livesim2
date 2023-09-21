@@ -62,7 +62,11 @@ func (mw prometheusMiddleware) handler(next http.Handler) http.Handler {
 		next.ServeHTTP(ww, r)
 		status := strconv.Itoa(ww.Status())
 		latencyMS := float64(time.Since(start).Nanoseconds()) * 1e-6
-		ext := strings.ToLower(path[strings.LastIndex(path, "."):])
+		dotIdx := strings.LastIndex(path, ".")
+		ext := ""
+		if dotIdx >= 0 {
+			ext = strings.ToLower(path[dotIdx:])
+		}
 		switch ext {
 		case ".mpd":
 			mw.mpdReqs.WithLabelValues(status).Inc()

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <link rel="stylesheet" href="/static/pico.min.css">
     <title>Local livesim2 assets</title>
   </head>
   <body>
@@ -25,8 +25,8 @@
           {{range $m := $a.MPDs}}
           <tr>
             {{$url := (print $h "/vod/" $a.Path "/" $m.Path)}}
-            <td>{{$m.Path}} <span data-tooltip="Copy" onclick="navigator.clipboard.writeText({{$url}})">Copy</span>
-              <a data-tooltip="Play" href="{{(printf $purl $url)}}" target="_blank">Play</a></td>
+            <td>{{$m.Path}} <span role="button" onclick="navigator.clipboard.writeText({{$url}})">Copy</span>
+              <a role="button" href="{{(printf $purl $url)}}" target="_blank">Play</a></td>
               <td>{{$m.Desc}}</td>
               <td>{{$m.Dur}}</td>
           </tr>

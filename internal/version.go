@@ -16,7 +16,7 @@ var (
 	commitDate    string = "1692891745" // commitDate in Epoch seconds (can be filled/updated in during build)
 )
 
-// GetVersion - get version, commitHash, commitDate, expirationDate depending on what is inserted
+// GetVersion - get version, commitHash and  commitDate depending on what is inserted
 func GetVersion() string {
 	seconds, _ := strconv.Atoi(commitDate)
 	msg := commitVersion
