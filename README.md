@@ -39,7 +39,8 @@ be able to generate streams with a huge number of
 parameter variations. Currently, not all parameters of [livesim1][1] are implemented,
 but there are also new parameters like the generated subtitles mentioned above.
 
-The [URL wiki page][urlparams] lists what is available.
+The [URL wiki page][urlparams] lists what is available and the served page `/urlgen`
+makes it easy to construct URLs to play the content with specific parameters set.
 
 Beside `livesim2` there is a tool called `dashfetcher` in this repo.
 That tool can be used to download the MPD and all segments of a DASH VoD asset.

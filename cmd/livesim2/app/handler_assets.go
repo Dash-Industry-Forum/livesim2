@@ -10,19 +10,19 @@ import (
 	"strings"
 )
 
-type AssetsInfo struct {
+type assetsInfo struct {
 	Host    string
 	PlayURL string
-	Assets  []*AssetInfo
+	Assets  []*assetInfo
 }
 
-type AssetInfo struct {
+type assetInfo struct {
 	Path      string
 	LoopDurMS int
-	MPDs      []MPDInfo
+	MPDs      []mpdInfo
 }
 
-type MPDInfo struct {
+type mpdInfo struct {
 	Path string
 	Desc string
 	Dur  string
@@ -40,15 +40,15 @@ func (s *Server) assetsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	})
 	fh := fullHost(s.Cfg.Host, r)
 	playURL := schemePrefix(fh) + s.Cfg.PlayURL
-	aInfo := AssetsInfo{
+	aInfo := assetsInfo{
 		Host:    fh,
 		PlayURL: playURL,
-		Assets:  make([]*AssetInfo, 0, len(assets)),
+		Assets:  make([]*assetInfo, 0, len(assets)),
 	}
 	for _, asset := range assets {
-		mpds := make([]MPDInfo, 0, len(asset.MPDs))
+		mpds := make([]mpdInfo, 0, len(asset.MPDs))
 		for _, mpd := range asset.MPDs {
-			mpds = append(mpds, MPDInfo{
+			mpds = append(mpds, mpdInfo{
 				Path: mpd.Name,
 				Desc: mpd.Title,
 				Dur:  mpd.Dur,
@@ -57,7 +57,7 @@ func (s *Server) assetsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		sort.Slice(mpds, func(i, j int) bool {
 			return mpds[i].Path < mpds[j].Path
 		})
-		assetInfo := AssetInfo{
+		assetInfo := assetInfo{
 			Path:      asset.AssetPath,
 			LoopDurMS: asset.LoopDurMS,
 			MPDs:      mpds,

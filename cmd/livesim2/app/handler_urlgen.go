@@ -1,3 +1,7 @@
+// Copyright 2023, DASH-Industry Forum. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE.md file.
+
 package app
 
 import (
@@ -19,15 +23,15 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	})
 	fh := fullHost(s.Cfg.Host, r)
 	playURL := schemePrefix(fh) + s.Cfg.PlayURL
-	aInfo := AssetsInfo{
+	aInfo := assetsInfo{
 		Host:    fh,
 		PlayURL: playURL,
-		Assets:  make([]*AssetInfo, 0, len(assets)),
+		Assets:  make([]*assetInfo, 0, len(assets)),
 	}
 	for _, asset := range assets {
-		mpds := make([]MPDInfo, 0, len(asset.MPDs))
+		mpds := make([]mpdInfo, 0, len(asset.MPDs))
 		for _, mpd := range asset.MPDs {
-			mpds = append(mpds, MPDInfo{
+			mpds = append(mpds, mpdInfo{
 				Path: mpd.Name,
 				Desc: mpd.Title,
 				Dur:  mpd.Dur,
@@ -36,7 +40,7 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		sort.Slice(mpds, func(i, j int) bool {
 			return mpds[i].Path < mpds[j].Path
 		})
-		assetInfo := AssetInfo{
+		assetInfo := assetInfo{
 			Path:      asset.AssetPath,
 			LoopDurMS: asset.LoopDurMS,
 			MPDs:      mpds,
@@ -77,10 +81,10 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func mpdsFromAssetInfo(a *AssetInfo) []MPDwithSelect {
-	mpds := make([]MPDwithSelect, len(a.MPDs))
+func mpdsFromAssetInfo(a *assetInfo) []mpdWithSelect {
+	mpds := make([]mpdWithSelect, len(a.MPDs))
 	for i, mpd := range a.MPDs {
-		mpds[i] = MPDwithSelect{Name: mpd.Path}
+		mpds[i] = mpdWithSelect{Name: mpd.Path}
 	}
 	return mpds
 }
@@ -94,9 +98,9 @@ type urlGenData struct {
 	PlayURL                     string
 	URL                         string
 	Host                        string
-	Assets                      []AssetWithSelect
-	MPDs                        []MPDwithSelect
-	Stl                         STL
+	Assets                      []assetWithSelect
+	MPDs                        []mpdWithSelect
+	Stl                         segmentTimelineType
 	Tsbd                        int // time-shift buffer depth in seconds
 	MinimumUpdatePeriodS        string
 	SuggestedPresentationDelayS string
@@ -121,8 +125,8 @@ type urlGenData struct {
 var initData urlGenData
 
 func init() {
-	initData.Assets = []AssetWithSelect{
-		{AssetPath: "Choose an asset...", MPDs: []MPDwithSelect{{Name: "Choose an asset first"}}},
+	initData.Assets = []assetWithSelect{
+		{AssetPath: "Choose an asset...", MPDs: []mpdWithSelect{{Name: "Choose an asset first"}}},
 	}
 	initData.Stl = Number
 	initData.Tsbd = defaultTimeShiftBufferDepthS
@@ -131,62 +135,65 @@ func init() {
 	initData.TimeSubsReg = defaultTimeSubsReg
 }
 
-type AssetWithSelect struct {
+type assetWithSelect struct {
 	AssetPath string
 	Selected  bool
-	MPDs      []MPDwithSelect
+	MPDs      []mpdWithSelect
 }
 
-type MPDwithSelect struct {
+type mpdWithSelect struct {
 	Name     string
 	Selected bool
 }
 
-type STL string
+type segmentTimelineType string
 
 const (
-	Number         STL = "nr"
-	TimelineTime   STL = "tlt"
-	TimelineNumber STL = "tlnr"
+	Number         segmentTimelineType = "nr"
+	TimelineTime   segmentTimelineType = "tlt"
+	TimelineNumber segmentTimelineType = "tlnr"
 )
 
-func createInitData(r *http.Request, aInfo AssetsInfo) (data urlGenData, err error) {
+func createInitData(r *http.Request, aInfo assetsInfo) (data urlGenData, err error) {
 	data = initData
-	data.Assets = make([]AssetWithSelect, 0, len(aInfo.Assets)+1)
+	data.Assets = make([]assetWithSelect, 0, len(aInfo.Assets)+1)
 	data.MPDs = nil
-	data.Assets = append(data.Assets, AssetWithSelect{AssetPath: "Choose an asset...", Selected: true, MPDs: []MPDwithSelect{{Name: "Choose an asset first"}}})
+	data.Assets = append(data.Assets, assetWithSelect{
+		AssetPath: "Choose an asset...", Selected: true,
+		MPDs: []mpdWithSelect{{Name: "Choose an asset first"}},
+	})
 	for i := range aInfo.Assets {
-		data.Assets = append(data.Assets, AssetWithSelect{AssetPath: aInfo.Assets[i].Path})
+		data.Assets = append(data.Assets, assetWithSelect{AssetPath: aInfo.Assets[i].Path})
 	}
 	data.Host = aInfo.Host
 	return data, nil
 }
 
-func createURL(r *http.Request, aInfo AssetsInfo) (data urlGenData, err error) {
-	qVals := r.URL.Query()
+func createURL(r *http.Request, aInfo assetsInfo) (data urlGenData, err error) {
+	q := r.URL.Query()
 	var sb strings.Builder // Used to build URL
-	asset := qVals.Get("asset")
-	mpd := qVals.Get("mpd")
+	asset := q.Get("asset")
+	mpd := q.Get("mpd")
 	// fmt.Println("create", asset, mpd)
 	data = initData
-	data.Assets = make([]AssetWithSelect, 0, len(aInfo.Assets))
+	data.Assets = make([]assetWithSelect, 0, len(aInfo.Assets))
 	data.MPDs = nil
 	for i := range aInfo.Assets {
-		a := AssetWithSelect{AssetPath: aInfo.Assets[i].Path}
+		a := assetWithSelect{AssetPath: aInfo.Assets[i].Path}
 		if a.AssetPath == asset {
 			a.Selected = true
-			data.MPDs = make([]MPDwithSelect, 0, len(a.MPDs)+1)
+			data.MPDs = make([]mpdWithSelect, 0, len(a.MPDs)+1)
 			for j := range aInfo.Assets[i].MPDs {
 				name := aInfo.Assets[i].MPDs[j].Path
 				selected := name == mpd
-				data.MPDs = append(data.MPDs, MPDwithSelect{Name: name, Selected: selected})
+				data.MPDs = append(data.MPDs, mpdWithSelect{Name: name, Selected: selected})
 			}
 		}
 		data.Assets = append(data.Assets, a)
 	}
 	sb.WriteString(aInfo.Host)
 	sb.WriteString("/livesim2/")
-	stl := STL(qVals.Get("stl"))
+	stl := segmentTimelineType(q.Get("stl"))
 	switch stl {
 	case Number:
 		data.Stl = Number
@@ -199,7 +206,7 @@ func createURL(r *http.Request, aInfo AssetsInfo) (data urlGenData, err error) {
 	default:
 		fmt.Printf("Bad stl: %s\n", stl)
 	}
-	tsbd := qVals.Get("tsbd")
+	tsbd := q.Get("tsbd")
 	if tsbd != "" {
 		t, err := strconv.Atoi(tsbd)
 		if err != nil {
@@ -210,47 +217,47 @@ func createURL(r *http.Request, aInfo AssetsInfo) (data urlGenData, err error) {
 			sb.WriteString(fmt.Sprintf("tsbd_%d/", t))
 		}
 	}
-	ato := qVals.Get("ato")
+	ato := q.Get("ato")
 	if ato != "" {
 		data.Ato = ato
 		sb.WriteString(fmt.Sprintf("ato_%s/", ato))
 	}
-	mup := qVals.Get("mup")
+	mup := q.Get("mup")
 	if mup != "" {
 		data.MinimumUpdatePeriodS = mup
 		sb.WriteString(fmt.Sprintf("mup_%s/", mup))
 	}
-	spd := qVals.Get("spd")
+	spd := q.Get("spd")
 	if spd != "" {
 		data.SuggestedPresentationDelayS = spd
 		sb.WriteString(fmt.Sprintf("spd_%s/", spd))
 	}
-	startNR := qVals.Get("snr")
+	startNR := q.Get("snr")
 	if startNR != "" {
 		data.StartNR = startNR
 		sb.WriteString(fmt.Sprintf("snr_%s/", startNR))
 	}
-	utc := qVals.Get("utc")
+	utc := q.Get("utc")
 	if utc != "" {
 		data.UTCTiming = utc
 		sb.WriteString(fmt.Sprintf("utc_%s/", utc))
 	}
-	periods := qVals.Get("periods")
+	periods := q.Get("periods")
 	if periods != "" {
 		data.Periods = periods
 		sb.WriteString(fmt.Sprintf("periods_%s/", periods))
 	}
-	continuous := qVals.Get("continuous")
+	continuous := q.Get("continuous")
 	if continuous != "" {
 		data.Continuous = true
 		sb.WriteString("continuous_1/")
 	}
-	chunkDur := qVals.Get("chunkdur")
+	chunkDur := q.Get("chunkdur")
 	if chunkDur != "" {
 		data.ChunkDur = chunkDur
 		sb.WriteString(fmt.Sprintf("chunkdur_%s/", chunkDur))
 	}
-	if llTarget := qVals.Get("ltgt"); llTarget != "" {
+	if llTarget := q.Get("ltgt"); llTarget != "" {
 		lt, err := strconv.Atoi(llTarget)
 		if err != nil {
 			panic("bad ltgt")
@@ -260,47 +267,47 @@ func createURL(r *http.Request, aInfo AssetsInfo) (data urlGenData, err error) {
 			sb.WriteString(fmt.Sprintf("ltgt_%d/", lt))
 		}
 	}
-	start := qVals.Get("start")
+	start := q.Get("start")
 	if start != "" {
 		data.Start = start
 		sb.WriteString(fmt.Sprintf("start_%s/", start))
 	}
-	stop := qVals.Get("stop")
+	stop := q.Get("stop")
 	if stop != "" {
 		data.Stop = stop
 		sb.WriteString(fmt.Sprintf("stop_%s/", stop))
 	}
-	startRel := qVals.Get("startrel")
+	startRel := q.Get("startrel")
 	if startRel != "" {
 		data.StartRel = startRel
 		sb.WriteString(fmt.Sprintf("startrel_%s/", startRel))
 	}
-	stopRel := qVals.Get("stoprel")
+	stopRel := q.Get("stoprel")
 	if stopRel != "" {
 		data.StopRel = stopRel
 		sb.WriteString(fmt.Sprintf("stoprel_%s/", stopRel))
 	}
-	timeSubsStpp := qVals.Get("timesubsstpp")
+	timeSubsStpp := q.Get("timesubsstpp")
 	if timeSubsStpp != "" {
 		data.TimeSubsStpp = timeSubsStpp
 		sb.WriteString(fmt.Sprintf("timesubsstpp_%s/", timeSubsStpp))
 	}
-	timeSubsWvtt := qVals.Get("timesubswvtt")
+	timeSubsWvtt := q.Get("timesubswvtt")
 	if timeSubsWvtt != "" {
 		data.TimeSubsWvtt = timeSubsWvtt
 		sb.WriteString(fmt.Sprintf("timesubswvtt_%s/", timeSubsWvtt))
 	}
-	timeSubsDur := qVals.Get("timesubsdur")
+	timeSubsDur := q.Get("timesubsdur")
 	if timeSubsDur != "" && timeSubsDur != defaultTimeSubsDur {
 		data.TimeSubsDur = timeSubsDur
 		sb.WriteString(fmt.Sprintf("timesubsdur_%s/", timeSubsDur))
 	}
-	timeSubsReg := qVals.Get("timesubsreg")
+	timeSubsReg := q.Get("timesubsreg")
 	if timeSubsReg != "" && timeSubsReg != defaultTimeSubsReg {
 		data.TimeSubsReg = timeSubsReg
 		sb.WriteString(fmt.Sprintf("timesubsreg_%s/", timeSubsReg))
 	}
-	scte35 := qVals.Get("scte35")
+	scte35 := q.Get("scte35")
 	if scte35 != "" {
 		data.Scte35Var = scte35
 		sb.WriteString(fmt.Sprintf("scte35_%s/", scte35))
