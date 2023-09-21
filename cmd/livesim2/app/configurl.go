@@ -40,8 +40,8 @@ const (
 const (
 	UtcTimingNtpServer    = "1.de.pool.ntp.org"
 	UtcTimingSntpServer   = "time.kfki.hu"
-	UtcTimingHttpServer   = "http://time.akamai.com/?iso"
-	UtcTimingHttpServerMS = "http://time.akamai.com/?isoms"
+	UtcTimingHttpServer   = "https://time.akamai.com/?iso"
+	UtcTimingHttpServerMS = "https://time.akamai.com/?isoms"
 	UtcTimingHeadAsset    = "/static/time.txt"
 )
 
