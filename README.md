@@ -8,6 +8,11 @@
 `livesim2` is a new and improved version of the
 [DASH-IF live source simulator][1].
 
+*Test it at [https://livesim2.dashif.org](https://livesim2.dashif.org) or set up your own server
+using your own DASH content or test content available
+at [livesim-content](https://github.com/Dash-Industry-Forum/livesim-content).
+See the [wiki](https://github.com/Dash-Industry-Forum/livesim2/wiki) for more info.*
+
 As the original simulator ([livesim1][1]), the output is a wall-clock (UTC) synchronized
 infinite linear stream of segments. This achieved by looping input VoD DASH assets,
 and changing time stamps so that an infinite "live" stream is available.
