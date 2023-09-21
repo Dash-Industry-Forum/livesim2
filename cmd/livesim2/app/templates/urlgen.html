@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<meta charset="utf-8">
+
+		<script src="/static/htmx.min.js"></script>
+        <link rel="stylesheet" href="/static/pico.min.css">
+		<title>Livesim2 URL generator</title>
+	</head>
+	<body>
+		<main class="container">
+			<hgroup>
+		<h1>Livesim2 URL generator</h1>
+		<p>host={{.Host}}</p>
+		</hgroup>
+		{{if ne .URL ""}}
+		<article>
+		URL= {{.URL}}<br />
+		<div class="grid">
+		<span onclick="navigator.clipboard.writeText({{.URL}})" role="button">Copy</span>
+		<a href="{{(printf .PlayURL .URL)}}" target="_blank" role="button">Play</a>
+		<span onclick="window.location.href='/urlgen/';" role="button" class="secondary">Reset</span>
+		</div>
+	</article>
+		{{end}}
+
+		<form action="/urlgen/create" method="get">
+
+		<label for="asset">Asset
+		<select name="asset" hx-get="/urlgen/mpds" hx-target="#mpd" hx-indicator=".htmx-indicator">
+			{{range .Assets}}
+			<option value="{{.AssetPath}}" {{if .Selected}} selected {{end}}>{{.AssetPath}} </option>
+			{{end}}
+		</select>
+		</label>
+
+		<label for="mpd">
+		MPDs
+		<select id="mpd" name="mpd">
+		{{block "mpds" .}}
+			{{range .MPDs}}
+			<option value="{{.Name}}" {{if .Selected}} selected {{end}}>{{.Name}}</option>
+			{{end}}
+		{{end}}
+		</select>
+		</label>
+
+
+		<fieldset>
+		<legend>SegmentTemplate variant</legend>
+		<label for="nr">
+			<input type="radio" id="nr" name="stl" value="nr" {{if eq .Stl "nr"}}checked{{end}}>
+			$Number$
+		</label>
+		<label for="tlt">
+			<input type="radio" id="tlt" name="stl" value="tlt" {{if eq .Stl "tlt"}}checked{{end}}>
+			SegmentTimeline with $Time$
+		</label>
+		<label for="tlnr">
+			<input type="radio" id="tlnr" name="stl" value="tlnr" {{if eq .Stl "tlnr"}}checked{{end}}>
+			SegmentTimeline with $Number$
+		</label>
+		</fieldset>
+
+		<details>
+		<summary>General timing ...</summary>
+			<label for="tsbd">
+			time-shift buffer depth (seconds)
+				<input type="text" id="tsbd" name="tsbd" value="{{.Tsbd}}" />
+			</label>
+			<label for="mup">
+			minimum update period (seconds). Default is the segment duration
+				<input type="text" id="mup" name="mup" value="{{.MinimumUpdatePeriodS}}" />
+			</label>
+			<label for="spd">
+			suggestedPresentationDelay (seconds)
+				<input type="text" id="spd" name="spd" value="{{.SuggestedPresentationDelayS}}" />
+			</label>
+			<label for="utc">
+			UTCTiming methods (comma-separated list of: direct, head, ntp, sntp, httpxsdate, httpiso, none. Default is httpiso)
+				<input type="text" id="utc" name="utc" value="{{.UTCTiming}}" />
+			</label>
+			<label for="snr">
+			startNumber (default=0) -1 translates to no value in MPD (fallback to default = 1)
+				<input type="text" id="snr" name="snr" value="{{.StartNR}}" />
+			</label>
+		</details>
+
+		<details>
+		<summary>Multi-period ...</summary>
+			<label for="periods">
+			number periods per hour (1-60)
+				<input type="text" id="periods" name="periods" value="{{.Periods}}" />
+			</label>
+			<label for="continuous">
+			period continuity signaling
+				<input type="checkbox" id="continuous" name="continuous" {{if .Continuous}}checked{{end}} />
+			</label>
+		</details>
+
+		<details>
+			<summary>Low latency...</summary>
+
+			<label for="ato">
+			availabilityTimeOffset (float in seconds or inf)
+				<input type="text" id="ato" name="ato" value="{{.Ato}}" />
+			</label>
+
+			<label for="chunkdur">
+			chunk duration for low-latency (float in seconds)
+				<input type="text" id="chunkdur" name="chunkdur" value="{{.ChunkDur}}" />
+			</label>
+
+			<label for="ltgt">
+			low-latency target (milliseconds)
+				<input type="text" id="ltgt" name="ltgt" value="{{.LlTarget}}" />
+			</label>
+		</details>
+
+		<details>
+			<summary>SCTE-35...</summary>
+			<fieldset>
+				<legend>SCTE-35 emsg frequency</legend>
+				<label for="scte35-none">
+					<input type="radio" id="scte35-none" name="scte35" value="" {{if eq .Scte35Var ""}}checked{{end}}>
+					No SCTE-35 emsg boxes
+				</label>
+				<label for="scte35-1">
+					<input type="radio" id="scte35-1" name="scte35" value="1" {{if eq .Scte35Var "1"}}checked{{end}}>
+					1 event per minute, duration 20s, start at hh:mm:10
+				</label>
+				<label for="scte35-2">
+					<input type="radio" id="scte35-2" name="scte35" value="2" {{if eq .Scte35Var "2"}}checked{{end}}>
+					2 events per minute, duration 10s, start at hh:mm:10 and hh:mm:40
+				</label>
+				<label for="scte35-3">
+					<input type="radio" id="scte35-3" name="scte35" value="3" {{if eq .Scte35Var "3"}}checked{{end}}>
+					3 events per minute, duration 10s, start at hh:mm:10, hh:mm:36, hh:mm:46
+				</label>
+			</fieldset>
+		</details>
+
+		<details>
+		<summary>Start and stop...</summary>
+			<label for="start">
+				timeline start (and availabilityStartTime) relative to Epoch (in seconds)
+				<input type="text" id="start" name="start" value="{{.Start}}" />
+			</label>
+			<label for="stop">
+				stop time for time-limited event (in seconds)
+				<input type="text" id="stop" name="stop" value="{{.Stop}}" />
+			</label>
+			<label for="relstart">
+				timeline start (and availabilityStartTime) relative to now (in seconds). Normally negative value.
+				<input type="text" id="startrel" name="startrel" value="{{.StartRel}}" />
+			</label>
+			<label for="relstop">
+				stop time for time-limited event relative to now (in seconds)
+				<input type="text" id="stoprel" name="stoprel" value="{{.StopRel}}" />
+			</label>
+		</details>
+
+		<details>
+			<summary>Generate time subtitles...</summary>
+
+			<label for="timesubsstpp">
+			languages for generated subtitles in stpp-format (comma-separated)
+				<input type="text" id="timesubsstpp" name="timesubsstpp" value="{{.TimeSubsStpp}}" />
+			</label>
+
+			<label for="timesubswvtt">
+			languages for generated subtitles in wvtt-format (comma-separated)
+				<input type="text" id="timesubswvtt" name="timesubswvtt" value="{{.TimeSubsWvtt}}" />
+			</label>
+
+			<label for="timesubsdur">
+				Cue duration of generated time subtitles in ms (<=1000)
+				<input type="text" id="timesubsdur" name="timesubsdur" value="{{.TimeSubsDur}}" />
+			</label>
+
+			<fieldset>
+			<legend>Time subtitle region</legend>
+				<label for="reg0">
+					<input type="radio" id="reg0" name="timesubsreg" value="0" {{if eq .TimeSubsReg "0"}}checked{{end}}>
+					Region 0 (bottom)
+				</label>
+				<label for="reg1">
+					<input type="radio" id="reg1" name="timesubsreg" value="1" {{if eq .TimeSubsReg "1"}}checked{{end}}>
+					Region 1 (top)
+				</label>
+			</fieldset>
+		</details>
+
+		<div class="grid">
+			<button type="submit">Submit</button>
+			<input type="button" onclick="window.location.href='/urlgen/';" class="secondary" value="Reset" />
+		</div>
+		</form>
+		</main>
+    </body>
+</html>
