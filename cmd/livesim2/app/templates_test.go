@@ -78,4 +78,5 @@ func TestHTMLTemplates(t *testing.T) {
 	require.NoError(t, err)
 	welcomeStr := buf.String()
 	require.Greater(t, strings.Index(welcomeStr, `href="http://localhost:8888/assets"`), 0)
+	require.Equal(t, 5, len(textTemplates.Templates()))
 }

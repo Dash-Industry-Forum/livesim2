@@ -30,7 +30,7 @@ const (
 	timeShiftBufferDepthMarginS     = 10
 	defaultTimeSubsDurMS            = 900
 	defaultLatencyTargetMS          = 3500
-	defaultPlayURL                  = "reference.dashif.org/dash.js/latest/samples/dash-if-reference-player/index.html?mpd=%s&autoload=true"
+	defaultPlayURL                  = "reference.dashif.org/dash.js/latest/samples/dash-if-reference-player/index.html?mpd=%s&autoLoad=true"
 )
 
 type ServerConfig struct {
