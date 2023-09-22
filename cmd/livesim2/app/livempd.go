@@ -345,7 +345,7 @@ func createProducerReferenceTimes(startTimeS int) []*m.ProducerReferenceTimeType
 			WallClockTime:    string(m.ConvertToDateTime(float64(startTimeS))),
 			UTCTiming: &m.DescriptorType{
 				SchemeIdUri: "urn:mpeg:dash:utc:http-iso:2014",
-				Value:       "http://time.akamai.com/?iso",
+				Value:       "https://time.akamai.com/?iso",
 			},
 		},
 	}

@@ -13,11 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Direct links to play assets mapped to latest dash.js with http or https scheme
 - Timing-Allow-Origin header to enable more detailed timing in client
 - /genurl page with URL generator supporting all URL parameters
+- /reqcount page for checking requests per interval
+- New option to log requests per interval to a file
 
 ### Changed
 
 - The / page has been slightly rewritten
 - The /assets and /vod pages slightly changed
+- The request limit interval can now be configured
+
+### Fixed
+
+- utc-timing URLs use https scheme
 
 ## [0.7.0] - 2023-08-24
 

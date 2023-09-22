@@ -47,10 +47,12 @@ func SetupServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 	// Add prometheus counters
 	r.Mount("/metrics", promhttp.Handler())
 
+	var reqLimiter *IPRequestLimiter
 	if cfg.MaxRequests > 0 {
-		ltr := NewIPRequestLimiter("Livesim2-Requests", cfg.MaxRequests, 24*time.Hour)
-		l.Use(ltr)
-		v.Use(ltr)
+		reqLimiter = NewIPRequestLimiter(cfg.MaxRequests, time.Duration(cfg.ReqLimitInt)*time.Second, time.Now(), cfg.ReqLimitLog)
+		ltrMw := NewLimiterMiddleware("Livesim2-Requests", reqLimiter)
+		l.Use(ltrMw)
+		v.Use(ltrMw)
 	}
 
 	// Mount livesim and vod routers
@@ -65,6 +67,7 @@ func SetupServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 		logger:     logger,
 		Cfg:        cfg,
 		assetMgr:   newAssetMgr(vodFS, cfg.RepDataRoot, cfg.WriteRepData),
+		reqLimiter: reqLimiter,
 	}
 
 	err = server.compileTemplates()

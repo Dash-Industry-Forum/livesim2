@@ -23,6 +23,7 @@ import (
 )
 
 const (
+	defaultReqIntervalS             = 24 * 3600
 	defaultAvailabilityStartTimeS   = 0
 	defaultAvailabilityTimeComplete = true
 	defaultTimeShiftBufferDepthS    = 60
@@ -36,6 +37,8 @@ const (
 type ServerConfig struct {
 	LogFormat   string `json:"logformat"`
 	LogLevel    string `json:"loglevel"`
+	ReqLimitLog string `json:"reqlimitlog"`
+	ReqLimitInt int    `json:"reqlimitint"` // in seconds
 	Port        int    `json:"port"`
 	LiveWindowS int    `json:"livewindowS"`
 	TimeoutS    int    `json:"timeoutS"`
@@ -64,6 +67,7 @@ var DefaultConfig = ServerConfig{
 	LiveWindowS: 300,
 	TimeoutS:    60,
 	MaxRequests: 0,
+	ReqLimitInt: defaultReqIntervalS,
 	VodRoot:     "./vod",
 	// MetaRoot + means follow VodRoot, _ means no metadata
 	RepDataRoot:  "+",
@@ -109,6 +113,8 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 	f.Bool("writerepdata", k.Bool("writerepdata"), "Write representation metadata if not present")
 	f.Int("timeout", k.Int("timeoutS"), "timeout for all requests (seconds)")
 	f.Int("maxrequests", k.Int("maxrequests"), "max nr of request per IP address per 24 hours")
+	f.String("reqlimitlog", k.String("reqlimitlog"), "path to request limit log file (only written if maxrequests > 0)")
+	f.Int("reqlimitint", k.Int("reqlimitint"), "interval for request limit i seconds (only used if maxrequests > 0)")
 	f.String("domains", k.String("domains"), "One or more DNS domains (comma-separated) for auto certificate from Let's Encrypt")
 	f.String("certpath", k.String("certpath"), "path to TLS certificate file (for HTTPS). Use domains instead if possible")
 	f.String("keypath", k.String("keypath"), "path to TLS private key file (for HTTPS). Use domains instead if possible.")

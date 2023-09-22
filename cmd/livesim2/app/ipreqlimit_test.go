@@ -19,7 +19,8 @@ func TestRequestLimiter(t *testing.T) {
 
 	maxNrRequests := 5
 	maxTime := 100 * time.Millisecond
-	l := NewIPRequestLimiter("limiter", maxNrRequests, maxTime)
+	ltr := NewIPRequestLimiter(maxNrRequests, maxTime, time.Now(), "")
+	l := NewLimiterMiddleware("limiter", ltr)
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt64(&endpointCalledCount, 1)
