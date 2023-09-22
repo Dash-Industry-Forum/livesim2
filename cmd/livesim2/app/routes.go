@@ -35,20 +35,18 @@ func (s *Server) Routes(ctx context.Context) error {
 	s.Router.MethodFunc("GET", "/static/*", s.embeddedStaticHandlerFunc)
 	s.Router.MethodFunc("HEAD", "/static/*", s.embeddedStaticHandlerFunc)
 	s.Router.MethodFunc("GET", "/reqcount", s.reqCountHandlerFunc)
+	s.Router.MethodFunc("OPTIONS", "/*", s.optionsHandlerFunc)
+	s.Router.MethodFunc("GET", "/", s.indexHandlerFunc)
 	// LiveRouter is mounted at /livesim2
 	s.LiveRouter.MethodFunc("GET", "/*", s.livesimHandlerFunc)
 	s.LiveRouter.MethodFunc("HEAD", "/*", s.livesimHandlerFunc)
 	// VodRouter is mounted at /vod
-	s.VodRouter.MethodFunc("GET", "/*", s.vodHandlerFunc)
-	s.VodRouter.MethodFunc("HEAD", "/*", s.vodHandlerFunc)
-	s.Router.MethodFunc("OPTIONS", "/*", s.optionsHandlerFunc)
-	s.Router.MethodFunc("GET", "/", s.indexHandlerFunc)
+	s.VodRouter.HandleFunc("/*", s.vodHandlerFunc)
 	// Redirect /livesim to /livesim2 and /livesim-chunked for backwards compatibility
 	s.Router.MethodFunc("GET", "/livesim/*", redirect("/livesim", "/livesim2"))
 	s.Router.MethodFunc("GET", "/livesim-chunked/*", redirect("/livesim-chunked", "/livesim2"))
 	// Redirect /dash/vod to /vod for backwards compatibility
 	s.Router.MethodFunc("GET", "/dash/vod/*", redirect("/dash/vod", "/vod"))
 	s.Router.MethodFunc("HEAD", "/dash/vod/*", redirect("/dash/vod", "/vod"))
-
 	return nil
 }
