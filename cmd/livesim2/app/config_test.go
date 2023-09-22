@@ -34,6 +34,7 @@ func TestConfigFile(t *testing.T) {
 	extCfg.VodRoot = "/vod2"
 	extCfg.RepDataRoot = extCfg.VodRoot
 	extCfg.PlayURL = defaultPlayURL
+	extCfg.ReqLimitInt = defaultReqIntervalS
 	assert.NoError(t, err)
 	assert.Equal(t, extCfg, *cfg)
 

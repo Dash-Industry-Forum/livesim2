@@ -27,6 +27,7 @@ type Server struct {
 	assetMgr      *assetMgr
 	textTemplates *ttmpl.Template
 	htmlTemplates *htmpl.Template
+	reqLimiter    *IPRequestLimiter
 }
 
 func (s *Server) healthzHandlerFunc(w http.ResponseWriter, r *http.Request) {

@@ -5,53 +5,63 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // IPRequestLimiter limits the number of requests per interval
 type IPRequestLimiter struct {
-	maxNrRequests int
-	interval      time.Duration
-	resetTime     time.Time
-	counters      map[string]int
-	mux           sync.Mutex
+	MaxNrRequests int            `json:"maxNrRequests"`
+	Interval      time.Duration  `json:"interval"`
+	ResetTime     time.Time      `json:"resetTime"`
+	Counters      map[string]int `json:"counters"`
+	logFile       string         `json:"-"`
+	mux           sync.Mutex     `json:"-"`
 }
 
-// NewIPRequestLimiter returns a middleware that limits the number of requests per IP address per interval
-//
+// NewIPRequestLimiter returns a new IPRequestLimiter with maxNrRequests per interval starting now.
+// If logFile is not empty, the IPRequestLimiter is dumped to the logFile at the end of each interval.
+func NewIPRequestLimiter(maxNrRequests int, interval time.Duration, start time.Time, logFile string) *IPRequestLimiter {
+	return &IPRequestLimiter{
+		MaxNrRequests: maxNrRequests,
+		Interval:      interval,
+		ResetTime:     start,
+		Counters:      make(map[string]int),
+		logFile:       logFile,
+		mux:           sync.Mutex{},
+	}
+}
+
+// NewLimiterMiddleware returns a middleware that limits the number of requests per IP address per interval
 // An HTTP response 429 Too Many Requests is generated if there are too many requests
-// A header with the
-func NewIPRequestLimiter(hdrName string, maxNrRequests int, interval time.Duration) func(next http.Handler) http.Handler {
+// An HTTP header named hdrName is return the number of requests and the maximum number of requests per interval
+func NewLimiterMiddleware(hdrName string, reqLimiter *IPRequestLimiter) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		reqLtr := IPRequestLimiter{
-			maxNrRequests: maxNrRequests,
-			interval:      interval,
-			resetTime:     time.Now(),
-			counters:      make(map[string]int),
-			mux:           sync.Mutex{},
-		}
 		fn := func(w http.ResponseWriter, r *http.Request) {
-			ip, err := getIP(r)
+			ip, err := ipFromRequest(r)
 			if err != nil {
 				_, _ = w.Write([]byte("could not read client IP"))
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
 			now := time.Now()
-			count, ok := reqLtr.Inc(now, ip)
+			count, ok := reqLimiter.Inc(now, ip)
 			if !ok {
 				if hdrName != "" {
-					w.Header().Set(hdrName, fmt.Sprintf("%d (max %d)", count, reqLtr.maxNrRequests))
+					w.Header().Set(hdrName, fmt.Sprintf("%d (max %d)", count, reqLimiter.MaxNrRequests))
 				}
 				w.WriteHeader(http.StatusTooManyRequests)
 				return
 			}
 			if hdrName != "" {
-				w.Header().Set(hdrName, fmt.Sprintf("%d (max %d)", count, reqLtr.maxNrRequests))
+				w.Header().Set(hdrName, fmt.Sprintf("%d (max %d)", count, reqLimiter.MaxNrRequests))
 			}
 			next.ServeHTTP(w, r)
 		}
@@ -59,20 +69,52 @@ func NewIPRequestLimiter(hdrName string, maxNrRequests int, interval time.Durati
 	}
 }
 
-// Inc incremets the number of requests and returns number and ok value
-func (il *IPRequestLimiter) Inc(now time.Time, key string) (int, bool) {
+// Inc increments the number of requests and returns number and ok value
+func (il *IPRequestLimiter) Inc(now time.Time, ip string) (int, bool) {
 	il.mux.Lock()
 	defer il.mux.Unlock()
-	if now.Sub(il.resetTime) > il.interval {
-		il.counters = make(map[string]int)
-		il.resetTime = now
+	if now.Sub(il.ResetTime) > il.Interval {
+		if il.logFile != "" {
+			il.dump()
+		}
+		il.Counters = make(map[string]int)
+		il.ResetTime = now
 	}
-	il.counters[key]++
-	val := il.counters[key]
-	return val, val <= il.maxNrRequests
+	il.Counters[ip]++
+	val := il.Counters[ip]
+	return val, val <= il.MaxNrRequests
 }
 
-func getIP(req *http.Request) (string, error) {
+// Count returns the counter value for an IP address
+func (il *IPRequestLimiter) Count(ip string) int {
+	il.mux.Lock()
+	defer il.mux.Unlock()
+	return il.Counters[ip]
+}
+
+// EndTime returns next reset time.
+func (il *IPRequestLimiter) EndTime() time.Time {
+	return il.ResetTime.Add(il.Interval)
+}
+
+func (il *IPRequestLimiter) dump() {
+	payload, err := json.Marshal(il)
+	if err != nil {
+		log.Error().Err(err).Msg("could not marshal IPRequestLimiter")
+		return
+	}
+	f, err := os.OpenFile(il.logFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		log.Error().Err(err).Msg("could not open IPRequestLimiter log file")
+	}
+	defer f.Close()
+	_, err = f.Write(payload)
+	if err != nil {
+		log.Error().Err(err).Msg("could not write to IPRequestLimiter log file")
+	}
+}
+
+func ipFromRequest(req *http.Request) (string, error) {
 	forwardIP := req.Header.Get("X-Forwarded-For")
 	if forwardIP != "" {
 		return forwardIP, nil
