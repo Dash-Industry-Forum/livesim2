@@ -100,6 +100,8 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 				return
 			case errors.As(err, &tooEarly):
 				http.Error(w, tooEarly.Error(), http.StatusTooEarly)
+			case errors.Is(err, errGone):
+				http.Error(w, "Gone", http.StatusGone)
 			default:
 				msg := "writeSegment"
 				log.Error().Err(err).Msg(msg)
