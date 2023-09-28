@@ -16,13 +16,18 @@
 
       <p>livesim2 is a simulator for MPEG-DASH live streaming developed by DASH-IF. It uses VoD assets
       and converts them to wall-clock synchronized "live" streams, by rewriting
-      timestamps, segment numbers, and segment URLs.<p>
+      timestamps, segment numbers, and segment URLs. It also re-fragments segments so that they can be used for
+      low-latency DASH streaming.<p>
 
       <p>The live stream URLs start with /livesim2/. After that comes an big optional set of parameters, followed by
-        the asset name, and finally the MPD. The available parameters are listed on the
+        the asset name, and finally the MPD. There may be multiple MPDs for one asset corresponding to different
+        sets of media tracks or other fixed settings in the MPD. The available parameters are listed on the
         <a href="https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters" target="_blank">Wiki parameters page</a>.
-        The easiest way to configure the URLs to with such parameters is the <a href="{{.Host}}/urlgen">URL generator</a> page.</p>
-    </p>
+        The easiest way to configure the URLs to with such parameters is the <a href="{{.Host}}/urlgen">URL generator</a> page.
+
+        Note, the URL generator and other pages include links for direct playback using online versions of `dash.js` or
+        any other configured player. However, some restrictions may apply as discussed on the Wiki page
+        <a href="https://github.com/Dash-Industry-Forum/livesim2/wiki/Direct-Playback">Direct Playback</a>.</p>
 
       <h4>Useful local URLs</h4>
 
