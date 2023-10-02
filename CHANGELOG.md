@@ -9,7 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- CORS header for private network
 - Test content with 29.97fps (video only)
 
 ### Fixed
