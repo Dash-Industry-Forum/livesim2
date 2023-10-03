@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
 // urlGenHandlerFunc returns page for generating URLs
@@ -22,7 +24,12 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		return assets[i].AssetPath < assets[j].AssetPath
 	})
 	fh := fullHost(s.Cfg.Host, r)
-	playURL := schemePrefix(fh) + s.Cfg.PlayURL
+	playURL, err := createPlayURL(fh, s.Cfg.PlayURL)
+	if err != nil {
+		log.Err(err).Msg("cannot create playurl")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	aInfo := assetsInfo{
 		Host:    fh,
 		PlayURL: playURL,
@@ -49,7 +56,6 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html")
 
-	var err error
 	templateName := "urlgen.html"
 	var data urlGenData
 	switch r.URL.Path {

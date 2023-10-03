@@ -5,9 +5,13 @@
 package app
 
 import (
+	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
 type assetsInfo struct {
@@ -39,7 +43,12 @@ func (s *Server) assetsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		return assets[i].AssetPath < assets[j].AssetPath
 	})
 	fh := fullHost(s.Cfg.Host, r)
-	playURL := schemePrefix(fh) + s.Cfg.PlayURL
+	playURL, err := createPlayURL(fh, s.Cfg.PlayURL)
+	if err != nil {
+		log.Err(err).Msg("cannot create playurl")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	aInfo := assetsInfo{
 		Host:    fh,
 		PlayURL: playURL,
@@ -69,7 +78,7 @@ func (s *Server) assetsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	if forVod {
 		templateName = "assets_vod.html"
 	}
-	err := s.htmlTemplates.ExecuteTemplate(w, templateName, aInfo)
+	err = s.htmlTemplates.ExecuteTemplate(w, templateName, aInfo)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -81,4 +90,20 @@ func schemePrefix(host string) string {
 		schemePrefix = "https://"
 	}
 	return schemePrefix
+}
+
+// createPlayURL returns a proxied URL for http and direct URL for https.
+func createPlayURL(host, playURL string) (string, error) {
+	schemePrefix := schemePrefix(host)
+	if schemePrefix == "https://" {
+		return playURL, nil
+	}
+	// Replace scheme + host with /player for proxying
+	u, err := url.Parse(playURL)
+	if err != nil {
+		return "", fmt.Errorf("cannot parse playurl %s: %w", playURL, err)
+	}
+	u.Scheme = ""
+	u.Host = ""
+	return "/player" + u.String(), nil
 }

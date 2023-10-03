@@ -31,7 +31,7 @@ const (
 	timeShiftBufferDepthMarginS     = 10
 	defaultTimeSubsDurMS            = 900
 	defaultLatencyTargetMS          = 3500
-	defaultPlayURL                  = "reference.dashif.org/dash.js/latest/samples/dash-if-reference-player/index.html?mpd=%s&autoLoad=true&muted=true"
+	defaultPlayURL                  = "https://reference.dashif.org/dash.js/latest/samples/dash-if-reference-player/index.html?mpd=%s&autoLoad=true&muted=true"
 )
 
 type ServerConfig struct {
@@ -56,7 +56,8 @@ type ServerConfig struct {
 	KeyPath string `json:"-"`
 	// If Host is set, it will be used instead of autodetected value scheme://host.
 	Host string `json:"host"`
-	// PlayURL is a URL template to play asset (without scheme). %s will be replaced by MPD URL
+	// PlayURL is a URL template to play asset including player and pattern %s to be replaced by MPD URL
+	// For autoplay, start the player muted.
 	PlayURL string `json:"playurl"`
 }
 
@@ -120,7 +121,7 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 	f.String("keypath", k.String("keypath"), "path to TLS private key file (for HTTPS). Use domains instead if possible.")
 	f.String("scheme", k.String("scheme"), "scheme used in Location and BaseURL elements. If empty, it is attempted to be auto-detected")
 	f.String("host", k.String("host"), "host (and possible prefix) used in MPD elements. Overrides auto-detected full scheme://host")
-	f.String("playurl", k.String("playurl"), "URL template to play mpd (without scheme). %s will be replaced by MPD URL")
+	f.String("playurl", k.String("playurl"), "URL template to play mpd. %s will be replaced by MPD URL")
 	if err := f.Parse(args[1:]); err != nil {
 		return nil, fmt.Errorf("command line parse: %w", err)
 	}
