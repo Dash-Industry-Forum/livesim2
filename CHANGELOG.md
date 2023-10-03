@@ -9,14 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- CORS header for private network
 - Test content with 29.97fps (video only)
+
+### Changed
+
+- The online player is now proxied via /player when livesim2 runs with http
+- The online playURL should now including scheme
 
 ### Fixed
 
 - added muted=true to default playURL
 - HTTP 410 Gone response for segments before timeShiftBufferDepth
 - limited methods in OPTIONS response
+
 
 ## [0.8.0] - 2023-09-22
 

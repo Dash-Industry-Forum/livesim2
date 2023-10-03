@@ -7,6 +7,8 @@ package app
 import (
 	"context"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"strings"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
@@ -17,6 +19,22 @@ func redirect(from, to string) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r.URL.Path = strings.Replace(r.URL.Path, from, to, 1)
 		http.Redirect(w, r, r.URL.String(), http.StatusFound)
+	}
+}
+
+// createReversePlayerProxy returns a handler that proxies request to an external player.
+// prefix is the part that should be dropped, e.g. /player while playURL is a full player URL.
+// The playURL host and scheme will replace the prefix in the uplink request.
+func createReversePlayerProxy(prefix, playerURL string) http.Handler {
+	url, _ := url.Parse(playerURL)
+
+	return &httputil.ReverseProxy{
+		Director: func(r *http.Request) {
+			r.URL.Path = strings.Replace(r.URL.Path, prefix, "", 1)
+			r.URL.Scheme = url.Scheme
+			r.URL.Host = url.Host
+			r.Host = url.Host
+		},
 	}
 }
 
@@ -37,6 +55,7 @@ func (s *Server) Routes(ctx context.Context) error {
 	s.Router.MethodFunc("GET", "/reqcount", s.reqCountHandlerFunc)
 	s.Router.MethodFunc("OPTIONS", "/*", s.optionsHandlerFunc)
 	s.Router.MethodFunc("GET", "/", s.indexHandlerFunc)
+	s.Router.Handle("/player/*", createReversePlayerProxy("/player", "https://reference.dashif.org/xxx"))
 	// LiveRouter is mounted at /livesim2
 	s.LiveRouter.MethodFunc("GET", "/*", s.livesimHandlerFunc)
 	s.LiveRouter.MethodFunc("HEAD", "/*", s.livesimHandlerFunc)
