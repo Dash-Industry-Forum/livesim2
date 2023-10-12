@@ -353,5 +353,71 @@ func TestTTMLTimeShifts(t *testing.T) {
 		gotTTML := string(gotTTMLBytes)
 		assert.Equal(t, c.wantedTTML, gotTTML)
 	}
+}
 
+func TestStartNumber(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false)
+	err := am.discoverAssets()
+	require.NoError(t, err)
+	_, err = logging.InitZerolog("debug", "discard")
+	require.NoError(t, err)
+
+	cases := []struct {
+		asset              string
+		media              string
+		nowMS              int
+		startNr            int
+		requestNr          int
+		expectedDecodeTime int
+		expectedErr        string
+	}{
+		{
+			asset:              "testpic_2s",
+			media:              "V300/$NrOrTime$.m4s",
+			nowMS:              50_000,
+			startNr:            0,
+			requestNr:          0,
+			expectedDecodeTime: 0,
+			expectedErr:        "",
+		},
+		{
+			asset:       "testpic_2s",
+			media:       "V300/$NrOrTime$.m4s",
+			nowMS:       50_000,
+			startNr:     5,
+			requestNr:   0,
+			expectedErr: "createOutSeg: not found",
+		},
+		{
+			asset:              "testpic_2s",
+			media:              "A48/$NrOrTime$.m4s",
+			nowMS:              50_000,
+			startNr:            5,
+			requestNr:          5,
+			expectedDecodeTime: 0,
+			expectedErr:        "",
+		},
+	}
+	for _, tc := range cases {
+		asset, ok := am.findAsset(tc.asset)
+		require.True(t, ok)
+		require.NoError(t, err)
+		cfg := NewResponseConfig()
+		cfg.StartNr = Ptr(tc.startNr)
+		media := strings.Replace(tc.media, "$NrOrTime$", fmt.Sprintf("%d", (tc.requestNr)), 1)
+		so, err := genLiveSegment(vodFS, asset, cfg, media, tc.nowMS)
+		if tc.expectedErr != "" {
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.expectedErr)
+			continue
+		}
+		require.NoError(t, err)
+		moof := so.seg.Fragments[0].Moof
+		seqNr := moof.Mfhd.SequenceNumber
+		require.Equal(t, tc.requestNr, int(seqNr), "response segment sequence number")
+		decodeTime := moof.Traf.Tfdt.BaseMediaDecodeTime()
+		require.Equal(t, tc.expectedDecodeTime, int(decodeTime), "response segment decode time")
+
+	}
 }

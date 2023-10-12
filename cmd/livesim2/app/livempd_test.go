@@ -32,6 +32,7 @@ func TestLiveMPDStart(t *testing.T) {
 		nrMedia   string
 		timeMedia string
 		timescale int
+		startNr   int
 	}{
 		{
 			asset:     "testpic_2s",
@@ -39,6 +40,7 @@ func TestLiveMPDStart(t *testing.T) {
 			nrMedia:   "$RepresentationID$/$Number$.m4s",
 			timeMedia: "$RepresentationID$/$Time$.m4s",
 			timescale: 1,
+			startNr:   2,
 		},
 		{
 			asset:     "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
@@ -46,6 +48,7 @@ func TestLiveMPDStart(t *testing.T) {
 			nrMedia:   "1/$Number$.m4s",
 			timeMedia: "1/$Time$.m4s",
 			timescale: 12800,
+			startNr:   0,
 		},
 		{
 			asset:     "testpic_2s",
@@ -53,6 +56,7 @@ func TestLiveMPDStart(t *testing.T) {
 			nrMedia:   "$RepresentationID$/$Number$.m4s",
 			timeMedia: "$RepresentationID$/$Time$.m4s",
 			timescale: 1,
+			startNr:   7,
 		},
 	}
 	for _, tc := range cases {
@@ -61,6 +65,7 @@ func TestLiveMPDStart(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 8000, asset.LoopDurMS)
 		cfg := NewResponseConfig()
+		cfg.StartNr = Ptr(tc.startNr)
 		nowMS := 100_000
 		// Number template
 		liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nowMS)
@@ -70,7 +75,7 @@ func TestLiveMPDStart(t *testing.T) {
 		for _, as := range liveMPD.Periods[0].AdaptationSets {
 			stl := as.SegmentTemplate
 			assert.Nil(t, stl.SegmentTimeline)
-			assert.Equal(t, uint32(0), *stl.StartNumber)
+			assert.Equal(t, uint32(tc.startNr), *stl.StartNumber)
 			if as.ContentType != "image" {
 				assert.Equal(t, tc.nrMedia, stl.Media)
 			} else {
@@ -99,6 +104,7 @@ func TestLiveMPDStart(t *testing.T) {
 			} else {
 				tcMedia := strings.Replace(tc.nrMedia, ".m4s", ".jpg", 1)
 				assert.Equal(t, tcMedia, stl.Media)
+				assert.Equal(t, tc.startNr, int(*stl.StartNumber))
 			}
 		}
 		assert.Equal(t, 1, len(liveMPD.UTCTimings))

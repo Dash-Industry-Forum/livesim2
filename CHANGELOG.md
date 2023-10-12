@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The online player is now proxied via /player when livesim2 runs with http
 - The online playURL should now including scheme
+- repdata (representation data on disk) format extended with commonSampleDuration
+- writerepdata option writes repdata even if existing
 
 ### Fixed
 

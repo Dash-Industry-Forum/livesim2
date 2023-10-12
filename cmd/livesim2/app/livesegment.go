@@ -181,28 +181,28 @@ func findRefSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseCo
 	refTimeAfterWrap := refTime - nrWraps*refTotDur
 	var refStartTime, refEndTime uint64
 	var refOutNr uint32
-	nr := refTimeAfterWrap / refTotDur
+	relNr := refTimeAfterWrap / refTotDur
 	for {
-		endTime := refRep.Segments[nr].EndTime
-		if endTime < refTimeAfterWrap || nr == 0 {
+		endTime := refRep.Segments[relNr].EndTime
+		if endTime < refTimeAfterWrap || relNr == 0 {
 			break
 		}
-		nr--
+		relNr--
 	}
 	for {
-		seg := refRep.Segments[nr]
+		seg := refRep.Segments[relNr]
 		if seg.EndTime > refTimeAfterWrap {
-			refOutNr = uint32(uint64(nr) + wrapNr)
+			refOutNr = uint32(uint64(relNr)+wrapNr) + uint32(cfg.getStartNr())
 			refStartTime = wrapTime + seg.StartTime
 			refEndTime = wrapTime + seg.EndTime
 			break
 		}
-		nr++
+		relNr++
 	}
 	if refEndTime == 0 {
 		return sm, fmt.Errorf("no matching reference segment")
 	}
-	dur := uint32(refRep.Segments[nr].EndTime - refRep.Segments[nr].StartTime)
+	dur := uint32(refRep.Segments[relNr].EndTime - refRep.Segments[relNr].StartTime)
 
 	// Check interval validity
 	segAvailTimeS := float64(refEndTime) / float64(refRep.MediaTimescale)
@@ -214,9 +214,9 @@ func findRefSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseCo
 
 	return segMeta{
 		rep:       refRep,
-		origTime:  refRep.Segments[nr].StartTime,
+		origTime:  refRep.Segments[relNr].StartTime,
 		newTime:   refStartTime,
-		origNr:    refRep.Segments[nr].Nr,
+		origNr:    refRep.Segments[relNr].Nr,
 		newNr:     refOutNr,
 		origDur:   dur,
 		newDur:    dur,
@@ -228,8 +228,9 @@ func findRefSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseCo
 func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, nowMS int) (segMeta, error) {
 	wrapLen := len(rep.Segments)
 	startNr := cfg.getStartNr()
-	nrWraps := (int(nr) - startNr) / wrapLen
-	relNr := int(nr) - nrWraps*wrapLen
+	nrAfterStart := int(nr) - startNr
+	nrWraps := nrAfterStart / wrapLen
+	relNr := nrAfterStart - nrWraps*wrapLen
 	wrapDur := a.LoopDurMS * rep.MediaTimescale / 1000
 	wrapTime := nrWraps * wrapDur
 	seg := rep.Segments[relNr]
@@ -356,6 +357,9 @@ func createOutSeg(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string
 	switch cfg.getRepType(segmentPart) {
 	case segmentNumber, timeLineNumber:
 		nr := uint32(segID)
+		if nr < uint32(cfg.getStartNr()) {
+			return so, errNotFound
+		}
 		so.meta, err = findSegMetaFromNr(a, rep, nr, cfg, nowMS)
 	case timeLineTime:
 		time := uint64(segID)

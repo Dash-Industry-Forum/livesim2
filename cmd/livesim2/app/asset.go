@@ -90,6 +90,7 @@ func (am *assetMgr) discoverAssets() error {
 		if err != nil {
 			log.Warn().Err(err).Str("asset", aID).Msg("Asset consolidation problem. Skipping")
 			delete(am.assets, aID) // This deletion should be safe
+			continue
 		}
 		log.Info().Str("asset", a.AssetPath).Int("loopDurMS", a.LoopDurMS).Msg("Asset consolidated")
 	}
@@ -173,9 +174,12 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 		Codecs:       as.Codecs,
 		MpdTimescale: 1,
 	}
-	ok, err := rp.readFromJSON(am.vodFS, am.repDataDir, assetPath)
-	if ok {
-		return &rp, err
+	if !am.writeRepData {
+		ok, err := rp.readFromJSON(am.vodFS, am.repDataDir, assetPath)
+		if ok {
+			log.Info().Str("rep", rp.ID).Str("asset", assetPath).Msg("Representation loaded from JSON")
+			return &rp, err
+		}
 	}
 	log.Debug().Str("rep", rp.ID).Str("asset", assetPath).Msg("Loading full representation")
 	st := as.SegmentTemplate
@@ -193,7 +197,7 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 	if st.Timescale != nil {
 		rp.MpdTimescale = int(*st.Timescale)
 	}
-	err = rp.addRegExpAndInit(am.vodFS, assetPath)
+	err := rp.addRegExpAndInit(am.vodFS, assetPath)
 	if err != nil {
 		return nil, fmt.Errorf("addRegExpAndInit: %w", err)
 	}
@@ -268,12 +272,14 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 		return nil, fmt.Errorf("unknown type of representation")
 	}
 	commonSampleDur := -1
+segLoop:
 	for _, seg := range rp.Segments {
 		switch {
 		case commonSampleDur < 0:
 			commonSampleDur = int(seg.CommonSampleDur)
 		case commonSampleDur != int(seg.CommonSampleDur):
 			commonSampleDur = 0
+			break segLoop
 		default:
 			// Equal. Just continue
 		}
@@ -285,6 +291,9 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 		return &rp, nil
 	}
 	err = rp.writeToJSON(am.repDataDir, assetPath)
+	if err == nil {
+		log.Info().Str("rep", rp.ID).Str("asset", assetPath).Msg("Representation  data written to JSON file")
+	}
 	return &rp, err
 }
 
@@ -559,7 +568,7 @@ func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string, w
 	return se
 }
 
-func (a *asset) setReferenceRep() {
+func (a *asset) setReferenceRep() error {
 	keys := make([]string, 0, len(a.Reps))
 	for k := range a.Reps {
 		keys = append(keys, k)
@@ -568,20 +577,24 @@ func (a *asset) setReferenceRep() {
 	for _, key := range keys {
 		if a.Reps[key].ContentType == "video" {
 			a.refRep = a.Reps[key]
-			return
+			return nil
 		}
 	}
 	for _, key := range keys {
 		if a.Reps[key].ContentType == "audio" {
 			a.refRep = a.Reps[key]
-			return
+			return nil
 		}
 	}
+	return fmt.Errorf("no video or audio representation found")
 }
 
 // consolidateAsset sets up reference track and loop duration if possible
 func (a *asset) consolidateAsset() error {
-	a.setReferenceRep()
+	err := a.setReferenceRep()
+	if err != nil {
+		return fmt.Errorf("setReferenceRep: %w", err)
+	}
 	refRep := a.refRep
 	a.LoopDurMS = 1000 * refRep.duration() / refRep.MediaTimescale
 	if a.LoopDurMS*refRep.MediaTimescale != 1000*refRep.duration() {
