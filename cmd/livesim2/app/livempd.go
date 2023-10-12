@@ -107,7 +107,9 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	period.Id = "P0"
 	period.Start = Ptr(m.Duration(0))
 
-	for i, as := range period.AdaptationSets {
+	adaptationSets := orderAdaptationSetsByContentType(period.AdaptationSets)
+	var refSegEntries segEntries
+	for i, as := range adaptationSets {
 		if as.ContentType == "video" && cfg.SCTE35PerMinute != nil {
 			// Add SCTE35 signaling
 			as.InbandEventStreams = append(as.InbandEventStreams,
@@ -116,11 +118,26 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 					Value:       "",
 				})
 		}
-
-		se, err := calcSegmentEntriesForAdaptationSet(cfg, a, as, wTimes)
+		atoMS, err := setOffsetInAdaptationSet(cfg, a, as)
 		if err != nil {
 			return nil, err
 		}
+		var se segEntries
+		if i == 0 {
+			// Assume that first representation is as good as any, so can be reference
+			refSegEntries = a.generateTimelineEntries(as.Representations[0].Id, wTimes, atoMS)
+			se = refSegEntries
+		} else {
+			switch as.ContentType {
+			case "video", "subtitle", "image":
+				se = a.generateTimelineEntries(as.Representations[0].Id, wTimes, atoMS)
+			case "audio":
+				se = a.generateTimelineEntriesFromRef(refSegEntries, as.Representations[0].Id, wTimes, atoMS)
+			default:
+				return nil, fmt.Errorf("unknown content type %s", as.ContentType)
+			}
+		}
+
 		templateType := cfg.liveMPDType()
 		if as.ContentType == "image" {
 			templateType = segmentNumber
@@ -358,15 +375,16 @@ type segEntries struct {
 	mediaTimescale uint32
 }
 
-func calcSegmentEntriesForAdaptationSet(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType, wt wrapTimes) (segEntries, error) {
-	se := segEntries{}
+// setOffsetInAdaptationSet sets the availabilityTimeOffset in the AdaptationSet.
+// Returns ErrAtoInfTimeline if infinite ato set with timeline.
+func setOffsetInAdaptationSet(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType) (atoMS int, err error) {
 	if as.SegmentTemplate == nil {
-		return se, fmt.Errorf("no SegmentTemplate in AdaptationSet")
+		return 0, fmt.Errorf("no SegmentTemplate in AdaptationSet")
 	}
 	ato := cfg.getAvailabilityTimeOffsetS()
 	if cfg.liveMPDType() != segmentNumber {
 		if ato == math.Inf(+1) {
-			return se, ErrAtoInfTimeline
+			return 0, ErrAtoInfTimeline
 		}
 	}
 	if ato != 0 {
@@ -379,11 +397,8 @@ func calcSegmentEntriesForAdaptationSet(cfg *ResponseConfig, a *asset, as *m.Ada
 			as.ProducerReferenceTimes = createProducerReferenceTimes(cfg.StartTimeS)
 		}
 	}
-	atoMS := int(1000 * ato)
-	r := as.Representations[0] // Assume that any representation will be fine
-	se.mediaTimescale = uint32(a.Reps[r.Id].MediaTimescale)
-	se.entries, se.lsi, se.startNr = a.generateTimelineEntries(r.Id, wt, atoMS)
-	return se, nil
+	atoMS = int(1000 * ato)
+	return atoMS, nil
 }
 
 func adjustAdaptationSetForTimelineTime(cfg *ResponseConfig, se segEntries, as *m.AdaptationSetType) error {
@@ -418,8 +433,14 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 	if as.SegmentTemplate.Duration == nil {
 		r0 := as.Representations[0]
 		rep0 := a.Reps[r0.Id]
-		dur := rep0.duration() / len(rep0.Segments)
 		timeScale := rep0.MediaTimescale
+		var dur uint32
+		switch as.ContentType {
+		case "audio":
+			dur = uint32(a.refRep.duration() * timeScale / len(a.refRep.Segments) / a.refRep.MediaTimescale)
+		default:
+			dur = uint32(rep0.duration() / len(rep0.Segments))
+		}
 		as.SegmentTemplate.Duration = Ptr(uint32(dur))
 		as.SegmentTemplate.Timescale = Ptr(uint32(timeScale))
 	}
@@ -593,4 +614,26 @@ func changeTimelineTimescale(inSTL *m.SegmentTimelineType, oldTimescale, newTime
 		o.S = append(o.S, &outS)
 	}
 	return &o
+}
+
+// orderAdaptationSetsByContentType creates a new slice of adaptation sets with video first, and then audio.
+func orderAdaptationSetsByContentType(aSets []*m.AdaptationSetType) []*m.AdaptationSetType {
+	outASets := make([]*m.AdaptationSetType, 0, len(aSets))
+	for _, as := range aSets {
+		if as.ContentType == "video" {
+			outASets = append(outASets, as)
+		}
+	}
+	for _, as := range aSets {
+		if as.ContentType == "audio" {
+			outASets = append(outASets, as)
+		}
+	}
+	for _, as := range aSets {
+		if as.ContentType != "video" && as.ContentType != "audio" {
+			outASets = append(outASets, as)
+		}
+	}
+
+	return outASets
 }

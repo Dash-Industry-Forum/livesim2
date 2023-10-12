@@ -133,14 +133,13 @@ the 1970 Epoch start, and makes it possible to test time-dependent requests in a
 
 Install Go 1.19 or later.
 
-Optionally, create a local `vendor` directory to keep a local copy of
-all dependencies.
-
 Then run
 
 ```sh
 > go mod tidy
 ```
+
+(or `go mod vendor`)
 
 to fetch and install all dependencies.
 
@@ -150,7 +149,7 @@ To build `dashfetcher` and `livesim2` you can use the `Makefile` like
 > make build
 ```
 
-to create binaries in the /out directory with embedded version numbers.
+to create binaries in the `/out` directory with embedded version numbers.
 
 During development it may be easier to use the usual go commands:
 
@@ -179,12 +178,23 @@ and set the `port` to 443.`
 
 ## Content
 
+The content must be a DASH VoD asset in `isoff-live` format
+(individual segment files) with either `SegmentTimeline with $Time$` or
+`SegmentTemplate with $Number$`. The video segment duration must
+be constant and an integral number of milliseconds. Audio output segments will be
+adjusted to start at, or less than one audio frame after, each video segment start.
+
 There are multiple ways to get content to the livesim2 server.
 
 1. Use the bundled test content (only 8s long)
 2. Fetch content that was used with [livesim1][1] from
    github at [livesim-content][livesim-content]
 3. Use the `dashfetcher` tool to download a DASH asset
+4. Copy an existing VoD asset in `isoff-live`
+
+There is special representation data that can be used for quicker loading of the
+assets. The generation of such data is controlled via the `writerepdata` and
+`repdataroot` configuration parameters.
 
 ### Bundled test streams with the livesim2 server
 

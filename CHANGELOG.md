@@ -22,7 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HTTP 410 Gone response for segments before timeShiftBufferDepth
 - limited methods in OPTIONS response
 
-
 ## [0.8.0] - 2023-09-22
 
 ### Added

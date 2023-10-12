@@ -84,6 +84,15 @@ func (am *assetMgr) discoverAssets() error {
 	if len(am.assets) == 0 {
 		return fmt.Errorf("no compatible assets found")
 	}
+
+	for aID, a := range am.assets {
+		err := a.consolidateAsset()
+		if err != nil {
+			log.Warn().Err(err).Str("asset", aID).Msg("Asset consolidation problem. Skipping")
+			delete(am.assets, aID) // This deletion should be safe
+		}
+		log.Info().Str("asset", a.AssetPath).Int("loopDurMS", a.LoopDurMS).Msg("Asset consolidated")
+	}
 	return nil
 }
 
@@ -129,7 +138,7 @@ func (am *assetMgr) loadAsset(mpdPath string) error {
 		}
 		for _, rep := range as.Representations {
 			if rep.SegmentTemplate != nil {
-				return fmt.Errorf("segmentTemplate on Representation level. Only supported on AdaptationSet level.ß")
+				return fmt.Errorf("segmentTemplate on Representation level. Only supported on AdaptationSet level")
 			}
 			if _, ok := asset.Reps[rep.Id]; ok {
 				log.Debug().Str("rep", rep.Id).Str("asset", mpdPath).Msg("Representation already loaded")
@@ -147,20 +156,14 @@ func (am *assetMgr) loadAsset(mpdPath string) error {
 			if asset.SegmentDurMS == 0 || avgSegDurMS < asset.SegmentDurMS {
 				asset.SegmentDurMS = avgSegDurMS
 			}
+			if as.ContentType == "audio" {
+				if r.ConstantSampleDuration == nil || *r.ConstantSampleDuration == 0 {
+					return fmt.Errorf("asset %s audio rep %s does not have (known) constant sample duration", assetPath, r.ID)
+				}
+			}
 		}
-	}
-	for _, rep := range asset.Reps {
-		repDurMS := 1000 * rep.duration() / rep.MediaTimescale
-		if repDurMS*rep.MediaTimescale != 1000*rep.duration() {
-			log.Warn().Str("rep", rep.ID).Str("asset", mpdPath).Msg("not perfect loop")
-		}
-		asset.LoopDurMS = repDurMS
 	}
 	log.Info().Str("mpdName", mpdPath).Msg("Asset MPD loaded")
-	//TODO
-	// Compare with MPD for segment timeline
-	// Calculate loop duration
-	// Finally fix
 	return nil
 }
 
@@ -203,11 +206,19 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 				t = *s.T
 			}
 			d := s.D
-			rp.Segments = append(rp.Segments, Segment{StartTime: t, EndTime: t + d, Nr: nr})
+			seg, err := rp.readMP4Segment(am.vodFS, assetPath, t, 0)
+			if err != nil {
+				return nil, fmt.Errorf("readMP4Segment: %w", err)
+			}
+			rp.Segments = append(rp.Segments, seg)
 			t += d
 			for i := 0; i < s.R; i++ {
 				nr++
-				rp.Segments = append(rp.Segments, Segment{StartTime: t, EndTime: t + d, Nr: nr})
+				seg, err := rp.readMP4Segment(am.vodFS, assetPath, t, 0)
+				if err != nil {
+					return nil, fmt.Errorf("readMP4Segment: %w", err)
+				}
+				rp.Segments = append(rp.Segments, seg)
 				t += d
 			}
 		}
@@ -233,7 +244,7 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 		for {
 			// Loop until we get an error when reading the segment
 			if rp.ContentType != "image" {
-				seg, err = rp.readMP4Segment(am.vodFS, assetPath, nr)
+				seg, err = rp.readMP4Segment(am.vodFS, assetPath, 0, nr)
 			} else {
 				seg, err = rp.readThumbSegment(am.vodFS, assetPath, nr, startNr, segDur)
 			}
@@ -245,7 +256,6 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 				rp.Segments[len(rp.Segments)-1].EndTime = seg.StartTime
 			}
 			rp.Segments = append(rp.Segments, seg)
-
 			if nr == endNr { // This only happens if endNumber is set
 				break
 			}
@@ -256,6 +266,20 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 		}
 	default:
 		return nil, fmt.Errorf("unknown type of representation")
+	}
+	commonSampleDur := -1
+	for _, seg := range rp.Segments {
+		switch {
+		case commonSampleDur < 0:
+			commonSampleDur = int(seg.CommonSampleDur)
+		case commonSampleDur != int(seg.CommonSampleDur):
+			commonSampleDur = 0
+		default:
+			// Equal. Just continue
+		}
+	}
+	if commonSampleDur >= 0 {
+		rp.ConstantSampleDuration = Ptr(uint32(commonSampleDur))
 	}
 	if !am.writeRepData {
 		return &rp, nil
@@ -384,6 +408,7 @@ type asset struct {
 	SegmentDurMS int                         `json:"segmentDurMS"`
 	LoopDurMS    int                         `json:"loopDurationMS"`
 	Reps         map[string]*RepData         `json:"representations"`
+	refRep       *RepData                    `json:"-"` // First video or audio representation
 }
 
 func (a *asset) getVodMPD(mpdName string) (*m.MPD, error) {
@@ -394,6 +419,7 @@ func (a *asset) getVodMPD(mpdName string) (*m.MPD, error) {
 	return m.ReadFromString(md.MPDStr)
 }
 
+// lastSegInfo is info about latest generated segment. Used for publishTime in some cases.
 type lastSegInfo struct {
 	timescale      uint64
 	startTime, dur uint64
@@ -405,13 +431,15 @@ func (l lastSegInfo) availabilityTime(ato float64) float64 {
 	return math.Round(float64(l.startTime+l.dur)/float64(l.timescale)) - ato
 }
 
-// generateTimelineEntries generates timeline entries for the given representation. If nowRelMS is too early,
-// startNr and lastSI.nr will both be -1.
-func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int) (entries []*m.S, lastSI lastSegInfo, startNr int) {
-	var ss []*m.S
+// generateTimelineEntries generates timeline entries for the given representation.
+// If no segments are available, startNr and lsi.nr are set to -1.
+func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int) segEntries {
 	rep := a.Reps[repID]
 	segs := rep.Segments
 	nrSegs := len(segs)
+	se := segEntries{
+		mediaTimescale: uint32(rep.MediaTimescale),
+	}
 
 	ato := uint64(atoMS * rep.MpdTimescale / 1000)
 
@@ -444,11 +472,13 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int) (
 			relNowIdx = nrSegs - 1
 		}
 	}
-	if wt.nowWraps < 0 { // end is before start.
-		return nil, lastSegInfo{nr: -1, timescale: uint64(rep.MediaTimescale)}, -1
+	if wt.nowWraps < 0 { // no segment finished yet. Return an empty list and set startNr and lsi.nr = -1
+		se.startNr = -1
+		se.lsi.nr = -1
+		return se
 	}
 
-	startNr = wt.startWraps*nrSegs + relStartIdx
+	se.startNr = wt.startWraps*nrSegs + relStartIdx
 	nowNr := wt.nowWraps*nrSegs + relNowIdx
 	t := uint64(rep.duration()*wt.startWraps) + segs[relStartIdx].StartTime
 	d := segs[relStartIdx].dur()
@@ -457,10 +487,10 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int) (
 		timescale: uint64(rep.MediaTimescale),
 		startTime: t,
 		dur:       d,
-		nr:        startNr,
+		nr:        se.startNr,
 	}
-	ss = append(ss, s)
-	for nr := startNr + 1; nr <= nowNr; nr++ {
+	se.entries = append(se.entries, s)
+	for nr := se.startNr + 1; nr <= nowNr; nr++ {
 		lsi.startTime += d
 		relIdx := nr % nrSegs
 		seg := segs[relIdx]
@@ -471,15 +501,65 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int) (
 		}
 		d = seg.dur()
 		s = &m.S{D: d}
-		ss = append(ss, s)
+		se.entries = append(se.entries, s)
 		lsi.dur = d
 		lsi.nr = nr
 	}
-	return ss, lsi, startNr
+	se.lsi = lsi
+	return se
 }
 
-// firstVideoRep returns the first (in alphabetical order) video rep if any present.
-func (a *asset) firstVideoRep() (rep *RepData, ok bool) {
+// generateTimelineEntriesFromRef generates timeline entries for the given representation given reference.
+// This is based on sample duration and the type of media.
+func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string, wt wrapTimes, atoMS int) segEntries {
+	rep := a.Reps[repID]
+	nrSegs := 0
+	for _, rs := range refSE.entries {
+		nrSegs += int(rs.R) + 1
+	}
+	se := segEntries{
+		mediaTimescale: uint32(rep.MediaTimescale),
+		startNr:        refSE.startNr,
+		lsi:            refSE.lsi, // This is good enough since availability time should be very close
+		entries:        make([]*m.S, 0, nrSegs),
+	}
+
+	if refSE.startNr < 0 {
+		return se
+	}
+
+	sampleDur := uint64(rep.sampleDur())
+	timeScale := uint64(rep.MediaTimescale)
+
+	refTimescale := uint64(refSE.mediaTimescale)
+	refT := *refSE.entries[0].T
+	nextRefT := refT
+	t := calcAudioTimeFromRef(refT, refTimescale, sampleDur, timeScale)
+	var s *m.S
+	for _, rs := range refSE.entries {
+		refD := rs.D
+		for j := 0; j <= rs.R; j++ {
+			nextRefT += refD
+			nextT := calcAudioTimeFromRef(nextRefT, refTimescale, sampleDur, timeScale)
+			d := nextT - t
+			if s == nil {
+				s = &m.S{T: m.Ptr(t), D: d}
+				se.entries = append(se.entries, s)
+			} else {
+				if s.D != d {
+					s = &m.S{D: d}
+					se.entries = append(se.entries, s)
+				} else {
+					s.R++
+				}
+			}
+			t = nextT
+		}
+	}
+	return se
+}
+
+func (a *asset) setReferenceRep() {
 	keys := make([]string, 0, len(a.Reps))
 	for k := range a.Reps {
 		keys = append(keys, k)
@@ -487,10 +567,55 @@ func (a *asset) firstVideoRep() (rep *RepData, ok bool) {
 	sort.Strings(keys)
 	for _, key := range keys {
 		if a.Reps[key].ContentType == "video" {
-			return a.Reps[key], true
+			a.refRep = a.Reps[key]
+			return
 		}
 	}
-	return nil, false
+	for _, key := range keys {
+		if a.Reps[key].ContentType == "audio" {
+			a.refRep = a.Reps[key]
+			return
+		}
+	}
+}
+
+// consolidateAsset sets up reference track and loop duration if possible
+func (a *asset) consolidateAsset() error {
+	a.setReferenceRep()
+	refRep := a.refRep
+	a.LoopDurMS = 1000 * refRep.duration() / refRep.MediaTimescale
+	if a.LoopDurMS*refRep.MediaTimescale != 1000*refRep.duration() {
+		// This is not an integral number of milliseconds, so we should drop this asset
+		return fmt.Errorf("cannot match loop duration %d for asset %s rep %s", a.LoopDurMS, a.AssetPath, refRep.ID)
+	}
+	for _, rep := range a.Reps {
+		if rep.ContentType != refRep.ContentType {
+			continue
+		}
+		repDurMS := 1000 * rep.duration() / rep.MediaTimescale
+		if repDurMS != a.LoopDurMS {
+			log.Info().Str("rep", rep.ID).Str("asset", a.AssetPath).Msg("rep duration differs from loop duration")
+		}
+	}
+	return nil
+}
+
+// getRefSegMeta returns the segment metadata for reference representation at nrOrTime.
+func (a *asset) getRefSegMeta(nrOrTime int, cfg *ResponseConfig, timeScale, nowMS int) (ref segMeta, err error) {
+	switch cfg.liveMPDType() {
+	case segmentNumber, timeLineNumber:
+		nr := uint32(nrOrTime)
+		ref, err = findSegMetaFromNr(a, a.refRep, nr, cfg, nowMS)
+	case timeLineTime:
+		videoTime := uint64(nrOrTime * a.refRep.MediaTimescale / SUBS_TIME_TIMESCALE)
+		ref, err = findSegMetaFromTime(a, a.refRep, videoTime, cfg, nowMS)
+	default:
+		return ref, fmt.Errorf("unknown liveMPDtype")
+	}
+	if err != nil {
+		return ref, fmt.Errorf("findSegMeta: %w", err)
+	}
+	return ref, nil
 }
 
 // findFirstFinishedSegIdx finds index of first finished segment.
@@ -511,18 +636,19 @@ const (
 
 // RepData provides information about a representation
 type RepData struct {
-	ID                    string           `json:"id"`
-	ContentType           string           `json:"contentType"`
-	Codecs                string           `json:"codecs"`
-	MpdTimescale          int              `json:"mpdTimescale"`
-	MediaTimescale        int              `json:"mediaTimescale"` // Used in the segments
-	InitURI               string           `json:"initURI"`
-	MediaURI              string           `json:"mediaURI"`
-	mediaRegexp           *regexp.Regexp   `json:"-"`
-	initSeg               *mp4.InitSegment `json:"-"`
-	initBytes             []byte           `json:"-"`
-	DefaultSampleDuration uint32           `json:"defaultSampleDuration"`
-	Segments              []Segment        `json:"segments"`
+	ID                     string           `json:"id"`
+	ContentType            string           `json:"contentType"`
+	Codecs                 string           `json:"codecs"`
+	MpdTimescale           int              `json:"mpdTimescale"`
+	MediaTimescale         int              `json:"mediaTimescale"` // Used in the segments
+	InitURI                string           `json:"initURI"`
+	MediaURI               string           `json:"mediaURI"`
+	Segments               []Segment        `json:"segments"`
+	DefaultSampleDuration  uint32           `json:"defaultSampleDuration"`            // Read from trex or tfhd
+	ConstantSampleDuration *uint32          `json:"constantSampleDuration,omitempty"` // Non-zero if all samples have the same duration
+	mediaRegexp            *regexp.Regexp   `json:"-"`
+	initSeg                *mp4.InitSegment `json:"-"`
+	initBytes              []byte           `json:"-"`
 }
 
 func (r RepData) duration() int {
@@ -530,6 +656,19 @@ func (r RepData) duration() int {
 		return 0
 	}
 	return int(r.Segments[len(r.Segments)-1].EndTime - r.Segments[0].StartTime)
+}
+
+// sampleDur returns sample duration if known or can easily be derived.
+func (r RepData) sampleDur() uint32 {
+	if r.DefaultSampleDuration != 0 {
+		return r.DefaultSampleDuration
+	}
+	switch {
+	case strings.HasPrefix(r.Codecs, "mp4a.40") && r.MediaTimescale == 48000:
+		return 1024
+	default:
+		return 0
+	}
 }
 
 func (r RepData) findSegmentIndexFromTime(t uint64) int {
@@ -597,9 +736,9 @@ func (r *RepData) readInit(vodFS fs.FS, assetPath string) error {
 }
 
 // readMP4Segment extracts segment data and returns an error if file does not exist.
-func (r *RepData) readMP4Segment(vodFS fs.FS, assetPath string, nr uint32) (Segment, error) {
+func (r *RepData) readMP4Segment(vodFS fs.FS, assetPath string, time uint64, nr uint32) (Segment, error) {
 	var seg Segment
-	uri := replaceTimeAndNr(r.MediaURI, 0, nr)
+	uri := replaceTimeAndNr(r.MediaURI, time, nr)
 	repPath := path.Join(assetPath, uri)
 
 	data, err := fs.ReadFile(vodFS, repPath)
@@ -612,14 +751,25 @@ func (r *RepData) readMP4Segment(vodFS fs.FS, assetPath string, nr uint32) (Segm
 		return seg, fmt.Errorf("decode %s: %w", repPath, err)
 	}
 
-	t := mp4Seg.Segments[0].Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
-	nf := len(mp4Seg.Segments[0].Fragments)
-	lastFragTraf := mp4Seg.Segments[0].Fragments[nf-1].Moof.Traf
+	if len(mp4Seg.Segments) != 1 {
+		return seg, fmt.Errorf("number of segments is %d, not 1", len(mp4Seg.Segments))
+	}
+	s := mp4Seg.Segments[0]
+
+	t := s.Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
+	nf := len(s.Fragments)
+	lastFragTraf := s.Fragments[nf-1].Moof.Traf
 	if lastFragTraf.Tfhd.HasDefaultSampleDuration() {
 		r.DefaultSampleDuration = lastFragTraf.Tfhd.DefaultSampleDuration
 	}
 	endTime := lastFragTraf.Tfdt.BaseMediaDecodeTime() + lastFragTraf.Trun.Duration(r.DefaultSampleDuration)
-	return Segment{StartTime: t, EndTime: endTime, Nr: nr}, nil
+	seg = Segment{StartTime: t, EndTime: endTime, Nr: nr}
+	commonSampleDur, err := s.CommonSampleDuration(r.initSeg.Moov.Mvex.Trex)
+	if err == nil {
+		seg.CommonSampleDur = commonSampleDur
+	}
+
+	return seg, nil
 }
 
 // readThumbSegment reads a thumbnail segment, and returns an error if file does not exist.
@@ -650,9 +800,10 @@ func replaceTimeAndNr(str string, time uint64, nr uint32) string {
 }
 
 type Segment struct {
-	StartTime uint64 `json:"startTime"`
-	EndTime   uint64 `json:"endTime"`
-	Nr        uint32 `json:"nr"`
+	StartTime       uint64 `json:"startTime"`
+	EndTime         uint64 `json:"endTime"`
+	Nr              uint32 `json:"nr"`
+	CommonSampleDur uint32 `json:"-"`
 }
 
 func (s Segment) dur() uint64 {
