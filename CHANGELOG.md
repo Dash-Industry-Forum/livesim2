@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Test content with 29.97fps (video only)
+- Support for audio segments not matching video duration. Audio timing follows video by resegmentation
+- Test content with 29.97fps with and without audio beeps
+- /debug/pprof entry for profiling
 
 ### Changed
 
