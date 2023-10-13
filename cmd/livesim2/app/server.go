@@ -16,6 +16,8 @@ import (
 
 	htmpl "html/template"
 	ttmpl "text/template"
+
+	_ "net/http/pprof"
 )
 
 type Server struct {

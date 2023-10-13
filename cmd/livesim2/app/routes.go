@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 // redirect returns an HTTP redirect with "from" replaced by "to" in URL.
@@ -43,6 +44,7 @@ func (s *Server) Routes(ctx context.Context) error {
 	for _, route := range logging.LogRoutes {
 		s.Router.MethodFunc(route.Method, route.Path, route.Handler)
 	}
+	s.Router.Mount("/debug", middleware.Profiler())
 	s.Router.MethodFunc("GET", "/healthz", s.healthzHandlerFunc)
 	s.Router.MethodFunc("GET", "/favicon.ico", s.favIconFunc)
 	s.Router.MethodFunc("GET", "/config", s.configHandlerFunc)
@@ -54,8 +56,8 @@ func (s *Server) Routes(ctx context.Context) error {
 	s.Router.MethodFunc("HEAD", "/static/*", s.embeddedStaticHandlerFunc)
 	s.Router.MethodFunc("GET", "/reqcount", s.reqCountHandlerFunc)
 	s.Router.MethodFunc("OPTIONS", "/*", s.optionsHandlerFunc)
-	s.Router.MethodFunc("GET", "/", s.indexHandlerFunc)
 	s.Router.Handle("/player/*", createReversePlayerProxy("/player", "https://reference.dashif.org/xxx"))
+	s.Router.MethodFunc("GET", "/", s.indexHandlerFunc)
 	// LiveRouter is mounted at /livesim2
 	s.LiveRouter.MethodFunc("GET", "/*", s.livesimHandlerFunc)
 	s.LiveRouter.MethodFunc("HEAD", "/*", s.livesimHandlerFunc)
@@ -67,5 +69,6 @@ func (s *Server) Routes(ctx context.Context) error {
 	// Redirect /dash/vod to /vod for backwards compatibility
 	s.Router.MethodFunc("GET", "/dash/vod/*", redirect("/dash/vod", "/vod"))
 	s.Router.MethodFunc("HEAD", "/dash/vod/*", redirect("/dash/vod", "/vod"))
+
 	return nil
 }
