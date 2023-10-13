@@ -89,6 +89,7 @@ func ZerologMiddleware(logger *zerolog.Logger) func(next http.Handler) http.Hand
 		fn := func(w http.ResponseWriter, r *http.Request) {
 			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 			startTime := time.Now()
+			inPath := r.URL.Path
 
 			defer func() {
 				endTime := time.Now()
@@ -105,20 +106,26 @@ func ZerologMiddleware(logger *zerolog.Logger) func(next http.Handler) http.Hand
 				}
 
 				accessLog := SubLoggerWithRequestIDAndTopic(r, "access")
-				accessLog.Info().
+				al := accessLog.Info().
 					Timestamp().
-					Fields(map[string]interface{}{
-						"remote_ip":  r.RemoteAddr,
-						"url":        r.URL.Path,
-						"proto":      r.Proto,
-						"method":     r.Method,
-						"user_agent": r.Header.Get("User-Agent"),
-						"status":     ww.Status(),
-						"latency_ms": float64(endTime.Sub(startTime).Nanoseconds()) / 1000000.0,
-						"bytes_in":   r.Header.Get("Content-Length"),
-						"bytes_out":  ww.BytesWritten(),
-					}).
-					Msg("Incoming request")
+					Str("remote_ip", r.RemoteAddr).
+					Str("proto", r.Proto).
+					Str("method", r.Method).
+					Str("user_agent", r.Header.Get("User-Agent")).
+					Int("status", ww.Status()).
+					Str("latency_ms", fmt.Sprintf("%.3f", float64(endTime.Sub(startTime).Nanoseconds())/1000000.0)).
+					Int("bytes_out", ww.BytesWritten())
+				if inPath != r.URL.Path {
+					al = al.Str("url", inPath).
+						Str("location", r.URL.Path)
+				} else {
+					al = al.Str("url", r.URL.Path)
+				}
+				bytesIn := r.Header.Get("Content-Length")
+				if bytesIn != "" {
+					al.Str("bytes_in", bytesIn)
+				}
+				al.Msg("Incoming request")
 			}()
 			next.ServeHTTP(ww, r)
 		}
