@@ -24,75 +24,89 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type segData struct {
-	data        []byte
-	contentType string
-}
+// genLiveSegment generates a live segment from one or more VoD segments following cfg and media type
+func genLiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int) (segOut, error) {
+	var so segOut
 
-// adjustLiveSegment adjusts a VoD segment to live parameters dependent on configuration.
-func adjustLiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int) (segData, error) {
-	var sd segData
-	rawSeg, err := findRawSeg(vodFS, a, cfg, segmentPart, nowMS)
+	outSeg, err := createOutSeg(vodFS, a, cfg, segmentPart, nowMS)
 	if err != nil {
-		return sd, fmt.Errorf("findMediaSegment: %w", err)
+		return so, fmt.Errorf("createOutSeg: %w", err)
 	}
 	if isImage(segmentPart) {
-		return segData{rawSeg.data, rawSeg.meta.rep.SegmentType()}, nil
+		return outSeg, nil
 	}
-	sr := bits.NewFixedSliceReader(rawSeg.data)
-	segFile, err := mp4.DecodeFileSR(sr)
-	if err != nil {
-		return sd, fmt.Errorf("mp4Decode: %w", err)
-	}
-
-	if len(segFile.Segments) != 1 {
-		return sd, fmt.Errorf("not 1 but %d segments", len(segFile.Segments))
-	}
-	seg := segFile.Segments[0]
-	timeShift := rawSeg.meta.newTime - seg.Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
-	if strings.HasPrefix(rawSeg.meta.rep.Codecs, "stpp") {
-		// Shift segment and TTML timestamps inside segment
-		err = shiftStppTimes(seg, rawSeg.meta.timescale, timeShift, rawSeg.meta.newNr)
+	if outSeg.data != nil { // Non-processed mp4-file
+		meta := outSeg.meta
+		contentType := meta.rep.ContentType
+		sr := bits.NewFixedSliceReader(outSeg.data)
+		segFile, err := mp4.DecodeFileSR(sr)
 		if err != nil {
-			return sd, fmt.Errorf("shiftStppTimes: %w", err)
+			return so, fmt.Errorf("mp4Decode: %w", err)
 		}
-	} else {
-		for _, frag := range seg.Fragments {
-			frag.Moof.Mfhd.SequenceNumber = rawSeg.meta.newNr
-			oldTime := frag.Moof.Traf.Tfdt.BaseMediaDecodeTime()
-			frag.Moof.Traf.Tfdt.SetBaseMediaDecodeTime(oldTime + timeShift)
+		if len(segFile.Segments) != 1 {
+			return so, fmt.Errorf("not 1 but %d segments", len(segFile.Segments))
 		}
-	}
+		seg := segFile.Segments[0]
+		timeShift := meta.newTime - seg.Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
+		if strings.HasPrefix(meta.rep.Codecs, "stpp") {
+			// Shift segment and TTML timestamps inside segment
+			err = shiftStppTimes(seg, meta.timescale, timeShift, meta.newNr)
+			if err != nil {
+				return so, fmt.Errorf("shiftStppTimes: %w", err)
+			}
+		} else {
+			for _, frag := range seg.Fragments {
+				frag.Moof.Mfhd.SequenceNumber = meta.newNr
+				oldTime := frag.Moof.Traf.Tfdt.BaseMediaDecodeTime()
+				frag.Moof.Traf.Tfdt.SetBaseMediaDecodeTime(oldTime + timeShift)
+			}
+		}
 
-	if cfg.SCTE35PerMinute != nil && rawSeg.meta.rep.ContentType == "video" {
-		startTime := uint64(rawSeg.meta.newTime)
-		endTime := startTime + uint64(rawSeg.meta.newDur)
-		timescale := uint64(rawSeg.meta.timescale)
-		emsg, err := scte35.CreateEmsgAhead(startTime, endTime, timescale, *cfg.SCTE35PerMinute)
-		if err != nil {
-			return sd, fmt.Errorf("insertSCTE35: %w", err)
+		if cfg.SCTE35PerMinute != nil && contentType == "video" {
+			startTime := uint64(meta.newTime)
+			endTime := startTime + uint64(meta.newDur)
+			timescale := uint64(meta.timescale)
+			emsg, err := scte35.CreateEmsgAhead(startTime, endTime, timescale, *cfg.SCTE35PerMinute)
+			if err != nil {
+				return so, fmt.Errorf("insertSCTE35: %w", err)
+			}
+			if emsg != nil {
+				seg.Fragments[0].AddEmsg(emsg)
+				log.Debug().Str("asset", a.AssetPath).Str("segment", segmentPart).Msg("added SCTE-35 emsg message")
+			}
 		}
-		if emsg != nil {
-			seg.Fragments[0].AddEmsg(emsg)
-			log.Debug().Str("asset", a.AssetPath).Str("segment", segmentPart).Msg("added SCTE-35 emsg message")
-		}
+		outSeg.seg = seg
+		outSeg.data = nil
 	}
-
-	out := make([]byte, seg.Size())
-
-	sw := bits.NewFixedSliceWriterFromSlice(out)
-	err = seg.EncodeSW(sw)
-	if err != nil {
-		return sd, fmt.Errorf("mp4Encode: %w", err)
-	}
-	return segData{sw.Bytes(), rawSeg.meta.rep.SegmentType()}, nil
+	return outSeg, nil
 }
 
 func isImage(segPath string) bool {
 	return path.Ext(segPath) == ".jpg"
 }
 
-// segMeta provides meta data information about a segment
+// CheckTimeValidity checks if availTimeS is a valid time given current time and parameters.
+// Returns errors if too early, or too late. availabilityTimeOffset < 0 signals always available.
+func CheckTimeValidity(availTimeS, nowS, timeShiftBufferDepthS, availabilityTimeOffsetS float64) error {
+	if availabilityTimeOffsetS == +math.Inf(1) {
+		return nil // Infinite availability time offset
+	}
+
+	// Valid interval [nowRel-cfg.tsbd, nowRel) where end-time must be used
+	if availabilityTimeOffsetS > 0 {
+		availTimeS -= availabilityTimeOffsetS
+	}
+	if availTimeS > nowS {
+		return newErrTooEarly(int(math.Round((availTimeS - nowS) * 1000.0)))
+	}
+	if availTimeS < nowS-(timeShiftBufferDepthS+timeShiftBufferDepthMarginS) {
+		return errGone
+	}
+	return nil
+}
+
+// segMeta provides meta data information about a segment.
+// For audio it may be a combination of several segments and sampleNrOffset may be non-zero.
 type segMeta struct {
 	rep       *RepData
 	origTime  uint64
@@ -126,6 +140,9 @@ func findSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseConfi
 
 	// Check interval validity
 	segAvailTimeS := float64(int(seg.EndTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
+	if !cfg.AvailabilityTimeCompleteFlag {
+		segAvailTimeS -= cfg.AvailabilityTimeOffsetS
+	}
 	nowS := float64(nowMS) * 0.001
 	err := CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
 	if err != nil {
@@ -144,32 +161,76 @@ func findSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseConfi
 	}, nil
 }
 
-// CheckTimeValidity checks if availTimeS is a valid time given current time and parameters.
-// Returns errors if too early, or too late. availabilityTimeOffset < 0 signals always available.
-func CheckTimeValidity(availTimeS, nowS, timeShiftBufferDepthS, availabilityTimeOffsetS float64) error {
-	if availabilityTimeOffsetS == +math.Inf(1) {
-		return nil // Infinite availability time offset
+// findRefSegMetaFromTime finds the proper segMeta if media time is OK for rep, or returns error.
+func findRefSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseConfig, nowMS int) (segMeta, error) {
+	var sm segMeta
+	if rep.ConstantSampleDuration == nil || *rep.ConstantSampleDuration == 0 {
+		return sm, fmt.Errorf("no constant sample duration")
+	}
+	sampleDur := *rep.ConstantSampleDuration
+	if time%uint64(sampleDur) != 0 {
+		return sm, fmt.Errorf("time must be multiple of sample duration")
+	}
+	refRep := a.refRep
+	refTotDur := uint64(refRep.duration())
+	nrSegs := uint64(len(refRep.Segments))
+	refTime := time * uint64(refRep.MediaTimescale) / uint64(rep.MediaTimescale)
+	nrWraps := refTime / refTotDur
+	wrapTime := nrWraps * refTotDur
+	wrapNr := nrWraps * nrSegs
+	refTimeAfterWrap := refTime - nrWraps*refTotDur
+	var refStartTime, refEndTime uint64
+	var refOutNr uint32
+	relNr := refTimeAfterWrap / refTotDur
+	for {
+		endTime := refRep.Segments[relNr].EndTime
+		if endTime < refTimeAfterWrap || relNr == 0 {
+			break
+		}
+		relNr--
+	}
+	for {
+		seg := refRep.Segments[relNr]
+		if seg.EndTime > refTimeAfterWrap {
+			refOutNr = uint32(uint64(relNr)+wrapNr) + uint32(cfg.getStartNr())
+			refStartTime = wrapTime + seg.StartTime
+			refEndTime = wrapTime + seg.EndTime
+			break
+		}
+		relNr++
+	}
+	if refEndTime == 0 {
+		return sm, fmt.Errorf("no matching reference segment")
+	}
+	dur := uint32(refRep.Segments[relNr].EndTime - refRep.Segments[relNr].StartTime)
+
+	// Check interval validity
+	segAvailTimeS := float64(refEndTime) / float64(refRep.MediaTimescale)
+	nowS := float64(nowMS) * 0.001
+	err := CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
+	if err != nil {
+		return segMeta{}, err
 	}
 
-	// Valid interval [nowRel-cfg.tsbd, nowRel) where end-time must be used
-	if availabilityTimeOffsetS > 0 {
-		availTimeS -= availabilityTimeOffsetS
-	}
-	if availTimeS > nowS {
-		return newErrTooEarly(int(math.Round((availTimeS - nowS) * 1000.0)))
-	}
-	if availTimeS < nowS-(timeShiftBufferDepthS+timeShiftBufferDepthMarginS) {
-		return errGone
-	}
-	return nil
+	return segMeta{
+		rep:       refRep,
+		origTime:  refRep.Segments[relNr].StartTime,
+		newTime:   refStartTime,
+		origNr:    refRep.Segments[relNr].Nr,
+		newNr:     refOutNr,
+		origDur:   dur,
+		newDur:    dur,
+		timescale: uint32(refRep.MediaTimescale),
+	}, nil
 }
 
 // findSegMetaFromNr returns segMeta if segment is available.
 func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, nowMS int) (segMeta, error) {
 	wrapLen := len(rep.Segments)
 	startNr := cfg.getStartNr()
-	nrWraps := (int(nr) - startNr) / wrapLen
-	relNr := int(nr) - nrWraps*wrapLen
+	nrAfterStart := int(nr) - startNr
+	nrWraps := nrAfterStart / wrapLen
+	relNr := nrAfterStart - nrWraps*wrapLen
 	wrapDur := a.LoopDurMS * rep.MediaTimescale / 1000
 	wrapTime := nrWraps * wrapDur
 	seg := rep.Segments[relNr]
@@ -178,6 +239,9 @@ func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, n
 
 	// Check interval validity
 	segAvailTimeS := float64(int(seg.EndTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
+	if !cfg.AvailabilityTimeCompleteFlag {
+		segAvailTimeS -= cfg.AvailabilityTimeOffsetS
+	}
 	nowS := float64(nowMS) * 0.001
 	err := CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
 	if err != nil {
@@ -222,66 +286,138 @@ func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a
 	if isTimeSubsMedia {
 		return err
 	}
-	segData, err := adjustLiveSegment(vodFS, a, cfg, segmentPart, nowMS)
+	outSeg, err := genLiveSegment(vodFS, a, cfg, segmentPart, nowMS)
 	if err != nil {
 		return fmt.Errorf("convertToLive: %w", err)
 	}
-	w.Header().Set("Content-Length", strconv.Itoa(len(segData.data)))
-	w.Header().Set("Content-Type", segData.contentType)
-	_, err = w.Write(segData.data)
+	var data []byte
+	if outSeg.seg != nil {
+		// Encode segment
+		sw := bits.NewFixedSliceWriter(int(outSeg.seg.Size()))
+		err = outSeg.seg.EncodeSW(sw)
+		if err != nil {
+			log.Error().Err(err).Msg("write live segment response")
+			return err
+		}
+		data = sw.Bytes()
+	} else {
+		data = outSeg.data
+	}
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.Header().Set("Content-Type", outSeg.meta.rep.SegmentType())
+	_, err = w.Write(data)
 	if err != nil {
-		log.Error().Err(err).Msg("write init response")
+		log.Error().Err(err).Msg("write live segment response")
 		return err
 	}
 	return nil
 }
 
-type rawSeg struct {
-	data []byte
+type segOut struct {
+	seg  *mp4.MediaSegment
+	data []byte // Mainly used for image out
 	meta segMeta
 }
 
-func findRawSeg(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int) (rawSeg, error) {
-	var r rawSeg
-	var segPath string
+// findRepAndSegmentID finds the rep and segment ID (nr or time) for a given cfg and live segment request.
+func findRepAndSegmentID(a *asset, segmentPart string) (r *RepData, segID int, err error) {
 	for _, rep := range a.Reps {
 		mParts := rep.mediaRegexp.FindStringSubmatch(segmentPart)
 		if mParts == nil {
 			continue
 		}
 		if len(mParts) != 2 {
-			return r, fmt.Errorf("bad segment match")
+			return nil, -1, fmt.Errorf("bad segment match")
 		}
-		idNr, err := strconv.Atoi(mParts[1])
+		segID, err = strconv.Atoi(mParts[1])
 		if err != nil {
-			return r, err
+			return nil, -1, err
 		}
+		return rep, segID, nil
+	}
+	return nil, -1, errNotFound
+}
 
-		switch cfg.getRepType(segmentPart) {
-		case segmentNumber, timeLineNumber:
-			nr := uint32(idNr)
-			r.meta, err = findSegMetaFromNr(a, rep, nr, cfg, nowMS)
-		case timeLineTime:
-			time := uint64(idNr)
-			r.meta, err = findSegMetaFromTime(a, rep, time, cfg, nowMS)
-		default:
-			return r, fmt.Errorf("unknown liveMPD type")
-		}
-		if err != nil {
-			return r, err
-		}
-		segPath = path.Join(a.AssetPath, replaceTimeAndNr(rep.MediaURI, r.meta.origTime, r.meta.origNr))
-		break // segPath found
-	}
-	if segPath == "" {
-		return r, errNotFound
-	}
-	var err error
-	r.data, err = fs.ReadFile(vodFS, segPath)
+// createOutSeg from the corresponding VoD segments. Checks time as well.
+func createOutSeg(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int) (segOut, error) {
+	var so segOut
+	rep, segID, err := findRepAndSegmentID(a, segmentPart)
 	if err != nil {
-		return r, fmt.Errorf("read segment: %w", err)
+		return so, fmt.Errorf("findRepAndSegmentID: %w", err)
 	}
-	return r, nil
+
+	if rep.ContentType == "audio" {
+		so, err = createAudioSegment(vodFS, a, cfg, segmentPart, nowMS, rep, segID)
+		if err != nil {
+			return so, fmt.Errorf("createAudioSegment: %w", err)
+		}
+		return so, nil
+	}
+
+	switch cfg.getRepType(segmentPart) {
+	case segmentNumber, timeLineNumber:
+		nr := uint32(segID)
+		if nr < uint32(cfg.getStartNr()) {
+			return so, errNotFound
+		}
+		so.meta, err = findSegMetaFromNr(a, rep, nr, cfg, nowMS)
+	case timeLineTime:
+		time := uint64(segID)
+		so.meta, err = findSegMetaFromTime(a, rep, time, cfg, nowMS)
+	default:
+		return so, fmt.Errorf("unknown liveMPD type")
+	}
+	if err != nil {
+		return so, err
+	}
+	segPath := path.Join(a.AssetPath, replaceTimeAndNr(rep.MediaURI, so.meta.origTime, so.meta.origNr))
+	so.data, err = fs.ReadFile(vodFS, segPath)
+	if err != nil {
+		return so, fmt.Errorf("read segment: %w", err)
+	}
+	return so, nil
+}
+
+func createAudioSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int, rep *RepData, segID int) (segOut, error) {
+	refRep := a.refRep
+	refTimescale := uint64(refRep.MediaTimescale)
+	var refMeta segMeta
+	var err error
+	var so segOut
+	switch cfg.getRepType(segmentPart) {
+	case segmentNumber, timeLineNumber:
+		outSegNr := uint32(segID)
+		refMeta, err = findSegMetaFromNr(a, refRep, outSegNr, cfg, nowMS)
+		if err != nil {
+			return so, fmt.Errorf("findSegMetaFromNr from reference: %w", err)
+		}
+	case timeLineTime:
+		time := int(segID)
+		refMeta, err = findRefSegMetaFromTime(a, rep, uint64(time), cfg, nowMS)
+		if err != nil {
+			return so, fmt.Errorf("findSegMetaFromNr from reference: %w", err)
+		}
+	default:
+		return so, fmt.Errorf("unknown liveMPD type")
+	}
+	recipe := calcAudioSegRecipe(refMeta.newNr,
+		refMeta.newTime,
+		refMeta.newTime+uint64(refMeta.newDur),
+		uint64(refRep.duration()),
+		refTimescale, rep)
+	so.seg, err = createAudioSeg(vodFS, a, cfg, recipe)
+	if err != nil {
+		return so, fmt.Errorf("createAudioSeg: %w", err)
+	}
+	so.meta = segMeta{
+		rep:       rep,
+		newTime:   recipe.startTime,
+		newDur:    uint32(recipe.endTime - recipe.startTime),
+		newNr:     recipe.segNr,
+		timescale: uint32(rep.MediaTimescale),
+	}
+
+	return so, nil
 }
 
 // writeChunkedSegment splits a segment into chunks and send them as they become available timewise.
@@ -291,42 +427,40 @@ func findRawSeg(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, 
 func writeChunkedSegment(ctx context.Context, w http.ResponseWriter, log *zerolog.Logger, cfg *ResponseConfig,
 	vodFS fs.FS, a *asset, segmentPart string, nowMS int) error {
 
-	// Need initial segment meta data
-	rawSeg, err := findRawSeg(vodFS, a, cfg, segmentPart, nowMS)
+	so, err := genLiveSegment(vodFS, a, cfg, segmentPart, nowMS)
 	if err != nil {
-		return fmt.Errorf("findSegment: %w", err)
+		return fmt.Errorf("convertToLive: %w", err)
 	}
-	meta := rawSeg.meta
-	w.Header().Set("Content-Type", meta.rep.SegmentType())
-	if isImage(segmentPart) {
-		w.Header().Set("Content-Length", strconv.Itoa(len(rawSeg.data)))
-		_, err = w.Write(rawSeg.data)
-		return fmt.Errorf("could not write image segment: %w", err)
+	if so.seg == nil {
+		return fmt.Errorf("no segment data for chunked segment")
 	}
 
-	sr := bits.NewFixedSliceReader(rawSeg.data)
-	seg, err := mp4.DecodeFileSR(sr)
-	if err != nil {
-		return fmt.Errorf("mp4Decode: %w", err)
+	w.Header().Set("Content-Type", so.meta.rep.SegmentType())
+	if isImage(segmentPart) {
+		w.Header().Set("Content-Length", strconv.Itoa(len(so.data)))
+		_, err = w.Write(so.data)
+		return fmt.Errorf("could not write image segment: %w", err)
 	}
+	rep := so.meta.rep
+	seg := so.seg
 
 	// Some part of the segment should be available, and is delivered directly.
 	// The rest are returned HTTP chunks as time passes.
 	// In general, we should extract all the samples and build a new one with the right fragment duration.
 	// That fragment/chunk duration is segment_duration-availabilityTimeOffset.
-	chunkDur := (a.SegmentDurMS - int(cfg.AvailabilityTimeOffsetS*1000)) * int(meta.timescale) / 1000
-	chunks, err := chunkSegment(meta.rep.initSeg, seg, meta, chunkDur)
+	chunkDur := (a.SegmentDurMS - int(cfg.AvailabilityTimeOffsetS*1000)) * int(rep.MediaTimescale) / 1000
+	chunks, err := chunkSegment(rep.initSeg, seg, so.meta, chunkDur)
 	if err != nil {
 		return fmt.Errorf("chunkSegment: %w", err)
 	}
 	startUnixMS := unixMS()
-	chunkAvailTime := int(meta.newTime) + cfg.StartTimeS*int(meta.timescale)
+	chunkAvailTime := int(so.meta.newTime) + cfg.StartTimeS*int(rep.MediaTimescale)
 	for _, chk := range chunks {
 		chunkAvailTime += int(chk.dur)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		chunkAvailMS := chunkAvailTime * 1000 / int(meta.timescale)
+		chunkAvailMS := chunkAvailTime * 1000 / int(rep.MediaTimescale)
 		if chunkAvailMS < nowMS {
 			err = writeChunk(w, chk)
 			if err != nil {
@@ -373,14 +507,10 @@ func createChunk(styp *mp4.StypBox, trackID, seqNr uint32) chunk {
 
 // chunkSegment splits a segment into chunks of specified duration.
 // The first chunk gets an styp box if one is available in the incoming segment.
-func chunkSegment(init *mp4.InitSegment, seg *mp4.File, segMeta segMeta, chunkDur int) ([]chunk, error) {
-	if len(seg.Segments) != 1 {
-		return nil, fmt.Errorf("not 1 but %d segments", len(seg.Segments))
-	}
+func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta, chunkDur int) ([]chunk, error) {
 	trex := init.Moov.Mvex.Trex
-	s := seg.Segments[0]
 	fs := make([]mp4.FullSample, 0, 32)
-	for _, f := range s.Fragments {
+	for _, f := range seg.Fragments {
 		ff, err := f.GetFullSamples(trex)
 		if err != nil {
 			return nil, err
@@ -389,7 +519,7 @@ func chunkSegment(init *mp4.InitSegment, seg *mp4.File, segMeta segMeta, chunkDu
 	}
 	chunks := make([]chunk, 0, segMeta.newDur/uint32(chunkDur))
 	trackID := init.Moov.Trak.Tkhd.TrackID
-	ch := createChunk(s.Styp, trackID, segMeta.newNr)
+	ch := createChunk(seg.Styp, trackID, segMeta.newNr)
 	chunkNr := 1
 	var accChunkDur uint32 = 0
 	var totalDur int = 0

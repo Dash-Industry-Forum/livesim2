@@ -46,7 +46,7 @@ type ServerConfig struct {
 	VodRoot     string `json:"vodroot"`
 	// RepDataRoot is the root directory for representation metadata
 	RepDataRoot string `json:"repdataroot"`
-	// WriteRepData is true if representation metadata should be written if not present
+	// WriteRepData is true if representation metadata should be written (will override existing metadata)
 	WriteRepData bool `json:"writerepdata"`
 	// Domains is a comma-separated list of domains for Let's Encrypt
 	Domains string `json:"domains"`

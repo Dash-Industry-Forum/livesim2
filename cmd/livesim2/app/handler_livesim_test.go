@@ -139,7 +139,7 @@ func TestFetches(t *testing.T) {
 			}
 			require.Greater(t, len(body), 0, "no body")
 			gotContentType := resp.Header.Get("Content-Type")
-			require.Equal(t, tc.wantedContentType, gotContentType)
+			require.Equal(t, tc.wantedContentType, gotContentType, "wrong content type for url %s", totURL)
 		})
 	}
 }

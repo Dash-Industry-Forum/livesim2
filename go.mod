@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/Comcast/gots v1.0.4
 	github.com/Eyevinn/dash-mpd v0.10.0
-	github.com/Eyevinn/mp4ff v0.36.0
+	github.com/Eyevinn/mp4ff v0.38.2-0.20231008210406-65ee06764473
 	github.com/caddyserver/certmagic v0.19.1
 	github.com/go-chi/chi/v5 v5.0.8
 	github.com/knadh/koanf v1.5.0

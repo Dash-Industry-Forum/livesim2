@@ -169,36 +169,23 @@ func writeTimeSubsMediaSegment(w http.ResponseWriter, cfg *ResponseConfig, a *as
 	// This is done by looking up a corresponding video segment.
 	// That segments also gives the right time range
 
-	var videoSegMeta segMeta
-	videoRep, ok := a.firstVideoRep()
-	if !ok {
-		return true, fmt.Errorf("no video rep. Cannot generate subtitle")
-	}
-	switch cfg.liveMPDType() {
-	case segmentNumber, timeLineNumber:
-		nr := uint32(nrOrTime)
-		videoSegMeta, err = findSegMetaFromNr(a, videoRep, nr, cfg, nowMS)
-	case timeLineTime:
-		videoTime := uint64(nrOrTime * videoRep.MediaTimescale / SUBS_TIME_TIMESCALE)
-		videoSegMeta, err = findSegMetaFromTime(a, videoRep, videoTime, cfg, nowMS)
-	default:
-		return true, fmt.Errorf("unknown liveMPDtype")
-	}
+	refSegMeta, err := a.getRefSegMeta(nrOrTime, cfg, SUBS_TIME_TIMESCALE, nowMS)
 	if err != nil {
-		return true, fmt.Errorf("findSegMeta: %w", err)
+		return true, fmt.Errorf("getRefSegMeta: %w", err)
 	}
-	log.Debug().Uint32("nr", videoSegMeta.newNr).Msg("segMeta")
-	baseMediaDecodeTime := rep2SubsTime(videoSegMeta.newTime, videoRep.MediaTimescale)
-	dur := uint32(rep2SubsTime(uint64(videoSegMeta.newDur), videoRep.MediaTimescale))
+
+	log.Debug().Uint32("nr", refSegMeta.newNr).Msg("segMeta")
+	baseMediaDecodeTime := rep2SubsTime(refSegMeta.newTime, int(refSegMeta.timescale))
+	dur := uint32(rep2SubsTime(uint64(refSegMeta.newDur), int(refSegMeta.timescale)))
 
 	utcTimeMS := baseMediaDecodeTime + uint64(cfg.StartTimeS*SUBS_TIME_TIMESCALE)
 	var mediaSeg *mp4.MediaSegment
 	switch prefix {
 	case SUBS_STPP_PREFIX:
-		mediaSeg, err = createSubtitlesStppMediaSegment(videoSegMeta.newNr, baseMediaDecodeTime, dur, lang, utcTimeMS,
+		mediaSeg, err = createSubtitlesStppMediaSegment(refSegMeta.newNr, baseMediaDecodeTime, dur, lang, utcTimeMS,
 			tt, cfg.TimeSubsDurMS, cfg.TimeSubsRegion)
 	default: // SUBS_WVTT_PREFIX
-		mediaSeg, err = createSubtitlesWvttMediaSegment(videoSegMeta.newNr, baseMediaDecodeTime, dur, lang, utcTimeMS,
+		mediaSeg, err = createSubtitlesWvttMediaSegment(refSegMeta.newNr, baseMediaDecodeTime, dur, lang, utcTimeMS,
 			tt, cfg.TimeSubsDurMS, cfg.TimeSubsRegion)
 	}
 	if err != nil {

@@ -19,6 +19,7 @@
     "cSpell.words": [
         "Atof",
         "autodetected",
+        "autoplay",
         "caddyserver",
         "certmagic",
         "certpath",
@@ -76,6 +77,8 @@
         "playurl",
         "posflag",
         "promhttp",
+        "proxied",
+        "repdata",
         "repdataroot",
         "reqcount",
         "reqlimitint",

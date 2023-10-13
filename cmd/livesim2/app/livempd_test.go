@@ -18,7 +18,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLiveMPD(t *testing.T) {
+// TestLiveMPDStart tests that start parameters are fine for Number and TimelineTime
+func TestLiveMPDStart(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	tmpDir := t.TempDir()
 	am := newAssetMgr(vodFS, tmpDir, false)
@@ -31,6 +32,7 @@ func TestLiveMPD(t *testing.T) {
 		nrMedia   string
 		timeMedia string
 		timescale int
+		startNr   int
 	}{
 		{
 			asset:     "testpic_2s",
@@ -38,6 +40,7 @@ func TestLiveMPD(t *testing.T) {
 			nrMedia:   "$RepresentationID$/$Number$.m4s",
 			timeMedia: "$RepresentationID$/$Time$.m4s",
 			timescale: 1,
+			startNr:   2,
 		},
 		{
 			asset:     "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
@@ -45,6 +48,7 @@ func TestLiveMPD(t *testing.T) {
 			nrMedia:   "1/$Number$.m4s",
 			timeMedia: "1/$Time$.m4s",
 			timescale: 12800,
+			startNr:   0,
 		},
 		{
 			asset:     "testpic_2s",
@@ -52,6 +56,7 @@ func TestLiveMPD(t *testing.T) {
 			nrMedia:   "$RepresentationID$/$Number$.m4s",
 			timeMedia: "$RepresentationID$/$Time$.m4s",
 			timescale: 1,
+			startNr:   7,
 		},
 	}
 	for _, tc := range cases {
@@ -60,6 +65,7 @@ func TestLiveMPD(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 8000, asset.LoopDurMS)
 		cfg := NewResponseConfig()
+		cfg.StartNr = Ptr(tc.startNr)
 		nowMS := 100_000
 		// Number template
 		liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nowMS)
@@ -69,7 +75,7 @@ func TestLiveMPD(t *testing.T) {
 		for _, as := range liveMPD.Periods[0].AdaptationSets {
 			stl := as.SegmentTemplate
 			assert.Nil(t, stl.SegmentTimeline)
-			assert.Equal(t, uint32(0), *stl.StartNumber)
+			assert.Equal(t, uint32(tc.startNr), *stl.StartNumber)
 			if as.ContentType != "image" {
 				assert.Equal(t, tc.nrMedia, stl.Media)
 			} else {
@@ -98,6 +104,7 @@ func TestLiveMPD(t *testing.T) {
 			} else {
 				tcMedia := strings.Replace(tc.nrMedia, ".m4s", ".jpg", 1)
 				assert.Equal(t, tcMedia, stl.Media)
+				assert.Equal(t, tc.startNr, int(*stl.StartNumber))
 			}
 		}
 		assert.Equal(t, 1, len(liveMPD.UTCTimings))
@@ -160,6 +167,7 @@ var liveSubEn = "" +
  <Representation id="timestpp-en" bandwidth="8000" startWithSAP="1"></Representation>
  </AdaptationSetType>`
 
+// TestSegmentTimes checks that the right number of entries are in the SegmentTimeline
 func TestSegmentTimes(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	am := newAssetMgr(vodFS, "", false)
@@ -317,15 +325,15 @@ func TestLastAvailableSegment(t *testing.T) {
 			mpd, err := asset.getVodMPD(tc.mpdName)
 			require.NoError(t, err)
 			as := mpd.Periods[0].AdaptationSets[0]
-			se, err := calcSegmentEntriesForAdaptationSet(cfg, asset, as, wTimes)
+			atoMS, err := setOffsetInAdaptationSet(cfg, asset, as)
 			if tc.wantedErr != "" {
 				require.EqualError(t, err, tc.wantedErr)
 			} else {
-				err := adjustAdaptationSetForTimelineTime(cfg, se, as)
 				require.NoError(t, err)
+				r := as.Representations[0] // Assume that any representation will be fine inside AS
+				se := asset.generateTimelineEntries(r.Id, wTimes, atoMS)
 				assert.Equal(t, tc.wantedSegNr, se.lsi.nr)
 			}
-
 		})
 	}
 }
@@ -610,6 +618,100 @@ func TestUTCTiming(t *testing.T) {
 	}
 }
 
+type segTiming struct {
+	t, d int
+}
+
+func segTimingsFromS(ss []*m.S) []segTiming {
+	res := make([]segTiming, 0, len(ss))
+	t := int(*ss[0].T)
+	for _, s := range ss {
+		d := int(s.D)
+		for i := 0; i <= int(s.R); i++ {
+			res = append(res, segTiming{t, d})
+			t += d
+		}
+	}
+	return res
+}
+
+func TestAudioSegmentTimeFollowsVideo(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false)
+	err := am.discoverAssets()
+	require.NoError(t, err)
+
+	cases := []struct {
+		desc                  string
+		asset                 string
+		mpdName               string
+		nowMS                 int
+		timeShiftBufferDepthS int
+		mpdStlType            string
+		wantedVideoTimescale  int
+		wantedAudioTimescale  int
+		wantedVideoSegTimings []segTiming
+		wantedAudioSegTimings []segTiming
+		wantedErr             string
+	}{
+		{
+			desc:                  "1-min periods with timelineTime",
+			asset:                 "testpic_2s",
+			mpdName:               "Manifest.mpd",
+			nowMS:                 1001_000,
+			timeShiftBufferDepthS: 8,
+			mpdStlType:            "timelineTime",
+			wantedVideoTimescale:  90000,
+			wantedAudioTimescale:  48000,
+			wantedVideoSegTimings: []segTiming{{t: 89100000, d: 180000}, {89280000, 180000}, {89460000, 180000}, {89640000, 180000}, {89820000, 180000}},
+			wantedAudioSegTimings: []segTiming{{t: 47520768, d: 95232}, {47616000, 96256}, {47712256, 96256}, {47808512, 96256}, {47904768, 95232}},
+			wantedErr:             "",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			asset, ok := am.findAsset(tc.asset)
+			require.True(t, ok)
+			cfg := NewResponseConfig()
+			cfg.TimeShiftBufferDepthS = Ptr(tc.timeShiftBufferDepthS)
+			switch tc.mpdStlType {
+			case "timelineTime":
+				cfg.SegTimelineFlag = true
+			case "timelineNumber":
+				cfg.SegTimelineNrFlag = true
+			default: // $Number$
+				// no flag
+			}
+			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
+			if tc.wantedErr != "" {
+				assert.EqualError(t, err, tc.wantedErr)
+				return
+			}
+			assert.NoError(t, err)
+			adaptationSets := orderAdaptationSetsByContentType(liveMPD.Periods[0].AdaptationSets)
+			for _, as := range adaptationSets {
+				assert.NotNil(t, as.SegmentTemplate, "segment template")
+				stl := as.SegmentTemplate.SegmentTimeline
+				assert.NotNil(t, stl, "segment timeline")
+				gotSegTimings := segTimingsFromS(stl.S)
+				switch as.ContentType {
+				case "video":
+					require.Equal(t, tc.wantedVideoTimescale, int(*as.SegmentTemplate.Timescale), "video timescale")
+					require.Equal(t, tc.wantedVideoSegTimings, gotSegTimings, "video segment timings")
+				case "audio":
+					require.Equal(t, tc.wantedAudioTimescale, int(*as.SegmentTemplate.Timescale), "audio timescale")
+					require.Equal(t, tc.wantedAudioSegTimings, gotSegTimings, "audio segment timings")
+				default:
+					t.Errorf("unexpected content type %q", as.ContentType)
+				}
+			}
+			_, _ = liveMPD.Write(os.Stdout, "", false)
+		})
+	}
+}
+
+// TestMultiPeriod tests that period splitting works as expected
 func TestMultiPeriod(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	am := newAssetMgr(vodFS, "", false)
@@ -624,8 +726,8 @@ func TestMultiPeriod(t *testing.T) {
 		nrPeriodsPerHour              int
 		mpdStlType                    string
 		wantedNrPeriods               int
-		wantedStartNrs                []*int // When applicable
-		wantedPresentationTimeOffsets [][]int
+		wantedStartNrs                []*int  // When applicable. Same for all adaptation sets
+		wantedPresentationTimeOffsets [][]int // For each period and adaptation set
 		wantedErr                     string
 	}{
 		{
@@ -705,7 +807,6 @@ func TestMultiPeriod(t *testing.T) {
 				assert.EqualError(t, err, tc.wantedErr)
 				return
 			}
-			// _ = liveMPD.Write(os.Stdout)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.wantedNrPeriods, len(liveMPD.Periods))
 			for pNr, p := range liveMPD.Periods {
@@ -714,7 +815,7 @@ func TestMultiPeriod(t *testing.T) {
 					if tc.wantedStartNrs[pNr] == nil {
 						assert.Nil(t, stl.StartNumber)
 					} else {
-						assert.Equal(t, *tc.wantedStartNrs[pNr], int(*stl.StartNumber))
+						assert.Equal(t, *tc.wantedStartNrs[pNr], int(*stl.StartNumber), "startNumber in period %d, AS %d", pNr, asNr)
 					}
 					assert.Equal(t, tc.wantedPresentationTimeOffsets[pNr][asNr], int(*stl.PresentationTimeOffset))
 				}
@@ -758,6 +859,54 @@ func TestRelStartStopTimeIntoLocation(t *testing.T) {
 	}
 }
 
-func TestThumbnailAS(t *testing.T) {
+func TestFractionalFramerateMPDs(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	tmpDir := t.TempDir()
+	am := newAssetMgr(vodFS, tmpDir, false)
+	err := am.discoverAssets()
+	require.NoError(t, err)
 
+	cases := []struct {
+		asset     string
+		mpdName   string
+		nrMedia   string
+		timeMedia string
+		timescale int
+	}{
+		{
+			asset:     "WAVE/vectors/cfhd_sets/14.985_29.97_59.94/t1/2022-10-17",
+			mpdName:   "stream_w_beeps.mpd",
+			nrMedia:   "$RepresentationID$/$Number$.m4s",
+			timeMedia: "$RepresentationID$/$Time$.m4s",
+			timescale: 1,
+		},
+	}
+	for _, tc := range cases {
+		asset, ok := am.findAsset(tc.asset)
+		require.True(t, ok)
+		require.NoError(t, err)
+		assert.Equal(t, 8008, asset.LoopDurMS)
+		cfg := NewResponseConfig()
+		nowMS := 100_000
+		// Number template
+		liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nowMS)
+		assert.NoError(t, err)
+		assert.Equal(t, "dynamic", *liveMPD.Type)
+		assert.Equal(t, m.DateTime("1970-01-01T00:00:00Z"), liveMPD.AvailabilityStartTime)
+		for _, as := range liveMPD.Periods[0].AdaptationSets {
+			stl := as.SegmentTemplate
+			assert.Nil(t, stl.SegmentTimeline)
+			require.Equal(t, 0, int(*stl.StartNumber))
+			switch as.ContentType {
+			case "video":
+				require.Equal(t, 30000, int(*stl.Timescale))
+				require.Equal(t, 60060, int(*stl.Duration))
+			case "audio":
+				require.Equal(t, 48000, int(*stl.Timescale))
+				require.Equal(t, 96096, int(*stl.Duration))
+			default:
+				t.Errorf("unexpected content type %q", as.ContentType)
+			}
+		}
+	}
 }
