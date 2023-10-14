@@ -155,7 +155,7 @@ func TestCheckAudioSegmentTimeAddressing(t *testing.T) {
 				trun := so.seg.Fragments[0].Moof.Traf.Trun
 				nrSamples := c.nrSamplesMod[nr%len(c.nrSamplesMod)]
 				require.Equal(t, nrSamples, len(trun.Samples))
-				fmt.Printf("nr %d segData: %s mpdType: %s mediaTime: %d\n", nr, so.meta.rep.SegmentType(), mpdType, mediaTime) // TODO. Remove
+				t.Logf("nr %d segData: %s mpdType: %s mediaTime: %d\n", nr, so.meta.rep.SegmentType(), mpdType, mediaTime)
 			}
 		}
 	}
