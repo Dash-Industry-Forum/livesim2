@@ -83,14 +83,13 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		cfg.SetHost(s.Cfg.Host, r)
 		err := writeLiveMPD(log, w, cfg, a, mpdName, nowMS)
 		if err != nil {
-			// TODO. Add more granular errors like 404 not found
 			msg := fmt.Sprintf("liveMPD: %s", err)
 			log.Error(msg)
 			http.Error(w, msg, http.StatusInternalServerError)
 			return
 		}
 	case ".mp4", ".m4s", ".cmfv", ".cmfa", ".cmft", ".jpg", ".jpeg", ".m4v", ".m4a":
-		segmentPart := strings.TrimPrefix(contentPart, a.AssetPath) // includes heading /
+		segmentPart := strings.TrimPrefix(contentPart, a.AssetPath) // includes heading slash
 		err = writeSegment(r.Context(), w, log, cfg, s.assetMgr.vodFS, a, segmentPart[1:], nowMS, s.textTemplates)
 		if err != nil {
 			var tooEarly errTooEarly
