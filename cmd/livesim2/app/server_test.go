@@ -23,7 +23,7 @@ func TestServer(t *testing.T) {
 	cfg, err := app.LoadConfig(args, ".")
 	assert.NoError(t, err)
 
-	_, err = logging.InitZerolog(cfg.LogLevel, logging.LogDiscard)
+	err = logging.InitSlog(cfg.LogLevel, logging.LogDiscard)
 	assert.NoError(t, err)
 
 	server, err := app.SetupServer(context.Background(), cfg)

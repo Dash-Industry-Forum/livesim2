@@ -21,7 +21,7 @@ func TestParamToMPD(t *testing.T) {
 		TimeoutS:  0,
 		LogFormat: logging.LogDiscard,
 	}
-	_, err := logging.InitZerolog(cfg.LogLevel, cfg.LogFormat)
+	err := logging.InitSlog(cfg.LogLevel, cfg.LogFormat)
 	require.NoError(t, err)
 	server, err := SetupServer(context.Background(), &cfg)
 	require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestFetches(t *testing.T) {
 		TimeoutS:  0,
 		LogFormat: logging.LogDiscard,
 	}
-	_, err := logging.InitZerolog(cfg.LogLevel, cfg.LogFormat)
+	err := logging.InitSlog(cfg.LogLevel, cfg.LogFormat)
 	require.NoError(t, err)
 	server, err := SetupServer(context.Background(), &cfg)
 	require.NoError(t, err)

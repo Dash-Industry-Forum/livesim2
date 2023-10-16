@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"path"
@@ -20,19 +21,18 @@ import (
 	"time"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
-	"github.com/rs/zerolog"
 )
 
 // livesimHandlerFunc handles mpd and segment requests.
 // ?nowMS=... can be used to set the current time for testing.
 func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
-	log := logging.SubLoggerWithRequestIDAndTopic(r, "livesim")
+	log := logging.SubLoggerWithRequestID(slog.Default(), r)
 	uPath := r.URL.Path
 	ext := filepath.Ext(uPath)
 	u, err := url.Parse(uPath)
 	if err != nil {
 		msg := "URL parser"
-		log.Error().Err(err).Msg(msg)
+		log.Error(msg)
 		http.Error(w, msg, http.StatusInternalServerError)
 		return
 	}
@@ -53,7 +53,7 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	cfg, err := processURLCfg(u.String(), nowMS)
 	if err != nil {
 		msg := "processURL error"
-		log.Error().Err(err).Msg(msg)
+		log.Error(msg, "err", err)
 		http.Error(w, msg, http.StatusInternalServerError)
 		return
 	}
@@ -66,7 +66,7 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	}
 
 	contentPart := cfg.URLContentPart()
-	log.Debug().Str("url", contentPart).Msg("requested content")
+	log.Debug("requested content", "url", contentPart)
 	a, ok := s.assetMgr.findAsset(contentPart)
 	if !ok {
 		http.Error(w, "unknown asset", http.StatusNotFound)
@@ -85,7 +85,7 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			// TODO. Add more granular errors like 404 not found
 			msg := fmt.Sprintf("liveMPD: %s", err)
-			log.Error().Err(err).Msg(msg)
+			log.Error(msg)
 			http.Error(w, msg, http.StatusInternalServerError)
 			return
 		}
@@ -104,7 +104,7 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "Gone", http.StatusGone)
 			default:
 				msg := "writeSegment"
-				log.Error().Err(err).Msg(msg)
+				log.Error(msg)
 				http.Error(w, msg, http.StatusInternalServerError)
 				return
 			}
@@ -115,7 +115,7 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func writeLiveMPD(log *zerolog.Logger, w http.ResponseWriter, cfg *ResponseConfig, a *asset, mpdName string, nowMS int) error {
+func writeLiveMPD(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, a *asset, mpdName string, nowMS int) error {
 	work := make([]byte, 0, 1024)
 	buf := bytes.NewBuffer(work)
 	lMPD, err := LiveMPD(a, mpdName, cfg, nowMS)
@@ -130,17 +130,19 @@ func writeLiveMPD(log *zerolog.Logger, w http.ResponseWriter, cfg *ResponseConfi
 	w.Header().Set("Content-Type", "application/dash+xml")
 	n, err := w.Write(buf.Bytes())
 	if err != nil {
-		log.Error().Err(err).Msg("writing response")
+		log.Error("writing response")
 		return err
 	}
 	if n != size {
-		log.Error().Int("size", size).Int("nr written", n).Msg("could not write all bytes")
+		log.Error("could not write all bytes",
+			"size", size,
+			"nr written", n)
 		return err
 	}
 	return nil
 }
 
-func writeSegment(ctx context.Context, w http.ResponseWriter, log *zerolog.Logger, cfg *ResponseConfig, vodFS fs.FS, a *asset,
+func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, cfg *ResponseConfig, vodFS fs.FS, a *asset,
 	segmentPart string, nowMS int, tt *template.Template) error {
 	// First check if init segment and return
 	isInitSegment, err := writeInitSegment(w, cfg, vodFS, a, segmentPart)

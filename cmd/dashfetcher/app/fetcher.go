@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -19,7 +20,6 @@ import (
 
 	"github.com/Dash-Industry-Forum/livesim2/internal"
 	m "github.com/Eyevinn/dash-mpd/mpd"
-	"github.com/rs/zerolog/log"
 )
 
 type Options struct {
@@ -50,8 +50,10 @@ func Fetch(o *Options) error {
 		return fmt.Errorf("createDir: %w", err)
 	}
 	cnt, err := start(ctx, o)
-	log.Info().Int("nrFiles", cnt.total()).Int("nrExisting", cnt.nrExisting).
-		Int("nrDownloaded", cnt.nrDownloaded).Int("nrErrors", cnt.nrErrors).Msg("download results")
+	slog.Info("download results", "nrFiles", cnt.total(),
+		"nrExisting", cnt.nrExisting,
+		"nrDownloaded", cnt.nrDownloaded,
+		"nrErrors", cnt.nrErrors)
 	return err
 }
 
@@ -121,7 +123,7 @@ func start(ctx context.Context, o *Options) (counts, error) {
 					case strings.Contains(media, "$Time$"):
 						cnt = downloadSegmentTimeLineWithTime(ctx, stl, media, outDir, baseURL, cnt, o.Force)
 					case strings.Contains(media, "$Number$"):
-						log.Warn().Msg("SegmentTimeline with $Number$ not yet supported")
+						slog.Warn("SegmentTimeline with $Number$ not yet supported")
 						// downloadSegmentTimeLineWithNumber
 					default:
 						return cnt, fmt.Errorf("strange media for SegmentTimeline")
@@ -145,7 +147,7 @@ func start(ctx context.Context, o *Options) (counts, error) {
 func downloadMPD(ctx context.Context, mpdURL, outDir, mpdName string, cnt counts, force bool) (counts, error) {
 	outPath := path.Join(outDir, mpdName)
 	if fileExists(outPath) && !force {
-		log.Info().Str("path", outPath).Str("url", mpdURL).Msg("file already exists. Skipping")
+		slog.Info("file already exists. Skipping", "path", outPath, "url", mpdURL)
 		cnt.nrExisting++
 	} else {
 		err := downloadToFile(ctx, mpdURL, outPath)
@@ -155,7 +157,7 @@ func downloadMPD(ctx context.Context, mpdURL, outDir, mpdName string, cnt counts
 		}
 		err = internal.WriteMPDData(outDir, mpdName, mpdURL)
 		if err != nil {
-			log.Warn().Err(err).Msg("could not write mdlist file")
+			slog.Warn("could not write mpdlist file", "error", err)
 		}
 	}
 	return cnt, nil
@@ -166,7 +168,7 @@ func downloadInit(ctx context.Context, segTmpl *m.SegmentTemplateType, outDir, b
 	p := path.Join(outDir, initStr)
 	cnt, err := downloadAndCount(ctx, u, p, cnt, force)
 	if err != nil {
-		log.Warn().Err(err).Msg("download init segment")
+		slog.Warn("download init segment", "error", err)
 	}
 	return cnt
 }
@@ -183,7 +185,7 @@ func downloadSegmentTimeLineWithTime(ctx context.Context, stl *m.SegmentTimeline
 		p := path.Join(outDir, mPart)
 		cnt, err = downloadAndCount(ctx, u, p, cnt, force)
 		if err != nil {
-			log.Warn().Err(err).Msg("download file")
+			slog.Warn("download file", "error", err)
 		}
 		dur := segItvl.D
 		startTime += dur
@@ -193,7 +195,7 @@ func downloadSegmentTimeLineWithTime(ctx context.Context, stl *m.SegmentTimeline
 			p := path.Join(outDir, mPart)
 			cnt, err = downloadAndCount(ctx, u, p, cnt, force)
 			if err != nil {
-				log.Warn().Err(err).Msg("download file")
+				slog.Warn("download file", "error", err)
 			}
 			startTime += dur
 		}
@@ -207,7 +209,7 @@ func downloadSegmentNumber(ctx context.Context, stpl *m.SegmentTemplateType, tot
 		startNr = *stpl.StartNumber
 	}
 	if stpl == nil {
-		log.Warn().Msg("segment duration not set")
+		slog.Warn("segment duration not set")
 		return cnt
 	}
 	dur := *stpl.Duration
@@ -223,7 +225,7 @@ func downloadSegmentNumber(ctx context.Context, stpl *m.SegmentTemplateType, tot
 		p := path.Join(outDir, mPart)
 		cnt, err = downloadAndCount(ctx, u, p, cnt, force)
 		if err != nil && i < nrSegments {
-			log.Warn().Err(err).Msg("download file")
+			slog.Warn("download file", "error", err)
 		}
 	}
 	return cnt
@@ -232,7 +234,7 @@ func downloadSegmentNumber(ctx context.Context, stpl *m.SegmentTemplateType, tot
 func downloadAndCount(ctx context.Context, url, outPath string, cnt counts, force bool) (counts, error) {
 	if fileExists(outPath) && !force {
 		cnt.nrExisting++
-		log.Info().Str("path", outPath).Str("url", url).Msg("file already exists. Skipping")
+		slog.Info("file already exists. Skipping", "path", outPath, "url", url)
 	} else {
 		err := downloadToFile(ctx, url, outPath)
 		if err != nil {
@@ -265,10 +267,10 @@ func replaceNumber(media string, nr uint32) string {
 func downloadToFile(ctx context.Context, url, outPath string) error {
 	client := http.DefaultClient
 	if fileExists(outPath) {
-		log.Info().Str("path", outPath).Msg("file exists")
+		slog.Info("file exists", "path", outPath)
 		return nil
 	}
-	log.Info().Str("url", url).Str("path", outPath).Msg("Downloading")
+	slog.Info("downloading", "url", url, "path", outPath)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -296,7 +298,7 @@ func downloadToFile(ctx context.Context, url, outPath string) error {
 	if err != nil {
 		return err
 	}
-	log.Debug().Str("path", outPath).Msg("stored")
+	slog.Debug("stored", "path", outPath)
 	return nil
 }
 

@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"math"
 	"net/http"
 	"path"
@@ -20,8 +21,6 @@ import (
 	"github.com/Dash-Industry-Forum/livesim2/pkg/scte35"
 	"github.com/Eyevinn/mp4ff/bits"
 	"github.com/Eyevinn/mp4ff/mp4"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 // genLiveSegment generates a live segment from one or more VoD segments following cfg and media type
@@ -72,7 +71,7 @@ func genLiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart stri
 			}
 			if emsg != nil {
 				seg.Fragments[0].AddEmsg(emsg)
-				log.Debug().Str("asset", a.AssetPath).Str("segment", segmentPart).Msg("added SCTE-35 emsg message")
+				slog.Debug("added SCTE-35 emsg message", "asset", a.AssetPath, "segment", segmentPart)
 			}
 		}
 		outSeg.seg = seg
@@ -272,7 +271,7 @@ func writeInitSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a
 			w.Header().Set("Content-Type", rep.SegmentType())
 			_, err := w.Write(rep.initBytes)
 			if err != nil {
-				log.Error().Err(err).Msg("writing response")
+				slog.Error("writing response", "error", err)
 				return false, err
 			}
 			return true, nil
@@ -296,7 +295,7 @@ func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a
 		sw := bits.NewFixedSliceWriter(int(outSeg.seg.Size()))
 		err = outSeg.seg.EncodeSW(sw)
 		if err != nil {
-			log.Error().Err(err).Msg("write live segment response")
+			slog.Error("write live segment response", "error", err)
 			return err
 		}
 		data = sw.Bytes()
@@ -307,7 +306,7 @@ func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a
 	w.Header().Set("Content-Type", outSeg.meta.rep.SegmentType())
 	_, err = w.Write(data)
 	if err != nil {
-		log.Error().Err(err).Msg("write live segment response")
+		slog.Error("write live segment response", "error", err)
 		return err
 	}
 	return nil
@@ -424,7 +423,7 @@ func createAudioSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart 
 //
 // nowMS servers as reference for the current time and can be set to any value. Media time will
 // be incremented with respect to nowMS.
-func writeChunkedSegment(ctx context.Context, w http.ResponseWriter, log *zerolog.Logger, cfg *ResponseConfig,
+func writeChunkedSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, cfg *ResponseConfig,
 	vodFS fs.FS, a *asset, segmentPart string, nowMS int) error {
 
 	so, err := genLiveSegment(vodFS, a, cfg, segmentPart, nowMS)

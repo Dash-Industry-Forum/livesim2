@@ -20,15 +20,16 @@ var LogRoutes = [2]Route{
 	{"POST", "/loglevel", LogLevelSet},
 }
 
-// LogLevelGet - Handle loglevel GET request
+// LogLevelGet handles loglevel GET request
 func LogLevelGet(w http.ResponseWriter, r *http.Request) {
-	currentLevel := GetLogLevel()
+	currentLevel := LogLevel()
 	fmt.Fprintln(w, currentLevel)
 }
 
-// LogLevelSet - Handle loglevel POST request
+// LogLevelSet sets the loglevel from a posted form
+// Can be triggered like curl -F level=debug <server>/loglevel
 func LogLevelSet(w http.ResponseWriter, r *http.Request) {
-	currentLevel := GetLogLevel()
+	currentLevel := LogLevel()
 	err := r.ParseMultipartForm(128)
 	if err != nil {
 		http.Error(w, "Incorrect form data", http.StatusBadRequest)
@@ -41,5 +42,5 @@ func LogLevelSet(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
-	fmt.Fprintf(w, "%q → %q\n", currentLevel, newLevel)
+	fmt.Fprintf(w, "%q → %q\n", currentLevel, LogLevel())
 }

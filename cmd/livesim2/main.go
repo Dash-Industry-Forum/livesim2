@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -34,9 +35,10 @@ func run() (exitCode int) {
 		os.Exit(1)
 	}
 
-	logger, err := logging.InitZerolog(cfg.LogLevel, cfg.LogFormat)
+	err = logging.InitSlog(cfg.LogLevel, cfg.LogFormat)
 	if err != nil {
-		logger.Fatal().Err(err).Send()
+		_, _ = fmt.Fprintf(os.Stderr, "Error initializing logging: %s\n", err.Error())
+		os.Exit(1)
 	}
 
 	stopSignal := make(chan os.Signal, 1)
@@ -79,14 +81,14 @@ func run() (exitCode int) {
 			err = http.ListenAndServe(fmt.Sprintf(":%d", server.Cfg.Port), server.Router)
 		}
 		if err != nil && err != http.ErrServerClosed {
-			logger.Error().Err(err).Msg("")
+			slog.Default().Error(err.Error())
 			exitCode = 1
 			startIssue <- struct{}{}
 		}
 	}()
 
 	<-stopServer // Wait here for stop signal
-	logger.Info().Msg("Server  stopped")
+	slog.Default().Info("Server  stopped")
 
 	return exitCode
 }

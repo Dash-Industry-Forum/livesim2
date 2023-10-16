@@ -7,13 +7,12 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"sync"
 	"time"
-
-	"github.com/rs/zerolog/log"
 )
 
 // IPRequestLimiter limits the number of requests per interval
@@ -100,17 +99,19 @@ func (il *IPRequestLimiter) EndTime() time.Time {
 func (il *IPRequestLimiter) dump() {
 	payload, err := json.Marshal(il)
 	if err != nil {
-		log.Error().Err(err).Msg("could not marshal IPRequestLimiter")
+		slog.Error("could not marshal IPRequestLimiter", "error", err.Error())
 		return
 	}
 	f, err := os.OpenFile(il.logFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
-		log.Error().Err(err).Msg("could not open IPRequestLimiter log file")
+		slog.Error("could not open IPRequestLimiter log file", "error", err.Error())
+
 	}
 	defer f.Close()
 	_, err = f.Write(payload)
 	if err != nil {
-		log.Error().Err(err).Msg("could not write to IPRequestLimiter log file")
+		slog.Error("could not write to IPRequestLimiter log file", "error", err.Error())
+
 	}
 }
 

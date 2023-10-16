@@ -7,12 +7,11 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-
-	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
 
 	htmpl "html/template"
 	ttmpl "text/template"
@@ -24,7 +23,6 @@ type Server struct {
 	Router        *chi.Mux
 	LiveRouter    *chi.Mux
 	VodRouter     *chi.Mux
-	logger        *logging.Logger
 	Cfg           *ServerConfig
 	assetMgr      *assetMgr
 	textTemplates *ttmpl.Template
@@ -36,10 +34,6 @@ func (s *Server) healthzHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	s.jsonResponse(w, true, http.StatusOK)
 }
 
-func (s *Server) GetLogger() *logging.Logger {
-	return s.logger
-}
-
 // jsonResponse marshals message and give response with code
 //
 // Don't add any more content after this since Content-Length is set
@@ -47,16 +41,14 @@ func (s *Server) jsonResponse(w http.ResponseWriter, message interface{}, code i
 	raw, err := json.Marshal(message)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("{message: \"%s\"}", err), http.StatusInternalServerError)
-		s.logger.Error().Msg(err.Error())
+		slog.Error(err.Error())
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	w.Header().Set("Content-Length", strconv.Itoa(len(raw)))
 	_, err = w.Write(raw)
 	if err != nil {
-		s.logger.Error().
-			Str("error", err.Error()).
-			Msg("Could not write HTTP response")
+		slog.Error("could not write HTTP response", "err", err)
 	}
 }
 
@@ -66,12 +58,12 @@ func (s *Server) compileTemplates() error {
 	if err != nil {
 		return fmt.Errorf("compileTextTemplates: %w", err)
 	}
-	s.logger.Debug().Str("tmpl", s.textTemplates.DefinedTemplates()).Msg("text templates")
+	slog.Debug("text templates", "defined", s.textTemplates.DefinedTemplates())
 	s.htmlTemplates, err = compileHTMLTemplates(content, "templates")
 	if err != nil {
 		return fmt.Errorf("compileHTMLTemplates: %w", err)
 	}
-	s.logger.Debug().Str("tmpl", s.htmlTemplates.DefinedTemplates()).Msg("html templates")
+	slog.Debug("html templates", "defined", s.htmlTemplates.DefinedTemplates())
 
 	return nil
 }

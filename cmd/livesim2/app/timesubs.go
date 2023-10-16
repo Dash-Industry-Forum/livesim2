@@ -7,6 +7,7 @@ package app
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"math"
 	"net/http"
 	"strconv"
@@ -15,7 +16,6 @@ import (
 	"time"
 
 	"github.com/Eyevinn/mp4ff/mp4"
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -85,7 +85,7 @@ func writeTimeSubsInitSegment(w http.ResponseWriter, cfg *ResponseConfig, a *ass
 	w.Header().Set("Content-Length", strconv.Itoa(int(init.Size())))
 	err := init.Encode(w)
 	if err != nil {
-		log.Error().Err(err).Msg("write init response")
+		slog.Error("write init response", "error", err)
 		return true, err
 	}
 	return true, nil
@@ -174,7 +174,7 @@ func writeTimeSubsMediaSegment(w http.ResponseWriter, cfg *ResponseConfig, a *as
 		return true, fmt.Errorf("getRefSegMeta: %w", err)
 	}
 
-	log.Debug().Uint32("nr", refSegMeta.newNr).Msg("segMeta")
+	slog.Debug("segMeta", "nr", refSegMeta.newNr)
 	baseMediaDecodeTime := rep2SubsTime(refSegMeta.newTime, int(refSegMeta.timescale))
 	dur := uint32(rep2SubsTime(uint64(refSegMeta.newDur), int(refSegMeta.timescale)))
 
@@ -195,7 +195,7 @@ func writeTimeSubsMediaSegment(w http.ResponseWriter, cfg *ResponseConfig, a *as
 	w.Header().Set("Content-Length", strconv.Itoa(int(mediaSeg.Size())))
 	err = mediaSeg.Encode(w)
 	if err != nil {
-		log.Error().Err(err).Msg("write media segment response")
+		slog.Error("write media segment response", "error", err)
 		return true, fmt.Errorf("mediaSeg: %w", err)
 	}
 	return true, nil
