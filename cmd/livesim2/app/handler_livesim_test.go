@@ -73,7 +73,7 @@ func TestParamToMPD(t *testing.T) {
 				return
 			}
 			bodyStr := string(body)
-			//fmt.Println(bodyStr)
+			t.Logf("length of body %d", len(bodyStr))
 			require.Greater(t, strings.Index(bodyStr, tc.wantedInMPD), -1, "no match in MPD")
 		})
 	}

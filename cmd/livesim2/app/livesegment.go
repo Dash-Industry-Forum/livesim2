@@ -139,9 +139,6 @@ func findSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseConfi
 
 	// Check interval validity
 	segAvailTimeS := float64(int(seg.EndTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
-	if !cfg.AvailabilityTimeCompleteFlag {
-		segAvailTimeS -= cfg.AvailabilityTimeOffsetS
-	}
 	nowS := float64(nowMS) * 0.001
 	err := CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
 	if err != nil {
@@ -238,9 +235,6 @@ func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, n
 
 	// Check interval validity
 	segAvailTimeS := float64(int(seg.EndTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
-	if !cfg.AvailabilityTimeCompleteFlag {
-		segAvailTimeS -= cfg.AvailabilityTimeOffsetS
-	}
 	nowS := float64(nowMS) * 0.001
 	err := CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
 	if err != nil {

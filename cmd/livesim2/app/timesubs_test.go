@@ -441,6 +441,5 @@ func genWvttCueText(fss []mp4.FullSample) (string, error) {
 		}
 		_ = box.Info(&b, "", "", "  ")
 	}
-	fmt.Println(b.String())
 	return b.String(), nil
 }
