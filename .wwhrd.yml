@@ -1,0 +1,10 @@
+denylist:
+
+allowlist:
+  - Apache-2.0
+  - MIT
+  - BSD-3-Clause
+  - CC0-1.0
+
+exceptions:
+
