@@ -422,3 +422,139 @@ func TestStartNumber(t *testing.T) {
 
 	}
 }
+
+func TestLLSegmentAvailability(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false)
+	err := am.discoverAssets()
+	require.NoError(t, err)
+	err = logging.InitSlog("error", "discard")
+	require.NoError(t, err)
+
+	cases := []struct {
+		asset              string
+		media              string
+		nowMS              int
+		startNr            int
+		mpdType            string
+		requestMedia       int
+		expectedNr         int
+		expectedDecodeTime int
+		expectedErr        string
+	}{
+		{
+			asset:        "testpic_2s",
+			media:        "V300/$NrOrTime$.m4s",
+			nowMS:        50_000,
+			mpdType:      "Number",
+			requestMedia: 25,
+			expectedErr:  "too early",
+		},
+		{
+			asset:              "testpic_2s",
+			media:              "V300/$NrOrTime$.m4s",
+			nowMS:              50_500,
+			mpdType:            "Number",
+			requestMedia:       25,
+			expectedNr:         25,
+			expectedDecodeTime: 50 * 90000,
+			expectedErr:        "",
+		},
+		{
+			asset:              "testpic_2s",
+			media:              "V300/$NrOrTime$.m4s",
+			nowMS:              50_500,
+			mpdType:            "TimelineNumber",
+			requestMedia:       25,
+			expectedNr:         25,
+			expectedDecodeTime: 50 * 90000,
+			expectedErr:        "",
+		},
+		{
+			asset:              "testpic_2s",
+			media:              "V300/$NrOrTime$.m4s",
+			nowMS:              50_500,
+			mpdType:            "TimelineTime",
+			requestMedia:       4_500_000,
+			expectedNr:         25,
+			expectedDecodeTime: 50 * 90000,
+			expectedErr:        "",
+		},
+		{
+			asset:              "testpic_2s",
+			media:              "V300/$NrOrTime$.m4s",
+			nowMS:              50_500,
+			startNr:            1,
+			mpdType:            "Number",
+			requestMedia:       26,
+			expectedNr:         26,
+			expectedDecodeTime: 50 * 90000,
+			expectedErr:        "",
+		},
+		{
+			asset:        "testpic_2s",
+			media:        "V300/$NrOrTime$.m4s",
+			nowMS:        50_500,
+			startNr:      1,
+			mpdType:      "Number",
+			requestMedia: 27,
+			expectedErr:  "too early",
+		},
+		{
+			asset:              "testpic_2s",
+			media:              "V300/$NrOrTime$.m4s",
+			nowMS:              50_500,
+			mpdType:            "TimelineNumber",
+			startNr:            1,
+			requestMedia:       26,
+			expectedNr:         26,
+			expectedDecodeTime: 50 * 90000,
+			expectedErr:        "",
+		},
+		{
+			asset:              "testpic_2s",
+			media:              "V300/$NrOrTime$.m4s",
+			nowMS:              50_500,
+			mpdType:            "TimelineTime",
+			startNr:            1,
+			requestMedia:       4_500_000,
+			expectedNr:         26,
+			expectedDecodeTime: 50 * 90000,
+			expectedErr:        "",
+		},
+	}
+	for _, tc := range cases {
+		asset, ok := am.findAsset(tc.asset)
+		require.True(t, ok)
+		require.NoError(t, err)
+		cfg := NewResponseConfig()
+		cfg.AvailabilityTimeCompleteFlag = false
+		cfg.AvailabilityTimeOffsetS = 1.5
+		switch tc.mpdType {
+		case "TimelineTime":
+			cfg.SegTimelineFlag = true
+		case "TimelineNumber":
+			cfg.SegTimelineNrFlag = true
+		case "Number":
+			// Nothing
+		default:
+			require.Fail(t, "unknown mpdType")
+		}
+		if tc.startNr != 0 {
+			cfg.StartNr = Ptr(tc.startNr)
+		}
+		media := strings.Replace(tc.media, "$NrOrTime$", fmt.Sprintf("%d", (tc.requestMedia)), 1)
+		so, err := genLiveSegment(vodFS, asset, cfg, media, tc.nowMS)
+		if tc.expectedErr != "" {
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.expectedErr)
+			continue
+		}
+		require.NoError(t, err)
+		moof := so.seg.Fragments[0].Moof
+		seqNr := moof.Mfhd.SequenceNumber
+		require.Equal(t, tc.expectedNr, int(seqNr), "response segment sequence number")
+		decodeTime := moof.Traf.Tfdt.BaseMediaDecodeTime()
+		require.Equal(t, tc.expectedDecodeTime, int(decodeTime), "response segment decode time")
+	}
+}

@@ -234,6 +234,7 @@ func TestSegmentTimes(t *testing.T) {
 	}
 }
 
+// TestLastAvailableSegment tests that the last available segment is correct including low latency.
 func TestLastAvailableSegment(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	tmpDir := t.TempDir()
@@ -256,6 +257,16 @@ func TestLastAvailableSegment(t *testing.T) {
 			asset:                    "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
 			mpdName:                  "stream.mpd",
 			segTimelineTime:          true,
+			availabilityTimeOffset:   1.5,
+			availabilityTimeComplete: false,
+			nowMS:                    3_600_501,
+			wantedSegNr:              1800,
+		},
+		{
+			desc:                     "Timeline with $Time$ 1hour+1s with chunkdur 0.5",
+			asset:                    "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:                  "stream.mpd",
+			segTimelineTime:          false,
 			availabilityTimeOffset:   1.5,
 			availabilityTimeComplete: false,
 			nowMS:                    3_601_000,
@@ -314,6 +325,8 @@ func TestLastAvailableSegment(t *testing.T) {
 			cfg := NewResponseConfig()
 			if tc.segTimelineTime {
 				cfg.SegTimelineFlag = true
+			} else {
+				cfg.SegTimelineNrFlag = true
 			}
 			cfg.AvailabilityTimeOffsetS = tc.availabilityTimeOffset
 			if tc.availabilityTimeOffset > 0 && !tc.availabilityTimeComplete {
@@ -324,15 +337,16 @@ func TestLastAvailableSegment(t *testing.T) {
 			wTimes := calcWrapTimes(asset, cfg, tc.nowMS, tsbd)
 			mpd, err := asset.getVodMPD(tc.mpdName)
 			require.NoError(t, err)
-			as := mpd.Periods[0].AdaptationSets[0]
-			atoMS, err := setOffsetInAdaptationSet(cfg, asset, as)
-			if tc.wantedErr != "" {
-				require.EqualError(t, err, tc.wantedErr)
-			} else {
-				require.NoError(t, err)
-				r := as.Representations[0] // Assume that any representation will be fine inside AS
-				se := asset.generateTimelineEntries(r.Id, wTimes, atoMS)
-				assert.Equal(t, tc.wantedSegNr, se.lsi.nr)
+			for _, as := range mpd.Periods[0].AdaptationSets {
+				atoMS, err := setOffsetInAdaptationSet(cfg, asset, as)
+				if tc.wantedErr != "" {
+					require.EqualError(t, err, tc.wantedErr)
+				} else {
+					require.NoError(t, err)
+					r := as.Representations[0] // Assume that any representation will be fine inside AS
+					se := asset.generateTimelineEntries(r.Id, wTimes, atoMS)
+					assert.Equal(t, tc.wantedSegNr, se.lsi.nr)
+				}
 			}
 		})
 	}
