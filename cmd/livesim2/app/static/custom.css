@@ -1,0 +1,4 @@
+:root {
+  --grid-spacing-vertical: var(--spacing);
+  --grid-spacing-horizontal: var(--spacing);
+}
