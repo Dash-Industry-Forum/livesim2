@@ -7,6 +7,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -220,7 +221,7 @@ func TestWriteChunkedSegment(t *testing.T) {
 	cfg := NewResponseConfig()
 	cfg.AvailabilityTimeCompleteFlag = false
 	cfg.AvailabilityTimeOffsetS = 7.0
-	log, err := logging.InitZerolog("debug", "discard")
+	err = logging.InitSlog("debug", "discard")
 	require.NoError(t, err)
 
 	cases := []struct {
@@ -243,7 +244,7 @@ func TestWriteChunkedSegment(t *testing.T) {
 		rr := httptest.NewRecorder()
 		segmentPart := strings.Replace(tc.media, "$NrOrTime$", "10", 1)
 		mediaTime := 80 * tc.mediaTimescale
-		err := writeChunkedSegment(context.Background(), rr, log, cfg, vodFS, asset, segmentPart, nowMS)
+		err := writeChunkedSegment(context.Background(), rr, slog.Default(), cfg, vodFS, asset, segmentPart, nowMS)
 		require.NoError(t, err)
 		seg := rr.Body.Bytes()
 		sr := bits.NewFixedSliceReader(seg)
@@ -360,7 +361,7 @@ func TestStartNumber(t *testing.T) {
 	am := newAssetMgr(vodFS, "", false)
 	err := am.discoverAssets()
 	require.NoError(t, err)
-	_, err = logging.InitZerolog("debug", "discard")
+	err = logging.InitSlog("debug", "discard")
 	require.NoError(t, err)
 
 	cases := []struct {

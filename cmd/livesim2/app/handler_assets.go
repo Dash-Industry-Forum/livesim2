@@ -6,12 +6,11 @@ package app
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"sort"
 	"strings"
-
-	"github.com/rs/zerolog/log"
 )
 
 type assetsInfo struct {
@@ -45,7 +44,7 @@ func (s *Server) assetsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	fh := fullHost(s.Cfg.Host, r)
 	playURL, err := createPlayURL(fh, s.Cfg.PlayURL)
 	if err != nil {
-		log.Err(err).Msg("cannot create playurl")
+		slog.Error("cannot create playurl")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

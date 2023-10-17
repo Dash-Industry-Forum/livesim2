@@ -6,12 +6,11 @@ package app
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
-
-	"github.com/rs/zerolog/log"
 )
 
 // urlGenHandlerFunc returns page for generating URLs
@@ -26,7 +25,7 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	fh := fullHost(s.Cfg.Host, r)
 	playURL, err := createPlayURL(fh, s.Cfg.PlayURL)
 	if err != nil {
-		log.Err(err).Msg("cannot create playurl")
+		slog.Error("cannot create playurl", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"math"
 	"os"
 	"path"
@@ -23,7 +24,6 @@ import (
 	m "github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/Eyevinn/mp4ff/bits"
 	"github.com/Eyevinn/mp4ff/mp4"
-	"github.com/rs/zerolog/log"
 )
 
 func newAssetMgr(vodFS fs.FS, repDataDir string, writeRepData bool) *assetMgr {
@@ -73,7 +73,7 @@ func (am *assetMgr) discoverAssets() error {
 		if path.Ext(p) == ".mpd" {
 			err := am.loadAsset(p)
 			if err != nil {
-				log.Warn().Err(err).Str("asset", p).Msg("Asset loading problem. Skipping")
+				slog.Warn("Asset loading problem. Skipping", "asset", p, "err", err.Error())
 			}
 		}
 		return nil
@@ -88,11 +88,11 @@ func (am *assetMgr) discoverAssets() error {
 	for aID, a := range am.assets {
 		err := a.consolidateAsset()
 		if err != nil {
-			log.Warn().Err(err).Str("asset", aID).Msg("Asset consolidation problem. Skipping")
+			slog.Warn("Asset consolidation problem. Skipping", "error", err.Error())
 			delete(am.assets, aID) // This deletion should be safe
 			continue
 		}
-		log.Info().Str("asset", a.AssetPath).Int("loopDurMS", a.LoopDurMS).Msg("Asset consolidated")
+		slog.Info("Asset consolidated", "asset", a.AssetPath, "loopDurMS", a.LoopDurMS)
 	}
 	return nil
 }
@@ -142,7 +142,7 @@ func (am *assetMgr) loadAsset(mpdPath string) error {
 				return fmt.Errorf("segmentTemplate on Representation level. Only supported on AdaptationSet level")
 			}
 			if _, ok := asset.Reps[rep.Id]; ok {
-				log.Debug().Str("rep", rep.Id).Str("asset", mpdPath).Msg("Representation already loaded")
+				slog.Debug("Representation already loaded", "rep", rep.Id, "asset", mpdPath)
 				continue
 			}
 			r, err := am.loadRep(assetPath, mpd, as, rep)
@@ -164,7 +164,7 @@ func (am *assetMgr) loadAsset(mpdPath string) error {
 			}
 		}
 	}
-	log.Info().Str("mpdName", mpdPath).Msg("Asset MPD loaded")
+	slog.Info("asset MPD loaded", "asset", assetPath, "mpdName", mpdPath)
 	return nil
 }
 
@@ -177,11 +177,11 @@ func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetTyp
 	if !am.writeRepData {
 		ok, err := rp.readFromJSON(am.vodFS, am.repDataDir, assetPath)
 		if ok {
-			log.Info().Str("rep", rp.ID).Str("asset", assetPath).Msg("Representation loaded from JSON")
+			slog.Info("Representation loaded from JSON", "rep", rp.ID, "asset", assetPath)
 			return &rp, err
 		}
 	}
-	log.Debug().Str("rep", rp.ID).Str("asset", assetPath).Msg("Loading full representation")
+	slog.Debug("Loading full representation", "rep", rp.ID, "asset", assetPath)
 	st := as.SegmentTemplate
 	if rep.SegmentTemplate != nil {
 		st = rep.SegmentTemplate
@@ -292,7 +292,7 @@ segLoop:
 	}
 	err = rp.writeToJSON(am.repDataDir, assetPath)
 	if err == nil {
-		log.Info().Str("rep", rp.ID).Str("asset", assetPath).Msg("Representation  data written to JSON file")
+		slog.Info("Representation  data written to JSON file", "rep", rp.ID, "asset", assetPath)
 	}
 	return &rp, err
 }
@@ -321,7 +321,7 @@ func (rp *RepData) readFromJSON(vodFS fs.FS, repDataDir, assetPath string) (bool
 		if err != nil {
 			return true, err
 		}
-		log.Debug().Str("path", gzipPath).Msg("Read repData")
+		slog.Debug("Read repdata", "path", gzipPath)
 	}
 	if len(data) == 0 {
 		_, err := os.Stat(repDataPath)
@@ -330,7 +330,7 @@ func (rp *RepData) readFromJSON(vodFS fs.FS, repDataDir, assetPath string) (bool
 			if err != nil {
 				return true, err
 			}
-			log.Debug().Str("path", repDataPath).Msg("Read repData")
+			slog.Debug("Read repdata", "path", repDataPath)
 		}
 	}
 	if len(data) == 0 {
@@ -395,7 +395,7 @@ func (rp *RepData) writeToJSON(repDataDir, assetPath string) error {
 	if err != nil {
 		return err
 	}
-	log.Debug().Str("path", gzipPath).Msg("Wrote repData")
+	slog.Debug("Wrote repData", "path", gzipPath)
 	return nil
 }
 
@@ -607,7 +607,7 @@ func (a *asset) consolidateAsset() error {
 		}
 		repDurMS := 1000 * rep.duration() / rep.MediaTimescale
 		if repDurMS != a.LoopDurMS {
-			log.Info().Str("rep", rep.ID).Str("asset", a.AssetPath).Msg("rep duration differs from loop duration")
+			slog.Info("Rep duration differs from loop duration", "rep", rep.ID, "asset", a.AssetPath)
 		}
 	}
 	return nil

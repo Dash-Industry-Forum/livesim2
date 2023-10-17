@@ -1,49 +1,42 @@
-//go:build !windows
-// +build !windows
-
+// Copyright 2023, DASH-Industry Forum. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE.md file.
 package logging
 
 import (
-	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
-	"time"
 
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/journald"
-	"github.com/rs/zerolog/log"
+	"github.com/dusted-go/logging/prettylog"
 )
 
-// InitZerolog initializes the global zerolog logger.
+// InitSlog initializes the global slog logger.
 //
 // level and logLevel determine where the logs go and what format is used.
-func InitZerolog(level string, logFormat string) (*Logger, error) {
+func InitSlog(level string, logFormat string) error {
 
-	if !isValidLogFormat(logFormat) {
-		msg := fmt.Sprintf("Unknown log format: %q", logFormat)
-		err := errors.New(msg)
-		return nil, err
-	}
+	var logger *slog.Logger
+	logLevel = new(slog.LevelVar)
 
 	switch logFormat {
+	case LogText:
+		logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 	case LogJSON:
-		log.Logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
-	case LogConsolePretty:
-		log.Logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}).
-			With().Timestamp().Logger()
-	case LogJournald:
-		log.Logger = zerolog.New(journald.NewJournalDWriter())
+		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
+	case LogPretty:
+		f := func(groups []string, a slog.Attr) slog.Attr { return a }
+		prettyHandler := prettylog.NewHandler(&slog.HandlerOptions{
+			Level:       logLevel,
+			AddSource:   false,
+			ReplaceAttr: f})
+		logger = slog.New(prettyHandler)
 	case LogDiscard:
-		log.Logger = zerolog.New(io.Discard)
+		logger = slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: logLevel}))
 	default:
-		return nil, fmt.Errorf("logFormat %q not known", logFormat)
+		return fmt.Errorf("logFormat %q not known", logFormat)
 	}
-
-	err := SetLogLevel(level)
-	if err != nil {
-		return nil, err
-	}
-
-	return &log.Logger, nil
+	slog.SetDefault(logger)
+	return SetLogLevel(level)
 }

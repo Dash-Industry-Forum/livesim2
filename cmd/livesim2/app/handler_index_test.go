@@ -23,7 +23,7 @@ func TestIndexPageWithHost(t *testing.T) {
 		LogFormat: logging.LogDiscard,
 		Host:      "https://example.com/subfolder",
 	}
-	_, err := logging.InitZerolog(cfg.LogLevel, cfg.LogFormat)
+	err := logging.InitSlog(cfg.LogLevel, cfg.LogFormat)
 	require.NoError(t, err)
 	server, err := SetupServer(context.Background(), &cfg)
 	require.NoError(t, err)
@@ -41,7 +41,7 @@ func TestIndexPageWithoutHost(t *testing.T) {
 		TimeoutS:  0,
 		LogFormat: logging.LogDiscard,
 	}
-	_, err := logging.InitZerolog(cfg.LogLevel, cfg.LogFormat)
+	err := logging.InitSlog(cfg.LogLevel, cfg.LogFormat)
 	require.NoError(t, err)
 	server, err := SetupServer(context.Background(), &cfg)
 	require.NoError(t, err)

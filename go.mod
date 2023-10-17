@@ -1,16 +1,18 @@
 module github.com/Dash-Industry-Forum/livesim2
 
-go 1.19
+go 1.21.0
+
+toolchain go1.21.1
 
 require (
 	github.com/Comcast/gots v1.0.4
 	github.com/Eyevinn/dash-mpd v0.10.0
 	github.com/Eyevinn/mp4ff v0.39.0
 	github.com/caddyserver/certmagic v0.19.2
+	github.com/dusted-go/logging v1.1.1
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/knadh/koanf v1.5.0
 	github.com/prometheus/client_golang v1.17.0
-	github.com/rs/zerolog v1.31.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
 
@@ -20,15 +22,12 @@ require (
 	github.com/barkimedes/go-deepcopy v0.0.0-20220514131651-17c30cfc62df // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
-	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
 	github.com/libdns/libdns v0.2.1 // indirect
-	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/mholt/acmez v1.2.0 // indirect
 	github.com/miekg/dns v1.1.56 // indirect

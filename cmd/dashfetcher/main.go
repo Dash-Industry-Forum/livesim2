@@ -6,10 +6,9 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
-
-	"github.com/rs/zerolog/log"
 
 	"github.com/Dash-Industry-Forum/livesim2/cmd/dashfetcher/app"
 	"github.com/Dash-Industry-Forum/livesim2/internal"
@@ -35,9 +34,9 @@ func parseOptions() *app.Options {
 	o := app.Options{}
 	flag.StringVarP(&o.OutDir, "outdir", "o", ".", "output directory")
 	flag.BoolVarP(&o.AutoOutDir, "auto", "a", false, "automatically add output directory parts from URL")
-	logFormatUsage := fmt.Sprintf("format and type of log: %v", logging.LogFormatsCommandLine)
+	logFormatUsage := fmt.Sprintf("format and type of log: %v", logging.LogFormats)
 	flag.StringVarP(&o.LogFile, "logfile", "l", "", "log file [default stdout]")
-	flag.StringVarP(&o.LogFormat, "logformat", "", "consolepretty", logFormatUsage)
+	flag.StringVarP(&o.LogFormat, "logformat", "", logging.LogText, logFormatUsage)
 	flag.StringVarP(&o.LogLevel, "loglevel", "", "info", "initial log level")
 	flag.BoolVarP(&o.Version, "version", "v", false, "print version and date")
 	longHelp := flag.Bool("help", false, "extended tool help")
@@ -74,30 +73,34 @@ func parseOptions() *app.Options {
 func main() {
 	o := parseOptions()
 
-	_, err := logging.InitZerolog(o.LogLevel, o.LogFormat)
+	err := logging.InitSlog(o.LogLevel, o.LogFormat)
 
 	if err != nil {
-		log.Fatal().Err(err).Send()
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 
 	if o.OutDir == "." {
 		o.OutDir, err = os.Getwd()
 		if err != nil {
-			log.Fatal().Err(err).Send()
+			slog.Error(err.Error())
+			os.Exit(1)
 		}
 	}
 
 	if o.AutoOutDir {
 		o.OutDir, err = app.AutoDir(o.AssetURL, o.OutDir)
 		if err != nil {
-			log.Fatal().Err(err).Send()
+			slog.Error(err.Error())
+			os.Exit(1)
 		}
-		log.Info().Str("output dir", o.OutDir).Msg("automatic output dir for MPD")
+		slog.Info("automatic output dir for MPD", "output dir", o.OutDir)
 	}
 
-	log.Info().Str("version", internal.GetVersion()).Msg("starting")
+	slog.Info("starting", "version", internal.GetVersion())
 	err = app.Fetch(o)
 	if err != nil {
-		log.Fatal().Err(err).Send()
+		slog.Error(err.Error())
+		os.Exit(1)
 	}
 }

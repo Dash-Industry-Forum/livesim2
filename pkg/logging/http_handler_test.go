@@ -52,7 +52,7 @@ func postLoglevel(t *testing.T, server *httptest.Server, level string) (*http.Re
 // TestHandleLoglevel - Test of log level handler
 func TestHandleLoglevelX(t *testing.T) {
 	// Initialize logging to debug
-	_, err := InitZerolog("debug", LogJSON)
+	err := InitSlog("DEBUG", LogJSON)
 	require.NoError(t, err)
 
 	// Create test server with loglevel routes
@@ -64,18 +64,18 @@ func TestHandleLoglevelX(t *testing.T) {
 	defer ts.Close()
 
 	// Verify initial log level
-	verifyLogLevel(t, ts, "debug\n")
+	verifyLogLevel(t, ts, "DEBUG\n")
 
 	// Set log level to info
-	resp, _ := postLoglevel(t, ts, "info")
+	resp, _ := postLoglevel(t, ts, "INFO")
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Verify new log level
-	verifyLogLevel(t, ts, "info\n")
+	verifyLogLevel(t, ts, "INFO\n")
 
 	// Set invalid log level
 	resp, _ = postLoglevel(t, ts, "banana")
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	// Log level should still be info
-	verifyLogLevel(t, ts, "info\n")
+	verifyLogLevel(t, ts, "INFO\n")
 }

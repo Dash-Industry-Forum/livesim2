@@ -80,6 +80,7 @@
         "prettylog",
         "promhttp",
         "proxied",
+        "proxying",
         "repdata",
         "repdataroot",
         "reqcount",

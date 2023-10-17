@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Changed
 
 - Upgrade to Go 1.21
+- Changed logging to slog instead of zerolog. Log levels limited to DEBUG, INFO, WARN, ERROR.
 
 ### Fixed
 

@@ -62,8 +62,8 @@ type ServerConfig struct {
 }
 
 var DefaultConfig = ServerConfig{
-	LogFormat:   "consolepretty",
-	LogLevel:    "info",
+	LogFormat:   "text",
+	LogLevel:    "INFO",
 	Port:        8888,
 	LiveWindowS: 300,
 	TimeoutS:    60,
