@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
+	"github.com/Eyevinn/dash-mpd/mpd"
 )
 
 // livesimHandlerFunc handles mpd and segment requests.
@@ -90,7 +91,7 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		}
 	case ".mp4", ".m4s", ".cmfv", ".cmfa", ".cmft", ".jpg", ".jpeg", ".m4v", ".m4a":
 		segmentPart := strings.TrimPrefix(contentPart, a.AssetPath) // includes heading slash
-		err = writeSegment(r.Context(), w, log, cfg, s.assetMgr.vodFS, a, segmentPart[1:], nowMS, s.textTemplates)
+		code, err := writeSegment(r.Context(), w, log, cfg, s.assetMgr.vodFS, a, segmentPart[1:], nowMS, s.textTemplates)
 		if err != nil {
 			var tooEarly errTooEarly
 			switch {
@@ -107,6 +108,11 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, msg, http.StatusInternalServerError)
 				return
 			}
+		}
+		if code != 0 {
+			log.Debug("special return code", "code", code)
+			http.Error(w, "triggered code", code)
+			return
 		}
 	default:
 		http.Error(w, "unknown file extension", http.StatusNotFound)
@@ -141,19 +147,108 @@ func writeLiveMPD(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, 
 	return nil
 }
 
+// writeSegment writes a segment to the response writer, but may also return a special status code if configured.
 func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, cfg *ResponseConfig, vodFS fs.FS, a *asset,
-	segmentPart string, nowMS int, tt *template.Template) error {
+	segmentPart string, nowMS int, tt *template.Template) (code int, err error) {
 	// First check if init segment and return
 	isInitSegment, err := writeInitSegment(w, cfg, vodFS, a, segmentPart)
 	if err != nil {
-		return fmt.Errorf("writeInitSegment: %w", err)
+		return 0, fmt.Errorf("writeInitSegment: %w", err)
 	}
 	if isInitSegment {
-		return nil
+		return 0, nil
+	}
+	if len(cfg.SegStatusCodes) > 0 {
+		code, err = calcStatusCode(cfg, vodFS, a, segmentPart, nowMS)
+		if err != nil {
+			return 0, err
+		}
+		if code != 0 {
+			return code, nil
+		}
 	}
 	if cfg.AvailabilityTimeCompleteFlag {
-		return writeLiveSegment(w, cfg, vodFS, a, segmentPart, nowMS, tt)
+		return 0, writeLiveSegment(w, cfg, vodFS, a, segmentPart, nowMS, tt)
 	}
 	// Chunked low-latency mode
-	return writeChunkedSegment(ctx, w, log, cfg, vodFS, a, segmentPart, nowMS)
+	return 0, writeChunkedSegment(ctx, w, log, cfg, vodFS, a, segmentPart, nowMS)
+}
+
+// calcStatusCode returns the configured status code for the segment or 0 if none.
+func calcStatusCode(cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string, nowMS int) (int, error) {
+	rep, _, err := findRepAndSegmentID(a, segmentPart)
+	if err != nil {
+		return 0, fmt.Errorf("findRepAndSegmentID: %w", err)
+	}
+
+	// segMeta is to be used for all look up. For audio it uses reference (video) track
+	segMeta, err := findSegMeta(vodFS, a, cfg, segmentPart, nowMS)
+	if err != nil {
+		return 0, fmt.Errorf("findSegMeta: %w", err)
+	}
+	startTime := int(segMeta.newTime)
+	repTimescale := int(segMeta.timescale)
+	for _, ss := range cfg.SegStatusCodes {
+		if !repInReps(a, rep.ID, ss.Reps) {
+			continue
+		}
+		// Then move to the reference track and relate to cycles
+		// From segment number we calculate a start time
+		// The time gives us how many cycles we have passed (time / cycleDuration)
+		cycle := ss.Cycle
+		cycleInTimescale := cycle * repTimescale
+		nrWraps := startTime / cycleInTimescale
+		wrapStartS := nrWraps * cycle
+		// Next we need to find the number after wrap
+		// For that we need to find the first segment nr after wrapStart
+		// Use nowMS = cycleStart to look up the latest segment published at that time
+		firstNr := 0
+		if nrWraps > 0 {
+			lastNr := findLastSegNr(cfg, a, wrapStartS*1000, segMeta.rep)
+			firstNr = lastNr + 1
+		}
+		segTime := findSegStartTime(a, cfg, firstNr, segMeta.rep)
+		if segTime < wrapStartS*repTimescale {
+			firstNr += 1
+		}
+		idx := int(segMeta.newNr) - firstNr
+		if idx < 0 {
+			return 0, fmt.Errorf("segment %d is before first segment %d", segMeta.newNr, firstNr)
+		}
+		if idx == ss.Rsq {
+			return ss.Code, nil
+		}
+	}
+	return 0, nil
+}
+
+func findLastSegNr(cfg *ResponseConfig, a *asset, nowMS int, rep *RepData) int {
+	wTimes := calcWrapTimes(a, cfg, nowMS, mpd.Duration(60*time.Second))
+	timeLineEntries := a.generateTimelineEntries(rep.ID, wTimes, 0)
+	return timeLineEntries.lastNr()
+}
+
+func findSegStartTime(a *asset, cfg *ResponseConfig, nr int, rep *RepData) int {
+	wrapLen := len(rep.Segments)
+	startNr := cfg.getStartNr()
+	nrAfterStart := int(nr) - startNr
+	nrWraps := nrAfterStart / wrapLen
+	relNr := nrAfterStart - nrWraps*wrapLen
+	wrapDur := a.LoopDurMS * rep.MediaTimescale / 1000
+	wrapTime := nrWraps * wrapDur
+	seg := rep.Segments[relNr]
+	return wrapTime + int(seg.StartTime)
+}
+
+func repInReps(a *asset, segmentPart string, reps []string) bool {
+	// TODO. Make better
+	if len(reps) == 0 {
+		return true
+	}
+	for _, rep := range reps {
+		if strings.Contains(segmentPart, rep) {
+			return true
+		}
+	}
+	return false
 }

@@ -125,6 +125,7 @@ type urlGenData struct {
 	StartRel                    string // sets timeline start (and availabilityStartTime) relative to now (in seconds). Normally negative value.
 	StopRel                     string // sets stop-time for time-limited event relative to now (in seconds)
 	Scte35Var                   string // SCTE-35 insertion variant
+	StatusCodes                 string // comma-separated list of response code patterns to return
 }
 
 var initData urlGenData
@@ -316,6 +317,16 @@ func createURL(r *http.Request, aInfo assetsInfo) (data urlGenData, err error) {
 	if scte35 != "" {
 		data.Scte35Var = scte35
 		sb.WriteString(fmt.Sprintf("scte35_%s/", scte35))
+	}
+	statusCodes := q.Get("statuscode")
+	if statusCodes != "" {
+		s := newStringConverter()
+		_ = s.ParseSegStatusCodes("statuscode", statusCodes)
+		if s.err != nil {
+			return data, fmt.Errorf("bad status codes: %w", s.err)
+		}
+		data.StatusCodes = statusCodes
+		sb.WriteString(fmt.Sprintf("statuscode_%s/", statusCodes))
 	}
 	sb.WriteString(fmt.Sprintf("%s/%s", asset, mpd))
 	data.URL = sb.String()

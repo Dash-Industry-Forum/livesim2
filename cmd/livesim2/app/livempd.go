@@ -375,6 +375,14 @@ type segEntries struct {
 	mediaTimescale uint32
 }
 
+func (s segEntries) lastNr() int {
+	nrSegs := 0
+	for _, e := range s.entries {
+		nrSegs += int(e.R) + 1
+	}
+	return s.startNr + nrSegs - 1
+}
+
 // setOffsetInAdaptationSet sets the availabilityTimeOffset in the AdaptationSet.
 // Returns ErrAtoInfTimeline if infinite ato set with timeline.
 func setOffsetInAdaptationSet(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType) (atoMS int, err error) {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/scte35"
@@ -83,6 +84,19 @@ type ResponseConfig struct {
 	TimeSubsDurMS                int               `json:"TimeSubsDurMS,omitempty"`
 	TimeSubsRegion               int               `json:"TimeSubsRegion,omitempty"`
 	Host                         string            `json:"Host,omitempty"`
+	SegStatusCodes               []SegStatusCodes  `json:"SegStatus,omitempty"`
+}
+
+// SegStatusCodes configures regular extraordinary segment response codes
+type SegStatusCodes struct {
+	// Cycle is cycle length in seconds
+	Cycle int
+	// Rsq is relative sequence number (in cycle)
+	Rsq int
+	// Code is the HTTP response code
+	Code int
+	// Reps is a list of applicable representations (empty means all)
+	Reps []string
 }
 
 // NewResponseConfig returns a new ResponseConfig with default values.
@@ -132,9 +146,14 @@ func (rc *ResponseConfig) getStartNr() int {
 }
 
 // processURLCfg returns all information that can be extracted from url
-func processURLCfg(url string, nowMS int) (*ResponseConfig, error) {
+func processURLCfg(confURL string, nowMS int) (*ResponseConfig, error) {
 	// Mimics configprocessor.process_url
-	urlParts := strings.Split(url, "/")
+
+	cfgURL, err := url.QueryUnescape(confURL)
+	if err != nil {
+		return nil, fmt.Errorf("url.QueryUnescape: %w", err)
+	}
+	urlParts := strings.Split(cfgURL, "/")
 	cfg := NewResponseConfig()
 	cfg.URLParts = urlParts
 	sc := strConvAccErr{}
@@ -225,6 +244,8 @@ cfgLoop:
 			cfg.TimeSubsDurMS = sc.Atoi(key, val)
 		case "timesubsreg": // region (0 or 1)
 			cfg.TimeSubsRegion = sc.Atoi(key, val)
+		case "statuscode":
+			cfg.SegStatusCodes = sc.ParseSegStatusCodes(key, val)
 		default:
 			contentStartIdx = i
 			break cfgLoop
@@ -237,7 +258,7 @@ cfgLoop:
 		return nil, fmt.Errorf("no content part")
 	}
 
-	err := verifyAndFillConfig(cfg, nowMS)
+	err = verifyAndFillConfig(cfg, nowMS)
 	if err != nil {
 		return cfg, fmt.Errorf("url config: %w", err)
 	}
