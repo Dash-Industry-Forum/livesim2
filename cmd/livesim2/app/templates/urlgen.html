@@ -192,6 +192,26 @@
 				</label>
 			</fieldset>
 		</details>
+		<details>
+			<summary>Negative test cases...</summary>
+
+			<label for="statuscode">
+			<p><em>Patterns of cyclic segment response codes</em></p>
+			<p>
+				A square-bracket-surrounded list of comma-separated patterns, like
+				<pre>[{code:404,cycle:30,rsq:0,rep:video},{code:403,cycle:60,rsq:1}]</pre>
+				where:<br/>
+			<ul>
+				<li><it>code</it> is an HTTP response code in the range 400-599</li>
+				<li><it>cycle</it> is cycle in seconds</li>
+				<li><it>rsq</it> is the relative sequence number in the cycle</li>
+				<li><it>rep</it> is a comma-separated list of representation IDs to which the pattern applies (can be empty)</li>
+			</ul>
+			</p>
+				<input type="text" id="statuscode" name="statuscode" value="{{.StatusCodes}}" />
+			</label>
+		</details>
+
 
 		<div class="grid">
 			<button type="submit">Submit</button>

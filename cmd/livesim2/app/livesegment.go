@@ -371,33 +371,55 @@ func createOutSeg(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string
 	return so, nil
 }
 
+func findSegMeta(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int) (segMeta, error) {
+	var sm segMeta
+	rep, segID, err := findRepAndSegmentID(a, segmentPart)
+	if err != nil {
+		return sm, fmt.Errorf("findRepAndSegmentID: %w", err)
+	}
+
+	if rep.ContentType == "audio" {
+		sm, err := findRefSegMeta(vodFS, a, cfg, segmentPart, nowMS, rep, segID)
+		if err != nil {
+			return sm, fmt.Errorf("findRefSegMeta: %w", err)
+		}
+		return sm, nil
+	} else {
+		switch cfg.getRepType(segmentPart) {
+		case segmentNumber, timeLineNumber:
+			nr := uint32(segID)
+			if nr < uint32(cfg.getStartNr()) {
+				return sm, errNotFound
+			}
+			sm, err = findSegMetaFromNr(a, rep, nr, cfg, nowMS)
+		case timeLineTime:
+			time := uint64(segID)
+			sm, err = findSegMetaFromTime(a, rep, time, cfg, nowMS)
+		default:
+			return sm, fmt.Errorf("unknown liveMPD type")
+		}
+		if err != nil {
+			return sm, err
+		}
+	}
+	return sm, nil
+}
+
 func createAudioSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int, rep *RepData, segID int) (segOut, error) {
 	refRep := a.refRep
 	refTimescale := uint64(refRep.MediaTimescale)
-	var refMeta segMeta
-	var err error
-	var so segOut
-	switch cfg.getRepType(segmentPart) {
-	case segmentNumber, timeLineNumber:
-		outSegNr := uint32(segID)
-		refMeta, err = findSegMetaFromNr(a, refRep, outSegNr, cfg, nowMS)
-		if err != nil {
-			return so, fmt.Errorf("findSegMetaFromNr from reference: %w", err)
-		}
-	case timeLineTime:
-		time := int(segID)
-		refMeta, err = findRefSegMetaFromTime(a, rep, uint64(time), cfg, nowMS)
-		if err != nil {
-			return so, fmt.Errorf("findSegMetaFromNr from reference: %w", err)
-		}
-	default:
-		return so, fmt.Errorf("unknown liveMPD type")
+
+	refMeta, err := findRefSegMeta(vodFS, a, cfg, segmentPart, nowMS, rep, segID)
+	if err != nil {
+		return segOut{}, fmt.Errorf("findRefSegMeta: %w", err)
 	}
+
 	recipe := calcAudioSegRecipe(refMeta.newNr,
 		refMeta.newTime,
 		refMeta.newTime+uint64(refMeta.newDur),
 		uint64(refRep.duration()),
 		refTimescale, rep)
+	var so segOut
 	so.seg, err = createAudioSeg(vodFS, a, cfg, recipe)
 	if err != nil {
 		return so, fmt.Errorf("createAudioSeg: %w", err)
@@ -411,6 +433,29 @@ func createAudioSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart 
 	}
 
 	return so, nil
+}
+
+// findRefSegMeta finds the reference track meta data given other following track like audio
+func findRefSegMeta(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int, rep *RepData, segID int) (segMeta, error) {
+	var refMeta segMeta
+	var err error
+	switch cfg.getRepType(segmentPart) {
+	case segmentNumber, timeLineNumber:
+		outSegNr := uint32(segID)
+		refMeta, err = findSegMetaFromNr(a, a.refRep, outSegNr, cfg, nowMS)
+		if err != nil {
+			return refMeta, fmt.Errorf("findSegMetaFromNr from reference: %w", err)
+		}
+	case timeLineTime:
+		time := int(segID)
+		refMeta, err = findRefSegMetaFromTime(a, rep, uint64(time), cfg, nowMS)
+		if err != nil {
+			return refMeta, fmt.Errorf("findSegMetaFromNr from reference: %w", err)
+		}
+	default:
+		return refMeta, fmt.Errorf("unknown liveMPD type")
+	}
+	return refMeta, nil
 }
 
 // writeChunkedSegment splits a segment into chunks and send them as they become available timewise.

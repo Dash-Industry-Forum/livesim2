@@ -558,3 +558,115 @@ func TestLLSegmentAvailability(t *testing.T) {
 		require.Equal(t, tc.expectedDecodeTime, int(decodeTime), "response segment decode time")
 	}
 }
+
+func TestSegmentStatusCodeResponse(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false)
+	err := am.discoverAssets()
+	require.NoError(t, err)
+
+	cases := []struct {
+		desc     string
+		asset    string
+		media    string
+		mpdType  string
+		nrOrTime int
+		ss       []SegStatusCodes
+		nowMS    int
+		expCode  int
+	}{
+		{
+			desc:     "hit cyclic 404",
+			asset:    "testpic_2s",
+			media:    "V300/$NrOrTime$.m4s",
+			mpdType:  "Number",
+			nrOrTime: 30,
+			nowMS:    90_000,
+			ss: []SegStatusCodes{
+				{Cycle: 30, Code: 404, Rsq: 0},
+			},
+			expCode: 404,
+		},
+		{
+			desc:     "miss cyclic 404",
+			asset:    "testpic_2s",
+			media:    "V300/$NrOrTime$.m4s",
+			mpdType:  "Number",
+			nrOrTime: 31,
+			nowMS:    90_000,
+			ss: []SegStatusCodes{
+				{Cycle: 30, Code: 404, Rsq: 0},
+			},
+			expCode: 0,
+		},
+		{
+			desc:     "hit cyclic 404 for timeline time",
+			asset:    "testpic_2s",
+			media:    "V300/$NrOrTime$.m4s",
+			mpdType:  "TimelineTime",
+			nrOrTime: 90000 * 30,
+			nowMS:    90_000,
+			ss: []SegStatusCodes{
+				{Cycle: 30, Code: 404},
+			},
+			expCode: 404,
+		},
+		{
+			desc:     "miss cyclic 404 for timeline time",
+			asset:    "testpic_2s",
+			media:    "V300/$NrOrTime$.m4s",
+			mpdType:  "TimelineTime",
+			nrOrTime: 90000 * 32,
+			nowMS:    90_000,
+			ss: []SegStatusCodes{
+				{Cycle: 30, Code: 404},
+			},
+			expCode: 0,
+		},
+		{
+			desc:     "hit cyclic 404 with specific rep",
+			asset:    "testpic_2s",
+			media:    "A48/$NrOrTime$.m4s",
+			mpdType:  "Number",
+			nrOrTime: 30,
+			nowMS:    90_000,
+			ss: []SegStatusCodes{
+				{Cycle: 30, Code: 404, Reps: []string{"A48"}},
+			},
+			expCode: 404,
+		},
+		{
+			desc:     "hit cyclic 404 but not specific rep",
+			asset:    "testpic_2s",
+			media:    "A48/$NrOrTime$.m4s",
+			mpdType:  "Number",
+			nrOrTime: 30,
+			nowMS:    90_000,
+			ss: []SegStatusCodes{
+				{Cycle: 30, Code: 404, Reps: []string{"V300"}},
+			},
+			expCode: 0,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			asset, ok := am.findAsset(tc.asset)
+			require.True(t, ok)
+			require.NoError(t, err)
+			cfg := NewResponseConfig()
+			switch tc.mpdType {
+			case "Number":
+			case "TimelineTime":
+				cfg.SegTimelineFlag = true
+			case "TimelineNumber":
+				cfg.SegTimelineNrFlag = true
+			}
+			cfg.SegStatusCodes = tc.ss
+			media := strings.Replace(tc.media, "$NrOrTime$", fmt.Sprintf("%d", tc.nrOrTime), -1)
+			rr := httptest.NewRecorder()
+			code, err := writeSegment(context.TODO(), rr, slog.Default(), cfg, vodFS, asset, media, tc.nowMS, nil)
+			require.NoError(t, err)
+			require.Equal(t, tc.expCode, code)
+		})
+	}
+}

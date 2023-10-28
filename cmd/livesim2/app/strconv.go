@@ -15,6 +15,11 @@ type strConvAccErr struct {
 	err error
 }
 
+// newStringConverter returns a new string converter for URL parsing.
+func newStringConverter() *strConvAccErr {
+	return &strConvAccErr{}
+}
+
 func (s *strConvAccErr) Atoi(key, val string) int {
 	if s.err != nil {
 		return 0
@@ -103,4 +108,56 @@ func (s *strConvAccErr) AtofInf(key, val string) float64 {
 		return 0
 	}
 	return valFloat
+}
+
+// ParseSegStatusCodes parses a command line [{cycle:30, rsq: 0, code: 404, rep:video}]
+func (s *strConvAccErr) ParseSegStatusCodes(key, val string) []SegStatusCodes {
+	if s.err != nil {
+		return nil
+	}
+	// remove all spaces, remove start [{ and end }], split on },{,
+	trimmed := strings.ReplaceAll(val, " ", "")
+	if len(trimmed) < 4 {
+		s.err = fmt.Errorf("val=%q for key %q is too short", val, key)
+		return nil
+	}
+	trimmed = trimmed[2 : len(trimmed)-2]
+	parts := strings.Split(trimmed, "},{")
+	codes := make([]SegStatusCodes, len(parts))
+	for i, part := range parts {
+		// split on , and :
+		pairs := strings.Split(part, ",")
+		for _, p := range pairs {
+			kv := strings.Split(p, ":")
+			if len(kv) != 2 {
+				s.err = fmt.Errorf("val=%q for key %q is not a valid. Bad pair", val, key)
+				return nil
+			}
+			switch kv[0] {
+			case "cycle":
+				codes[i].Cycle = s.Atoi("cycle", kv[1])
+			case "rsq":
+				codes[i].Rsq = s.Atoi("rsq", kv[1])
+			case "code":
+				codes[i].Code = s.Atoi("code", kv[1])
+			case "rep":
+				if kv[1] != "*" { // * and empty means all reps
+					reps := strings.Split(kv[1], ",")
+					codes[i].Reps = reps
+				}
+			default:
+				s.err = fmt.Errorf("val=%q for key %q is not a valid. Unknown key", val, key)
+			}
+		}
+		if codes[i].Cycle <= 0 {
+			s.err = fmt.Errorf("val=%q for key %q is not a valid. cycle is too small", val, key)
+		}
+		if codes[i].Rsq < 0 {
+			s.err = fmt.Errorf("val=%q for key %q is not a valid. rsq is too small", val, key)
+		}
+		if codes[i].Code < 400 || codes[i].Code > 599 {
+			s.err = fmt.Errorf("val=%q for key %q is not a valid. code is not in range 400-599", val, key)
+		}
+	}
+	return codes
 }
