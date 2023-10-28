@@ -68,11 +68,7 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		}
 		templateName = "mpds"
 	case "/urlgen/create":
-		data, err = createURL(r, aInfo)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		data = createURL(r, aInfo)
 	default:
 		data, err = createInitData(r, aInfo)
 		if err != nil {
@@ -117,15 +113,17 @@ type urlGenData struct {
 	TimeSubsDur                 string // cue duration of generated subtitles (in milliseconds)
 	TimeSubsReg                 string // 0 for bottom and 1 for top
 	UTCTiming                   string
-	Periods                     string // number of periods per hour (1-60)
-	Continuous                  bool   // period continuity signaling
-	StartNR                     string // startNumber (default=0) -1 translates to no value in MPD (fallback to default = 1)
-	Start                       string // sets timeline start (and availabilityStartTime) relative to Epoch (in seconds)
-	Stop                        string // sets stop-time for time-limited event (in seconds)
-	StartRel                    string // sets timeline start (and availabilityStartTime) relative to now (in seconds). Normally negative value.
-	StopRel                     string // sets stop-time for time-limited event relative to now (in seconds)
-	Scte35Var                   string // SCTE-35 insertion variant
-	StatusCodes                 string // comma-separated list of response code patterns to return
+	Periods                     string   // number of periods per hour (1-60)
+	Continuous                  bool     // period continuity signaling
+	StartNR                     string   // startNumber (default=0) -1 translates to no value in MPD (fallback to default = 1)
+	Start                       string   // sets timeline start (and availabilityStartTime) relative to Epoch (in seconds)
+	Stop                        string   // sets stop-time for time-limited event (in seconds)
+	StartRel                    string   // sets timeline start (and availabilityStartTime) relative to now (in seconds). Normally negative value.
+	StopRel                     string   // sets stop-time for time-limited event relative to now (in seconds)
+	Scte35Var                   string   // SCTE-35 insertion variant
+	StatusCodes                 string   // comma-separated list of response code patterns to return
+	Traffic                     string   // comma-separated list of up/down/slow/hang intervals for one or more BaseURLs in MPD
+	Errors                      []string // error messages to display due to bad configuration
 }
 
 var initData urlGenData
@@ -175,13 +173,14 @@ func createInitData(r *http.Request, aInfo assetsInfo) (data urlGenData, err err
 	return data, nil
 }
 
-func createURL(r *http.Request, aInfo assetsInfo) (data urlGenData, err error) {
+// createURL creates a URL from the request parameters. Errors are returned in ErrorMsg field.
+func createURL(r *http.Request, aInfo assetsInfo) urlGenData {
 	q := r.URL.Query()
 	var sb strings.Builder // Used to build URL
 	asset := q.Get("asset")
 	mpd := q.Get("mpd")
 	// fmt.Println("create", asset, mpd)
-	data = initData
+	data := initData
 	data.Assets = make([]assetWithSelect, 0, len(aInfo.Assets))
 	data.MPDs = nil
 	for i := range aInfo.Assets {
@@ -320,17 +319,31 @@ func createURL(r *http.Request, aInfo assetsInfo) (data urlGenData, err error) {
 	}
 	statusCodes := q.Get("statuscode")
 	if statusCodes != "" {
-		s := newStringConverter()
-		_ = s.ParseSegStatusCodes("statuscode", statusCodes)
-		if s.err != nil {
-			return data, fmt.Errorf("bad status codes: %w", s.err)
+		sc := newStringConverter()
+		_ = sc.ParseSegStatusCodes("statuscode", statusCodes)
+		if sc.err != nil {
+			data.Errors = append(data.Errors, fmt.Sprintf("bad statuscode patterns: %s", sc.err.Error()))
 		}
 		data.StatusCodes = statusCodes
 		sb.WriteString(fmt.Sprintf("statuscode_%s/", statusCodes))
 	}
+	traffic := q.Get("traffic")
+	if traffic != "" {
+		_, err := CreateAllLossItvls(traffic)
+		if err != nil {
+			data.Errors = append(data.Errors, fmt.Sprintf("bad traffic pattern: %s", err.Error()))
+		}
+		data.Traffic = traffic
+		sb.WriteString(fmt.Sprintf("traffic_%s/", traffic))
+	}
 	sb.WriteString(fmt.Sprintf("%s/%s", asset, mpd))
-	data.URL = sb.String()
-	data.PlayURL = aInfo.PlayURL
+	if len(data.Errors) > 0 {
+		data.URL = ""
+		data.PlayURL = ""
+	} else {
+		data.URL = sb.String()
+		data.PlayURL = aInfo.PlayURL
+	}
 	data.Host = aInfo.Host
-	return data, nil
+	return data
 }

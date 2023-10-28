@@ -253,3 +253,40 @@ func TestProcessURLCfg(t *testing.T) {
 		}
 	}
 }
+
+func TestParseLossItvls(t *testing.T) {
+	cases := []struct {
+		desc        string
+		patter      string
+		wantedItvls []LossItvls
+	}{
+		{"empty", "", nil},
+		{"up 10s", "u10",
+			[]LossItvls{
+				{Itvls: []LossItvl{
+					{10, lossNo}}},
+			},
+		},
+		{"up20s down3s up12s", "u10d3u12",
+			[]LossItvls{
+				{Itvls: []LossItvl{
+					{10, lossNo},
+					{3, loss404},
+					{12, lossNo}}},
+			},
+		},
+		{"up 5s", "u5",
+			[]LossItvls{
+				{Itvls: []LossItvl{
+					{5, lossNo}}},
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			gotItvls, err := CreateAllLossItvls(c.patter)
+			require.NoError(t, err)
+			require.Equal(t, c.wantedItvls, gotItvls)
+		})
+	}
+}
