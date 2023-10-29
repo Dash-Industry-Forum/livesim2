@@ -104,8 +104,8 @@ func SlogMiddleWare(l *slog.Logger) func(next http.Handler) http.Handler {
 					l2 = l2.With("bytes_in", bytesIn)
 				}
 				l2.Info("request")
-				next.ServeHTTP(ww, r)
 			}()
+			next.ServeHTTP(ww, r)
 		}
 		return http.HandlerFunc(fn)
 	}
