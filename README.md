@@ -309,6 +309,13 @@ More information can be found in the [deployment/README.md](deployment/README.md
 To get information about the available assets and other information
 access the server's root URL.
 
+### Docker
+
+A simple `Dockerfile` is also provided. It builds a stand-alone livesim2
+image bundled with the test content that is provided in this repo.
+Some comments are included in the Dockerfile. Check the options of livesim2
+to find out how to add other content, HTTPs etc.
+
 ## List of functionality and options
 
 The URL parameters are now listed on this project's Wiki page
