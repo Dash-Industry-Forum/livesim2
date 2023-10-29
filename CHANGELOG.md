@@ -9,9 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Added
 
-- New highly configurable `statuscode`` parameter for cyclic bad segment request responses
+- New highly configurable `statuscode` parameter for cyclic bad segment request responses
 - New URL parameter `traffic` to simulate periodic issues with fetching
   segments. Supports multiple parallel BaseURLs.
+- Dockerfile to build a minimal Docker image with sample test content
 
 ## Changed
 
