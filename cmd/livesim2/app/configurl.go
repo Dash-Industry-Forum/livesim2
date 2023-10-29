@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/scte35"
 )
@@ -24,6 +25,7 @@ const (
 	timeLineTime liveMPDType = iota
 	timeLineNumber
 	segmentNumber
+	baseURLPrefix = "bu"
 )
 
 type UTCTimingMethod string
@@ -49,7 +51,6 @@ const (
 type ResponseConfig struct {
 	URLParts                     []string          `json:"-"`
 	URLContentIdx                int               `json:"-"`
-	BaseURLs                     []string          `json:"BaseURLs,omitempty"`
 	UTCTimingMethods             []UTCTimingMethod `json:"UTCTimingMethods,omitempty"`
 	PeriodDurations              []int             `json:"PeriodDurations,omitempty"`
 	StartTimeS                   int               `json:"StartTimeS"`
@@ -85,6 +86,7 @@ type ResponseConfig struct {
 	TimeSubsRegion               int               `json:"TimeSubsRegion,omitempty"`
 	Host                         string            `json:"Host,omitempty"`
 	SegStatusCodes               []SegStatusCodes  `json:"SegStatus,omitempty"`
+	Traffic                      []LossItvls       `json:"Traffic,omitempty"`
 }
 
 // SegStatusCodes configures regular extraordinary segment response codes
@@ -97,6 +99,113 @@ type SegStatusCodes struct {
 	Code int
 	// Reps is a list of applicable representations (empty means all)
 	Reps []string
+}
+
+// CreateAllLossItvls creates loss intervals for multiple BaseURLs
+func CreateAllLossItvls(pattern string) ([]LossItvls, error) {
+	if pattern == "" {
+		return nil, nil
+	}
+	nr := strings.Count(pattern, ",") + 1
+	li := make([]LossItvls, 0, nr)
+	for _, s := range strings.Split(pattern, ",") {
+		li1, err := CreateLossItvls(s)
+		if err != nil {
+			return nil, err
+		}
+		li = append(li, li1)
+	}
+	return li, nil
+}
+
+type lossState int
+
+const (
+	lossUnknown lossState = iota
+	lossNo
+	loss404
+	lossSlow     // Slow response
+	lossHang     // Hangs for 10s
+	lossSlowTime = 2 * time.Second
+	lossHangTime = 10 * time.Second
+)
+
+// LossItvls is loss intervals for one BaseURL
+type LossItvls struct {
+	Itvls []LossItvl
+}
+
+// CycleDurS returns complete dur of cycle in seconds
+func (l LossItvls) CycleDurS() int {
+	dur := 0
+	for _, itvl := range l.Itvls {
+		dur += itvl.durS
+	}
+	return dur
+}
+
+func (l LossItvls) StateAt(nowS int) lossState {
+	dur := l.CycleDurS()
+	rest := nowS % dur
+	for _, itvl := range l.Itvls {
+		rest -= itvl.durS
+		if rest < 0 {
+			return itvl.state
+		}
+	}
+	return lossUnknown
+}
+
+// CreateLossItvls creates a LossItvls from a pattern like u20d10 (20s up, 10 down)
+func CreateLossItvls(pattern string) (LossItvls, error) {
+	li := LossItvls{}
+	state := lossUnknown
+	dur := 0
+	for i := 0; i < len(pattern); i++ {
+		c := pattern[i]
+		switch c {
+		case 'u', 'd', 's', 'h':
+			if state != lossUnknown {
+				if dur == 0 {
+					return LossItvls{}, fmt.Errorf("invalid loss pattern %q", pattern)
+				}
+				li.Itvls = append(li.Itvls, LossItvl{durS: dur, state: state})
+			}
+			dur = 0
+			switch c {
+			case 'u':
+				state = lossNo
+			case 'd':
+				state = loss404
+			case 's':
+				state = lossSlow
+			case 'h':
+				state = lossHang
+			}
+		default:
+			digit := c - '0'
+			if digit > 9 {
+				return LossItvls{}, fmt.Errorf("invalid loss pattern %q", pattern)
+			}
+			dur = dur*10 + int(digit)
+		}
+	}
+	if state != lossUnknown {
+		if dur == 0 {
+			return LossItvls{}, fmt.Errorf("invalid loss pattern %q", pattern)
+		}
+		li.Itvls = append(li.Itvls, LossItvl{durS: dur, state: state})
+	}
+	return li, nil
+}
+
+type LossItvl struct {
+	durS  int
+	state lossState
+}
+
+func baseURL(nr int) string {
+	return fmt.Sprintf("bu%d/", nr)
 }
 
 // NewResponseConfig returns a new ResponseConfig with default values.
@@ -213,8 +322,6 @@ cfgLoop:
 			cfg.SegTimelineFlag = true
 		case "segtimelinenr":
 			cfg.SegTimelineNrFlag = true
-		case "baseurl": // Add one or more BaseURLs, put all configurations
-			cfg.BaseURLs = append(cfg.BaseURLs, val)
 		case "peroff": // Set the period offset
 			cfg.PeriodOffset = sc.AtoiPtr(key, val)
 		case "scte35": // Signal this many SCTE-35 ad periods inband (emsg messages) every minute
@@ -246,6 +353,8 @@ cfgLoop:
 			cfg.TimeSubsRegion = sc.Atoi(key, val)
 		case "statuscode":
 			cfg.SegStatusCodes = sc.ParseSegStatusCodes(key, val)
+		case "traffic":
+			cfg.Traffic = sc.ParseLossItvls(key, val)
 		default:
 			contentStartIdx = i
 			break cfgLoop

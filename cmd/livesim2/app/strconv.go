@@ -161,3 +161,15 @@ func (s *strConvAccErr) ParseSegStatusCodes(key, val string) []SegStatusCodes {
 	}
 	return codes
 }
+
+func (s *strConvAccErr) ParseLossItvls(key, val string) []LossItvls {
+	if s.err != nil {
+		return nil
+	}
+	itvls, err := CreateAllLossItvls(val)
+	if err != nil {
+		s.err = fmt.Errorf("key=%s, err=%w", key, err)
+		return nil
+	}
+	return itvls
+}

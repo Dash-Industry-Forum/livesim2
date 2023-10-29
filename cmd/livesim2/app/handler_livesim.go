@@ -91,6 +91,30 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		}
 	case ".mp4", ".m4s", ".cmfv", ".cmfa", ".cmft", ".jpg", ".jpeg", ".m4v", ".m4a":
 		segmentPart := strings.TrimPrefix(contentPart, a.AssetPath) // includes heading slash
+		if len(cfg.Traffic) > 0 {
+			var patternNr int
+			patternNr, segmentPart = extractPattern(segmentPart)
+			if patternNr >= 0 {
+				itvls := cfg.Traffic[patternNr]
+				switch itvls.StateAt(nowMS / 1000) {
+				case lossNo:
+					// Just continue
+				case loss404:
+					http.Error(w, "Not Found", http.StatusNotFound)
+					return
+				case lossSlow:
+					time.Sleep(lossSlowTime)
+				case lossHang:
+					// Get the result, but after 10s
+					time.Sleep(lossHangTime)
+					http.Error(w, "Hang", http.StatusServiceUnavailable)
+					return
+				default:
+					http.Error(w, "strange loss state", http.StatusInternalServerError)
+					return
+				}
+			}
+		}
 		code, err := writeSegment(r.Context(), w, log, cfg, s.assetMgr.vodFS, a, segmentPart[1:], nowMS, s.textTemplates)
 		if err != nil {
 			var tooEarly errTooEarly
@@ -118,6 +142,23 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown file extension", http.StatusNotFound)
 		return
 	}
+}
+
+// extractPattern extracts the pattern number and return a modified segmentPart.
+func extractPattern(segmentPart string) (int, string) {
+	parts := strings.Split(segmentPart, "/")
+	pPart := parts[1]
+	if !strings.HasPrefix(pPart, baseURLPrefix) {
+		return -1, segmentPart
+	}
+	nr, err := strconv.Atoi(pPart[len(baseURLPrefix):])
+	if err != nil {
+		return -1, segmentPart
+	}
+	// Remove the base URL part, but leave an empty string at start.
+	parts = parts[1:]
+	parts[0] = ""
+	return nr, strings.Join(parts, "/")
 }
 
 func writeLiveMPD(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, a *asset, mpdName string, nowMS int) error {

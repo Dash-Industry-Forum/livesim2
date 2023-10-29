@@ -106,6 +106,10 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	period.Duration = nil
 	period.Id = "P0"
 	period.Start = Ptr(m.Duration(0))
+	for bNr := 0; bNr < len(cfg.Traffic); bNr++ {
+		b := m.NewBaseURL(baseURL(bNr))
+		period.BaseURLs = append(period.BaseURLs, b)
+	}
 
 	adaptationSets := orderAdaptationSetsByContentType(period.AdaptationSets)
 	var refSegEntries segEntries

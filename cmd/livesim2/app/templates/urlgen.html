@@ -17,13 +17,20 @@
 		</hgroup>
 		{{if ne .URL ""}}
 		<article>
-		URL= {{.URL}}<br />
-		<div class="grid">
-		<span onclick="navigator.clipboard.writeText({{.URL}})" role="button">Copy</span>
-		<a href="{{(printf .PlayURL .URL)}}" target="_blank" role="button">Play</a>
-		<span onclick="window.location.href='/urlgen/';" role="button" class="secondary">Reset</span>
-		</div>
-	</article>
+			URL= {{.URL}}<br />
+			<div class="grid">
+			<span onclick="navigator.clipboard.writeText({{.URL}})" role="button">Copy</span>
+			<a href="{{(printf .PlayURL .URL)}}" target="_blank" role="button">Play</a>
+			<span onclick="window.location.href='/urlgen/';" role="button" class="secondary">Reset</span>
+			</div>
+		</article>
+		{{end}}
+		{{if .Errors}}
+		<article>
+			{{range .Errors}}
+			{{.}}<br />
+			{{end}}
+		</article>
 		{{end}}
 
 		<form action="/urlgen/create" method="get">
@@ -210,6 +217,34 @@
 			</p>
 				<input type="text" id="statuscode" name="statuscode" value="{{.StatusCodes}}" />
 			</label>
+			<label for="traffic">
+				<p><em>Traffic Patterns for one or more BaseURLs</em></p>
+				<p>
+					Specify time interval for loss patterns for one or more BaseURLs
+					with "up (u)", "down (d)", "slow (s)", or "hang (h)" states, like
+					<pre>u50d10,u10d50</pre>
+					or
+					<pre>d1,u1,u45s10h5</pre>
+					where:<br/>
+				<ul>
+					<li><it>u50d10,u10d50</it> is two pairs (two base URLS)</li>
+					<li><it>u50d10 means 50s up time and 10s downtime (60s cycle)</li>
+					<li><it>u10d50 means 10s up time and 50s downtime (60s cycle)</li>
+					<li><it>d1,u1,u45s10h5</it> means three base URLS where the first is always down,
+						    the second is always up,
+					        and the third is up 45s, slow 10s, and hanging 5s every minute</li>
+				</ul>
+				<ul>
+					<li>During a "down (d)" interval, all segment requests will result in a "404 Not Found" response.</li>
+					<li>During a "slow (s)" interval, all segment responses are delayed by 2s.</li>
+					<li>During a "hang (s)" interval, all segment responses hang for 10s before resulting in 503.
+					</li>
+				</ul>
+
+
+				</p>
+					<input type="text" id="traffic" name="traffic" value="{{.Traffic}}" />
+				</label>
 		</details>
 
 
