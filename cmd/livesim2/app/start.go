@@ -31,11 +31,6 @@ func SetupServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 	r.Use(middleware.Recoverer)
 	r.Use(addVersionAndCORSHeaders)
 	prometheusMiddleWare := NewPrometheusMiddleware()
-
-	l := chi.NewRouter()
-	r.Use(prometheusMiddleWare)
-
-	v := chi.NewRouter()
 	r.Use(prometheusMiddleWare)
 
 	// Set a timeout value on the request context (ctx), that will signal
@@ -49,6 +44,8 @@ func SetupServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 	r.Mount("/metrics", promhttp.Handler())
 
 	var reqLimiter *IPRequestLimiter
+	l := chi.NewRouter()
+	v := chi.NewRouter()
 	if cfg.MaxRequests > 0 {
 		reqLimiter = NewIPRequestLimiter(cfg.MaxRequests, time.Duration(cfg.ReqLimitInt)*time.Second, time.Now(), cfg.ReqLimitLog)
 		ltrMw := NewLimiterMiddleware("Livesim2-Requests", reqLimiter)
