@@ -26,11 +26,9 @@ func InitSlog(level string, logFormat string) error {
 	case LogJSON:
 		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 	case LogPretty:
-		f := func(groups []string, a slog.Attr) slog.Attr { return a }
 		prettyHandler := prettylog.NewHandler(&slog.HandlerOptions{
-			Level:       logLevel,
-			AddSource:   false,
-			ReplaceAttr: f})
+			Level:     logLevel,
+			AddSource: false})
 		logger = slog.New(prettyHandler)
 	case LogDiscard:
 		logger = slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: logLevel}))

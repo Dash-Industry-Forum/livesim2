@@ -7,9 +7,9 @@ toolchain go1.21.1
 require (
 	github.com/Comcast/gots v1.0.4
 	github.com/Eyevinn/dash-mpd v0.10.0
-	github.com/Eyevinn/mp4ff v0.39.0
+	github.com/Eyevinn/mp4ff v0.40.0
 	github.com/caddyserver/certmagic v0.19.2
-	github.com/dusted-go/logging v1.1.1
+	github.com/dusted-go/logging v1.1.3
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/knadh/koanf v1.5.0
 	github.com/prometheus/client_golang v1.17.0
@@ -24,11 +24,10 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
-	github.com/fsnotify/fsnotify v1.6.0 // indirect
-	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
 	github.com/libdns/libdns v0.2.1 // indirect
-	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
+	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
 	github.com/mholt/acmez v1.2.0 // indirect
 	github.com/miekg/dns v1.1.56 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
@@ -36,7 +35,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.5.0 // indirect
-	github.com/prometheus/common v0.44.0 // indirect
+	github.com/prometheus/common v0.45.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/zeebo/blake3 v0.2.3 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
