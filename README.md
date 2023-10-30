@@ -71,6 +71,32 @@ Once the server is started, it will scan the file tree starting from
 Currently, only source VoD assets using SegmentTimeline with `$Time$` and
 SegmentTemplate with `$Number$`  are supported.
 
+### Command-line parameters
+
+A complete list of parameters, and their access
+via the command line looks like:
+
+```sh
+  --certpath string      path to TLS certificate file (for HTTPS). Use domains instead if possible
+  --cfg string           path to a JSON config file
+  --domains string       One or more DNS domains (comma-separated) for auto certificate from Lets Encrypt
+  --host string          host (and possible prefix) used in MPD elements. Overrides auto-detected full scheme://host
+  --keypath string       path to TLS private key file (for HTTPS). Use domains instead if possible.
+  --livewindow int       default live window (seconds) (default 300)
+  --logformat string     log format [text, json, pretty, discard] (default "text")
+  --loglevel string      log level [DEBUG, INFO, WARN, ERROR] (default "INFO")
+  --maxrequests int      max nr of request per IP address per 24 hours
+  --playurl string       URL template to play mpd. %s will be replaced by MPD URL (default "https://reference.dashif.org/dash.js/latest/samples/dash-if-reference-player/index.html?mpd=%s&autoLoad=true&muted=true")
+  --port int             HTTP port (default 8888)
+  --repdataroot string   Representation metadata root directory. "+" copies vodroot value. "-" disables usage. (default "+")
+  --reqlimitint int      interval for request limit i seconds (only used if maxrequests > 0) (default 86400)
+  --reqlimitlog string   path to request limit log file (only written if maxrequests > 0)
+  --scheme string        scheme used in Location and BaseURL elements. If empty, it is attempted to be auto-detected
+  --timeout int          timeout for all requests (seconds) (default 60)
+  --vodroot string       VoD root directory (default "./vod")
+  --writerepdata         Write representation metadata if not present
+```
+
 ### Quicker load by using metadata files
 
 For assets with many segments, the scanning process can take a considerable time.
@@ -318,8 +344,14 @@ to find out how to add other content, HTTPs etc.
 
 ## List of functionality and options
 
-The URL parameters are now listed on this project's Wiki page
-[URL-parameters][urlparams].
+The most direct information about the URL parameters
+and how to find them, is available via the `urlgen`
+page that can be reached once the server is running.
+The livesim2 online page is [urlgen][urlgen].
+
+The URL parameters are also listed on this project's Wiki page
+[URL-parameters][urlparams]. Some more information
+about how they are working is also available on the Wiki.
 
 ## Project and plan for new features/enhancement
 
@@ -343,3 +375,4 @@ See [LICENSE.md](LICENSE.md).
 [l2-project]: https://github.com/orgs/Dash-Industry-Forum/projects/7
 [l2-issues]: https://github.com/Dash-Industry-Forum/livesim2/issues
 [l2-status]: https://github.com/Dash-Industry-Forum/livesim2/wiki/Sponsored-transition-from-livesim1-to-livesim2
+[urlgen]: https://livesim2.dashif.org/urlgen/
