@@ -58,6 +58,14 @@ func TestLiveMPDStart(t *testing.T) {
 			timescale: 1,
 			startNr:   7,
 		},
+		{
+			asset:     "testpic_2s",
+			mpdName:   "Manifest_imsc1.mpd",
+			nrMedia:   "$RepresentationID$/$Number$.m4s",
+			timeMedia: "$RepresentationID$/$Time$.m4s",
+			timescale: 1,
+			startNr:   7,
+		},
 	}
 	for _, tc := range cases {
 		asset, ok := am.findAsset(tc.asset)
@@ -76,13 +84,11 @@ func TestLiveMPDStart(t *testing.T) {
 			stl := as.SegmentTemplate
 			assert.Nil(t, stl.SegmentTimeline)
 			assert.Equal(t, uint32(tc.startNr), *stl.StartNumber)
-			if as.ContentType != "image" {
-				assert.Equal(t, tc.nrMedia, stl.Media)
-			} else {
-				tcMedia := strings.Replace(tc.nrMedia, ".m4s", ".jpg", 1)
-				assert.Equal(t, tcMedia, stl.Media)
+			tcMedia := tc.nrMedia
+			if as.ContentType == "image" {
+				tcMedia = strings.Replace(tc.nrMedia, ".m4s", ".jpg", 1)
 			}
-
+			assert.Equal(t, tcMedia, stl.Media)
 			require.NotNil(t, stl.Duration)
 			require.Equal(t, tc.timescale, int(stl.GetTimescale()))
 			assert.Equal(t, 2, int(*stl.Duration)/int(stl.GetTimescale()))
@@ -95,16 +101,19 @@ func TestLiveMPDStart(t *testing.T) {
 		assert.Equal(t, m.DateTime("1970-01-01T00:00:00Z"), liveMPD.AvailabilityStartTime)
 		for _, as := range liveMPD.Periods[0].AdaptationSets {
 			stl := as.SegmentTemplate
-			if as.ContentType == "video" {
+			switch as.ContentType {
+			case "video":
 				require.Greater(t, stl.SegmentTimeline.S[0].R, 0)
-			}
-			if as.ContentType != "image" {
+				fallthrough
+			case "audio", "text":
 				assert.Nil(t, stl.StartNumber)
 				assert.Equal(t, tc.timeMedia, stl.Media)
-			} else {
+			case "image":
 				tcMedia := strings.Replace(tc.nrMedia, ".m4s", ".jpg", 1)
 				assert.Equal(t, tcMedia, stl.Media)
 				assert.Equal(t, tc.startNr, int(*stl.StartNumber))
+			default:
+				t.Errorf("unknown content type %s", as.ContentType)
 			}
 		}
 		assert.Equal(t, 1, len(liveMPD.UTCTimings))
