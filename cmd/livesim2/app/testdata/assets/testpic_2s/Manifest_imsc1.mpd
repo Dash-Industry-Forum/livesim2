@@ -18,7 +18,7 @@
       </AdaptationSet>
       <AdaptationSet contentType="text" mimeType="application/mp4" segmentAlignment="true" lang="en">
          <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle"/>
-         <SegmentTemplate startNumber="1" initialization="$RepresentationID$/init.cmft" duration="2" media="$RepresentationID$/$Number$.cmft"/>
+         <SegmentTemplate startNumber="1" initialization="$RepresentationID$/init.mp4" duration="2" media="$RepresentationID$/$Number$.m4s"/>
          <Representation id="imsc1_img_en" codecs="stpp.ttml.im1i" bandwidth="40000"/>
       </AdaptationSet>
     <AdaptationSet contentType="text" mimeType="application/mp4" segmentAlignment="true" lang="sv">

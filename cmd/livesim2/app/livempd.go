@@ -133,7 +133,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 			se = refSegEntries
 		} else {
 			switch as.ContentType {
-			case "video", "subtitle", "image":
+			case "video", "text", "image":
 				se = a.generateTimelineEntries(as.Representations[0].Id, wTimes, atoMS)
 			case "audio":
 				se = a.generateTimelineEntriesFromRef(refSegEntries, as.Representations[0].Id, wTimes, atoMS)
