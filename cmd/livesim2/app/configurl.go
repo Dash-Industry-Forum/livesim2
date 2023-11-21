@@ -38,6 +38,7 @@ const (
 	UtcTimingHttpXSDate UTCTimingMethod = "httpxsdate"
 	UtcTimingHttpISO    UTCTimingMethod = "httpiso"
 	UtcTimingNone       UTCTimingMethod = "none"
+	UtcTimingKeep       UTCTimingMethod = "keep"
 )
 
 const (

@@ -7,24 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Nothing yet
+### Added
+
+- UTCTiming "mode" `keep` forwards UTCTiming values from VoD MPD
 
 ## [1.0.1] - 2023-11-15
 
-## Fixed
+### Fixed
 
 - Correct contentType match for subtitles (text)
 
 ## [1.0.0] - 2023-10-30
 
-## Added
+### Added
 
 - New highly configurable `statuscode` parameter for cyclic bad segment request responses
 - New URL parameter `traffic` to simulate periodic issues with fetching
   segments. Supports multiple parallel BaseURLs.
 - Dockerfile to build a minimal Docker image with sample test content
 
-## Changed
+### Changed
 
 - Upgrade to Go 1.21
 - Changed logging to slog instead of zerolog. Log levels limited to DEBUG, INFO, WARN, ERROR.

@@ -555,9 +555,10 @@ func lastSegAvailTimeS(cfg *ResponseConfig, lsi lastSegInfo) float64 {
 	return availTime
 }
 
-// addUTCTimings adds the UTCTiming elements to the MPD.
+// addUTCTimings adds or keeps the UTCTiming elements to the MPD.
 func addUTCTimings(mpd *m.MPD, cfg *ResponseConfig) {
-	if len(cfg.UTCTimingMethods) == 0 {
+	switch {
+	case len(cfg.UTCTimingMethods) == 0:
 		// default if none is set. Use HTTP with ms precision.
 		mpd.UTCTimings = []*m.DescriptorType{
 			{
@@ -566,45 +567,49 @@ func addUTCTimings(mpd *m.MPD, cfg *ResponseConfig) {
 			},
 		}
 		return
-	}
-	for _, utcTiming := range cfg.UTCTimingMethods {
-		var ut *m.DescriptorType
-		switch utcTiming {
-		case UtcTimingDirect:
-			ut = &m.DescriptorType{
-				SchemeIdUri: "urn:mpeg:dash:utc:direct:2014",
-				Value:       string(mpd.PublishTime),
+	case len(cfg.UTCTimingMethods) == 1 && cfg.UTCTimingMethods[0] == UtcTimingKeep:
+		// keep the UTCTiming elements in the MPD
+		return
+	default:
+		for _, utcTiming := range cfg.UTCTimingMethods {
+			var ut *m.DescriptorType
+			switch utcTiming {
+			case UtcTimingDirect:
+				ut = &m.DescriptorType{
+					SchemeIdUri: "urn:mpeg:dash:utc:direct:2014",
+					Value:       string(mpd.PublishTime),
+				}
+			case UtcTimingNtp:
+				ut = &m.DescriptorType{
+					SchemeIdUri: "urn:mpeg:dash:utc:ntp:2014",
+					Value:       UtcTimingNtpServer,
+				}
+			case UtcTimingSntp:
+				ut = &m.DescriptorType{
+					SchemeIdUri: "urn:mpeg:dash:utc:sntp:2014",
+					Value:       UtcTimingSntpServer,
+				}
+			case UtcTimingHttpXSDate:
+				ut = &m.DescriptorType{
+					SchemeIdUri: "urn:mpeg:dash:utc:http-xsdate:2014",
+					Value:       UtcTimingHttpServer,
+				}
+			case UtcTimingHttpISO:
+				ut = &m.DescriptorType{
+					SchemeIdUri: "urn:mpeg:dash:utc:http-iso:2014",
+					Value:       UtcTimingHttpServerMS,
+				}
+			case UtcTimingHead:
+				ut = &m.DescriptorType{
+					SchemeIdUri: "urn:mpeg:dash:utc:http-head:2014",
+					Value:       fmt.Sprintf("%s%s", cfg.Host, UtcTimingHeadAsset),
+				}
+			case UtcTimingNone:
+				cfg.UTCTimingMethods = nil
+				return // no UTCTiming elements
 			}
-		case UtcTimingNtp:
-			ut = &m.DescriptorType{
-				SchemeIdUri: "urn:mpeg:dash:utc:ntp:2014",
-				Value:       UtcTimingNtpServer,
-			}
-		case UtcTimingSntp:
-			ut = &m.DescriptorType{
-				SchemeIdUri: "urn:mpeg:dash:utc:sntp:2014",
-				Value:       UtcTimingSntpServer,
-			}
-		case UtcTimingHttpXSDate:
-			ut = &m.DescriptorType{
-				SchemeIdUri: "urn:mpeg:dash:utc:http-xsdate:2014",
-				Value:       UtcTimingHttpServer,
-			}
-		case UtcTimingHttpISO:
-			ut = &m.DescriptorType{
-				SchemeIdUri: "urn:mpeg:dash:utc:http-iso:2014",
-				Value:       UtcTimingHttpServerMS,
-			}
-		case UtcTimingHead:
-			ut = &m.DescriptorType{
-				SchemeIdUri: "urn:mpeg:dash:utc:http-head:2014",
-				Value:       fmt.Sprintf("%s%s", cfg.Host, UtcTimingHeadAsset),
-			}
-		case UtcTimingNone:
-			cfg.UTCTimingMethods = nil
-			return // no UTCTiming elements
+			mpd.UTCTimings = append(mpd.UTCTimings, ut)
 		}
-		mpd.UTCTimings = append(mpd.UTCTimings, ut)
 	}
 }
 
