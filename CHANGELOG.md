@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - UTCTiming "mode" `keep` forwards UTCTiming values from VoD MPD
+- UTCTiming "modes" `httpisoms` and `httpxsdatems` for millisecond resolution
+
+### Fixed
+
+- Default UTCTiming signaling schemeIdUri set to "urn:mpeg:dash:utc:http-xsdate:2014"
 
 ## [1.0.1] - 2023-11-15
 

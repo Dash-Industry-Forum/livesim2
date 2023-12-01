@@ -85,7 +85,9 @@ func (s *strConvAccErr) SplitUTCTimings(key, val string) []UTCTimingMethod {
 	for i, val := range vals {
 		utcVal := UTCTimingMethod(val)
 		switch utcVal {
-		case UtcTimingDirect, UtcTimingNtp, UtcTimingSntp, UtcTimingHttpXSDate, UtcTimingHttpISO,
+		case UtcTimingDirect, UtcTimingNtp, UtcTimingSntp,
+			UtcTimingHttpXSDate, UtcTimingHttpXSDateMs,
+			UtcTimingHttpISO, UtcTimingHttpISOMs,
 			UtcTimingNone, UtcTimingHead:
 			utcTimingMethods[i] = utcVal
 		case UtcTimingKeep:
