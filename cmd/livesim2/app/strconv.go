@@ -79,6 +79,7 @@ func (s *strConvAccErr) SplitUTCTimings(key, val string) []UTCTimingMethod {
 	if s.err != nil {
 		return nil
 	}
+	keepSet := false
 	vals := strings.Split(val, "-")
 	utcTimingMethods := make([]UTCTimingMethod, len(vals))
 	for i, val := range vals {
@@ -87,9 +88,15 @@ func (s *strConvAccErr) SplitUTCTimings(key, val string) []UTCTimingMethod {
 		case UtcTimingDirect, UtcTimingNtp, UtcTimingSntp, UtcTimingHttpXSDate, UtcTimingHttpISO,
 			UtcTimingNone, UtcTimingHead:
 			utcTimingMethods[i] = utcVal
+		case UtcTimingKeep:
+			keepSet = true
 		default:
 			s.err = fmt.Errorf("key=%q, val=%q is not a valid UTC timing method", key, val)
 		}
+	}
+	if keepSet && len(vals) > 1 {
+		s.err = fmt.Errorf("UTC value keep set together with other values")
+		return nil
 	}
 	return utcTimingMethods
 }
