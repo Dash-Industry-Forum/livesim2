@@ -31,22 +31,26 @@ const (
 type UTCTimingMethod string
 
 const (
-	UtcTimingDirect     UTCTimingMethod = "direct"
-	UtcTimingHead       UTCTimingMethod = "head"
-	UtcTimingNtp        UTCTimingMethod = "ntp"
-	UtcTimingSntp       UTCTimingMethod = "sntp"
-	UtcTimingHttpXSDate UTCTimingMethod = "httpxsdate"
-	UtcTimingHttpISO    UTCTimingMethod = "httpiso"
-	UtcTimingNone       UTCTimingMethod = "none"
-	UtcTimingKeep       UTCTimingMethod = "keep"
+	UtcTimingDirect       UTCTimingMethod = "direct"
+	UtcTimingHead         UTCTimingMethod = "head"
+	UtcTimingNtp          UTCTimingMethod = "ntp"
+	UtcTimingSntp         UTCTimingMethod = "sntp"
+	UtcTimingHttpXSDate   UTCTimingMethod = "httpxsdate"
+	UtcTimingHttpXSDateMs UTCTimingMethod = "httpxsdatems"
+	UtcTimingHttpISO      UTCTimingMethod = "httpiso"
+	UtcTimingHttpISOMs    UTCTimingMethod = "httpisoms"
+	UtcTimingNone         UTCTimingMethod = "none"
+	UtcTimingKeep         UTCTimingMethod = "keep"
 )
 
 const (
-	UtcTimingNtpServer    = "1.de.pool.ntp.org"
-	UtcTimingSntpServer   = "time.kfki.hu"
-	UtcTimingHttpServer   = "https://time.akamai.com/?iso"
-	UtcTimingHttpServerMS = "https://time.akamai.com/?isoms"
-	UtcTimingHeadAsset    = "/static/time.txt"
+	UtcTimingNtpServer          = "1.de.pool.ntp.org"
+	UtcTimingSntpServer         = "time.kfki.hu"
+	UtcTimingXSDateHttpServer   = "https://time.akamai.com"
+	UtcTimingXSDateHttpServerMS = "https://time.akamai.com/?ms"
+	UtcTimingISOHttpServer      = "https://time.akamai.com/?iso"
+	UtcTimingISOHttpServerMS    = "https://time.akamai.com/?iso&ms"
+	UtcTimingHeadAsset          = "/static/time.txt"
 )
 
 type ResponseConfig struct {
