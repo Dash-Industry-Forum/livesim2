@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - UTCTiming "mode" `keep` forwards UTCTiming values from VoD MPD
 - UTCTiming "modes" `httpisoms` and `httpxsdatems` for millisecond resolution
+- Support for Marlin DRM and DASH-IF ClearKey in MPD
 
 ### Fixed
 
