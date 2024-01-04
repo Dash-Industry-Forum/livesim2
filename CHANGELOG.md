@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Nothing yet
+
+## [1.1.0] - 2024-01-04
+
 ### Added
 
 - UTCTiming "mode" `keep` forwards UTCTiming values from VoD MPD
@@ -155,7 +159,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - features and URLs listed at livesim2 root page
 - configurable generated stpp subtitles with timing info
 
-[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v0.9.0...v1.0.0
 [0.9.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v0.8.0...v0.9.0
