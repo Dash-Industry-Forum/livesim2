@@ -112,6 +112,7 @@ type urlGenData struct {
 	TimeSubsWvtt                string // languages for generated subtitles in wvtt-format (comma-separated)
 	TimeSubsDur                 string // cue duration of generated subtitles (in milliseconds)
 	TimeSubsReg                 string // 0 for bottom and 1 for top
+	EccpEnc                     string // empty, cbcs or cenc depending on encryption type
 	UTCTiming                   string
 	Periods                     string   // number of periods per hour (1-60)
 	Continuous                  bool     // period continuity signaling
@@ -311,6 +312,20 @@ func createURL(r *http.Request, aInfo assetsInfo) urlGenData {
 	if timeSubsReg != "" && timeSubsReg != defaultTimeSubsReg {
 		data.TimeSubsReg = timeSubsReg
 		sb.WriteString(fmt.Sprintf("timesubsreg_%s/", timeSubsReg))
+	}
+	eccpEnc := q.Get("eccp")
+	switch eccpEnc {
+	case "cbcs":
+		data.EccpEnc = "cbcs"
+		sb.WriteString("eccp_cbcs/")
+	case "cenc":
+		data.EccpEnc = "cenc"
+		sb.WriteString("eccp_cenc/")
+	case "":
+		data.EccpEnc = ""
+	default:
+		data.Errors = append(data.Errors, fmt.Sprintf("bad eccp: %s", eccpEnc))
+
 	}
 	scte35 := q.Get("scte35")
 	if scte35 != "" {

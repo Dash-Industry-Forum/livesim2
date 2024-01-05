@@ -40,6 +40,6 @@ func (s *Server) favIconFunc(w http.ResponseWriter, r *http.Request) {
 
 // optionsHandlerFunc provides the allowed methods.
 func (s *Server) optionsHandlerFunc(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Allow", "OPTIONS, GET, HEAD")
+	w.Header().Set("Allow", "OPTIONS, GET, HEAD, POST")
 	w.WriteHeader(http.StatusNoContent)
 }

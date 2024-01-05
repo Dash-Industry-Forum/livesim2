@@ -59,50 +59,52 @@ func TestLiveSegment(t *testing.T) {
 		},
 	}
 	for _, tc := range cases {
-		for _, mpdType := range []string{"Number", "TimelineTime"} {
-			asset, ok := am.findAsset(tc.asset)
-			require.True(t, ok)
-			require.NoError(t, err)
-			cfg := NewResponseConfig()
-			switch mpdType {
-			case "Number":
-			case "TimelineTime":
-				cfg.SegTimelineFlag = true
-			case "TimelineNumber":
-				cfg.SegTimelineNrFlag = true
+		t.Run(tc.asset, func(t *testing.T) {
+			for _, mpdType := range []string{"Number", "TimelineTime"} {
+				asset, ok := am.findAsset(tc.asset)
+				require.True(t, ok)
+				require.NoError(t, err)
+				cfg := NewResponseConfig()
+				switch mpdType {
+				case "Number":
+				case "TimelineTime":
+					cfg.SegTimelineFlag = true
+				case "TimelineNumber":
+					cfg.SegTimelineNrFlag = true
+				}
+				nowMS := 100_000
+				rr := httptest.NewRecorder()
+				wroteInit, err := writeInitSegment(rr, cfg, vodFS, asset, "2/init.mp4")
+				require.False(t, wroteInit)
+				require.NoError(t, err)
+				rr = httptest.NewRecorder()
+				wroteInit, err = writeInitSegment(rr, cfg, vodFS, asset, tc.initialization)
+				require.True(t, wroteInit)
+				require.NoError(t, err)
+				require.Equal(t, http.StatusOK, rr.Code)
+				initSeg := rr.Body.Bytes()
+				sr := bits.NewFixedSliceReader(initSeg)
+				mp4d, err := mp4.DecodeFileSR(sr)
+				require.NoError(t, err)
+				mediaTimescale := int(mp4d.Moov.Trak.Mdia.Mdhd.Timescale)
+				assert.Equal(t, tc.mediaTimescale, mediaTimescale)
+				media := tc.media
+				nr := 40
+				mediaTime := nr * 2 * mediaTimescale // This is exact even for audio for nr == 40
+				switch mpdType {
+				case "Number", "TimelineNumber":
+					media = strings.Replace(media, "$NrOrTime$", fmt.Sprintf("%d", nr), -1)
+				default: // "TimelineTime":
+					media = strings.Replace(media, "$NrOrTime$", fmt.Sprintf("%d", mediaTime), -1)
+				}
+				so, err := genLiveSegment(vodFS, asset, cfg, media, nowMS)
+				require.NoError(t, err)
+				require.Equal(t, tc.segmentMimeType, so.meta.rep.SegmentType())
+				seg := so.seg
+				bdt := seg.Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
+				require.Equal(t, mediaTime, int(bdt))
 			}
-			nowMS := 100_000
-			rr := httptest.NewRecorder()
-			wroteInit, err := writeInitSegment(rr, cfg, vodFS, asset, "2/init.mp4")
-			require.False(t, wroteInit)
-			require.NoError(t, err)
-			rr = httptest.NewRecorder()
-			wroteInit, err = writeInitSegment(rr, cfg, vodFS, asset, tc.initialization)
-			require.True(t, wroteInit)
-			require.NoError(t, err)
-			require.Equal(t, http.StatusOK, rr.Code)
-			initSeg := rr.Body.Bytes()
-			sr := bits.NewFixedSliceReader(initSeg)
-			mp4d, err := mp4.DecodeFileSR(sr)
-			require.NoError(t, err)
-			mediaTimescale := int(mp4d.Moov.Trak.Mdia.Mdhd.Timescale)
-			assert.Equal(t, tc.mediaTimescale, mediaTimescale)
-			media := tc.media
-			nr := 40
-			mediaTime := nr * 2 * mediaTimescale // This is exact even for audio for nr == 40
-			switch mpdType {
-			case "Number", "TimelineNumber":
-				media = strings.Replace(media, "$NrOrTime$", fmt.Sprintf("%d", nr), -1)
-			default: // "TimelineTime":
-				media = strings.Replace(media, "$NrOrTime$", fmt.Sprintf("%d", mediaTime), -1)
-			}
-			so, err := genLiveSegment(vodFS, asset, cfg, media, nowMS)
-			require.NoError(t, err)
-			require.Equal(t, tc.segmentMimeType, so.meta.rep.SegmentType())
-			seg := so.seg
-			bdt := seg.Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
-			require.Equal(t, mediaTime, int(bdt))
-		}
+		})
 	}
 }
 

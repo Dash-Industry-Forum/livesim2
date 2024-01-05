@@ -101,8 +101,10 @@ type ResponseConfig struct {
 	TimeSubsDurMS                int               `json:"TimeSubsDurMS,omitempty"`
 	TimeSubsRegion               int               `json:"TimeSubsRegion,omitempty"`
 	Host                         string            `json:"Host,omitempty"`
-	SegStatusCodes               []SegStatusCodes  `json:"SegStatus,omitempty"`
-	Traffic                      []LossItvls       `json:"Traffic,omitempty"`
+	// DashIFECCP is DASH-IF Enhanced Clear Key Content Protection
+	DashIFECCP     string           `json:"ECCP,omitempty"`
+	SegStatusCodes []SegStatusCodes `json:"SegStatus,omitempty"`
+	Traffic        []LossItvls      `json:"Traffic,omitempty"`
 }
 
 // SegStatusCodes configures regular extraordinary segment response codes
@@ -371,6 +373,8 @@ cfgLoop:
 			cfg.SegStatusCodes = sc.ParseSegStatusCodes(key, val)
 		case "traffic":
 			cfg.Traffic = sc.ParseLossItvls(key, val)
+		case "eccp":
+			cfg.DashIFECCP = val
 		default:
 			contentStartIdx = i
 			break cfgLoop
@@ -419,7 +423,12 @@ func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 			return err
 		}
 	}
-
+	switch cfg.DashIFECCP {
+	case "", "cenc", "cbcs":
+		// OK
+	default:
+		return fmt.Errorf("invalid DASH-IF Enhanced Clear Key Content Protection eccp  %q", cfg.DashIFECCP)
+	}
 	return nil
 }
 

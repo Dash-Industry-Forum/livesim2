@@ -58,10 +58,12 @@ func (s *Server) Routes(ctx context.Context) error {
 	s.Router.MethodFunc("OPTIONS", "/*", s.optionsHandlerFunc)
 	s.Router.Handle("/player/*", createReversePlayerProxy("/player", s.Cfg.PlayURL))
 	s.Router.MethodFunc("GET", "/", s.indexHandlerFunc)
+	s.Router.MethodFunc("POST", "/*", s.laURLHandlerFunc)
 	// LiveRouter is mounted at /livesim2
 	s.LiveRouter.MethodFunc("GET", "/*", s.livesimHandlerFunc)
 	s.LiveRouter.MethodFunc("HEAD", "/*", s.livesimHandlerFunc)
 	s.Router.MethodFunc("OPTIONS", "/*", s.optionsHandlerFunc)
+	s.LiveRouter.MethodFunc("POST", "/*", s.laURLHandlerFunc)
 	// VodRouter is mounted at /vod
 	s.VodRouter.MethodFunc("GET", "/*", s.vodHandlerFunc)
 	s.VodRouter.MethodFunc("HEAD", "/*", s.vodHandlerFunc)

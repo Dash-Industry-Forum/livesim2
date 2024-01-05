@@ -5,8 +5,8 @@
 package app
 
 import (
-	"bytes"
 	"compress/gzip"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -659,10 +659,26 @@ type RepData struct {
 	Segments               []Segment        `json:"segments"`
 	DefaultSampleDuration  uint32           `json:"defaultSampleDuration"`            // Read from trex or tfhd
 	ConstantSampleDuration *uint32          `json:"constantSampleDuration,omitempty"` // Non-zero if all samples have the same duration
+	PreEncrypted           bool             `json:"preEncrypted"`
 	mediaRegexp            *regexp.Regexp   `json:"-"`
 	initSeg                *mp4.InitSegment `json:"-"`
 	initBytes              []byte           `json:"-"`
+	encData                *repEncData      `json:"-"`
 }
+
+type repEncData struct {
+	keyID         id16   // Should be common within one AdaptationSet, but for now common for one asset
+	key           id16   // Should be common within one AdaptationSet, but for now common for one asset
+	iv            []byte // Can be random, but we use a constant default value at start
+	cbcsPD        *mp4.InitProtectData
+	cencPD        *mp4.InitProtectData
+	cbcsInitSeg   *mp4.InitSegment
+	cencInitSeg   *mp4.InitSegment
+	cbcsInitBytes []byte
+	cencInitBytes []byte
+}
+
+var defaultIV = []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07}
 
 func (r RepData) duration() int {
 	if len(r.Segments) == 0 {
@@ -719,24 +735,23 @@ func (r RepData) typeURI() mediaURIType {
 	}
 }
 
+func prepareForEncryption(codec string) bool {
+	return strings.HasPrefix(codec, "avc") || strings.HasPrefix(codec, "mp4a.40")
+}
+
 func (r *RepData) readInit(vodFS fs.FS, assetPath string) error {
 	data, err := fs.ReadFile(vodFS, path.Join(assetPath, r.InitURI))
 	if err != nil {
 		return fmt.Errorf("read initURI %q: %w", r.InitURI, err)
 	}
-	sr := bits.NewFixedSliceReader(data)
-	initFile, err := mp4.DecodeFileSR(sr)
+	r.initSeg, err = getInitSeg(data)
 	if err != nil {
 		return fmt.Errorf("decode init: %w", err)
 	}
-	r.initSeg = initFile.Init
-	b := make([]byte, 0, r.initSeg.Size())
-	buf := bytes.NewBuffer(b)
-	err = r.initSeg.Encode(buf)
+	r.initBytes, err = getInitBytes(r.initSeg)
 	if err != nil {
-		return fmt.Errorf("encode init seg: %w", err)
+		return fmt.Errorf("getInitBytes: %w", err)
 	}
-	r.initBytes = buf.Bytes()
 
 	if r.MediaTimescale != 0 {
 		return nil // Already set
@@ -745,7 +760,88 @@ func (r *RepData) readInit(vodFS fs.FS, assetPath string) error {
 	r.MediaTimescale = int(r.initSeg.Moov.Trak.Mdia.Mdhd.Timescale)
 	trex := r.initSeg.Moov.Mvex.Trex
 	r.DefaultSampleDuration = trex.DefaultSampleDuration
+
+	if prepareForEncryption(r.Codecs) {
+		assetName := path.Base(assetPath)
+		err = r.addEncryption(assetName, data)
+		if err != nil {
+			return fmt.Errorf("addEncryption: %w", err)
+		}
+	}
 	return nil
+}
+
+func (r *RepData) addEncryption(assetName string, data []byte) error {
+	// Set up the encryption data for this representation given asset
+	ed := repEncData{}
+	ed.keyID = kidFromString(assetName)
+	ed.key = kidToKey(ed.keyID)
+	ed.iv = defaultIV
+
+	// Generate cbcs data or exit if already encrypted
+	initSeg, err := getInitSeg(data)
+	if err != nil {
+		return fmt.Errorf("decode init: %w", err)
+	}
+	stsd := initSeg.Moov.Trak.Mdia.Minf.Stbl.Stsd
+	for _, c := range stsd.Children {
+		switch c.Type() {
+		case "encv", "enca":
+			slog.Info("asset", assetName, "repID", r.ID, "Init segment already encrypted")
+			r.PreEncrypted = true
+			return nil
+		}
+	}
+	kid, err := mp4.NewUUIDFromHex(hex.EncodeToString(ed.keyID[:]))
+	if err != nil {
+		return fmt.Errorf("new uuid: %w", err)
+	}
+	ipd, err := mp4.InitProtect(initSeg, nil, ed.iv, "cbcs", kid, nil)
+	if err != nil {
+		return fmt.Errorf("init protect cbcs: %w", err)
+	}
+	ed.cbcsPD = ipd
+	ed.cbcsInitSeg = initSeg
+	ed.cbcsInitBytes, err = getInitBytes(initSeg)
+	if err != nil {
+		return fmt.Errorf("getInitBytes: %w", err)
+	}
+
+	// Generate cenc data
+	initSeg, err = getInitSeg(data)
+	if err != nil {
+		return fmt.Errorf("decode init: %w", err)
+	}
+	ipd, err = mp4.InitProtect(initSeg, nil, ed.iv, "cenc", kid, nil)
+	if err != nil {
+		return fmt.Errorf("init protect cenc: %w", err)
+	}
+	ed.cencPD = ipd
+	ed.cencInitSeg = initSeg
+	ed.cencInitBytes, err = getInitBytes(initSeg)
+	if err != nil {
+		return fmt.Errorf("getInitBytes: %w", err)
+	}
+	r.encData = &ed
+	return nil
+}
+
+func getInitSeg(data []byte) (*mp4.InitSegment, error) {
+	sr := bits.NewFixedSliceReader(data)
+	initFile, err := mp4.DecodeFileSR(sr)
+	if err != nil {
+		return nil, fmt.Errorf("decode init: %w", err)
+	}
+	return initFile.Init, nil
+}
+
+func getInitBytes(initSeg *mp4.InitSegment) ([]byte, error) {
+	sw := bits.NewFixedSliceWriter(int(initSeg.Size()))
+	err := initSeg.EncodeSW(sw)
+	if err != nil {
+		return nil, fmt.Errorf("encode init: %w", err)
+	}
+	return sw.Bytes(), nil
 }
 
 // readMP4Segment extracts segment data and returns an error if file does not exist.

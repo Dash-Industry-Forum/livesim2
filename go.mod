@@ -7,7 +7,7 @@ toolchain go1.21.1
 require (
 	github.com/Comcast/gots v1.0.4
 	github.com/Eyevinn/dash-mpd v0.11.1
-	github.com/Eyevinn/mp4ff v0.41.0
+	github.com/Eyevinn/mp4ff v0.42.0
 	github.com/caddyserver/certmagic v0.20.0
 	github.com/dusted-go/logging v1.1.3
 	github.com/go-chi/chi/v5 v5.0.11
