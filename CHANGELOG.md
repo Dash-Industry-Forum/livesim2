@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Nothing yet
 
+## [1.1.1] - 2024-01-19
+
+### Fixed
+
+- The UTCTiming output for xsdate is now the same as for ISO
+- The DASH-IF content protection signaling updated to follow ECCP in IOP 5.0
+
 ## [1.1.0] - 2024-01-04
 
 ### Added
@@ -159,7 +166,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - features and URLs listed at livesim2 root page
 - configurable generated stpp subtitles with timing info
 
-[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v0.9.0...v1.0.0
