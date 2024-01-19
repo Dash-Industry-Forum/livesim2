@@ -365,8 +365,8 @@ func createProducerReferenceTimes(startTimeS int) []*m.ProducerReferenceTimeType
 			Type:             "encoder",
 			WallClockTime:    string(m.ConvertToDateTime(float64(startTimeS))),
 			UTCTiming: &m.DescriptorType{
-				SchemeIdUri: "urn:mpeg:dash:utc:http-iso:2014",
-				Value:       "https://time.akamai.com/?iso",
+				SchemeIdUri: UtcTimingHttpXSDateScheme,
+				Value:       UtcTimingXSDateHttpServerMS,
 			},
 		},
 	}
@@ -562,7 +562,7 @@ func addUTCTimings(mpd *m.MPD, cfg *ResponseConfig) {
 		// default if none is set. Use HTTP with ms precision.
 		mpd.UTCTimings = []*m.DescriptorType{
 			{
-				SchemeIdUri: "urn:mpeg:dash:utc:http-xsdate:2014",
+				SchemeIdUri: UtcTimingHttpXSDateScheme,
 				Value:       UtcTimingXSDateHttpServerMS,
 			},
 		}
@@ -576,42 +576,42 @@ func addUTCTimings(mpd *m.MPD, cfg *ResponseConfig) {
 			switch utcTiming {
 			case UtcTimingDirect:
 				ut = &m.DescriptorType{
-					SchemeIdUri: "urn:mpeg:dash:utc:direct:2014",
+					SchemeIdUri: UtcTimingDirectScheme,
 					Value:       string(mpd.PublishTime),
 				}
 			case UtcTimingNtp:
 				ut = &m.DescriptorType{
-					SchemeIdUri: "urn:mpeg:dash:utc:ntp:2014",
+					SchemeIdUri: UtcTimingNtpDateScheme,
 					Value:       UtcTimingNtpServer,
 				}
 			case UtcTimingSntp:
 				ut = &m.DescriptorType{
-					SchemeIdUri: "urn:mpeg:dash:utc:sntp:2014",
+					SchemeIdUri: UtcTimingSntpDateScheme,
 					Value:       UtcTimingSntpServer,
 				}
 			case UtcTimingHttpXSDate:
 				ut = &m.DescriptorType{
-					SchemeIdUri: "urn:mpeg:dash:utc:http-xsdate:2014",
+					SchemeIdUri: UtcTimingHttpXSDateScheme,
 					Value:       UtcTimingXSDateHttpServer,
 				}
 			case UtcTimingHttpXSDateMs:
 				ut = &m.DescriptorType{
-					SchemeIdUri: "urn:mpeg:dash:utc:http-xsdate:2014",
+					SchemeIdUri: UtcTimingHttpXSDateScheme,
 					Value:       UtcTimingXSDateHttpServerMS,
 				}
 			case UtcTimingHttpISO:
 				ut = &m.DescriptorType{
-					SchemeIdUri: "urn:mpeg:dash:utc:http-iso:2014",
+					SchemeIdUri: UtcTimingHttpISOScheme,
 					Value:       UtcTimingISOHttpServer,
 				}
 			case UtcTimingHttpISOMs:
 				ut = &m.DescriptorType{
-					SchemeIdUri: "urn:mpeg:dash:utc:http-iso:2014",
+					SchemeIdUri: UtcTimingHttpISOScheme,
 					Value:       UtcTimingISOHttpServerMS,
 				}
 			case UtcTimingHead:
 				ut = &m.DescriptorType{
-					SchemeIdUri: "urn:mpeg:dash:utc:http-head:2014",
+					SchemeIdUri: UtcTimingHeadScheme,
 					Value:       fmt.Sprintf("%s%s", cfg.Host, UtcTimingHeadAsset),
 				}
 

@@ -44,13 +44,24 @@ const (
 )
 
 const (
-	UtcTimingNtpServer          = "1.de.pool.ntp.org"
-	UtcTimingSntpServer         = "time.kfki.hu"
-	UtcTimingXSDateHttpServer   = "https://time.akamai.com"
-	UtcTimingXSDateHttpServerMS = "https://time.akamai.com/?ms"
-	UtcTimingISOHttpServer      = "https://time.akamai.com/?iso"
-	UtcTimingISOHttpServerMS    = "https://time.akamai.com/?iso&ms"
-	UtcTimingHeadAsset          = "/static/time.txt"
+	UtcTimingDirectScheme     = "urn:mpeg:dash:utc:direct:2014"
+	UtcTimingHeadScheme       = "urn:mpeg:dash:utc:head:2014"
+	UtcTimingHttpISOScheme    = "urn:mpeg:dash:utc:iso:2014"
+	UtcTimingHttpXSDateScheme = "urn:mpeg:dash:utc:http-xsdate:2014"
+	UtcTimingNtpDateScheme    = "urn:mpeg:dash:utc:ntp:2014"
+	UtcTimingSntpDateScheme   = "urn:mpeg:dash:utc:sntp:2014"
+)
+
+const (
+	UtcTimingNtpServer  = "1.de.pool.ntp.org"
+	UtcTimingSntpServer = "time.kfki.hu"
+	// UtcTimingHttpXSDateServer format is xs:date, which is essentially ISO 8601
+	UtcTimingXSDateHttpServer   = "https://time.akamai.com/?iso"
+	UtcTimingXSDateHttpServerMS = "https://time.akamai.com/?iso&ms"
+	//UtcTimingHttpISOHttpServer format is ISO 8601
+	UtcTimingISOHttpServer   = "https://time.akamai.com/?iso"
+	UtcTimingISOHttpServerMS = "https://time.akamai.com/?iso&ms"
+	UtcTimingHeadAsset       = "/static/time.txt"
 )
 
 type ResponseConfig struct {
