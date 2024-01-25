@@ -61,8 +61,11 @@ func (s *Server) Routes(ctx context.Context) error {
 	// LiveRouter is mounted at /livesim2
 	s.LiveRouter.MethodFunc("GET", "/*", s.livesimHandlerFunc)
 	s.LiveRouter.MethodFunc("HEAD", "/*", s.livesimHandlerFunc)
+	s.Router.MethodFunc("OPTIONS", "/*", s.optionsHandlerFunc)
 	// VodRouter is mounted at /vod
-	s.VodRouter.HandleFunc("/*", s.vodHandlerFunc)
+	s.VodRouter.MethodFunc("GET", "/*", s.vodHandlerFunc)
+	s.VodRouter.MethodFunc("HEAD", "/*", s.vodHandlerFunc)
+	s.VodRouter.MethodFunc("OPTIONS", "/*", s.optionsHandlerFunc)
 	// Redirect /livesim to /livesim2 and /livesim-chunked for backwards compatibility
 	s.Router.MethodFunc("GET", "/livesim/*", redirect("/livesim", "/livesim2"))
 	s.Router.MethodFunc("GET", "/livesim-chunked/*", redirect("/livesim-chunked", "/livesim2"))
