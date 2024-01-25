@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Make HTTP OPTIONS method work for all URLs
+- Make --playurl work for general paths
 
 ## [1.1.1] - 2024-01-19
 

@@ -56,7 +56,7 @@ func (s *Server) Routes(ctx context.Context) error {
 	s.Router.MethodFunc("HEAD", "/static/*", s.embeddedStaticHandlerFunc)
 	s.Router.MethodFunc("GET", "/reqcount", s.reqCountHandlerFunc)
 	s.Router.MethodFunc("OPTIONS", "/*", s.optionsHandlerFunc)
-	s.Router.Handle("/player/*", createReversePlayerProxy("/player", "https://reference.dashif.org/xxx"))
+	s.Router.Handle("/player/*", createReversePlayerProxy("/player", s.Cfg.PlayURL))
 	s.Router.MethodFunc("GET", "/", s.indexHandlerFunc)
 	// LiveRouter is mounted at /livesim2
 	s.LiveRouter.MethodFunc("GET", "/*", s.livesimHandlerFunc)
