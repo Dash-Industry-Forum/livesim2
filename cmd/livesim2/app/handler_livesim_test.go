@@ -161,6 +161,20 @@ func TestFetches(t *testing.T) {
 			wantedStatusCode:  http.StatusOK,
 			wantedContentType: `video/mp4`,
 		},
+		{
+			desc:              "thumbnail image too early",
+			url:               "testpic_2s_thumbs/thumbs/300.jpg?nowMS=510000",
+			params:            "",
+			wantedStatusCode:  425,
+			wantedContentType: `image/jpeg`,
+		},
+		{
+			desc:              "media segment too early",
+			url:               "testpic_2s/V300/300.m4s?nowMS=510000",
+			params:            "",
+			wantedStatusCode:  425,
+			wantedContentType: `video/mp4`,
+		},
 	}
 
 	for _, tc := range testCases {
