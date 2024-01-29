@@ -42,6 +42,11 @@ func calcWrapTimes(a *asset, cfg *ResponseConfig, nowMS int, tsbd m.Duration) wr
 	return wt
 }
 
+func genLaURL(cfg *ResponseConfig) string {
+	laURL := cfg.Host + strings.Join(cfg.URLParts[:cfg.URLContentIdx+1], "/") + laURLSuffix
+	return laURL
+}
+
 // LiveMPD generates a dynamic configured MPD for a VoD asset.
 func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, error) {
 	mpd, err := a.getVodMPD(mpdName)
@@ -114,6 +119,29 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	adaptationSets := orderAdaptationSetsByContentType(period.AdaptationSets)
 	var refSegEntries segEntries
 	for i, as := range adaptationSets {
+		switch as.ContentType {
+		case "video", "audio":
+			if cfg.DashIFECCP != "" {
+				if a.refRep.PreEncrypted {
+					return nil, fmt.Errorf("pre-encrypted asset %s cannot be encrypted again", a.AssetPath)
+				}
+				laURL := genLaURL(cfg)
+				cp := m.NewContentProtection()
+				cp.SchemeIdUri = "urn:mpeg:dash:mp4protection:2011"
+				cp.Value = cfg.DashIFECCP
+				cp.DefaultKID = kidFromString(laURL).String()
+				as.ContentProtections = append(as.ContentProtections, cp)
+				cp = m.NewContentProtection()
+				cp.SchemeIdUri = m.DRM_CLEAR_KEY_DASHIF
+				cp.Value = "ClearKey1.0"
+				laUrl := genLaURL(cfg)
+				cp.LaURL = &m.LaURLType{
+					LicenseType: "EME-1.0",
+					Value:       m.AnyURI(laUrl),
+				}
+				as.ContentProtections = append(as.ContentProtections, cp)
+			}
+		}
 		if as.ContentType == "video" && cfg.SCTE35PerMinute != nil {
 			// Add SCTE35 signaling
 			as.InbandEventStreams = append(as.InbandEventStreams,

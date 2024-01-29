@@ -201,6 +201,29 @@
 				</label>
 			</fieldset>
 		</details>
+
+		<details>
+			<summary>Encrypt with DASH-IF ECCP</summary>
+
+			<fieldset>
+			<legend><a href="https://dashif.org/docs/IOP-Guidelines/DASH-IF-IOP-Part6-v5.0.0.pdf" target="_blank">
+				DASH-IF Enhanced Clear Key Content Protection (encrypted on the fly)</a></legend>
+			<label for="eccp-none">
+				<input type="radio" id="eccp-none" name="eccp" value="" {{if eq .EccpEnc ""}}checked{{end}}>
+				No on-the-fly encryption
+			</label>
+				<label for="eccp-cbcs">
+					<input type="radio" id="eccp-cbcs" name="eccp" value="cbcs" {{if eq .EccpEnc "cbcs"}}checked{{end}}>
+					ECCP with cbcs common encryption scheme
+				</label>
+				<label for="eccp-cenc">
+					<input type="radio" id="eccp-cenc" name="eccp" value="cenc" {{if eq .EccpEnc "cenc"}}checked{{end}}>
+					ECCP with cenc common encryption scheme
+				</label>
+
+			</fieldset>
+		</details>
+
 		<details>
 			<summary>Negative test cases...</summary>
 

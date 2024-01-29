@@ -6,6 +6,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -32,35 +33,46 @@ func TestParamToMPD(t *testing.T) {
 		mpd              string
 		params           string
 		wantedStatusCode int
-		wantedInMPD      string
+		wantedInMPD      []string
 	}{
 		{
 			desc:             "minimumUpdatePeriod",
 			mpd:              "testpic_2s/Manifest.mpd",
 			params:           "mup_1/",
 			wantedStatusCode: http.StatusOK,
-			wantedInMPD:      `minimumUpdatePeriod="PT1S"`,
+			wantedInMPD:      []string{`minimumUpdatePeriod="PT1S"`},
 		},
 		{
 			desc:             "latency target",
 			mpd:              "testpic_2s/Manifest.mpd",
 			params:           "ltgt_2500/ato_1/chunkdur_0.25/",
 			wantedStatusCode: http.StatusOK,
-			wantedInMPD:      `<Latency referenceId="0" target="2500" max="5000" min="1875"></Latency>`,
+			wantedInMPD:      []string{`<Latency referenceId="0" target="2500" max="5000" min="1875"></Latency>`},
 		},
 		{
 			desc:             "latency target",
 			mpd:              "testpic_2s/Manifest.mpd",
 			params:           "ato_1/chunkdur_0.25/",
 			wantedStatusCode: http.StatusOK,
-			wantedInMPD:      `<Latency referenceId="0" target="3500" max="7000" min="2625"></Latency>`,
+			wantedInMPD:      []string{`<Latency referenceId="0" target="3500" max="7000" min="2625"></Latency>`},
 		},
 		{
 			desc:             "period continuity",
 			mpd:              "testpic_2s/Manifest.mpd",
 			params:           "periods_60/continuous_1/",
 			wantedStatusCode: http.StatusOK,
-			wantedInMPD:      `<SupplementalProperty schemeIdUri="urn:mpeg:dash:period-continuity:2015" value="1"></SupplementalProperty>`,
+			wantedInMPD:      []string{`<SupplementalProperty schemeIdUri="urn:mpeg:dash:period-continuity:2015" value="1"></SupplementalProperty>`},
+		},
+		{
+			desc:             "ECCP ClearKey CBCS",
+			mpd:              "testpic_2s/Manifest.mpd",
+			params:           "eccp_cbcs/",
+			wantedStatusCode: http.StatusOK,
+			wantedInMPD: []string{
+				`<ContentProtection xmlns:cenc="urn:mpeg:cenc:2013" cenc:default_KID="2880fe36-e44b-f9bf-79d2-752e234818a5" schemeIdUri="urn:mpeg:dash:mp4protection:2011" value="cbcs"></ContentProtection>`,
+				`<ContentProtection schemeIdUri="urn:uuid:e2719d58-a985-b3c9-781a-b030af78d30e" value="ClearKey1.0">`,
+				`<dashif:Laurl xmlns:dashif="https://dashif.org/CPS" licenseType="EME-1.0">`,
+			},
 		},
 	}
 
@@ -73,8 +85,9 @@ func TestParamToMPD(t *testing.T) {
 				return
 			}
 			bodyStr := string(body)
-			t.Logf("length of body %d", len(bodyStr))
-			require.Greater(t, strings.Index(bodyStr, tc.wantedInMPD), -1, "no match in MPD")
+			for _, wanted := range tc.wantedInMPD {
+				require.Greater(t, strings.Index(bodyStr, wanted), -1, fmt.Sprintf("no match in MPD for %s", wanted))
+			}
 		})
 	}
 }
@@ -126,6 +139,41 @@ func TestFetches(t *testing.T) {
 			params:            "",
 			wantedStatusCode:  http.StatusOK,
 			wantedContentType: `application/mp4`,
+		},
+		{
+			desc:              "encrypted init segment",
+			url:               "testpic_2s/V300/init.mp4",
+			params:            "eccp_cbcs/",
+			wantedStatusCode:  http.StatusOK,
+			wantedContentType: `video/mp4`,
+		},
+		{
+			desc:              "encrypted media segment cbcs",
+			url:               "testpic_2s/V300/300.m4s?nowMS=610000",
+			params:            "eccp_cbcs/",
+			wantedStatusCode:  http.StatusOK,
+			wantedContentType: `video/mp4`,
+		},
+		{
+			desc:              "encrypted media segment cenc",
+			url:               "testpic_2s/V300/300.m4s?nowMS=610000",
+			params:            "eccp_cenc/",
+			wantedStatusCode:  http.StatusOK,
+			wantedContentType: `video/mp4`,
+		},
+		{
+			desc:              "thumbnail image too early",
+			url:               "testpic_2s_thumbs/thumbs/300.jpg?nowMS=510000",
+			params:            "",
+			wantedStatusCode:  425,
+			wantedContentType: `image/jpeg`,
+		},
+		{
+			desc:              "media segment too early",
+			url:               "testpic_2s/V300/300.m4s?nowMS=510000",
+			params:            "",
+			wantedStatusCode:  425,
+			wantedContentType: `video/mp4`,
 		},
 	}
 

@@ -260,10 +260,22 @@ func writeInitSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a
 	}
 	for _, rep := range a.Reps {
 		if segmentPart == rep.InitURI {
-			w.Header().Set("Content-Length", strconv.Itoa(len(rep.initBytes)))
+			var initBytes []byte
+			initBytes = rep.initBytes
+			if rep.encData != nil && cfg.DashIFECCP != "" {
+				switch cfg.DashIFECCP {
+				case "cbcs":
+					initBytes = rep.encData.cbcsInitBytes
+				case "cenc":
+					initBytes = rep.encData.cencInitBytes
+				default:
+					return false, fmt.Errorf("unknown DashIFECCP %s", cfg.DashIFECCP)
+				}
+			}
+			w.Header().Set("Content-Length", strconv.Itoa(len(initBytes)))
 
 			w.Header().Set("Content-Type", rep.SegmentType())
-			_, err := w.Write(rep.initBytes)
+			_, err := w.Write(initBytes)
 			if err != nil {
 				slog.Error("writing response", "error", err)
 				return false, err
@@ -285,7 +297,22 @@ func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a
 	}
 	var data []byte
 	if outSeg.seg != nil {
-		// Encode segment
+		ed := outSeg.meta.rep.encData
+		if ed != nil && cfg.DashIFECCP != "" {
+			// Encrypt segment
+			for _, f := range outSeg.seg.Fragments {
+				ipd := ed.cbcsPD
+				if cfg.DashIFECCP == "cenc" {
+					ipd = ed.cencPD
+				}
+				err = mp4.EncryptFragment(f, ed.key[:], ed.iv, ipd)
+				if err != nil {
+					slog.Error("encrypting fragment", "error", err)
+					return err
+				}
+			}
+		}
+
 		sw := bits.NewFixedSliceWriter(int(outSeg.seg.Size()))
 		err = outSeg.seg.EncodeSW(sw)
 		if err != nil {
@@ -491,6 +518,22 @@ func writeChunkedSegment(ctx context.Context, w http.ResponseWriter, log *slog.L
 	if err != nil {
 		return fmt.Errorf("chunkSegment: %w", err)
 	}
+	ed := rep.encData
+	if ed != nil && cfg.DashIFECCP != "" {
+		// Encrypt chunks
+		ipd := ed.cbcsPD
+		if cfg.DashIFECCP == "cenc" {
+			ipd = ed.cencPD
+		}
+		for i, chk := range chunks {
+			f := chk.frag
+			err = mp4.EncryptFragment(f, ed.key[:], ed.iv, ipd)
+			if err != nil {
+				slog.Error("encrypting fragment", "nr", i, "error", err)
+			}
+		}
+	}
+
 	startUnixMS := unixMS()
 	chunkAvailTime := int(so.meta.newTime) + cfg.StartTimeS*int(rep.MediaTimescale)
 	for _, chk := range chunks {

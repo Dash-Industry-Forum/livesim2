@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Nothing yet
+### Fixed
+
+- Make HTTP OPTIONS method work for all URLs
+- Make --playurl work for general paths
+
+### Added
+
+- Support for DASH-IF Enhanced Clear Key Content Protection (ECCP)
+- On the fly encryption for ECCP using cbcs or cenc scheme
 
 ## [1.1.1] - 2024-01-19
 
