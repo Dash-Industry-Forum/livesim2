@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Eyevinn/dash-mpd/mpd"
 	m "github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/Eyevinn/dash-mpd/xml"
 	"github.com/stretchr/testify/assert"
@@ -932,4 +933,22 @@ func TestFractionalFramerateMPDs(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestFillContentTypes(t *testing.T) {
+	p := &m.Period{
+		AdaptationSets: []*m.AdaptationSetType{
+			{Id: Ptr(uint32(1)), RepresentationBaseType: m.RepresentationBaseType{MimeType: "video/mp4"}},
+			{Id: Ptr(uint32(2)), RepresentationBaseType: m.RepresentationBaseType{MimeType: "audio/mp4"}},
+			{Id: Ptr(uint32(2)), RepresentationBaseType: m.RepresentationBaseType{MimeType: "application/mp4"}},
+			{Id: Ptr(uint32(4)), ContentType: "audio"},
+			{Id: Ptr(uint32(4))},
+		},
+	}
+	fillContentTypes("theAsset", p)
+	assert.Equal(t, mpd.RFC6838ContentTypeType("video"), p.AdaptationSets[0].ContentType)
+	assert.Equal(t, mpd.RFC6838ContentTypeType("audio"), p.AdaptationSets[1].ContentType)
+	assert.Equal(t, mpd.RFC6838ContentTypeType("text"), p.AdaptationSets[2].ContentType)
+	assert.Equal(t, mpd.RFC6838ContentTypeType("audio"), p.AdaptationSets[3].ContentType)
+	assert.Equal(t, mpd.RFC6838ContentTypeType(""), p.AdaptationSets[4].ContentType)
 }

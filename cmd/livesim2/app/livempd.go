@@ -6,6 +6,7 @@ package app
 
 import (
 	"fmt"
+	"log/slog"
 	"math"
 	"strings"
 
@@ -115,6 +116,8 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 		b := m.NewBaseURL(baseURL(bNr))
 		period.BaseURLs = append(period.BaseURLs, b)
 	}
+
+	fillContentTypes(a.AssetPath, period)
 
 	adaptationSets := orderAdaptationSetsByContentType(period.AdaptationSets)
 	var refSegEntries segEntries
@@ -692,4 +695,22 @@ func orderAdaptationSetsByContentType(aSets []*m.AdaptationSetType) []*m.Adaptat
 	}
 
 	return outASets
+}
+
+// fillContentTypes fills contentType if not set based on mimeType
+func fillContentTypes(assetPath string, period *m.Period) {
+	for _, as := range period.AdaptationSets {
+		if as.ContentType == "" {
+			switch as.MimeType {
+			case "video/mp4":
+				as.ContentType = "video"
+			case "audio/mp4":
+				as.ContentType = "audio"
+			case "application/mp4":
+				as.ContentType = "text"
+			default:
+				slog.Warn("no contentType and unknown mimeType", "asset", assetPath, "mimeType", as.MimeType)
+			}
+		}
+	}
 }
