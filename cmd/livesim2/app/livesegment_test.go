@@ -672,3 +672,22 @@ func TestSegmentStatusCodeResponse(t *testing.T) {
 		})
 	}
 }
+
+func TestMehdBoxRemovedFromInitSegment(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false)
+	err := am.discoverAssets()
+	require.NoError(t, err)
+	asset, ok := am.findAsset("testpic_8s")
+	require.True(t, ok)
+	cfg := NewResponseConfig()
+	initV300 := "V300/init.mp4"
+	match, err := matchInit(initV300, cfg, asset)
+	require.NoError(t, err)
+	sr := bits.NewFixedSliceReader(match.init)
+	mp4File, err := mp4.DecodeFileSR(sr)
+	require.NoError(t, err)
+	initSeg := mp4File.Init
+	require.NotNil(t, initSeg)
+	require.Nil(t, initSeg.Moov.Mvex.Mehd)
+}

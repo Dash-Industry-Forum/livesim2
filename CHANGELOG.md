@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Make HTTP OPTIONS method work for all URLs
 - Make --playurl work for general paths
 - Derive and insert contentType if missing
+- Remove any mehd box from init segment
 
 ## [1.1.1] - 2024-01-19
 
