@@ -253,37 +253,56 @@ func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, n
 	}, nil
 }
 
+type initMatch struct {
+	isInit bool
+	init   []byte
+	rep    *RepData
+}
+
 func writeInitSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string) (isInit bool, err error) {
 	isTimeSubsInit, err := writeTimeSubsInitSegment(w, cfg, a, segmentPart)
 	if isTimeSubsInit {
 		return true, err
 	}
+	match, err := matchInit(segmentPart, cfg, a)
+	if err != nil {
+		return false, fmt.Errorf("getInitBytes: %w", err)
+	}
+	if !match.isInit {
+		return false, nil
+	}
+
+	w.Header().Set("Content-Length", strconv.Itoa(len(match.init)))
+	w.Header().Set("Content-Type", match.rep.SegmentType())
+	_, err = w.Write(match.init)
+	if err != nil {
+		slog.Error("writing response", "error", err)
+		return false, err
+	}
+	return true, nil
+}
+
+func matchInit(segmentPart string, cfg *ResponseConfig, a *asset) (initMatch, error) {
+	var im initMatch
 	for _, rep := range a.Reps {
 		if segmentPart == rep.InitURI {
-			var initBytes []byte
-			initBytes = rep.initBytes
+			im.init = rep.initBytes
 			if rep.encData != nil && cfg.DashIFECCP != "" {
 				switch cfg.DashIFECCP {
 				case "cbcs":
-					initBytes = rep.encData.cbcsInitBytes
+					im.init = rep.encData.cbcsInitBytes
 				case "cenc":
-					initBytes = rep.encData.cencInitBytes
+					im.init = rep.encData.cencInitBytes
 				default:
-					return false, fmt.Errorf("unknown DashIFECCP %s", cfg.DashIFECCP)
+					return im, fmt.Errorf("unknown DashIFECCP %s", cfg.DashIFECCP)
 				}
 			}
-			w.Header().Set("Content-Length", strconv.Itoa(len(initBytes)))
-
-			w.Header().Set("Content-Type", rep.SegmentType())
-			_, err := w.Write(initBytes)
-			if err != nil {
-				slog.Error("writing response", "error", err)
-				return false, err
-			}
-			return true, nil
+			im.rep = rep
+			im.isInit = true
+			return im, nil
 		}
 	}
-	return false, nil
+	return im, nil
 }
 
 func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string, nowMS int, tt *template.Template) error {

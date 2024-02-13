@@ -832,7 +832,15 @@ func getInitSeg(data []byte) (*mp4.InitSegment, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode init: %w", err)
 	}
-	return initFile.Init, nil
+	initSeg := initFile.Init
+	if initSeg == nil {
+		return nil, fmt.Errorf("no init segment found")
+	}
+	err = initSeg.TweakSingleTrakLive()
+	if err != nil {
+		return nil, fmt.Errorf("tweak single trak live: %w", err)
+	}
+	return initSeg, nil
 }
 
 func getInitBytes(initSeg *mp4.InitSegment) ([]byte, error) {
