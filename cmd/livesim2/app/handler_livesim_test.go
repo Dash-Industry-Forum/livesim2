@@ -114,28 +114,28 @@ func TestFetches(t *testing.T) {
 	}{
 		{
 			desc:              "mpd",
-			url:               "testpic_2s_thumbs/Manifest.mpd",
+			url:               "testpic_2s/Manifest_thumbs.mpd",
 			params:            "",
 			wantedStatusCode:  http.StatusOK,
 			wantedContentType: `application/dash+xml`,
 		},
 		{
 			desc:              "thumbnail image",
-			url:               "testpic_2s_thumbs/thumbs/300.jpg?nowMS=610000",
+			url:               "testpic_2s/thumbs/300.jpg?nowMS=610000",
 			params:            "",
 			wantedStatusCode:  http.StatusOK,
 			wantedContentType: `image/jpeg`,
 		},
 		{
 			desc:              "imsc1 image subtitle",
-			url:               "testpic_2s_imsc1/imsc1_img_en/300.m4s?nowMS=610000",
+			url:               "testpic_2s/imsc1_img_en/300.m4s?nowMS=610000",
 			params:            "",
 			wantedStatusCode:  http.StatusOK,
 			wantedContentType: `application/mp4`,
 		},
 		{
 			desc:              "imsc1 text subtitle",
-			url:               "testpic_2s_imsc1/imsc1_txt_sv/300.m4s?nowMS=610000",
+			url:               "testpic_2s/imsc1_txt_sv/300.m4s?nowMS=610000",
 			params:            "",
 			wantedStatusCode:  http.StatusOK,
 			wantedContentType: `application/mp4`,
@@ -163,7 +163,7 @@ func TestFetches(t *testing.T) {
 		},
 		{
 			desc:              "thumbnail image too early",
-			url:               "testpic_2s_thumbs/thumbs/300.jpg?nowMS=510000",
+			url:               "testpic_2s/thumbs/300.jpg?nowMS=510000",
 			params:            "",
 			wantedStatusCode:  425,
 			wantedContentType: `image/jpeg`,

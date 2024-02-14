@@ -46,7 +46,7 @@ type assetMgr struct {
 // findAsset finds the asset by matching the uri with all assets paths.
 func (am *assetMgr) findAsset(uri string) (*asset, bool) {
 	for assetPath := range am.assets {
-		if strings.HasPrefix(uri, assetPath) {
+		if uri == assetPath || strings.HasPrefix(uri, assetPath+"/") {
 			return am.assets[assetPath], true
 		}
 	}

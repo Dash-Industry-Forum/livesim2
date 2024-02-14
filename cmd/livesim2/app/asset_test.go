@@ -44,3 +44,14 @@ func TestLoadAsset(t *testing.T) {
 	assert.Equal(t, 720_000, rep.duration())
 	assert.Equal(t, 8000, asset.LoopDurMS)
 }
+
+func TestAssetLookupForNameOverlap(t *testing.T) {
+	am := assetMgr{}
+	am.assets = make(map[string]*asset)
+	am.assets["assets/testpic_2s"] = &asset{AssetPath: "assets/testpic_2s"}
+	am.assets["assets/testpic_2s_1"] = &asset{AssetPath: "assets/testpic_2s_1"}
+	uri := "assets/testpic_2s_1/rep1/init.mp4"
+	a, ok := am.findAsset(uri)
+	require.True(t, ok)
+	require.Equal(t, "assets/testpic_2s_1", a.AssetPath)
+}

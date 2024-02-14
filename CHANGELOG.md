@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Make --playurl work for general paths
 - Derive and insert contentType if missing
 - Remove any mehd box from init segment
+- Asset lookup for case where one asset path is prefix of another
 
 ## [1.1.1] - 2024-01-19
 
