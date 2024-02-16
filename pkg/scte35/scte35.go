@@ -4,8 +4,8 @@ package scte35
 import (
 	"errors"
 
-	"github.com/Comcast/gots"
-	"github.com/Comcast/gots/scte35"
+	"github.com/Comcast/gots/v2"
+	"github.com/Comcast/gots/v2/scte35"
 	"github.com/Eyevinn/mp4ff/mp4"
 )
 
