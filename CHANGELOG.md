@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Nothing yet
+
+## [1.2.0] - 2024-02-16
+
 ### Added
 
 - Support for DASH-IF Enhanced Clear Key Content Protection (ECCP)
@@ -177,7 +181,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - features and URLs listed at livesim2 root page
 - configurable generated stpp subtitles with timing info
 
-[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.0.0...v1.0.1
