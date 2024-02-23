@@ -32,7 +32,7 @@ type UTCTimingMethod string
 
 const (
 	UtcTimingDirect       UTCTimingMethod = "direct"
-	UtcTimingHead         UTCTimingMethod = "head"
+	UtcTimingHttpHead     UTCTimingMethod = "head"
 	UtcTimingNtp          UTCTimingMethod = "ntp"
 	UtcTimingSntp         UTCTimingMethod = "sntp"
 	UtcTimingHttpXSDate   UTCTimingMethod = "httpxsdate"
@@ -45,8 +45,8 @@ const (
 
 const (
 	UtcTimingDirectScheme     = "urn:mpeg:dash:utc:direct:2014"
-	UtcTimingHeadScheme       = "urn:mpeg:dash:utc:head:2014"
-	UtcTimingHttpISOScheme    = "urn:mpeg:dash:utc:iso:2014"
+	UtcTimingHttpHeadScheme   = "urn:mpeg:dash:utc:http-head:2014"
+	UtcTimingHttpISOScheme    = "urn:mpeg:dash:utc:http-iso:2014"
 	UtcTimingHttpXSDateScheme = "urn:mpeg:dash:utc:http-xsdate:2014"
 	UtcTimingNtpDateScheme    = "urn:mpeg:dash:utc:ntp:2014"
 	UtcTimingSntpDateScheme   = "urn:mpeg:dash:utc:sntp:2014"
