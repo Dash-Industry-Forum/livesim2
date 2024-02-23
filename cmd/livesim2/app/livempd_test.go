@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Eyevinn/dash-mpd/mpd"
 	m "github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/Eyevinn/dash-mpd/xml"
 	"github.com/stretchr/testify/assert"
@@ -946,9 +945,9 @@ func TestFillContentTypes(t *testing.T) {
 		},
 	}
 	fillContentTypes("theAsset", p)
-	assert.Equal(t, mpd.RFC6838ContentTypeType("video"), p.AdaptationSets[0].ContentType)
-	assert.Equal(t, mpd.RFC6838ContentTypeType("audio"), p.AdaptationSets[1].ContentType)
-	assert.Equal(t, mpd.RFC6838ContentTypeType("text"), p.AdaptationSets[2].ContentType)
-	assert.Equal(t, mpd.RFC6838ContentTypeType("audio"), p.AdaptationSets[3].ContentType)
-	assert.Equal(t, mpd.RFC6838ContentTypeType(""), p.AdaptationSets[4].ContentType)
+	assert.Equal(t, m.RFC6838ContentTypeType("video"), p.AdaptationSets[0].ContentType)
+	assert.Equal(t, m.RFC6838ContentTypeType("audio"), p.AdaptationSets[1].ContentType)
+	assert.Equal(t, m.RFC6838ContentTypeType("text"), p.AdaptationSets[2].ContentType)
+	assert.Equal(t, m.RFC6838ContentTypeType("audio"), p.AdaptationSets[3].ContentType)
+	assert.Equal(t, m.RFC6838ContentTypeType(""), p.AdaptationSets[4].ContentType)
 }
