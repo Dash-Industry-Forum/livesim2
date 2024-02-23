@@ -88,7 +88,7 @@ func (s *strConvAccErr) SplitUTCTimings(key, val string) []UTCTimingMethod {
 		case UtcTimingDirect, UtcTimingNtp, UtcTimingSntp,
 			UtcTimingHttpXSDate, UtcTimingHttpXSDateMs,
 			UtcTimingHttpISO, UtcTimingHttpISOMs,
-			UtcTimingNone, UtcTimingHead:
+			UtcTimingNone, UtcTimingHttpHead:
 			utcTimingMethods[i] = utcVal
 		case UtcTimingKeep:
 			keepSet = true

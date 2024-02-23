@@ -640,9 +640,9 @@ func addUTCTimings(mpd *m.MPD, cfg *ResponseConfig) {
 					SchemeIdUri: UtcTimingHttpISOScheme,
 					Value:       UtcTimingISOHttpServerMS,
 				}
-			case UtcTimingHead:
+			case UtcTimingHttpHead:
 				ut = &m.DescriptorType{
-					SchemeIdUri: UtcTimingHeadScheme,
+					SchemeIdUri: UtcTimingHttpHeadScheme,
 					Value:       fmt.Sprintf("%s%s", cfg.Host, UtcTimingHeadAsset),
 				}
 
