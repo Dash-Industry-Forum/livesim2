@@ -229,6 +229,7 @@
 
 			<label for="statuscode">
 			<p><em>Patterns of cyclic segment response codes</em></p>
+			<input type="text" id="statuscode" name="statuscode" value="{{.StatusCodes}}" />
 			<p>
 				A square-bracket-surrounded list of comma-separated patterns, like
 				<pre>[{code:404,cycle:30,rsq:0,rep:video},{code:403,cycle:60,rsq:1}]</pre>
@@ -240,10 +241,10 @@
 				<li><it>rep</it> is a comma-separated list of representation IDs to which the pattern applies (can be empty)</li>
 			</ul>
 			</p>
-				<input type="text" id="statuscode" name="statuscode" value="{{.StatusCodes}}" />
 			</label>
 			<label for="traffic">
 				<p><em>Traffic Patterns for one or more BaseURLs</em></p>
+				<input type="text" id="traffic" name="traffic" value="{{.Traffic}}" />
 				<p>
 					Specify time interval for loss patterns for one or more BaseURLs
 					with "up (u)", "down (d)", "slow (s)", or "hang (h)" states, like
@@ -265,10 +266,8 @@
 					<li>During a "hang (s)" interval, all segment responses hang for 10s before resulting in 503.
 					</li>
 				</ul>
-
-
 				</p>
-					<input type="text" id="traffic" name="traffic" value="{{.Traffic}}" />
+
 				</label>
 		</details>
 
