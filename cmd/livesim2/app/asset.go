@@ -753,6 +753,14 @@ func (r *RepData) readInit(vodFS fs.FS, assetPath string) error {
 		return fmt.Errorf("getInitBytes: %w", err)
 	}
 
+	if prepareForEncryption(r.Codecs) {
+		assetName := path.Base(assetPath)
+		err = r.addEncryption(assetName, data)
+		if err != nil {
+			return fmt.Errorf("addEncryption: %w", err)
+		}
+	}
+
 	if r.MediaTimescale != 0 {
 		return nil // Already set
 	}
@@ -761,13 +769,6 @@ func (r *RepData) readInit(vodFS fs.FS, assetPath string) error {
 	trex := r.initSeg.Moov.Mvex.Trex
 	r.DefaultSampleDuration = trex.DefaultSampleDuration
 
-	if prepareForEncryption(r.Codecs) {
-		assetName := path.Base(assetPath)
-		err = r.addEncryption(assetName, data)
-		if err != nil {
-			return fmt.Errorf("addEncryption: %w", err)
-		}
-	}
 	return nil
 }
 
@@ -800,6 +801,7 @@ func (r *RepData) addEncryption(assetName string, data []byte) error {
 	if err != nil {
 		return fmt.Errorf("init protect cbcs: %w", err)
 	}
+	slog.Info("Encrypted init segment with cbcs", "asset", assetName, "repID", r.ID)
 	ed.cbcsPD = ipd
 	ed.cbcsInitSeg = initSeg
 	ed.cbcsInitBytes, err = getInitBytes(initSeg)
@@ -816,6 +818,7 @@ func (r *RepData) addEncryption(assetName string, data []byte) error {
 	if err != nil {
 		return fmt.Errorf("init protect cenc: %w", err)
 	}
+	slog.Info("Encrypted init segment with cenc", "asset", assetName, "repID", r.ID)
 	ed.cencPD = ipd
 	ed.cencInitSeg = initSeg
 	ed.cencInitBytes, err = getInitBytes(initSeg)

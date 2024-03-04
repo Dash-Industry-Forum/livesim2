@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Correct UTCTiming schemes for http-iso and http-head
 - Make urlgen fields for negative test cases easier to fill
+- Fix OPTIONS for livesim2/ path
+- Fix encryption of segments for representations with previous metadata
 
 ## [1.2.0] - 2024-02-16
 
