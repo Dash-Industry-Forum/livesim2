@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Nothing yet
 
+## [1.2.2] - 2024-03-05
+
+### Fixed
+
+- Add extra CORS headers to fix ECCP key request
+
 ## [1.2.1] - 2024-03-04
 
 ### Fixed
