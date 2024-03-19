@@ -2,7 +2,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <tt xmlns:ttp="http://www.w3.org/ns/ttml#parameter" xmlns="http://www.w3.org/ns/ttml"
     xmlns:tts="http://www.w3.org/ns/ttml#styling" xmlns:ttm="http://www.w3.org/ns/ttml#metadata"
-    xmlns:ebuttm="urn:ebu:metadata" xmlns:ebutts="urn:ebu:style"
+    xmlns:ebuttm="urn:ebu:tt:metadata" xmlns:ebutts="urn:ebu:tt:style"
     xml:lang="{{.Lang}}" xml:space="default"
     ttp:timeBase="media"
     ttp:cellResolution="32 15">
@@ -16,13 +16,13 @@
     </metadata>
     <styling>
       <style xml:id="s0" tts:fontStyle="normal" tts:fontFamily="sansSerif" tts:fontSize="100%" tts:lineHeight="normal"
-      tts:color="#FFFFFF" tts:wrapOption="noWrap" tts:textAlign="center"/>
-      <style xml:id="s1" tts:color="#00FF00" tts:backgroundColor="#000000" ebutts:linePadding="0.5c"/>
-      <style xml:id="s2" tts:color="#ff0000" tts:backgroundColor="#000000" ebutts:linePadding="0.5c"/>
+      tts:color="white" tts:wrapOption="noWrap" tts:textAlign="center" ebutts:linePadding="0.5c"/>
+      <style xml:id="s1" tts:color="yellow" tts:backgroundColor="black"/>
+      <style xml:id="s2" tts:color="green" tts:backgroundColor="black"/>
     </styling>
     <layout>
-      <region xml:id="r0" tts:origin="15% 80%" tts:extent="70% 20%" tts:overflow="visible" tts:displayAlign="before"/>
-      <region xml:id="r1" tts:origin="15% 20%" tts:extent="70% 20%" tts:overflow="visible" tts:displayAlign="before"/>
+      <region xml:id="r0" tts:origin="15% 80%" tts:extent="70% 20%" tts:overflow="visible"/>
+      <region xml:id="r1" tts:origin="15% 20%" tts:extent="70% 20%" tts:overflow="visible"/>
     </layout>
   </head>
   <body style="s0">
