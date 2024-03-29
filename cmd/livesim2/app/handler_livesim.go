@@ -38,17 +38,29 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var nowMS int // Set from query string or from wall-clock
 	q := r.URL.Query()
-	nowMSValue := q.Get("nowMS")
-	if nowMSValue != "" {
-		nowMS, err = strconv.Atoi(nowMSValue)
+	nowMS, err := getNowMS(q.Get("nowMS"))
+	if err != nil {
+		http.Error(w, "bad nowMS query", http.StatusBadRequest)
+		return
+	}
+
+	nowDate := q.Get("nowDate")
+	if nowDate != "" {
+		nowMS, err = getMSFromDate(nowDate)
 		if err != nil {
-			http.Error(w, "bad nowMS query", http.StatusBadRequest)
+			http.Error(w, "bad date query", http.StatusBadRequest)
 			return
 		}
-	} else {
-		nowMS = int(time.Now().UnixMilli())
+	}
+
+	publishTime := q.Get("publishTime")
+	if publishTime != "" {
+		nowMS, err = getMSFromDate(publishTime)
+		if err != nil {
+			http.Error(w, "bad publishTime query", http.StatusBadRequest)
+			return
+		}
 	}
 
 	cfg, err := processURLCfg(u.String(), nowMS)
@@ -142,6 +154,25 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown file extension", http.StatusNotFound)
 		return
 	}
+}
+
+// getNowMS returns value from query or local clock.
+func getNowMS(nowMSValue string) (nowMS int, err error) {
+	if nowMSValue != "" {
+		return strconv.Atoi(nowMSValue)
+	}
+	return int(time.Now().UnixMilli()), nil
+}
+
+// getMSFromDate returns a nowMS value based on date (+1ms).
+// The extra millisecond is there to ensure that the corresponding manifest
+// can be generated
+func getMSFromDate(publishTimeValue string) (nowMS int, err error) {
+	t, err := time.Parse(time.RFC3339, publishTimeValue)
+	if err != nil {
+		return -1, err
+	}
+	return int(t.UnixMilli()) + 1, nil
 }
 
 // extractPattern extracts the pattern number and return a modified segmentPart.

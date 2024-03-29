@@ -122,6 +122,7 @@ type urlGenData struct {
 	StartRel                    string   // sets timeline start (and availabilityStartTime) relative to now (in seconds). Normally negative value.
 	StopRel                     string   // sets stop-time for time-limited event relative to now (in seconds)
 	Scte35Var                   string   // SCTE-35 insertion variant
+	PatchTTL                    string   // MPD Patch TTL  inv value in seconds (> 0 to be valid))
 	StatusCodes                 string   // comma-separated list of response code patterns to return
 	Traffic                     string   // comma-separated list of up/down/slow/hang intervals for one or more BaseURLs in MPD
 	Errors                      []string // error messages to display due to bad configuration
@@ -271,6 +272,16 @@ func createURL(r *http.Request, aInfo assetsInfo) urlGenData {
 		if lt != defaultLatencyTargetMS {
 			data.LlTarget = lt
 			sb.WriteString(fmt.Sprintf("ltgt_%d/", lt))
+		}
+	}
+	if ptl := q.Get("patch-ttl"); ptl != "" {
+		patchTTL, err := strconv.Atoi(ptl)
+		if err != nil {
+			panic("bad patch-ttl")
+		}
+		if patchTTL > 0 {
+			data.PatchTTL = ptl
+			sb.WriteString(fmt.Sprintf("patch_%s/", ptl))
 		}
 	}
 	start := q.Get("start")

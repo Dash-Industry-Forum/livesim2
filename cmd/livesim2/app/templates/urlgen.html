@@ -129,6 +129,17 @@
 		</details>
 
 		<details>
+			<summary>MPD Patch...</summary>
+			<fieldset>
+				<legend>Provides delta DASH MPDs at a PatchLocation</legend>
+				<label for="patch-ttl">
+						<input type="text" id="patch-ttl" name="patch-ttl" value="{{.PatchTTL}}" />
+				</label>
+				<p><em>Set a positive TTL in seconds</em></p>
+			</fieldset>
+		</details>
+
+		<details>
 			<summary>SCTE-35...</summary>
 			<fieldset>
 				<legend>SCTE-35 emsg frequency</legend>
@@ -204,7 +215,6 @@
 
 		<details>
 			<summary>Encrypt with DASH-IF ECCP</summary>
-
 			<fieldset>
 			<legend><a href="https://dashif.org/docs/IOP-Guidelines/DASH-IF-IOP-Part6-v5.0.0.pdf" target="_blank">
 				DASH-IF Enhanced Clear Key Content Protection (encrypted on the fly)</a></legend>

@@ -8,9 +8,11 @@ require (
 	github.com/Comcast/gots/v2 v2.2.1
 	github.com/Eyevinn/dash-mpd v0.11.1
 	github.com/Eyevinn/mp4ff v0.42.1-0.20240212112335-795b1455e438
+	github.com/beevik/etree v1.3.0
 	github.com/caddyserver/certmagic v0.20.0
 	github.com/dusted-go/logging v1.1.3
 	github.com/go-chi/chi/v5 v5.0.12
+	github.com/google/go-cmp v0.6.0
 	github.com/knadh/koanf v1.5.0
 	github.com/prometheus/client_golang v1.19.0
 	github.com/spf13/pflag v1.0.5
