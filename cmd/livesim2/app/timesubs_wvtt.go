@@ -36,25 +36,44 @@ type WvttTimeCue struct {
 	Vttc    []byte
 }
 
-// makeWvttMessage makes a message for an stpptime cue.
+// makeWvttMessage makes a message for an wvtt cue.
+// region = 0 => default alignment
+// region = 1 => line:2
+// region = 2 => line:2 and line:10 align: right
 func makeWvttCuePayload(lang string, region, utcMS, segNr int) []byte {
 	t := time.UnixMilli(int64(utcMS))
 	utc := t.UTC().Format(time.RFC3339)
 	pl := mp4.PaylBox{
 		CueText: fmt.Sprintf("%s\n%s # %d", utc, lang, segNr),
 	}
+	boxes := make([]mp4.Box, 0, 2)
 	vttc := mp4.VttcBox{}
-	if region == 1 {
-		sttg := mp4.SttgBox{
-			Settings: "line:2",
-		}
+	size := 0
+	switch {
+	case region == 1:
+		sttg := mp4.SttgBox{Settings: "line:2"}
+		vttc.AddChild(&sttg)
+	case region == 2:
+		sttg := mp4.SttgBox{Settings: "line:2 align:left"}
 		vttc.AddChild(&sttg)
 	}
 	vttc.AddChild(&pl)
-	sw := bits.NewFixedSliceWriter(int(vttc.Size()))
-	err := vttc.EncodeSW(sw)
-	if err != nil {
-		panic("cannot write vttc")
+	size += int(vttc.Size())
+	boxes = append(boxes, &vttc)
+	if region > 1 {
+		vttc := mp4.VttcBox{}
+		sttg := mp4.SttgBox{Settings: "line:10 align:right"}
+		vttc.AddChild(&sttg)
+		vttc.AddChild(&pl)
+		size += int(vttc.Size())
+		boxes = append(boxes, &vttc)
+	}
+	sw := bits.NewFixedSliceWriter(size)
+	for _, b := range boxes {
+		err := b.EncodeSW(sw)
+		if err != nil {
+			panic("cannot write vttc")
+		}
 	}
 	return sw.Bytes()
 }

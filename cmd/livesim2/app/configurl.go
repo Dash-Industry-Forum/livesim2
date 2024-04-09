@@ -405,8 +405,8 @@ func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 	if cfg.SegTimelineNrFlag && cfg.SegTimelineFlag {
 		return fmt.Errorf("SegmentTimelineTime and SegmentTimelineNr cannot be used at same time")
 	}
-	if cfg.TimeSubsRegion < 0 || cfg.TimeSubsRegion > 1 {
-		return fmt.Errorf("timesubsreg number must be 0 or 1")
+	if cfg.TimeSubsRegion < 0 || cfg.TimeSubsRegion > 2 {
+		return fmt.Errorf("timesubsreg number must be 0,1 or 2")
 	}
 	if cfg.MinimumUpdatePeriodS != nil && *cfg.MinimumUpdatePeriodS <= 0 {
 		return fmt.Errorf("minimumUpdatePeriod must be > 0")
