@@ -17,9 +17,11 @@
         "gots"
     ],
     "cSpell.words": [
+        "apos",
         "Atof",
         "autodetected",
         "autoplay",
+        "beevik",
         "caddyserver",
         "cbcs",
         "cenc",
@@ -39,6 +41,7 @@
         "emsg",
         "enca",
         "encv",
+        "etree",
         "Eyevinn",
         "genurl",
         "golangci",

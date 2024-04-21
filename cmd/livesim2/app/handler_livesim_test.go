@@ -74,6 +74,18 @@ func TestParamToMPD(t *testing.T) {
 				`<dashif:Laurl xmlns:dashif="https://dashif.org/CPS" licenseType="EME-1.0">`,
 			},
 		},
+		{
+			desc:             "MPD with Patch",
+			mpd:              "testpic_6s/Manifest.mpd",
+			params:           "patch_60/",
+			wantedStatusCode: http.StatusOK,
+			wantedInMPD: []string{
+				`id="auto-patch-id"`, // id in MPD
+				`id="1"`,             // id in AdaptationSet
+				`id="2"`,             // id in AdaptationSet
+				`<PatchLocation ttl="60">/patch/livesim2/patch_60/testpic_6s/Manifest.mpp?publishTime=`, // PatchLocation
+			},
+		},
 	}
 
 	for _, tc := range testCases {

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- MPD Patch functionality with new `/patch_ttl` URL configuration
+- nowDate query parameter as an alternative to nowMS for MPD and patch
+
 ### Fixed
 
 - Timed stpp subtitles EBU-TT-D linePadding

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"net/url"
 	"strings"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/scte35"
@@ -67,6 +68,10 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	if cfg.TimeShiftBufferDepthS != nil {
 		mpd.TimeShiftBufferDepth = m.Seconds2DurPtr(*cfg.TimeShiftBufferDepthS)
 	}
+	if cfg.PatchTTL > 0 && mpd.Id == "" {
+		slog.Debug("Inserting ID for MPD for patch", "id", "auto-patch-id")
+		mpd.Id = "auto-patch-id"
+	}
 	if cfg.AddLocationFlag {
 		var strBuf strings.Builder
 		strBuf.WriteString(cfg.Host)
@@ -124,6 +129,10 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	for i, as := range adaptationSets {
 		switch as.ContentType {
 		case "video", "audio":
+			if cfg.PatchTTL > 0 && as.Id == nil {
+				slog.Debug("Inserting ID for AdaptationSet for patch", "contentType", as.ContentType, "id", i+1)
+				as.Id = Ptr(uint32(i + 1))
+			}
 			if cfg.DashIFECCP != "" {
 				if a.refRep.PreEncrypted {
 					return nil, fmt.Errorf("pre-encrypted asset %s cannot be encrypted again", a.AssetPath)
@@ -220,7 +229,9 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 		if afterStop {
 			mpdDurS := *cfg.StopTimeS - cfg.StartTimeS
 			makeMPDStatic(mpd, mpdDurS)
+			return mpd, nil
 		}
+		addPatchLocation(mpd, cfg)
 		return mpd, nil
 	}
 
@@ -233,9 +244,26 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	if afterStop {
 		mpdDurS := *cfg.StopTimeS - cfg.StartTimeS
 		makeMPDStatic(mpd, mpdDurS)
+		return mpd, nil
 	}
+	addPatchLocation(mpd, cfg)
 
 	return mpd, nil
+}
+
+func addPatchLocation(mpd *m.MPD, cfg *ResponseConfig) {
+	// Still live. Add patch location if specified
+	if cfg.PatchTTL > 0 {
+		baseURL := "/patch" + strings.Replace(strings.Join(cfg.URLParts, "/"), ".mpd", ".mpp", 1)
+		escapedPublishTime := url.QueryEscape(string(mpd.PublishTime))
+		fullURL := fmt.Sprintf("%s?publishTime=%s", baseURL, escapedPublishTime)
+		mpd.PatchLocation = append(mpd.PatchLocation,
+			&m.PatchLocationType{
+				Ttl:   float64(cfg.PatchTTL),
+				Value: m.AnyURI(fullURL),
+			},
+		)
+	}
 }
 
 func makeMPDStatic(mpd *m.MPD, mpdDurS int) {

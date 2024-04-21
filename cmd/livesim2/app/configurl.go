@@ -101,6 +101,7 @@ type ResponseConfig struct {
 	TimeSubsDurMS                int               `json:"TimeSubsDurMS,omitempty"`
 	TimeSubsRegion               int               `json:"TimeSubsRegion,omitempty"`
 	Host                         string            `json:"Host,omitempty"`
+	PatchTTL                     int               `json:"Patch,omitempty"`
 	// DashIFECCP is DASH-IF Enhanced Clear Key Content Protection
 	DashIFECCP     string           `json:"ECCP,omitempty"`
 	SegStatusCodes []SegStatusCodes `json:"SegStatus,omitempty"`
@@ -375,6 +376,11 @@ cfgLoop:
 			cfg.Traffic = sc.ParseLossItvls(key, val)
 		case "eccp":
 			cfg.DashIFECCP = val
+		case "patch":
+			ttl := sc.Atoi(key, val)
+			if ttl > 0 {
+				cfg.PatchTTL = ttl
+			}
 		default:
 			contentStartIdx = i
 			break cfgLoop
