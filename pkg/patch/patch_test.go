@@ -2,6 +2,7 @@ package patch
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -63,18 +64,24 @@ const wantedPatchSegmentTimelineNumber = (`<?xml version="1.0" encoding="UTF-8"?
 
 func TestDiff(t *testing.T) {
 	cases := []struct {
-		desc       string
-		oldMPD     string
-		newMPD     string
-		wantedDiff string
-		wantedErr  string
+		desc           string
+		oldMPD         string
+		newMPD         string
+		wantedDiff     string
+		wantedDiffFile string
+		wantedErr      string
 	}{
 		{
-			desc:       "too big publishTime diff vs ttl",
-			oldMPD:     "testdata/testpic_2s_1.mpd",
-			newMPD:     "testdata/testpic_2s_2_late_publish.mpd",
-			wantedDiff: "",
-			wantedErr:  ErrPatchTooLate.Error(),
+			desc:           "multiPeriodPatch",
+			oldMPD:         "testdata/multiperiod_1.mpd",
+			newMPD:         "testdata/multiperiod_2.mpd",
+			wantedDiffFile: "testdata/multiperiod_patch.mpp",
+		},
+		{
+			desc:      "too big publishTime diff vs ttl",
+			oldMPD:    "testdata/testpic_2s_1.mpd",
+			newMPD:    "testdata/testpic_2s_2_late_publish.mpd",
+			wantedErr: ErrPatchTooLate.Error(),
 		},
 		{
 			desc:       "segmentTimelineTime",
@@ -109,9 +116,16 @@ func TestDiff(t *testing.T) {
 			require.NoError(t, err)
 			patch.Indent(2)
 			out, err := patch.WriteToString()
-			//os.WriteFile(fmt.Sprintf("%s.mpp", c.desc), []byte(out), 0o644)
+			wantedDiff := c.wantedDiff
+			if c.wantedDiffFile != "" {
+				//os.WriteFile(c.wantedDiffFile, []byte(out), 0o644)
+				d, err := os.ReadFile(c.wantedDiffFile)
+				require.NoError(t, err)
+				wantedDiff = string(d)
+				wantedDiff = strings.Replace(wantedDiff, "\r\n", "\n", -1) // Windows line endings
+			}
 			require.NoError(t, err)
-			require.Equal(t, c.wantedDiff, out)
+			require.Equal(t, wantedDiff, out)
 		})
 	}
 }

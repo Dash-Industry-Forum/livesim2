@@ -152,28 +152,6 @@ func addAttrChanges(patchRoot, oldElem, newElem *etree.Element, elemPath string)
 	return nil
 }
 
-type elementCounter struct {
-	latestTag string
-	counter   int
-}
-
-func (ec *elementCounter) update(tag string) {
-	if ec.latestTag == tag {
-		ec.counter++
-		return
-	}
-	ec.latestTag = tag
-	ec.counter = 0
-}
-
-// index returns a 0-based index for an element
-func (ec *elementCounter) index(tag string) int {
-	if ec.latestTag == tag {
-		return ec.counter + 1
-	}
-	return 0
-}
-
 // addElemChanges adds changes to patchRoot for elements in new relative to old
 // elemPath is the path to the element in the MPD needed for the patch
 func addElemChanges(patchRoot, old, new *etree.Element, elemPath string) error {
@@ -203,17 +181,21 @@ func addElemChanges(patchRoot, old, new *etree.Element, elemPath string) error {
 	newChildren := new.ChildElements()
 	diffOps := MyersDiff(oldChildren, newChildren, sameElements)
 	oldIdx := 0
-	ec := elementCounter{}
 	newIdx := 0
+	lastNewPath := ""
+	lastNewIdx := make(map[string]int) // Last index for each tag
 	for _, d := range diffOps {
 		for d.OldPos > oldIdx {
-			// Elements to keep at start. Look for changes at lower level
-			newElemPath := fmt.Sprintf("%s/%s[%d]", elemPath, oldChildren[oldIdx].Tag, oldIdx)
-			err := addElemChanges(patchRoot, oldChildren[oldIdx], newChildren[oldIdx], newElemPath)
+			oldElem := oldChildren[oldIdx]
+			tag := oldElem.Tag
+			addr := calcAddr(oldElem, lastNewIdx[tag])
+			newElemPath := fmt.Sprintf("%s/%s", elemPath, addr)
+			err := addElemChanges(patchRoot, oldChildren[oldIdx], newChildren[newIdx], newElemPath)
 			if err != nil {
 				return fmt.Errorf("addElemChanges for %s: %w", newElemPath, err)
 			}
-			ec.update(oldChildren[oldIdx].Tag)
+			lastNewIdx[tag]++
+			lastNewPath = newElemPath
 			oldIdx++
 			newIdx++
 		}
@@ -222,15 +204,26 @@ func addElemChanges(patchRoot, old, new *etree.Element, elemPath string) error {
 			case OpDelete:
 				e := patchRoot.CreateElement("remove")
 				oldElem := oldChildren[d.OldPos]
-				addr := calcAddr(oldElem, ec.index(oldElem.Tag))
+				addr := calcAddr(oldElem, oldIdx)
 				e.CreateAttr("sel", fmt.Sprintf("%s/%s", elemPath, addr))
 				oldIdx++
 			case OpInsert:
 				e := patchRoot.CreateElement("add")
 				newElem := newChildren[d.NewPos]
-				addr := calcAddr(newElem, ec.index(newElem.Tag))
-				e.CreateAttr("sel", fmt.Sprintf("%s/%s[%d]", elemPath, addr, oldIdx))
+				addr := calcAddr(newElem, lastNewIdx[newElem.Tag])
+				newPath := fmt.Sprintf("%s/%s", elemPath, addr)
+				if lastNewPath == "" {
+					// Always use prepend on insertion at start (since the list may be empty)
+					e.CreateAttr("sel", elemPath)
+					e.CreateAttr("pos", "prepend")
+				} else {
+					// Put after previous element
+					e.CreateAttr("sel", lastNewPath)
+					e.CreateAttr("pos", "after")
+				}
 				e.AddChild(newElem.Copy())
+				lastNewPath = newPath
+				lastNewIdx[newElem.Tag]++
 				newIdx++
 			}
 		}
@@ -239,13 +232,13 @@ func addElemChanges(patchRoot, old, new *etree.Element, elemPath string) error {
 	for oldIdx < len(oldChildren) {
 		oldElem := oldChildren[oldIdx]
 		newElem := newChildren[newIdx]
-		addr := calcAddr(oldElem, ec.index(oldElem.Tag))
+		addr := calcAddr(oldElem, lastNewIdx[oldElem.Tag])
 		newElemPath := fmt.Sprintf("%s/%s", elemPath, addr)
 		err := addElemChanges(patchRoot, oldElem, newElem, newElemPath)
 		if err != nil {
 			return fmt.Errorf("addElemChanges for %s: %w", newElemPath, err)
 		}
-		ec.update(oldElem.Tag)
+		lastNewIdx[oldElem.Tag]++
 		oldIdx++
 		newIdx++
 	}
