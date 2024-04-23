@@ -50,7 +50,7 @@ func (s *Server) patchHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	r.URL.RawQuery = newQuery
 	s.livesimHandlerFunc(new, r)
 
-	doc, err := patch.MPDDiff(old.body, new.body)
+	doc, expiration, err := patch.MPDDiff(old.body, new.body)
 	switch {
 	case errors.Is(err, patch.ErrPatchSamePublishTime):
 		http.Error(w, err.Error(), http.StatusTooEarly)
@@ -71,6 +71,7 @@ func (s *Server) patchHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/dash-patch+xml")
+	w.Header().Set("Expires", expiration.Format(http.TimeFormat))
 	w.Header().Set("Content-Length", strconv.Itoa(len(b)))
 	_, err = w.Write(b)
 	if err != nil {

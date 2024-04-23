@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - MPD Patch functionality with new `/patch_ttl` URL configuration
 - nowDate query parameter as an alternative to nowMS for MPD and patch
+- MPD Patch has Expires header equal to publishTime + ttl + 10s
 
 ### Fixed
 

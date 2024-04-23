@@ -11,18 +11,22 @@ import (
 )
 
 var wantedPatchSegTimelineTime = `<?xml version="1.0" encoding="UTF-8"?>
-<Patch xmlns="urn:mpeg:dash:schema:mpd-patch:2020" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd-patch:2020 DASH-MPD-PATCH.xsd" mpdId="base" originalPublishTime="2024-04-02T15:50:56Z" publishTime="2024-04-02T15:52:40Z">
-  <replace sel="/MPD/@publishTime">2024-04-02T15:52:40Z</replace>
+<Patch xmlns="urn:mpeg:dash:schema:mpd-patch:2020" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd-patch:2020 DASH-MPD-PATCH.xsd" mpdId="base" originalPublishTime="2024-04-02T15:50:56Z" publishTime="2024-04-02T15:51:40Z">
+  <replace sel="/MPD/@publishTime">2024-04-02T15:51:40Z</replace>
   <replace sel="/MPD/PatchLocation[1]">
-    <PatchLocation ttl="60">/patch/livesim2/patch_60/segtimeline_1/testpic_2s/Manifest.mpp?publishTime=2024-04-02T15%3A52%3A40Z</PatchLocation>
+    <PatchLocation ttl="60">/patch/livesim2/patch_60/segtimeline_1/testpic_2s/Manifest.mpp?publishTime=2024-04-02T15%3A51%3A40Z</PatchLocation>
   </replace>
   <remove sel="/MPD/Period[@id=&apos;P0&apos;]/AdaptationSet[@id=&apos;1&apos;]/SegmentTemplate/SegmentTimeline/S[1]"/>
+  <remove sel="/MPD/Period[@id=&apos;P0&apos;]/AdaptationSet[@id=&apos;1&apos;]/SegmentTemplate/SegmentTimeline/S[1]"/>
   <add sel="/MPD/Period[@id=&apos;P0&apos;]/AdaptationSet[@id=&apos;1&apos;]/SegmentTemplate/SegmentTimeline" pos="prepend">
-    <S t="82179508704256" d="96256" r="1"/>
+    <S t="82179505824768" d="95232"/>
+  </add>
+  <add sel="/MPD/Period[@id=&apos;P0&apos;]/AdaptationSet[@id=&apos;1&apos;]/SegmentTemplate/SegmentTimeline/S[15]" pos="after">
+    <S d="96256" r="1"/>
   </add>
   <remove sel="/MPD/Period[@id=&apos;P0&apos;]/AdaptationSet[@id=&apos;2&apos;]/SegmentTemplate/SegmentTimeline/S[1]"/>
   <add sel="/MPD/Period[@id=&apos;P0&apos;]/AdaptationSet[@id=&apos;2&apos;]/SegmentTemplate/SegmentTimeline" pos="prepend">
-    <S t="154086578820000" d="180000" r="30"/>
+    <S t="154086573420000" d="180000" r="30"/>
   </add>
 </Patch>
 `
@@ -67,6 +71,7 @@ func TestPatchHandler(t *testing.T) {
 		wantedStatusCode  int
 		wantedContentType string
 		wantedBody        string
+		wantedExpires     string
 	}{
 		{
 			desc:              "segTimeline no update yet",
@@ -84,10 +89,11 @@ func TestPatchHandler(t *testing.T) {
 		},
 		{
 			desc:              "segTimeline",
-			url:               "/patch/livesim2/patch_60/segtimeline_1/testpic_2s/Manifest.mpp?publishTime=2024-04-02T15:50:56Z&nowMS=1712073160000",
+			url:               "/patch/livesim2/patch_60/segtimeline_1/testpic_2s/Manifest.mpp?publishTime=2024-04-02T15:50:56Z&nowDate=2024-04-02T15:51:40Z",
 			wantedStatusCode:  http.StatusOK,
 			wantedContentType: "application/dash-patch+xml",
 			wantedBody:        wantedPatchSegTimelineTime,
+			wantedExpires:     "Tue, 02 Apr 2024 15:52:06 GMT",
 		},
 		{
 			desc:              "segTimeline with Number",
@@ -95,6 +101,7 @@ func TestPatchHandler(t *testing.T) {
 			wantedStatusCode:  http.StatusOK,
 			wantedContentType: "application/dash-patch+xml",
 			wantedBody:        wantedPatchSegTimelineNumberWithAddAtEnd,
+			wantedExpires:     "Tue, 16 Apr 2024 07:35:48 GMT",
 		},
 	}
 
@@ -105,6 +112,9 @@ func TestPatchHandler(t *testing.T) {
 			require.Equal(t, tc.wantedContentType, resp.Header.Get("Content-Type"))
 			if tc.wantedStatusCode != http.StatusOK {
 				return
+			}
+			if tc.wantedExpires != "" {
+				require.Equal(t, tc.wantedExpires, resp.Header.Get("Expires"))
 			}
 			bodyStr := string(body)
 			require.Equal(t, tc.wantedBody, bodyStr)

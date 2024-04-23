@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -64,18 +65,20 @@ const wantedPatchSegmentTimelineNumber = (`<?xml version="1.0" encoding="UTF-8"?
 
 func TestDiff(t *testing.T) {
 	cases := []struct {
-		desc           string
-		oldMPD         string
-		newMPD         string
-		wantedDiff     string
-		wantedDiffFile string
-		wantedErr      string
+		desc             string
+		oldMPD           string
+		newMPD           string
+		wantedDiff       string
+		wantedDiffFile   string
+		wantedExpiration time.Time
+		wantedErr        string
 	}{
 		{
-			desc:           "multiPeriodPatch",
-			oldMPD:         "testdata/multiperiod_1.mpd",
-			newMPD:         "testdata/multiperiod_2.mpd",
-			wantedDiffFile: "testdata/multiperiod_patch.mpp",
+			desc:             "multiPeriodPatch",
+			oldMPD:           "testdata/multiperiod_1.mpd",
+			newMPD:           "testdata/multiperiod_2.mpd",
+			wantedDiffFile:   "testdata/multiperiod_patch.mpp",
+			wantedExpiration: time.Date(2024, 4, 21, 6, 12, 8, 0, time.UTC),
 		},
 		{
 			desc:      "too big publishTime diff vs ttl",
@@ -84,15 +87,17 @@ func TestDiff(t *testing.T) {
 			wantedErr: ErrPatchTooLate.Error(),
 		},
 		{
-			desc:       "segmentTimelineTime",
-			oldMPD:     "testdata/testpic_2s_1.mpd",
-			newMPD:     "testdata/testpic_2s_2.mpd",
-			wantedDiff: wantedPatchSegmentTimelineTime,
+			desc:             "segmentTimelineTime",
+			oldMPD:           "testdata/testpic_2s_1.mpd",
+			newMPD:           "testdata/testpic_2s_2.mpd",
+			wantedDiff:       wantedPatchSegmentTimelineTime,
+			wantedExpiration: time.Date(2024, 3, 28, 15, 44, 20, 0, time.UTC),
 		}, {
-			desc:       "segmentTimelineNumber",
-			oldMPD:     "testdata/testpic_2s_snr_1.mpd",
-			newMPD:     "testdata/testpic_2s_snr_2.mpd",
-			wantedDiff: wantedPatchSegmentTimelineNumber,
+			desc:             "segmentTimelineNumber",
+			oldMPD:           "testdata/testpic_2s_snr_1.mpd",
+			newMPD:           "testdata/testpic_2s_snr_2.mpd",
+			wantedDiff:       wantedPatchSegmentTimelineNumber,
+			wantedExpiration: time.Date(2024, 3, 28, 15, 44, 20, 0, time.UTC),
 		},
 		{
 			desc:       "no diff",
@@ -108,12 +113,14 @@ func TestDiff(t *testing.T) {
 			require.NoError(t, err)
 			in2, err := os.ReadFile(c.newMPD)
 			require.NoError(t, err)
-			patch, err := MPDDiff(in1, in2)
+			patch, expiration, err := MPDDiff(in1, in2)
 			if c.wantedErr != "" {
 				require.Error(t, err, c.wantedErr)
 				return
 			}
 			require.NoError(t, err)
+			expirationDiff := c.wantedExpiration.Sub(expiration)
+			require.Equal(t, time.Duration(0), expirationDiff)
 			patch.Indent(2)
 			out, err := patch.WriteToString()
 			wantedDiff := c.wantedDiff
