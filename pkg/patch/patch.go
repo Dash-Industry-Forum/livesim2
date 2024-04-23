@@ -9,6 +9,9 @@ import (
 	"github.com/beevik/etree"
 )
 
+// PatchExpirationMargin is added to the HTTP expiration beyond ttl.
+const PatchExpirationMargin = 10 * time.Second
+
 var ErrPatchSamePublishTime = fmt.Errorf("same publishTime in both MPDs")
 var ErrPatchTooLate = fmt.Errorf("patch TTL exceeded")
 
@@ -46,77 +49,77 @@ func newPatchDoc(oldRoot, newRoot *etree.Element) (*patchDoc, error) {
 }
 
 // MPDDiff compares two MPDs and returns a patch document or an error.
-func MPDDiff(mpdOld, mpdNew []byte) (*etree.Document, error) {
+func MPDDiff(mpdOld, mpdNew []byte) (doc *etree.Document, expiration time.Time, err error) {
 	dOld := etree.NewDocument()
-	err := dOld.ReadFromBytes(mpdOld)
+	err = dOld.ReadFromBytes(mpdOld)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read old MPD: %w", err)
+		return nil, expiration, fmt.Errorf("failed to read old MPD: %w", err)
 	}
 	dNew := etree.NewDocument()
 	err = dNew.ReadFromBytes(mpdNew)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read new MPD: %w", err)
+		return nil, expiration, fmt.Errorf("failed to read new MPD: %w", err)
 	}
 	oldRoot := dOld.Root()
 	newRoot := dNew.Root()
 
-	err = checkPatchConditions(oldRoot, newRoot)
+	expiration, err = checkPatchConditions(oldRoot, newRoot)
 	if err != nil {
-		return nil, err
+		return nil, expiration, err
 	}
 
 	pDoc, err := newPatchDoc(oldRoot, newRoot)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create patch doc: %w", err)
+		return nil, expiration, fmt.Errorf("failed to create patch doc: %w", err)
 	}
 
 	elemPath := "/MPD"
 	root := pDoc.doc.Root()
 	err = addElemChanges(root, oldRoot, newRoot, elemPath)
 	if err != nil {
-		return nil, err
+		return nil, expiration, err
 	}
 
-	return pDoc.doc, nil
+	return pDoc.doc, expiration, nil
 }
 
-func checkPatchConditions(oldRoot, newRoot *etree.Element) error {
+func checkPatchConditions(oldRoot, newRoot *etree.Element) (expiration time.Time, err error) {
 	if oldRoot.Tag != "MPD" || newRoot.Tag != "MPD" {
-		return fmt.Errorf("not MPD root element in both MPDs")
+		return expiration, fmt.Errorf("not MPD root element in both MPDs")
 	}
 	newPublishTime := getAttrValue(newRoot, "publishTime")
 	oldPublishTime := getAttrValue(oldRoot, "publishTime")
 	if newPublishTime == "" || oldPublishTime == "" {
-		return fmt.Errorf("lacking publishTime attribute in MPD")
+		return expiration, fmt.Errorf("lacking publishTime attribute in MPD")
 	}
 	if newPublishTime == oldPublishTime {
-		return ErrPatchSamePublishTime
+		return expiration, ErrPatchSamePublishTime
 	}
 	oldPatchLocation := oldRoot.SelectElement("PatchLocation")
 	if oldPatchLocation == nil {
-		return fmt.Errorf("no PatchLocation element in old MPD")
+		return expiration, fmt.Errorf("no PatchLocation element in old MPD")
 	}
 	oldTTL := oldPatchLocation.SelectAttr("ttl")
 	if oldTTL == nil {
-		return fmt.Errorf("no ttl attribute in PatchLocation element in old MPD")
+		return expiration, fmt.Errorf("no ttl attribute in PatchLocation element in old MPD")
 	}
 	ttl, err := strconv.Atoi(oldTTL.Value)
 	if err != nil {
-		return fmt.Errorf("failed to convert ttl attribute in PatchLocation element in old MPD: %w", err)
+		return expiration, fmt.Errorf("failed to convert ttl attribute in PatchLocation element in old MPD: %w", err)
 	}
 	oldPT, err := time.Parse(time.RFC3339, oldPublishTime)
 	if err != nil {
-		return fmt.Errorf("failed to parse old publishTime: %w", err)
+		return expiration, fmt.Errorf("failed to parse old publishTime: %w", err)
 	}
 	newPT, err := time.Parse(time.RFC3339, newPublishTime)
 	if err != nil {
-		return fmt.Errorf("failed to parse new publishTime: %w", err)
+		return expiration, fmt.Errorf("failed to parse new publishTime: %w", err)
 	}
-	endTime := oldPT.Add(2 * time.Duration(ttl) * time.Second)
-	if newPT.After(endTime) {
-		return ErrPatchTooLate
+	expiration = oldPT.Add(time.Duration(ttl)*time.Second + PatchExpirationMargin)
+	if newPT.After(expiration) {
+		return expiration, ErrPatchTooLate
 	}
-	return nil
+	return expiration, nil
 }
 
 // getAttrValue returns value if key exists, of empty string
