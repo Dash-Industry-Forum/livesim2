@@ -126,12 +126,12 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 
 	adaptationSets := orderAdaptationSetsByContentType(period.AdaptationSets)
 	var refSegEntries segEntries
-	for i, as := range adaptationSets {
+	for asIdx, as := range adaptationSets {
 		switch as.ContentType {
 		case "video", "audio":
 			if cfg.PatchTTL > 0 && as.Id == nil {
-				slog.Debug("Inserting ID for AdaptationSet for patch", "contentType", as.ContentType, "id", i+1)
-				as.Id = Ptr(uint32(i + 1))
+				slog.Debug("Inserting ID for AdaptationSet for patch", "contentType", as.ContentType, "id", asIdx+1)
+				as.Id = Ptr(uint32(asIdx + 1))
 			}
 			if cfg.DashIFECCP != "" {
 				if a.refRep.PreEncrypted {
@@ -167,7 +167,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 			return nil, err
 		}
 		var se segEntries
-		if i == 0 {
+		if asIdx == 0 {
 			// Assume that first representation is as good as any, so can be reference
 			refSegEntries = a.generateTimelineEntries(as.Representations[0].Id, wTimes, atoMS)
 			se = refSegEntries
@@ -192,7 +192,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForTimelineTime: %w", err)
 			}
-			if i == 0 {
+			if asIdx == 0 {
 				mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, se.lsi))
 			}
 		case timeLineNumber:
@@ -200,7 +200,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForTimelineNr: %w", err)
 			}
-			if i == 0 {
+			if asIdx == 0 {
 				mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, se.lsi))
 			}
 		case segmentNumber:

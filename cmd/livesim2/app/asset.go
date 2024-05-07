@@ -450,7 +450,7 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int) s
 		mediaTimescale: uint32(rep.MediaTimescale),
 	}
 
-	ato := uint64(atoMS * rep.MpdTimescale / 1000)
+	ato := uint64(atoMS * rep.MediaTimescale / 1000)
 
 	relStartTime := uint64(wt.startRelMS * rep.MediaTimescale / 1000)
 	relStartIdx := 0
