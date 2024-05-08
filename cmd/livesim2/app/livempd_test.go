@@ -473,6 +473,26 @@ func TestPublishTime(t *testing.T) {
 			nowMS:             0,
 			wantedPublishTime: "1970-01-01T00:00:00Z",
 		},
+		{
+			desc:                   "LL SegmentTimeline, early not yet available MPD",
+			asset:                  "testpic_2s",
+			mpdName:                "Manifest.mpd",
+			segTimelineTime:        true,
+			availabilityTimeOffset: 1.75,
+			availabilityStartTime:  0,
+			nowMS:                  10_200,
+			wantedPublishTime:      "1970-01-01T00:00:08.25Z",
+		},
+		{
+			desc:                   "LL SegmentTimeline, early available MPD",
+			asset:                  "testpic_2s",
+			mpdName:                "Manifest.mpd",
+			segTimelineTime:        true,
+			availabilityTimeOffset: 1.75,
+			availabilityStartTime:  0,
+			nowMS:                  10_300,
+			wantedPublishTime:      "1970-01-01T00:00:10.25Z",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
