@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Dash-Industry-Forum/livesim2/internal"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
 	"github.com/stretchr/testify/require"
 )
@@ -35,7 +36,7 @@ func TestIndexPageWithHost(t *testing.T) {
 	require.Greater(t, strings.Index(string(body), `href="https://example.com/subfolder/assets"`), 0)
 }
 
-func TestIndexPageWithoutHost(t *testing.T) {
+func TestIndexPageWithoutHostAndVersion(t *testing.T) {
 	cfg := ServerConfig{
 		VodRoot:   "testdata/assets",
 		TimeoutS:  0,
@@ -51,4 +52,9 @@ func TestIndexPageWithoutHost(t *testing.T) {
 	resp, body := testFullRequest(t, ts, "GET", "/", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Greater(t, strings.Index(string(body), fmt.Sprintf(`href="%s/assets"`, ts.URL)), 0)
+
+	resp, body = testFullRequest(t, ts, "GET", "/version", nil)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	bodyStr := string(body)
+	require.Equal(t, fmt.Sprintf("{\"Version\":\"%s\"}", internal.GetVersion()), bodyStr)
 }
