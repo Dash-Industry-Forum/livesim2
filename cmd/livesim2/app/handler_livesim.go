@@ -96,9 +96,8 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		cfg.SetHost(s.Cfg.Host, r)
 		err := writeLiveMPD(log, w, cfg, a, mpdName, nowMS)
 		if err != nil {
-			msg := fmt.Sprintf("liveMPD: %s", err)
-			log.Error(msg)
-			http.Error(w, msg, http.StatusInternalServerError)
+			log.Error("liveMPD", "err", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	case ".mp4", ".m4s", ".cmfv", ".cmfa", ".cmft", ".jpg", ".jpeg", ".m4v", ".m4a":
@@ -129,6 +128,7 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		}
 		code, err := writeSegment(r.Context(), w, log, cfg, s.assetMgr.vodFS, a, segmentPart[1:], nowMS, s.textTemplates)
 		if err != nil {
+			log.Error("writeSegment", "code", code, "err", err)
 			var tooEarly errTooEarly
 			switch {
 			case errors.Is(err, errNotFound):
@@ -139,9 +139,7 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 			case errors.Is(err, errGone):
 				http.Error(w, "Gone", http.StatusGone)
 			default:
-				msg := "writeSegment"
-				log.Error(msg)
-				http.Error(w, msg, http.StatusInternalServerError)
+				http.Error(w, "writeSegment", http.StatusInternalServerError)
 				return
 			}
 		}
