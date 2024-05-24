@@ -40,10 +40,11 @@
         <li><a href="{{.Host}}/assets">/assets</a> provides a list of all loaded assets and their MPDs</li>
         <li><a href="https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters">livesim2-wiki</a> compares url parameters between livesim2 and livesim1</li>
         <li><a href="{{.Host}}/vod">/vod</a> provides a list of all VoD assets and their MPDs</li>
-        <li><a href="{{.Host}}/healthz">/healthz</a> to check if server is running</li>
-        <li><a href="{{.Host}}/config">/config</a> to get the current config of the server</li>
-        <li><a href="{{.Host}}/metrics">/metrics</a> to get Prometheus metrics for the system and all streaming content requests</li>
+        <li><a href="{{.Host}}/healthz">/healthz</a> returns true if server is running</li>
+        <li><a href="{{.Host}}/config">/config</a> return the current config of the server in JSON format</li>
+        <li><a href="{{.Host}}/metrics">/metrics</a> return  Prometheus metrics for the system and all streaming content requests</li>
         <li><a href="{{.Host}}/reqcount">/reqcount</a> returns the number of requests if a limit is set</li>
+        <li><a href="{{.Host}}/version">/version</a> returns the software version in JSON format</li>
       </ul>
 
       <h4>Further information</h4>
@@ -54,6 +55,8 @@
         <li><a href="https://github.com/Dash-Industry-Forum/livesim2"  target="_blank">livesim2 Github project</a></li>
         <li><a href="https://github.com/Dash-Industry-Forum/livesim2/wiki" target="_blank">livesim2 Github Wiki</a></li>
         <li><a href="https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters" target="_blank">wiki list of url parameters</a></li>
+        <li><a href="https://github.com/orgs/Dash-Industry-Forum/projects/7" target="_blank">Github project for planning new features</a></li>
+        <li><a href="https://dashif.slack.com" target="_blank">The livesim channel in the DASH-IF slack</a></li>
       </ul>
 
       <p>Version: {{.Version}}</p>

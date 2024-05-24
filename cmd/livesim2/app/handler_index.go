@@ -43,3 +43,7 @@ func (s *Server) optionsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Allow", "OPTIONS, GET, HEAD, POST")
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (s *Server) versionHandlerFunc(w http.ResponseWriter, r *http.Request) {
+	s.jsonResponse(w, struct{ Version string }{Version: internal.GetVersion()}, http.StatusOK)
+}

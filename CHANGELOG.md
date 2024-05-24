@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - More error logging for segment generation.
+- New endpoint /version responds with livesim2 version
+- Some more links in the Welcome page
 
 ## [1.3.1] - 2024-05-08
 
