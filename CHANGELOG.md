@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - correct low-latency MPD update time for SegmentTimeline
+- fix patch response for multiperiod segment-timeline
 
 ## [1.3.0] - 2024-04-23
 
