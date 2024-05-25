@@ -375,6 +375,7 @@ func TestPublishTime(t *testing.T) {
 		segTimelineTime        bool
 		availabilityStartTime  int
 		availabilityTimeOffset float64
+		periodsPerHour         int
 		nowMS                  int
 		wantedPublishTime      string
 	}{
@@ -474,6 +475,15 @@ func TestPublishTime(t *testing.T) {
 			wantedPublishTime: "1970-01-01T00:00:00Z",
 		},
 		{
+			desc:              "SegmentTemplate with $Number$, at period start",
+			asset:             "testpic_2s",
+			mpdName:           "Manifest.mpd",
+			segTimelineTime:   false,
+			periodsPerHour:    60,
+			nowMS:             120_000,
+			wantedPublishTime: "1970-01-01T00:02:00Z",
+		},
+		{
 			desc:                   "LL SegmentTimeline, early not yet available MPD",
 			asset:                  "testpic_2s",
 			mpdName:                "Manifest.mpd",
@@ -508,6 +518,9 @@ func TestPublishTime(t *testing.T) {
 				cfg.AvailabilityTimeOffsetS = tc.availabilityTimeOffset
 				cfg.ChunkDurS = Ptr(2 - tc.availabilityTimeOffset)
 				cfg.AvailabilityTimeCompleteFlag = false
+			}
+			if tc.periodsPerHour > 0 {
+				cfg.PeriodsPerHour = Ptr(tc.periodsPerHour)
 			}
 			err := verifyAndFillConfig(cfg, tc.nowMS)
 			require.NoError(t, err)
