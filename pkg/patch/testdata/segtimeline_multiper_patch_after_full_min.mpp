@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Patch xmlns="urn:mpeg:dash:schema:mpd-patch:2020" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd-patch:2020 DASH-MPD-PATCH.xsd" mpdId="auto-patch-id" originalPublishTime="2024-05-24T15:12:00Z" publishTime="2024-05-24T15:12:04Z">
+  <replace sel="/MPD/@publishTime">2024-05-24T15:12:04Z</replace>
+  <replace sel="/MPD/PatchLocation[1]">
+    <PatchLocation ttl="60">/patch/livesim2/patch_60/periods_60/segtimeline_1/testpic_2s/Manifest.mpp?publishTime=2024-05-24T15%3A12%3A04Z</PatchLocation>
+  </replace>
+  <remove sel="/MPD/Period[@id=&apos;P28609391&apos;]/AdaptationSet[@id=&apos;2&apos;]/SegmentTemplate/SegmentTimeline/S[1]"/>
+  <remove sel="/MPD/Period[@id=&apos;P28609391&apos;]/AdaptationSet[@id=&apos;1&apos;]/SegmentTemplate/SegmentTimeline/S[1]"/>
+  <add sel="/MPD/Period[@id=&apos;P28609391&apos;]/AdaptationSet[@id=&apos;1&apos;]/SegmentTemplate/SegmentTimeline" pos="prepend">
+    <S t="154490711580000" d="180000" r="28"/>
+  </add>
+  <add sel="/MPD/Period[@id=&apos;P28609392&apos;]/AdaptationSet[@id=&apos;2&apos;]/SegmentTemplate/SegmentTimeline" pos="prepend">
+    <S t="82395048960000" d="96256" r="1"/>
+  </add>
+  <add sel="/MPD/Period[@id=&apos;P28609392&apos;]/AdaptationSet[@id=&apos;1&apos;]/SegmentTemplate/SegmentTimeline" pos="prepend">
+    <S t="154490716800000" d="180000" r="1"/>
+  </add>
+</Patch>

@@ -81,6 +81,13 @@ func TestDiff(t *testing.T) {
 			wantedExpiration: time.Date(2024, 4, 21, 6, 12, 8, 0, time.UTC),
 		},
 		{
+			desc:             "multiPeriodPatch at period change",
+			oldMPD:           "testdata/segtimeline_multiper_full_min.mpd",
+			newMPD:           "testdata/segtimeline_multiper_after_full_min.mpd",
+			wantedDiffFile:   "testdata/segtimeline_multiper_patch_after_full_min.mpp",
+			wantedExpiration: time.Date(2024, 5, 24, 15, 13, 10, 0, time.UTC),
+		},
+		{
 			desc:      "too big publishTime diff vs ttl",
 			oldMPD:    "testdata/testpic_2s_1.mpd",
 			newMPD:    "testdata/testpic_2s_2_late_publish.mpd",

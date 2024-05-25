@@ -267,7 +267,15 @@ func addLeafChanges(patchRoot, old, new *etree.Element, elemPath string) error {
 func addLeafListChanges(patchRoot, old, new *etree.Element, elemPath string) error {
 	oldElems := old.ChildElements()
 	newElems := new.ChildElements()
-	tag := oldElems[0].Tag // Require that all are the same
+	var tag string // Require that all elements have same type
+	switch {
+	case len(oldElems) == 0 && len(newElems) == 0:
+		return nil
+	case len(oldElems) > 0:
+		tag = oldElems[0].Tag
+	default:
+		tag = newElems[0].Tag
+	}
 	for _, e := range oldElems {
 		if e.Tag != tag {
 			return fmt.Errorf("other tag %q in list of %q", e.Tag, tag)
