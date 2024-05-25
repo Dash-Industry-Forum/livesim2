@@ -10,6 +10,7 @@ import (
 	"math"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/scte35"
 	m "github.com/Eyevinn/dash-mpd/mpd"
@@ -241,6 +242,11 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 		return nil, fmt.Errorf("splitPeriods: %w", err)
 	}
 
+	mpd.PublishTime, err = lastPeriodStartTime(mpd)
+	if err != nil {
+		return nil, fmt.Errorf("lastPeriodStartTime: %w", err)
+	}
+
 	if afterStop {
 		mpdDurS := *cfg.StopTimeS - cfg.StartTimeS
 		makeMPDStatic(mpd, mpdDurS)
@@ -249,6 +255,18 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	addPatchLocation(mpd, cfg)
 
 	return mpd, nil
+}
+
+// lastSegInfo returns the absolute startTime of the last Period.
+func lastPeriodStartTime(mpd *m.MPD) (m.DateTime, error) {
+	lastPeriod := mpd.Periods[len(mpd.Periods)-1]
+	lastRelStartS := time.Duration(*lastPeriod.Start).Seconds()
+	ast, err := mpd.AvailabilityStartTime.ConvertToSeconds()
+	if err != nil {
+		return "", err
+	}
+	lastAbsStart := ast + lastRelStartS
+	return m.ConvertToDateTime(lastAbsStart), nil
 }
 
 func addPatchLocation(mpd *m.MPD, cfg *ResponseConfig) {
