@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	commitVersion string = "v1.3.1"     // Should be updated during build
-	commitDate    string = "1715145165" // commitDate in Epoch seconds (can be filled/updated in during build)
+	commitVersion string = "v1.4.0"     // Should be updated during build
+	commitDate    string = "1716626969" // commitDate in Epoch seconds (can be filled/updated in during build)
 )
 
 // GetVersion - get version, commitHash and  commitDate depending on what is inserted
