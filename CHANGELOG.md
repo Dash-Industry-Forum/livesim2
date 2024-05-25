@@ -7,19 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2024-05-25
+
 ### Added
 
 - More error logging for segment generation.
 - New endpoint /version responds with livesim2 version
 - Some more links in the Welcome page
 
+### Fixed
+
+- fix patch response for multiperiod segment-timeline
+- fix publishTime for multiperiod SegmentTemplate with Number
+
 ## [1.3.1] - 2024-05-08
 
 ### Fixed
 
 - correct low-latency MPD update time for SegmentTimeline
-- fix patch response for multiperiod segment-timeline
-- fix publishTime for multiperiod SegmentTemplate with Number
 
 ## [1.3.0] - 2024-04-23
 
@@ -221,7 +226,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - features and URLs listed at livesim2 root page
 - configurable generated stpp subtitles with timing info
 
-[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.2.1...v1.2.2
