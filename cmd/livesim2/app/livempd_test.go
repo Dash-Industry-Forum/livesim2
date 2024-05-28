@@ -484,6 +484,15 @@ func TestPublishTime(t *testing.T) {
 			wantedPublishTime: "1970-01-01T00:02:00Z",
 		},
 		{
+			desc:              "SegmentTimeline, mid period",
+			asset:             "testpic_2s",
+			mpdName:           "Manifest.mpd",
+			segTimelineTime:   true,
+			periodsPerHour:    60,
+			nowMS:             150_000,
+			wantedPublishTime: "1970-01-01T00:02:30Z",
+		},
+		{
 			desc:                   "LL SegmentTimeline, early not yet available MPD",
 			asset:                  "testpic_2s",
 			mpdName:                "Manifest.mpd",

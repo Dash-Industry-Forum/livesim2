@@ -242,9 +242,11 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 		return nil, fmt.Errorf("splitPeriods: %w", err)
 	}
 
-	mpd.PublishTime, err = lastPeriodStartTime(mpd)
-	if err != nil {
-		return nil, fmt.Errorf("lastPeriodStartTime: %w", err)
+	if cfg.liveMPDType() == segmentNumber {
+		mpd.PublishTime, err = lastPeriodStartTime(mpd)
+		if err != nil {
+			return nil, fmt.Errorf("lastPeriodStartTime: %w", err)
+		}
 	}
 
 	if afterStop {
