@@ -133,6 +133,8 @@ func (am *assetMgr) loadAsset(mpdPath string) error {
 	md.Dur = mpd.MediaPresentationDuration.String()
 	asset.MPDs[mpdName] = md
 
+	fillContentTypes(assetPath, mpd.Periods[0])
+
 	for _, as := range mpd.Periods[0].AdaptationSets {
 		if as.SegmentTemplate == nil {
 			return fmt.Errorf("no SegmentTemplate in adaptation set")
