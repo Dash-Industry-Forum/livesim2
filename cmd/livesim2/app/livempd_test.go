@@ -984,6 +984,12 @@ func TestFillContentTypes(t *testing.T) {
 			{Id: Ptr(uint32(2)), RepresentationBaseType: m.RepresentationBaseType{MimeType: "application/mp4"}},
 			{Id: Ptr(uint32(4)), ContentType: "audio"},
 			{Id: Ptr(uint32(4))},
+			{Id: Ptr(uint32(4)), Representations: []*m.RepresentationType{
+				{RepresentationBaseType: m.RepresentationBaseType{MimeType: "video/mp4"}},
+			}},
+			{Id: Ptr(uint32(4)), Representations: []*m.RepresentationType{
+				{RepresentationBaseType: m.RepresentationBaseType{Codecs: "ac-3"}},
+			}},
 		},
 	}
 	fillContentTypes("theAsset", p)
@@ -992,4 +998,6 @@ func TestFillContentTypes(t *testing.T) {
 	assert.Equal(t, m.RFC6838ContentTypeType("text"), p.AdaptationSets[2].ContentType)
 	assert.Equal(t, m.RFC6838ContentTypeType("audio"), p.AdaptationSets[3].ContentType)
 	assert.Equal(t, m.RFC6838ContentTypeType(""), p.AdaptationSets[4].ContentType)
+	assert.Equal(t, m.RFC6838ContentTypeType("video"), p.AdaptationSets[5].ContentType)
+	assert.Equal(t, m.RFC6838ContentTypeType("audio"), p.AdaptationSets[6].ContentType)
 }

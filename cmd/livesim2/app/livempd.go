@@ -749,16 +749,75 @@ func orderAdaptationSetsByContentType(aSets []*m.AdaptationSetType) []*m.Adaptat
 func fillContentTypes(assetPath string, period *m.Period) {
 	for _, as := range period.AdaptationSets {
 		if as.ContentType == "" {
-			switch as.MimeType {
-			case "video/mp4":
-				as.ContentType = "video"
-			case "audio/mp4":
-				as.ContentType = "audio"
-			case "application/mp4":
-				as.ContentType = "text"
-			default:
-				slog.Warn("no contentType and unknown mimeType", "asset", assetPath, "mimeType", as.MimeType)
+			as.ContentType = m.RFC6838ContentTypeType(contentTypeFromMimeType(as.MimeType))
+			if as.ContentType == "" {
+				as.ContentType = m.RFC6838ContentTypeType(guessContentTypeForAS(as))
+				if as.ContentType == "" {
+					asID := "not set"
+					if as.Id != nil {
+						asID = fmt.Sprintf("%d", *as.Id)
+					}
+					slog.Warn("no contentType, unknown mimeType, and no known codecs", "asset", assetPath, "adaptationSetID", asID)
+				}
 			}
 		}
+	}
+}
+
+var videoCodecPrefixes = []string{"avc", "hev", "hvc"}
+var audioCodecPrefixes = []string{"mp4a", "ac-3", "ec-3"}
+var textCodecPrefixes = []string{"stpp", "wvtt"}
+
+func matchesPrefix(s string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(s, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// guesssContentTypeForAS guesses the content type based on codecs and other data in the AdaptationSet or its Representations.
+func guessContentTypeForAS(as *m.AdaptationSetType) string {
+	if as.Codecs != "" {
+		switch {
+		case matchesPrefix(as.Codecs, videoCodecPrefixes):
+			return "video"
+		case matchesPrefix(as.Codecs, audioCodecPrefixes):
+			return "audio"
+		case matchesPrefix(as.Codecs, textCodecPrefixes):
+			return "text"
+		}
+	}
+
+	for _, rep := range as.Representations {
+		contentType := contentTypeFromMimeType(rep.MimeType)
+		if contentType != "" {
+			return contentType
+		}
+		if rep.Codecs != "" {
+			switch {
+			case matchesPrefix(rep.Codecs, videoCodecPrefixes):
+				return "video"
+			case matchesPrefix(rep.Codecs, audioCodecPrefixes):
+				return "audio"
+			case matchesPrefix(rep.Codecs, textCodecPrefixes):
+				return "text"
+			}
+		}
+	}
+	return ""
+}
+
+func contentTypeFromMimeType(mimeType string) string {
+	switch mimeType {
+	case "video/mp4":
+		return "video"
+	case "audio/mp4":
+		return "audio"
+	case "application/mp4":
+		return "text"
+	default:
+		return ""
 	}
 }
