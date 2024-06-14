@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" minBufferTime="PT1.500S" type="static" mediaPresentationDuration="PT0H0M8.000S" maxSegmentDuration="PT0H0M2.016S" profiles="urn:mpeg:dash:profile:isoff-live:2011">
+ <ProgramInformation>
+  <Title>BigBuckBunny 8s generated with ffmpeg and MP4Box</Title>
+ </ProgramInformation>
+ <Period duration="PT0H0M8.000S">
+  <AdaptationSet segmentAlignment="true" contentType="video" maxWidth="640" maxHeight="360" maxFrameRate="24" par="16:9" lang="und" startWithSAP="1">
+   <SegmentTemplate media="video_$Number$.m4s" initialization="video_init.mp4" timescale="12288" startNumber="1" duration="24576"/>
+   <Representation id="1" mimeType="video/mp4" codecs="hev1.1.6.L63.90" width="640" height="360" frameRate="24" sar="1:1" bandwidth="741142">
+   </Representation>
+  </AdaptationSet>
+  <AdaptationSet segmentAlignment="true" contentType="audio" lang="und" startWithSAP="1">
+   <SegmentTemplate media="audio_$Number$.m4s" initialization="audio_init.mp4" timescale="48000" startNumber="1" duration="96000"/>
+   <Representation id="2" mimeType="audio/mp4" codecs="ac-3" audioSamplingRate="48000" bandwidth="96000">
+    <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+   </Representation>
+  </AdaptationSet>
+ </Period>
+</MPD>
