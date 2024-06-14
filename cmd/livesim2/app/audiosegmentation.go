@@ -92,11 +92,14 @@ func createAudioSeg(vodFS fs.FS, a *asset, cfg *ResponseConfig, rec audioRecipe)
 			itvl := sampleItvl{i, startSampleIdx, 0, 0}
 			sampleItvls = append(sampleItvls, itvl)
 		}
-		if rec.audioInEnd > s.EndTime {
+		if rec.audioInEnd >= s.EndTime {
 			endSampleIdx = uint32((s.EndTime - s.StartTime) / sampleDur)
 			sampleItvls[len(sampleItvls)-1].endIdx = endSampleIdx
 			timeCollected += sampleItvls[len(sampleItvls)-1].dur(sampleDur)
 			nextAudioStart = s.EndTime
+			if nextAudioStart == rec.audioInEnd {
+				break
+			}
 			if i < lastIdx {
 				sampleItvls = append(sampleItvls, sampleItvl{i + 1, 0, 0, 0})
 				continue

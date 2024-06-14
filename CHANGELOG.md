@@ -7,10 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Short HEVC + AC-3 test content
+
 ### Fixed
 
 - Will now set contentType from mimeType on AdaptationSet or Representation level.
 - If contentType and mimedType is not present, contentType will be set from codecs string.
+- Issue with audio resegmentation.
 
 ## [1.4.1] - 2024-05-28
 
