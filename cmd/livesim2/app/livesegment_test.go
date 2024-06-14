@@ -108,6 +108,29 @@ func TestLiveSegment(t *testing.T) {
 	}
 }
 
+// TestAc3Timing checks that the generated segments end within one frame from nominal segment duration.
+func TestAc3Timing(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false)
+	err := am.discoverAssets()
+	require.NoError(t, err)
+
+	asset, ok := am.findAsset("bbb_hevc_ac3_8s")
+	require.True(t, ok)
+	cfg := NewResponseConfig()
+	nowMS := 20_000
+	for sNr := 0; sNr <= 5; sNr++ {
+		media := "audio_$NrOrTime$.m4s"
+		media = strings.Replace(media, "$NrOrTime$", fmt.Sprintf("%d", sNr), -1)
+		so, err := genLiveSegment(vodFS, asset, cfg, media, nowMS)
+		require.NoError(t, err)
+		bmdt := int(so.seg.Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime())
+		overShoot := bmdt - (2 * sNr * 48000)
+		require.Less(t, overShoot, 1536)
+		require.GreaterOrEqual(t, overShoot, 0)
+	}
+}
+
 func TestCheckAudioSegmentTimeAddressing(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	am := newAssetMgr(vodFS, "", false)
