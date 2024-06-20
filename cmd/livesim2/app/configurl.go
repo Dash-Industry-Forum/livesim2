@@ -311,7 +311,7 @@ cfgLoop:
 			cfg.AddLocationFlag = true
 		case "dur": // Adds a presentation duration for multiple periods
 			cfg.PeriodDurations = append(cfg.PeriodDurations, sc.Atoi(key, val))
-		case "timeoffset": //Time offset in seconds version NTP
+		case "timeoffset": //Time offset in seconds versus NTP
 			cfg.TimeOffsetS = sc.Atof(key, val)
 		case "init": // Make the init segment available earlier
 			cfg.InitSegAvailOffsetS = sc.AtoiPtr(key, val)
