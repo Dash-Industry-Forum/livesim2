@@ -24,33 +24,38 @@ import (
 	"github.com/Eyevinn/dash-mpd/mpd"
 )
 
-// livesimHandlerFunc handles mpd and segment requests.
-// ?nowMS=... can be used to set the current time for testing.
-func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
-	log := logging.SubLoggerWithRequestID(slog.Default(), r)
+type errorWithHttpType struct {
+	msg        string
+	statusCode int
+}
+
+func (e errorWithHttpType) Error() string {
+	return e.msg
+}
+
+func generateAndLogHttpError(log *slog.Logger, msg string, statusCode int) *errorWithHttpType {
+	log.Error(msg)
+	return &errorWithHttpType{msg, statusCode}
+}
+
+func cfgFromRequest(r *http.Request, log *slog.Logger) (nowMS int, cfg *ResponseConfig, errHT *errorWithHttpType) {
 	uPath := r.URL.Path
-	ext := filepath.Ext(uPath)
 	u, err := url.Parse(uPath)
 	if err != nil {
-		msg := "URL parser"
-		log.Error(msg)
-		http.Error(w, msg, http.StatusInternalServerError)
-		return
+		return 0, nil, generateAndLogHttpError(log, "URL parsing", http.StatusInternalServerError)
 	}
 
 	q := r.URL.Query()
-	nowMS, err := getNowMS(q.Get("nowMS"))
+	nowMS, err = getNowMS(q.Get("nowMS"))
 	if err != nil {
-		http.Error(w, "bad nowMS query", http.StatusBadRequest)
-		return
+		return 0, nil, generateAndLogHttpError(log, "bad nowMS query", http.StatusBadRequest)
 	}
 
 	nowDate := q.Get("nowDate")
 	if nowDate != "" {
 		nowMS, err = getMSFromDate(nowDate)
 		if err != nil {
-			http.Error(w, "bad date query", http.StatusBadRequest)
-			return
+			return 0, nil, generateAndLogHttpError(log, "bad nowDate query", http.StatusBadRequest)
 		}
 	}
 
@@ -58,42 +63,53 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	if publishTime != "" {
 		nowMS, err = getMSFromDate(publishTime)
 		if err != nil {
-			http.Error(w, "bad publishTime query", http.StatusBadRequest)
-			return
+			return 0, nil, generateAndLogHttpError(log, "bad publishTime query", http.StatusBadRequest)
 		}
 	}
 
-	cfg, err := processURLCfg(u.String(), nowMS)
+	cfg, err = processURLCfg(u.String(), nowMS)
 	if err != nil {
-		msg := "processURL error"
-		log.Error(msg, "err", err)
-		http.Error(w, msg, http.StatusInternalServerError)
-		return
+		msg := fmt.Sprintf("processURL error: %q", err)
+		return 0, nil, generateAndLogHttpError(log, msg, http.StatusBadRequest)
 	}
-
-	cfg.SetHost(s.Cfg.Host, r)
 
 	if cfg.TimeOffsetS != nil {
 		offsetMS := int(*cfg.TimeOffsetS * 1000)
 		nowMS += offsetMS
 	}
 
+	if nowMS < cfg.StartTimeS*1000 {
+		tooEarlyMS := cfg.StartTimeS - nowMS
+		msg := fmt.Sprintf("%dms too early", tooEarlyMS)
+		return 0, nil, generateAndLogHttpError(log, msg, http.StatusTooEarly)
+	}
+
+	return nowMS, cfg, nil
+}
+
+// livesimHandlerFunc handles mpd and segment requests.
+// ?nowMS=... can be used to set the current time for testing.
+func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
+	log := logging.SubLoggerWithRequestID(slog.Default(), r)
+	nowMS, cfg, errHT := cfgFromRequest(r, log)
+	if errHT != nil {
+		http.Error(w, errHT.Error(), errHT.statusCode)
+		return
+	}
+
 	contentPart := cfg.URLContentPart()
 	log.Debug("requested content", "url", contentPart)
 	a, ok := s.assetMgr.findAsset(contentPart)
 	if !ok {
-		http.Error(w, "unknown asset", http.StatusNotFound)
+		msg := fmt.Sprintf("unknown asset %q", contentPart)
+		log.Error(msg)
+		http.Error(w, msg, http.StatusNotFound)
 		return
 	}
-	if nowMS < cfg.StartTimeS*1000 {
-		tooEarlyMS := cfg.StartTimeS - nowMS
-		http.Error(w, fmt.Sprintf("%dms too early", tooEarlyMS), http.StatusTooEarly)
-		return
-	}
-	switch ext {
+	cfg.SetHost(s.Cfg.Host, r)
+	switch filepath.Ext(r.URL.Path) {
 	case ".mpd":
 		_, mpdName := path.Split(contentPart)
-		cfg.SetHost(s.Cfg.Host, r)
 		err := writeLiveMPD(log, w, cfg, a, mpdName, nowMS)
 		if err != nil {
 			log.Error("liveMPD", "err", err)
