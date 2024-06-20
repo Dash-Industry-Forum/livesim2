@@ -220,6 +220,29 @@ func findRefSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseCo
 	}, nil
 }
 
+// calcSegmentAvailabilityTime calculates the availability time in ms for a segment given the segment number.
+func calcSegmentAvailabilityTime(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig) (int64, error) {
+	wrapLen := len(rep.Segments)
+	startNr := cfg.getStartNr()
+	nrAfterStart := int(nr) - startNr
+	nrWraps := nrAfterStart / wrapLen
+	relNr := nrAfterStart - nrWraps*wrapLen
+	wrapDur := a.LoopDurMS * rep.MediaTimescale / 1000
+	wrapTime := nrWraps * wrapDur
+	seg := rep.Segments[relNr]
+	mediaRef := cfg.StartTimeS * rep.MediaTimescale // TODO. Add period offset
+
+	// Check interval validity
+	segAvailTimeS := float64(int(seg.EndTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
+	ato := cfg.getAvailabilityTimeOffsetS()
+	if ato == +math.Inf(1) {
+		return int64(cfg.StartTimeS) * 1000, nil
+	}
+	segAvailTimeS -= ato
+	milliSeconds := int64(segAvailTimeS * 1_000)
+	return milliSeconds, nil
+}
+
 // findSegMetaFromNr returns segMeta if segment is available.
 func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, nowMS int) (segMeta, error) {
 	wrapLen := len(rep.Segments)

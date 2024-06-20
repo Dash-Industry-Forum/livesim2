@@ -466,6 +466,19 @@ func (s segEntries) lastNr() int {
 	return s.startNr + nrSegs - 1
 }
 
+func (s segEntries) lastTime() uint64 {
+	t := uint64(0)
+	lastD := uint64(0)
+	for _, e := range s.entries {
+		if e.T != nil {
+			t = *e.T
+		}
+		t += e.D * (uint64(e.R) + 1)
+		lastD = e.D
+	}
+	return t - lastD
+}
+
 // setOffsetInAdaptationSet sets the availabilityTimeOffset in the AdaptationSet.
 // Returns ErrAtoInfTimeline if infinite ato set with timeline.
 func setOffsetInAdaptationSet(cfg *ResponseConfig, as *m.AdaptationSetType) (atoMS int, err error) {

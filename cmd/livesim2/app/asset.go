@@ -921,6 +921,12 @@ func replaceTimeAndNr(str string, time uint64, nr uint32) string {
 	return str
 }
 
+func replaceTimeOrNr(str string, val int) string {
+	str = strings.ReplaceAll(str, "$Time$", strconv.Itoa(val))
+	str = strings.ReplaceAll(str, "$Number$", strconv.Itoa(val))
+	return str
+}
+
 type Segment struct {
 	StartTime       uint64 `json:"startTime"`
 	EndTime         uint64 `json:"endTime"`
