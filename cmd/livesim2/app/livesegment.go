@@ -259,8 +259,8 @@ type initMatch struct {
 	rep    *RepData
 }
 
-func writeInitSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string) (isInit bool, err error) {
-	isTimeSubsInit, err := writeTimeSubsInitSegment(w, cfg, a, segmentPart)
+func writeInitSegment(w http.ResponseWriter, cfg *ResponseConfig, a *asset, segmentPart string) (isInit bool, err error) {
+	isTimeSubsInit, err := writeTimeSubsInitSegment(w, cfg, segmentPart)
 	if isTimeSubsInit {
 		return true, err
 	}
@@ -417,7 +417,7 @@ func createOutSeg(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string
 	return so, nil
 }
 
-func findSegMeta(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int) (segMeta, error) {
+func findSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int) (segMeta, error) {
 	var sm segMeta
 	rep, segID, err := findRepAndSegmentID(a, segmentPart)
 	if err != nil {
@@ -425,7 +425,7 @@ func findSegMeta(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string,
 	}
 
 	if rep.ContentType == "audio" {
-		sm, err := findRefSegMeta(vodFS, a, cfg, segmentPart, nowMS, rep, segID)
+		sm, err := findRefSegMeta(a, cfg, segmentPart, nowMS, rep, segID)
 		if err != nil {
 			return sm, fmt.Errorf("findRefSegMeta: %w", err)
 		}
@@ -455,7 +455,7 @@ func createAudioSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart 
 	refRep := a.refRep
 	refTimescale := uint64(refRep.MediaTimescale)
 
-	refMeta, err := findRefSegMeta(vodFS, a, cfg, segmentPart, nowMS, rep, segID)
+	refMeta, err := findRefSegMeta(a, cfg, segmentPart, nowMS, rep, segID)
 	if err != nil {
 		return segOut{}, fmt.Errorf("findRefSegMeta: %w", err)
 	}
@@ -466,7 +466,7 @@ func createAudioSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart 
 		uint64(refRep.duration()),
 		refTimescale, rep)
 	var so segOut
-	so.seg, err = createAudioSeg(vodFS, a, cfg, recipe)
+	so.seg, err = createAudioSeg(vodFS, a, recipe)
 	if err != nil {
 		return so, fmt.Errorf("createAudioSeg: %w", err)
 	}
@@ -482,7 +482,7 @@ func createAudioSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart 
 }
 
 // findRefSegMeta finds the reference track meta data given other following track like audio
-func findRefSegMeta(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int, rep *RepData, segID int) (segMeta, error) {
+func findRefSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int, rep *RepData, segID int) (segMeta, error) {
 	var refMeta segMeta
 	var err error
 	switch cfg.getRepType(segmentPart) {
@@ -508,7 +508,7 @@ func findRefSegMeta(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart stri
 //
 // nowMS servers as reference for the current time and can be set to any value. Media time will
 // be incremented with respect to nowMS.
-func writeChunkedSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, cfg *ResponseConfig,
+func writeChunkedSegment(ctx context.Context, w http.ResponseWriter, cfg *ResponseConfig,
 	vodFS fs.FS, a *asset, segmentPart string, nowMS int) error {
 
 	so, err := genLiveSegment(vodFS, a, cfg, segmentPart, nowMS)

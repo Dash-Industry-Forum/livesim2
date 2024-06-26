@@ -163,7 +163,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 					Value:       "",
 				})
 		}
-		atoMS, err := setOffsetInAdaptationSet(cfg, a, as)
+		atoMS, err := setOffsetInAdaptationSet(cfg, as)
 		if err != nil {
 			return nil, err
 		}
@@ -177,7 +177,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 			case "video", "text", "image":
 				se = a.generateTimelineEntries(as.Representations[0].Id, wTimes, atoMS)
 			case "audio":
-				se = a.generateTimelineEntriesFromRef(refSegEntries, as.Representations[0].Id, wTimes, atoMS)
+				se = a.generateTimelineEntriesFromRef(refSegEntries, as.Representations[0].Id)
 			default:
 				return nil, fmt.Errorf("unknown content type %s", as.ContentType)
 			}
@@ -189,7 +189,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 		}
 		switch templateType {
 		case timeLineTime:
-			err := adjustAdaptationSetForTimelineTime(cfg, se, as)
+			err := adjustAdaptationSetForTimelineTime(se, as)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForTimelineTime: %w", err)
 			}
@@ -197,7 +197,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 				mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, se.lsi))
 			}
 		case timeLineNumber:
-			err := adjustAdaptationSetForTimelineNr(cfg, se, as)
+			err := adjustAdaptationSetForTimelineNr(se, as)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForTimelineNr: %w", err)
 			}
@@ -205,7 +205,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 				mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, se.lsi))
 			}
 		case segmentNumber:
-			err := adjustAdaptationSetForSegmentNumber(cfg, a, as, wTimes)
+			err := adjustAdaptationSetForSegmentNumber(cfg, a, as)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForSegmentNumber: %w", err)
 			}
@@ -468,7 +468,7 @@ func (s segEntries) lastNr() int {
 
 // setOffsetInAdaptationSet sets the availabilityTimeOffset in the AdaptationSet.
 // Returns ErrAtoInfTimeline if infinite ato set with timeline.
-func setOffsetInAdaptationSet(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType) (atoMS int, err error) {
+func setOffsetInAdaptationSet(cfg *ResponseConfig, as *m.AdaptationSetType) (atoMS int, err error) {
 	if as.SegmentTemplate == nil {
 		return 0, fmt.Errorf("no SegmentTemplate in AdaptationSet")
 	}
@@ -492,7 +492,7 @@ func setOffsetInAdaptationSet(cfg *ResponseConfig, a *asset, as *m.AdaptationSet
 	return atoMS, nil
 }
 
-func adjustAdaptationSetForTimelineTime(cfg *ResponseConfig, se segEntries, as *m.AdaptationSetType) error {
+func adjustAdaptationSetForTimelineTime(se segEntries, as *m.AdaptationSetType) error {
 	if as.SegmentTemplate.SegmentTimeline == nil {
 		as.SegmentTemplate.SegmentTimeline = &m.SegmentTimelineType{}
 	}
@@ -504,7 +504,7 @@ func adjustAdaptationSetForTimelineTime(cfg *ResponseConfig, se segEntries, as *
 	return nil
 }
 
-func adjustAdaptationSetForTimelineNr(cfg *ResponseConfig, se segEntries, as *m.AdaptationSetType) error {
+func adjustAdaptationSetForTimelineNr(se segEntries, as *m.AdaptationSetType) error {
 	if as.SegmentTemplate.SegmentTimeline == nil {
 		as.SegmentTemplate.SegmentTimeline = &m.SegmentTimelineType{}
 	}
@@ -520,7 +520,7 @@ func adjustAdaptationSetForTimelineNr(cfg *ResponseConfig, se segEntries, as *m.
 	return nil
 }
 
-func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType, wt wrapTimes) error {
+func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType) error {
 	if as.SegmentTemplate.Duration == nil {
 		r0 := as.Representations[0]
 		rep0 := a.Reps[r0.Id]
@@ -777,7 +777,7 @@ func matchesPrefix(s string, prefixes []string) bool {
 	return false
 }
 
-// guesssContentTypeForAS guesses the content type based on codecs and other data in the AdaptationSet or its Representations.
+// guessContentTypeForAS guesses the content type based on codecs and other data in the AdaptationSet or its Representations.
 func guessContentTypeForAS(as *m.AdaptationSetType) string {
 	if as.Codecs != "" {
 		switch {

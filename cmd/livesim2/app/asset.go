@@ -147,7 +147,7 @@ func (am *assetMgr) loadAsset(mpdPath string) error {
 				slog.Debug("Representation already loaded", "rep", rep.Id, "asset", mpdPath)
 				continue
 			}
-			r, err := am.loadRep(assetPath, mpd, as, rep)
+			r, err := am.loadRep(assetPath, as, rep)
 			if err != nil {
 				return fmt.Errorf("getRep: %w", err)
 			}
@@ -170,7 +170,7 @@ func (am *assetMgr) loadAsset(mpdPath string) error {
 	return nil
 }
 
-func (am *assetMgr) loadRep(assetPath string, mpd *m.MPD, as *m.AdaptationSetType, rep *m.RepresentationType) (*RepData, error) {
+func (am *assetMgr) loadRep(assetPath string, as *m.AdaptationSetType, rep *m.RepresentationType) (*RepData, error) {
 	rp := RepData{ID: rep.Id,
 		ContentType:  string(as.ContentType),
 		Codecs:       as.Codecs,
@@ -522,7 +522,7 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int) s
 
 // generateTimelineEntriesFromRef generates timeline entries for the given representation given reference.
 // This is based on sample duration and the type of media.
-func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string, wt wrapTimes, atoMS int) segEntries {
+func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string) segEntries {
 	rep := a.Reps[repID]
 	nrSegs := 0
 	for _, rs := range refSE.entries {
@@ -616,7 +616,7 @@ func (a *asset) consolidateAsset() error {
 }
 
 // getRefSegMeta returns the segment metadata for reference representation at nrOrTime.
-func (a *asset) getRefSegMeta(nrOrTime int, cfg *ResponseConfig, timeScale, nowMS int) (ref segMeta, err error) {
+func (a *asset) getRefSegMeta(nrOrTime int, cfg *ResponseConfig, nowMS int) (ref segMeta, err error) {
 	switch cfg.liveMPDType() {
 	case segmentNumber, timeLineNumber:
 		nr := uint32(nrOrTime)
