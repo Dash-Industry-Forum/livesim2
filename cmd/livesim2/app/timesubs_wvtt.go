@@ -6,7 +6,6 @@ package app
 
 import (
 	"fmt"
-	"text/template"
 	"time"
 
 	"github.com/Eyevinn/mp4ff/bits"
@@ -60,7 +59,7 @@ func makeWvttCuePayload(lang string, region, utcMS, segNr int) []byte {
 }
 
 func createSubtitlesWvttMediaSegment(nr uint32, baseMediaDecodeTime uint64, dur uint32, lang string, utcTimeMS uint64,
-	tt *template.Template, timeSubsDurMS, region int) (*mp4.MediaSegment, error) {
+	timeSubsDurMS, region int) (*mp4.MediaSegment, error) {
 	seg := mp4.NewMediaSegment()
 	frag, err := mp4.CreateFragment(nr, 1)
 	if err != nil {

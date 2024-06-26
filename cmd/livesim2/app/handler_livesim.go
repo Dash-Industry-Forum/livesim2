@@ -237,7 +237,8 @@ func writeLiveMPD(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, 
 func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, cfg *ResponseConfig, vodFS fs.FS, a *asset,
 	segmentPart string, nowMS int, tt *template.Template) (code int, err error) {
 	// First check if init segment and return
-	isInitSegment, err := writeInitSegment(w, cfg, vodFS, a, segmentPart)
+	log.Debug("writeSegment", "segmentPart", segmentPart)
+	isInitSegment, err := writeInitSegment(w, cfg, a, segmentPart)
 	if err != nil {
 		return 0, fmt.Errorf("writeInitSegment: %w", err)
 	}
@@ -245,7 +246,7 @@ func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, 
 		return 0, nil
 	}
 	if len(cfg.SegStatusCodes) > 0 {
-		code, err = calcStatusCode(cfg, vodFS, a, segmentPart, nowMS)
+		code, err = calcStatusCode(cfg, a, segmentPart, nowMS)
 		if err != nil {
 			return 0, err
 		}
@@ -257,25 +258,25 @@ func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, 
 		return 0, writeLiveSegment(w, cfg, vodFS, a, segmentPart, nowMS, tt)
 	}
 	// Chunked low-latency mode
-	return 0, writeChunkedSegment(ctx, w, log, cfg, vodFS, a, segmentPart, nowMS)
+	return 0, writeChunkedSegment(ctx, w, cfg, vodFS, a, segmentPart, nowMS)
 }
 
 // calcStatusCode returns the configured status code for the segment or 0 if none.
-func calcStatusCode(cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string, nowMS int) (int, error) {
+func calcStatusCode(cfg *ResponseConfig, a *asset, segmentPart string, nowMS int) (int, error) {
 	rep, _, err := findRepAndSegmentID(a, segmentPart)
 	if err != nil {
 		return 0, fmt.Errorf("findRepAndSegmentID: %w", err)
 	}
 
 	// segMeta is to be used for all look up. For audio it uses reference (video) track
-	segMeta, err := findSegMeta(vodFS, a, cfg, segmentPart, nowMS)
+	segMeta, err := findSegMeta(a, cfg, segmentPart, nowMS)
 	if err != nil {
 		return 0, fmt.Errorf("findSegMeta: %w", err)
 	}
 	startTime := int(segMeta.newTime)
 	repTimescale := int(segMeta.timescale)
 	for _, ss := range cfg.SegStatusCodes {
-		if !repInReps(a, rep.ID, ss.Reps) {
+		if !repInReps(rep.ID, ss.Reps) {
 			continue
 		}
 		// Then move to the reference track and relate to cycles
@@ -326,7 +327,7 @@ func findSegStartTime(a *asset, cfg *ResponseConfig, nr int, rep *RepData) int {
 	return wrapTime + int(seg.StartTime)
 }
 
-func repInReps(a *asset, segmentPart string, reps []string) bool {
+func repInReps(segmentPart string, reps []string) bool {
 	// TODO. Make better
 	if len(reps) == 0 {
 		return true

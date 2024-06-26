@@ -83,7 +83,7 @@ func matchTimeSubsInitLang(cfg *ResponseConfig, segmentPart string) (prefix, lan
 	return prefix, lang, true, nil
 }
 
-func writeTimeSubsInitSegment(w http.ResponseWriter, cfg *ResponseConfig, a *asset, segmentPart string) (bool, error) {
+func writeTimeSubsInitSegment(w http.ResponseWriter, cfg *ResponseConfig, segmentPart string) (bool, error) {
 	prefix, lang, ok, err := matchTimeSubsInitLang(cfg, segmentPart)
 	if !ok {
 		return false, nil
@@ -180,7 +180,7 @@ func writeTimeSubsMediaSegment(w http.ResponseWriter, cfg *ResponseConfig, a *as
 	// This is done by looking up a corresponding video segment.
 	// That segments also gives the right time range
 
-	refSegMeta, err := a.getRefSegMeta(nrOrTime, cfg, SUBS_TIME_TIMESCALE, nowMS)
+	refSegMeta, err := a.getRefSegMeta(nrOrTime, cfg, nowMS)
 	if err != nil {
 		return true, fmt.Errorf("getRefSegMeta: %w", err)
 	}
@@ -197,7 +197,7 @@ func writeTimeSubsMediaSegment(w http.ResponseWriter, cfg *ResponseConfig, a *as
 			tt, cfg.TimeSubsDurMS, cfg.TimeSubsRegion)
 	default: // SUBS_WVTT_PREFIX
 		mediaSeg, err = createSubtitlesWvttMediaSegment(refSegMeta.newNr, baseMediaDecodeTime, dur, lang, utcTimeMS,
-			tt, cfg.TimeSubsDurMS, cfg.TimeSubsRegion)
+			cfg.TimeSubsDurMS, cfg.TimeSubsRegion)
 	}
 	if err != nil {
 		return true, fmt.Errorf("createSubtitleStppMediaSegment: %w", err)

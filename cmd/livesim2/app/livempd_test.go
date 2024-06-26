@@ -347,7 +347,7 @@ func TestLastAvailableSegment(t *testing.T) {
 			mpd, err := asset.getVodMPD(tc.mpdName)
 			require.NoError(t, err)
 			for _, as := range mpd.Periods[0].AdaptationSets {
-				atoMS, err := setOffsetInAdaptationSet(cfg, asset, as)
+				atoMS, err := setOffsetInAdaptationSet(cfg, as)
 				if tc.wantedErr != "" {
 					require.EqualError(t, err, tc.wantedErr)
 				} else {

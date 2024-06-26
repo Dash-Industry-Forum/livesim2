@@ -402,6 +402,9 @@ cfgLoop:
 }
 
 func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
+	if nowMS < 0 {
+		return fmt.Errorf("nowMS must be >= 0")
+	}
 	if cfg.SegTimelineNrFlag && cfg.SegTimelineFlag {
 		return fmt.Errorf("SegmentTimelineTime and SegmentTimelineNr cannot be used at same time")
 	}

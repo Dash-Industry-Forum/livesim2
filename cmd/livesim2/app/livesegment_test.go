@@ -74,11 +74,11 @@ func TestLiveSegment(t *testing.T) {
 				}
 				nowMS := 100_000
 				rr := httptest.NewRecorder()
-				wroteInit, err := writeInitSegment(rr, cfg, vodFS, asset, "2/init.mp4")
+				wroteInit, err := writeInitSegment(rr, cfg, asset, "2/init.mp4")
 				require.False(t, wroteInit)
 				require.NoError(t, err)
 				rr = httptest.NewRecorder()
-				wroteInit, err = writeInitSegment(rr, cfg, vodFS, asset, tc.initialization)
+				wroteInit, err = writeInitSegment(rr, cfg, asset, tc.initialization)
 				require.True(t, wroteInit)
 				require.NoError(t, err)
 				require.Equal(t, http.StatusOK, rr.Code)
@@ -269,7 +269,7 @@ func TestWriteChunkedSegment(t *testing.T) {
 		rr := httptest.NewRecorder()
 		segmentPart := strings.Replace(tc.media, "$NrOrTime$", "10", 1)
 		mediaTime := 80 * tc.mediaTimescale
-		err := writeChunkedSegment(context.Background(), rr, slog.Default(), cfg, vodFS, asset, segmentPart, nowMS)
+		err := writeChunkedSegment(context.Background(), rr, cfg, vodFS, asset, segmentPart, nowMS)
 		require.NoError(t, err)
 		seg := rr.Body.Bytes()
 		sr := bits.NewFixedSliceReader(seg)
