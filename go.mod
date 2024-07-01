@@ -10,6 +10,7 @@ require (
 	github.com/Eyevinn/mp4ff v0.45.0
 	github.com/beevik/etree v1.4.0
 	github.com/caddyserver/certmagic v0.21.3
+	github.com/danielgtaylor/huma/v2 v2.18.0
 	github.com/dusted-go/logging v1.2.2
 	github.com/go-chi/chi/v5 v5.0.12
 	github.com/google/go-cmp v0.6.0
@@ -28,7 +29,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.7 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.8 // indirect
 	github.com/libdns/libdns v0.2.2 // indirect
 	github.com/mholt/acmez/v2 v2.0.1 // indirect
 	github.com/miekg/dns v1.1.59 // indirect
@@ -49,6 +50,6 @@ require (
 	golang.org/x/sys v0.21.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
 	golang.org/x/tools v0.22.0 // indirect
-	google.golang.org/protobuf v1.34.1 // indirect
+	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
