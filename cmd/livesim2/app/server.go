@@ -25,6 +25,7 @@ type Server struct {
 	VodRouter     *chi.Mux
 	Cfg           *ServerConfig
 	assetMgr      *assetMgr
+	cmafMgr       *cmafIngesterMgr
 	textTemplates *ttmpl.Template
 	htmlTemplates *htmpl.Template
 	reqLimiter    *IPRequestLimiter

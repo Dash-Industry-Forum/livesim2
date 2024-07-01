@@ -220,6 +220,29 @@ func findRefSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseCo
 	}, nil
 }
 
+// calcSegmentAvailabilityTime calculates the availability time in ms for a segment given the segment number.
+func calcSegmentAvailabilityTime(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig) (int64, error) {
+	wrapLen := len(rep.Segments)
+	startNr := cfg.getStartNr()
+	nrAfterStart := int(nr) - startNr
+	nrWraps := nrAfterStart / wrapLen
+	relNr := nrAfterStart - nrWraps*wrapLen
+	wrapDur := a.LoopDurMS * rep.MediaTimescale / 1000
+	wrapTime := nrWraps * wrapDur
+	seg := rep.Segments[relNr]
+	mediaRef := cfg.StartTimeS * rep.MediaTimescale // TODO. Add period offset
+
+	// Check interval validity
+	segAvailTimeS := float64(int(seg.EndTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
+	ato := cfg.getAvailabilityTimeOffsetS()
+	if ato == +math.Inf(1) {
+		return int64(cfg.StartTimeS) * 1000, nil
+	}
+	segAvailTimeS -= ato
+	milliSeconds := int64(segAvailTimeS * 1_000)
+	return milliSeconds, nil
+}
+
 // findSegMetaFromNr returns segMeta if segment is available.
 func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, nowMS int) (segMeta, error) {
 	wrapLen := len(rep.Segments)
@@ -259,8 +282,8 @@ type initMatch struct {
 	rep    *RepData
 }
 
-func writeInitSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string) (isInit bool, err error) {
-	isTimeSubsInit, err := writeTimeSubsInitSegment(w, cfg, a, segmentPart)
+func writeInitSegment(w http.ResponseWriter, cfg *ResponseConfig, a *asset, segmentPart string) (isInit bool, err error) {
+	isTimeSubsInit, err := writeTimeSubsInitSegment(w, cfg, segmentPart)
 	if isTimeSubsInit {
 		return true, err
 	}
@@ -344,11 +367,19 @@ func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a
 	}
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 	w.Header().Set("Content-Type", outSeg.meta.rep.SegmentType())
-	_, err = w.Write(data)
-	if err != nil {
-		slog.Error("write live segment response", "error", err)
-		return err
+	nrWritten := 0
+	for {
+		n, err := w.Write(data[nrWritten:])
+		if err != nil {
+			slog.Error("write live segment response", "error", err)
+			return err
+		}
+		nrWritten += n
+		if nrWritten == len(data) {
+			break
+		}
 	}
+
 	return nil
 }
 
@@ -417,7 +448,7 @@ func createOutSeg(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string
 	return so, nil
 }
 
-func findSegMeta(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int) (segMeta, error) {
+func findSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int) (segMeta, error) {
 	var sm segMeta
 	rep, segID, err := findRepAndSegmentID(a, segmentPart)
 	if err != nil {
@@ -425,7 +456,7 @@ func findSegMeta(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string,
 	}
 
 	if rep.ContentType == "audio" {
-		sm, err := findRefSegMeta(vodFS, a, cfg, segmentPart, nowMS, rep, segID)
+		sm, err := findRefSegMeta(a, cfg, segmentPart, nowMS, rep, segID)
 		if err != nil {
 			return sm, fmt.Errorf("findRefSegMeta: %w", err)
 		}
@@ -455,7 +486,7 @@ func createAudioSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart 
 	refRep := a.refRep
 	refTimescale := uint64(refRep.MediaTimescale)
 
-	refMeta, err := findRefSegMeta(vodFS, a, cfg, segmentPart, nowMS, rep, segID)
+	refMeta, err := findRefSegMeta(a, cfg, segmentPart, nowMS, rep, segID)
 	if err != nil {
 		return segOut{}, fmt.Errorf("findRefSegMeta: %w", err)
 	}
@@ -466,7 +497,7 @@ func createAudioSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart 
 		uint64(refRep.duration()),
 		refTimescale, rep)
 	var so segOut
-	so.seg, err = createAudioSeg(vodFS, a, cfg, recipe)
+	so.seg, err = createAudioSeg(vodFS, a, recipe)
 	if err != nil {
 		return so, fmt.Errorf("createAudioSeg: %w", err)
 	}
@@ -482,7 +513,7 @@ func createAudioSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart 
 }
 
 // findRefSegMeta finds the reference track meta data given other following track like audio
-func findRefSegMeta(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int, rep *RepData, segID int) (segMeta, error) {
+func findRefSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int, rep *RepData, segID int) (segMeta, error) {
 	var refMeta segMeta
 	var err error
 	switch cfg.getRepType(segmentPart) {
@@ -508,7 +539,7 @@ func findRefSegMeta(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart stri
 //
 // nowMS servers as reference for the current time and can be set to any value. Media time will
 // be incremented with respect to nowMS.
-func writeChunkedSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, cfg *ResponseConfig,
+func writeChunkedSegment(ctx context.Context, w http.ResponseWriter, cfg *ResponseConfig,
 	vodFS fs.FS, a *asset, segmentPart string, nowMS int) error {
 
 	so, err := genLiveSegment(vodFS, a, cfg, segmentPart, nowMS)
