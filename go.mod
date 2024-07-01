@@ -1,8 +1,6 @@
 module github.com/Dash-Industry-Forum/livesim2
 
-go 1.21.0
-
-toolchain go1.21.1
+go 1.22
 
 require (
 	github.com/Comcast/gots/v2 v2.2.1
@@ -12,7 +10,7 @@ require (
 	github.com/caddyserver/certmagic v0.21.3
 	github.com/danielgtaylor/huma/v2 v2.18.0
 	github.com/dusted-go/logging v1.2.2
-	github.com/go-chi/chi/v5 v5.0.12
+	github.com/go-chi/chi/v5 v5.1.0
 	github.com/google/go-cmp v0.6.0
 	github.com/knadh/koanf v1.5.0
 	github.com/prometheus/client_golang v1.19.1
@@ -32,13 +30,14 @@ require (
 	github.com/klauspost/cpuid/v2 v2.2.8 // indirect
 	github.com/libdns/libdns v0.2.2 // indirect
 	github.com/mholt/acmez/v2 v2.0.1 // indirect
-	github.com/miekg/dns v1.1.59 // indirect
+	github.com/miekg/dns v1.1.61 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
+	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
-	github.com/prometheus/common v0.54.0 // indirect
+	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/zeebo/blake3 v0.2.3 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
