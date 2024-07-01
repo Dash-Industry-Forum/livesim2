@@ -19,14 +19,6 @@ import (
 	"github.com/Eyevinn/mp4ff/bits"
 )
 
-type CmafIngesterRequest struct {
-	User      string `json:"user"`
-	PassWord  string `json:"password"`
-	Dest      string `json:"destination"`
-	URL       string `json:"livesimURL"`
-	TestNowMS *int   `json:"testTimeMS,omitempty"`
-}
-
 type ingesterState int
 
 const (
@@ -40,11 +32,30 @@ type cmafIngesterMgr struct {
 	ingesters map[uint64]*cmafIngester
 	state     ingesterState
 	s         *Server
+	cancels   map[uint64]context.CancelFunc
+}
+
+type cmafIngester struct {
+	mgr            *cmafIngesterMgr
+	user           string
+	passWord       string
+	dest           string
+	url            string
+	log            *slog.Logger
+	testNowMS      *int
+	dur            *int
+	cfg            *ResponseConfig
+	asset          *asset
+	repsData       []cmafRepData
+	nextSegTrigger chan struct{}
+	state          ingesterState
+	report         []string
 }
 
 func NewCmafIngesterMgr(s *Server) *cmafIngesterMgr {
 	return &cmafIngesterMgr{
 		ingesters: make(map[uint64]*cmafIngester),
+		cancels:   make(map[uint64]context.CancelFunc),
 		state:     ingesterStateNotStarted,
 		s:         s,
 	}
@@ -54,7 +65,15 @@ func (cm *cmafIngesterMgr) Start() {
 	cm.state = ingesterStateRunning
 }
 
-func (cm *cmafIngesterMgr) NewCmafIngester(req CmafIngesterRequest) (nr uint64, err error) {
+func (cm *cmafIngesterMgr) Close() {
+	for i, cancel := range cm.cancels {
+		if cm.ingesters[i].state == ingesterStateRunning {
+			cancel()
+		}
+	}
+}
+
+func (cm *cmafIngesterMgr) NewCmafIngester(req CmafIngesterSetup) (nr uint64, err error) {
 	if cm.state != ingesterStateRunning {
 		return 0, fmt.Errorf("CMAF ingester manager not running")
 	}
@@ -87,6 +106,10 @@ func (cm *cmafIngesterMgr) NewCmafIngester(req CmafIngesterRequest) (nr uint64, 
 	liveMPD, err := LiveMPD(asset, mpdName, cfg, nowMS)
 	if err != nil {
 		return 0, fmt.Errorf("failed to generate live MPD: %w", err)
+	}
+
+	if !cfg.AvailabilityTimeCompleteFlag {
+		return 0, fmt.Errorf("availabilityTimeCompleteFlag not set. Low-latency not yet supported")
 	}
 
 	// Extract list of all representations with their information
@@ -134,16 +157,34 @@ func (cm *cmafIngesterMgr) NewCmafIngester(req CmafIngesterRequest) (nr uint64, 
 		passWord:       req.PassWord,
 		dest:           req.Dest,
 		url:            req.URL,
-		TestNowMS:      req.TestNowMS,
+		testNowMS:      req.TestNowMS,
+		dur:            req.Duration,
 		log:            log,
 		cfg:            cfg,
 		asset:          asset,
 		repsData:       repsData,
+		state:          ingesterStateNotStarted,
 		nextSegTrigger: make(chan struct{}),
 	}
 	cm.ingesters[nr] = &c
 
 	return nr, nil
+}
+
+func (cm *cmafIngesterMgr) startIngester(nr uint64) {
+	c, ok := cm.ingesters[nr]
+	if !ok {
+		return
+	}
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if c.dur == nil {
+		ctx, cancel = context.WithCancel(context.Background())
+	} else {
+		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(*c.dur)*time.Second)
+	}
+	cm.cancels[nr] = cancel
+	go c.start(ctx)
 }
 
 type cmafRepData struct {
@@ -152,21 +193,6 @@ type cmafRepData struct {
 	mimeType     string
 	initPath     string
 	mediaPattern string
-}
-
-type cmafIngester struct {
-	mgr            *cmafIngesterMgr
-	user           string
-	passWord       string
-	dest           string
-	url            string
-	log            *slog.Logger
-	TestNowMS      *int
-	cfg            *ResponseConfig
-	asset          *asset
-	repsData       []cmafRepData
-	nextSegTrigger chan struct{}
-	report         []string
 }
 
 // start starts the main ingest loop for sending init and media packets.
@@ -179,6 +205,10 @@ type cmafIngester struct {
 // TestNowMS and increments to next segment every time testNextSegment()
 // is called.
 func (c *cmafIngester) start(ctx context.Context) {
+
+	defer func() {
+		c.state = ingesterStateStopped
+	}()
 
 	// Finally we should send off the init segments
 	// and then start the loop for sending the media segments
@@ -231,16 +261,17 @@ func (c *cmafIngester) start(ctx context.Context) {
 			}
 
 		}
-		c.log.Info("Sending init segment", "path", rd.initPath, "contentType", contentType, "size", len(initBin))
+		c.log.Info("Sent init segment", "path", rd.initPath, "contentType", contentType, "size", len(initBin))
 	}
 
 	// Now calculate the availability time for the next segment
 	var nowMS int
-	if c.TestNowMS != nil {
-		nowMS = *c.TestNowMS
+	if c.testNowMS != nil {
+		nowMS = *c.testNowMS
 	} else {
 		nowMS = int(time.Now().UnixNano() / 1e6)
 	}
+	c.state = ingesterStateRunning
 
 	refRep := c.asset.refRep
 	lastNr := findLastSegNr(c.cfg, c.asset, nowMS, refRep)
@@ -256,7 +287,7 @@ func (c *cmafIngester) start(ctx context.Context) {
 	c.log.Info("Next segment availability time", "time", availabilityTime)
 	var timer *time.Timer
 	deltaTime := 24 * time.Hour
-	if c.TestNowMS == nil {
+	if c.testNowMS == nil {
 		deltaTime = time.Duration(availabilityTime-int64(nowMS)) * time.Millisecond
 	}
 	timer = time.NewTimer(deltaTime)
@@ -293,12 +324,12 @@ func (c *cmafIngester) start(ctx context.Context) {
 			c.log.Error(msg)
 			return
 		}
-		if c.TestNowMS == nil {
+		if c.testNowMS == nil {
 			nowMS = int(time.Now().UnixNano() / 1e6)
 		}
 
 		c.log.Info("Next segment availability time", "time", availabilityTime)
-		if c.TestNowMS == nil {
+		if c.testNowMS == nil {
 			deltaTime := time.Duration(availabilityTime-int64(nowMS)) * time.Millisecond
 			for {
 				if deltaTime > 0 {
@@ -385,6 +416,7 @@ func (c *cmafIngester) sendInitSegment(ctx context.Context, filename, mimeType s
 	}
 	req.Header.Set("Content-Type", mimeType)
 	req.Header.Set("Connection", "keep-alive")
+	slog.Info("Sending init segment", "filename", filename, "url", url)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("Error sending request: %w", err)
@@ -429,35 +461,39 @@ func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, nowMS i
 			segPart = replaceTimeOrNr(rd.mediaPattern, segTime)
 			segPath := strings.Join(append(assetParts, segPart), "/")
 			wg.Add(1)
-			go c.sendMediaSegment(ctx, &wg, segPath, segPart, nextSegNr, nowMS, rd)
+			go c.sendMediaSegment(ctx, &wg, segPath, segPart, rd.contentType, nextSegNr, nowMS)
 		}
 	} else {
 		for _, rd := range c.repsData {
 			segPart := replaceTimeOrNr(rd.mediaPattern, nextSegNr)
 			segPath := strings.Join(append(assetParts, segPart), "/")
 			wg.Add(1)
-			go c.sendMediaSegment(ctx, &wg, segPath, segPart, nextSegNr, nowMS, rd)
+			go c.sendMediaSegment(ctx, &wg, segPath, segPart, rd.contentType, nextSegNr, nowMS)
 		}
 	}
 	wg.Wait()
 	return nil
 }
 
-func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup, segPath, segPart string, segNr, nowMS int, rd cmafRepData) {
+// sendMediaSegment sends a media segment to the destination URL.
+// The segment may be written in chunks, rather than as a whole.
+func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup, segPath, segPart, contentType string, segNr, nowMS int) {
 	defer wg.Done()
-	stopCh := make(chan struct{})
-	finishedCh := make(chan struct{})
-	defer close(stopCh)
-	defer close(finishedCh)
 
 	u := c.dest + "/" + segPath
 	c.log.Info("send media segment", "path", segPath, "segNr", segNr, "nowMS", nowMS, "url", u)
 
-	src := newCmafSource(stopCh, finishedCh, c.log, u)
-	go src.start(ctx)
+	nrBytesCh := make(chan int)
+	defer close(nrBytesCh)
+	writeMoreCh := make(chan struct{})
+	defer close(writeMoreCh)
+	finishedSendCh := make(chan struct{})
+	defer close(finishedSendCh)
+
+	src := newCmafSource(nrBytesCh, writeMoreCh, c.log, u, contentType)
 
 	// Create media segment based on number and send it to segPath
-	c.log.Debug("Sending media segment", "path", segPath, "segNr", segNr, "nowMS", nowMS)
+	go src.startReadAndSend(ctx, finishedSendCh)
 	code, err := writeSegment(ctx, src, c.log, c.cfg, c.mgr.s.assetMgr.vodFS, c.asset, segPart, nowMS, c.mgr.s.textTemplates)
 	if err != nil {
 		c.log.Error("writeSegment", "code", code, "err", err)
@@ -478,113 +514,129 @@ func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup,
 			return
 		}
 	}
-	stopCh <- struct{}{}
-	<-finishedCh
+	<-writeMoreCh   // Capture final message
+	nrBytesCh <- -1 // Signal that we are done
+	<-finishedSendCh
 }
 
 // cmafSource intermediates HTTP response writer and client push writer
 // It provides a Read method that the client can use to read the data.
 type cmafSource struct {
-	mu         sync.Mutex
-	ctx        context.Context
-	noMoreCh   chan struct{}
-	finishedCh chan struct{}
-	moreDataCh chan struct{}
-	url        string
-	h          http.Header
-	status     int
-	log        *slog.Logger
-	buf        []byte
+	ctx         context.Context
+	req         *http.Request
+	contentType string
+	nrBytesCh   chan int // Used to signal how many bytes have been written to local buffer.
+	writeMoreCh chan struct{}
+	url         string
+	h           http.Header
+	status      int
+	log         *slog.Logger
+	buf         []byte
+	bufLevel    int // Keeping track of local buffer
+	offset      int // Offset in local buffer
 }
 
-func newCmafSource(noMoreCh, finishedCh chan struct{}, log *slog.Logger, url string) *cmafSource {
+func newCmafSource(nrBytesCh chan int, writeMoreCh chan struct{}, log *slog.Logger, url string, contentType string) *cmafSource {
 	cs := cmafSource{
-		noMoreCh:   noMoreCh,
-		finishedCh: finishedCh,
-		moreDataCh: make(chan struct{}),
-		url:        url,
-		h:          make(http.Header),
-		log:        log,
-		buf:        make([]byte, 0, 1024*1024),
+		url:         url,
+		contentType: contentType,
+		h:           make(http.Header),
+		log:         log,
+		buf:         make([]byte, 1024*64),
+		nrBytesCh:   nrBytesCh,
+		writeMoreCh: writeMoreCh,
 	}
 	return &cs
 }
 
-func (c *cmafSource) start(ctx context.Context) {
-
-	c.ctx = ctx
-	req, err := http.NewRequestWithContext(ctx, "PUT", c.url, c)
-	defer func() {
-		c.finishedCh <- struct{}{}
-	}()
+func (cs *cmafSource) startReadAndSend(ctx context.Context, finishedCh chan struct{}) {
+	cs.writeMoreCh <- struct{}{} // Get the writer going
+	cs.ctx = ctx
+	req, err := http.NewRequestWithContext(ctx, "PUT", cs.url, cs)
 	if err != nil {
-		c.log.Error("creating request", "err", err)
+		cs.log.Error("creating request", "err", err)
 		return
 	}
-	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("Connection", "keep-alive")
+	switch cs.contentType {
+	case "video":
+		req.Header.Set("Content-Type", "video/mp4")
+	case "audio":
+		req.Header.Set("Content-Type", "audio/mp4")
+	case "text":
+		req.Header.Set("Content-Type", "application/mp4")
+	default:
+		cs.log.Warn("unknown content type", "type", cs.contentType)
+	}
+	cs.req = req
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		c.log.Error("creating request", "err", err)
+		cs.log.Error("creating request", "err", err)
 		return
 	}
-	_, err = io.ReadAll(resp.Body)
+	_, err = io.ReadAll(resp.Body) // Normally no body, but ready to be sure that buffers are cleared
 	if err != nil {
-		c.log.Warn("Error reading response body", "err", err)
+		cs.log.Warn("Error reading response body", "err", err)
 	}
 	defer func() {
-		c.log.Debug("Closing body", "url", c.url)
+		cs.log.Debug("Closing body", "url", cs.url)
 		resp.Body.Close()
 	}()
+	finishedCh <- struct{}{}
 }
 
-func (c *cmafSource) Header() http.Header {
-	return c.h
+func (cs *cmafSource) Header() http.Header {
+	return cs.h
 }
 
-func (c *cmafSource) Flush() {
-	c.log.Debug("Flush")
+func (cs *cmafSource) Flush() {
+	cs.log.Debug("Flush")
 }
 
-func (c *cmafSource) Write(b []byte) (int, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.log.Debug("Write", "url", c.url, "len", len(b))
-	c.buf = append(c.buf, b...)
+func (cs *cmafSource) Write(b []byte) (int, error) {
+	<-cs.writeMoreCh
+	if cs.offset != 0 || cs.bufLevel != 0 {
+		cs.log.Warn("bad write levels", "url", cs.url, "offset", cs.offset, "bufLevel", cs.bufLevel)
+	}
+	nrWritten := 0
+	for {
+		n := copy(cs.buf, b[nrWritten:])
+		cs.nrBytesCh <- n
+		nrWritten += n
+		if nrWritten == len(b) {
+			break
+		}
+	}
 	return len(b), nil
 }
 
-func (c *cmafSource) WriteHeader(status int) {
-	c.log.Debug("Writer status", "status", status)
-	c.status = status
+func (cs *cmafSource) WriteHeader(status int) {
+	cs.log.Debug("Writer status", "status", status)
+	cs.status = status
 }
 
-func (c *cmafSource) Read(p []byte) (int, error) {
-	i := 0
-	for {
-		c.mu.Lock()
-		if i%10 == 0 {
-			c.log.Debug("Read", "len", len(c.buf), "i", i)
-		}
-		i++
-		if len(c.buf) > 0 {
-			n := copy(p, c.buf)
-			if n < len(c.buf) {
-				c.buf = c.buf[n:]
-			} else {
-				c.buf = c.buf[:0]
-			}
-			c.mu.Unlock()
-			return n, nil
-		}
-		c.mu.Unlock()
-		select {
-		case <-c.ctx.Done():
+// Read reads data from the intermediate buffer.
+// It is triggered by receiving a message on nrBytesCh
+// with how many bytes are available.
+// The receiver never returns 0 bytes, except together
+// with io.EOF.
+func (cs *cmafSource) Read(p []byte) (int, error) {
+	if cs.offset >= cs.bufLevel {
+		nrAvailable := <-cs.nrBytesCh // wait for more bytes
+		cs.bufLevel = nrAvailable
+		if cs.bufLevel < 0 {
 			return 0, io.EOF
-		case <-c.noMoreCh:
-			return 0, io.EOF
-		default:
-			time.Sleep(250 * time.Millisecond)
+		}
+		if cs.offset != 0 {
+			cs.log.Warn("Read", "url", cs.url, "offset is not zero", cs.offset)
 		}
 	}
+	n := copy(p, cs.buf[cs.offset:cs.bufLevel])
+	cs.offset += n
+	if cs.offset == cs.bufLevel {
+		cs.offset = 0
+		cs.bufLevel = 0
+		cs.writeMoreCh <- struct{}{}
+	}
+	return n, nil
 }

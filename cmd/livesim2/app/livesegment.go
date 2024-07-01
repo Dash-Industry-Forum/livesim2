@@ -367,11 +367,19 @@ func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a
 	}
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 	w.Header().Set("Content-Type", outSeg.meta.rep.SegmentType())
-	_, err = w.Write(data)
-	if err != nil {
-		slog.Error("write live segment response", "error", err)
-		return err
+	nrWritten := 0
+	for {
+		n, err := w.Write(data[nrWritten:])
+		if err != nil {
+			slog.Error("write live segment response", "error", err)
+			return err
+		}
+		nrWritten += n
+		if nrWritten == len(data) {
+			break
+		}
 	}
+
 	return nil
 }
 

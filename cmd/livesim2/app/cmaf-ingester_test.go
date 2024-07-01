@@ -32,7 +32,7 @@ func TestCmafIngesterMgr(t *testing.T) {
 	server, err := SetupServer(context.Background(), &cfg)
 	require.NoError(t, err)
 	cm := NewCmafIngesterMgr(server)
-	_, err = cm.NewCmafIngester(CmafIngesterRequest{"", "", "http://localhost:8080", "/livesim2/testpic_2s/Manifest.mpd", nil})
+	_, err = cm.NewCmafIngester(CmafIngesterSetup{"", "", "http://localhost:8080", "/livesim2/testpic_2s/Manifest.mpd", nil, nil})
 	require.Error(t, err)
 	cm.Start()
 
@@ -41,7 +41,8 @@ func TestCmafIngesterMgr(t *testing.T) {
 	defer recServer.Close()
 
 	// cId, err := cm.NewCmafIngester(CmafIngesterRequest{"", "", recServer.URL, "/livesim2/segtimeline_1/ato_1.5/chunkdur_1.5/testpic_2s/Manifest.mpd", mpd.Ptr(int(10000))})
-	cId, err := cm.NewCmafIngester(CmafIngesterRequest{"", "", recServer.URL, "/livesim2/segtimeline_1/testpic_2s/Manifest.mpd", mpd.Ptr(int(10000))})
+	cId, err := cm.NewCmafIngester(
+		CmafIngesterSetup{"", "", recServer.URL, "/livesim2/segtimeline_1/testpic_2s/Manifest.mpd", mpd.Ptr(int(10000)), nil})
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), cId, "first CMAF ingester ID should be 1")
 	cI := cm.ingesters[cId]
