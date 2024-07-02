@@ -3,12 +3,14 @@ package app
 import (
 	"context"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/Dash-Industry-Forum/livesim2/pkg/chunkparser"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
 	"github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/stretchr/testify/require"
@@ -19,7 +21,7 @@ func TestCmafIngesterMgr(t *testing.T) {
 	// Then it is started, create a CMAF ingester manager with the server
 	// Create a HTTP server that can receive data
 	// Create a new CMAF ingester with the manager
-	// Check that init segments are sent to the receiving server
+	// Check that init and media segments are received.
 
 	cfg := ServerConfig{
 		VodRoot:   "testdata/assets",
@@ -32,31 +34,49 @@ func TestCmafIngesterMgr(t *testing.T) {
 	server, err := SetupServer(context.Background(), &cfg)
 	require.NoError(t, err)
 	cm := NewCmafIngesterMgr(server)
-	_, err = cm.NewCmafIngester(CmafIngesterSetup{"", "", "http://localhost:8080", "/livesim2/testpic_2s/Manifest.mpd", nil, nil})
-	require.Error(t, err)
 	cm.Start()
 
-	rc := newCmafReceiverTestServer()
-	recServer := httptest.NewServer(rc)
-	defer recServer.Close()
+	cases := []struct {
+		livesimURL         string
+		testNowMS          *int
+		streamsURLs        bool
+		nrTriggers         int
+		expectedNrSegments int
+	}{
+		{"/livesim2/segtimeline_1/testpic_2s/Manifest.mpd", mpd.Ptr(int(10000)), true, 2, 2},
+		{"/livesim2/segtimeline_1/testpic_2s/Manifest.mpd", mpd.Ptr(int(10000)), false, 2, 6},
+	}
 
-	// cId, err := cm.NewCmafIngester(CmafIngesterRequest{"", "", recServer.URL, "/livesim2/segtimeline_1/ato_1.5/chunkdur_1.5/testpic_2s/Manifest.mpd", mpd.Ptr(int(10000))})
-	cId, err := cm.NewCmafIngester(
-		CmafIngesterSetup{"", "", recServer.URL, "/livesim2/segtimeline_1/testpic_2s/Manifest.mpd", mpd.Ptr(int(10000)), nil})
-	require.NoError(t, err)
-	require.Equal(t, uint64(1), cId, "first CMAF ingester ID should be 1")
-	cI := cm.ingesters[cId]
-	require.NotNil(t, cI, "CMAF ingester should be created")
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 1000*time.Second)
-	go cI.start(ctx)
-	cI.triggerNextSegment()
-	//time.Sleep(200 * time.Millisecond)
-	cI.triggerNextSegment()
-	time.Sleep(1000 * time.Millisecond)
-	// Now we need to check that the init segments are received
-	require.Equal(t, 6, len(rc.receivedSegments), "should have received 2 init segments and 4 media segments")
-	cancel()
+	for i, c := range cases {
+		rc := newCmafReceiverTestServer()
+		recServer := httptest.NewServer(rc)
+		setup := CmafIngesterSetup{
+			User:        "",
+			PassWord:    "",
+			DestRoot:    recServer.URL,
+			DestName:    "testpic_ingest",
+			URL:         c.livesimURL,
+			TestNowMS:   c.testNowMS,
+			Duration:    nil,
+			StreamsURLs: c.streamsURLs,
+		}
+		cId, err := cm.NewCmafIngester(setup)
+		require.NoError(t, err)
+		require.Equal(t, uint64(i+1), cId, "CMAF ingester ID be one-based and increase by 1")
+		cI := cm.ingesters[cId]
+		require.NotNil(t, cI, "CMAF ingester should be created")
+		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(ctx, 1000*time.Second)
+		go cI.start(ctx)
+		for j := 0; j < c.nrTriggers; j++ {
+			cI.triggerNextSegment()
+		}
+		time.Sleep(500 * time.Millisecond)
+		// Now we need to check that the segments are received
+		require.Equal(t, c.expectedNrSegments, len(rc.receivedSegments), "Number of segments received")
+		cancel()
+		recServer.Close()
+	}
 }
 
 type cmafReceiverTestServer struct {
@@ -86,9 +106,9 @@ func (s *cmafReceiverTestServer) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Get the segment name from the URL path
-	segmentName := r.URL.Path
+	segmentName := r.URL.Path[1:]
 
-	if r.Header.Get("Content-Length") != "" {
+	if r.Header.Get("Content-Length") != "" { // Receive full segment based on Content-Length
 		contentLen, _ := strconv.Atoi(r.Header.Get("Content-Length"))
 		buf := make([]byte, contentLen)
 		n, err := r.Body.Read(buf)
@@ -103,34 +123,22 @@ func (s *cmafReceiverTestServer) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	buf := make([]byte, 1024*1024)
-	for {
-		n, err := r.Body.Read(buf)
-		if err != nil && err != io.EOF {
-			w.WriteHeader(http.StatusInternalServerError)
+	ci := make([]chunkparser.ChunkData, 0, 2)
+
+	buf := make([]byte, 32*1024)
+	cp := chunkparser.NewMP4ChunkParser(r.Body, buf, func(cd chunkparser.ChunkData) error {
+		ci = append(ci, cd)
+		return nil
+	})
+
+	err := cp.Parse()
+	if err == nil {
+		for _, c := range ci {
+			s.receivedSegments[segmentName] = append(s.receivedSegments[segmentName], c.Data...)
 		}
-		if n > 0 {
-			// Data is partial
-			s.receivedPartialSegments[segmentName] = append(s.receivedPartialSegments[segmentName], buf[:n]...)
-			continue
-		}
-		if err == io.EOF {
-			// Data is complete
-			s.receivedSegments[segmentName] = s.receivedPartialSegments[segmentName]
-			delete(s.receivedPartialSegments, segmentName)
-		}
-		// Read the data from the request
-		data, err := io.ReadAll(r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		// Check if the data is complete
-		if r.Header.Get("Content-Length") == "" {
-			// Data is partial
-			s.receivedPartialSegments[segmentName] = append(s.receivedPartialSegments[segmentName], data...)
-			w.WriteHeader(http.StatusOK)
-			return
-		}
+		w.WriteHeader(http.StatusOK)
+		return
 	}
+	w.WriteHeader(http.StatusInternalServerError)
+	slog.Error("Failed to parse MP4 chunk", "err", err)
 }

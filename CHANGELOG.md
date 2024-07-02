@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added functions and constants for CMAF file extensions in pkg/cmaf
 - Short HEVC + AC-3 test content
 
 ### Fixed

@@ -13,12 +13,14 @@ import (
 
 // CmafIngesterRequest represents the CMAF ingest start request.
 type CmafIngesterSetup struct {
-	User      string `json:"user,omitempty" doc:"User name for basic auth" example:""`
-	PassWord  string `json:"password,omitempty" doc:"Password for basic auth" example:""`
-	Dest      string `json:"destination" doc:"Destination URL path for segments" example:"https://server.com/ingest"`
-	URL       string `json:"livesimURL" doc:"Full livesimURL without scheme and host" example:"/livesim2/segtimeline_1/testpic_2s/Manifest.mpd"`
-	TestNowMS *int   `json:"testNowMS,omitempty" doc:"Test: start time for step-wise sending"`
-	Duration  *int   `json:"duration,omitempty" doc:"Duration in seconds for the CMAF ingest session" example:"60"`
+	User        string `json:"user,omitempty" doc:"User name for basic auth" example:""`
+	PassWord    string `json:"password,omitempty" doc:"Password for basic auth" example:""`
+	DestRoot    string `json:"destRoot" doc:"Destination URL root for assets" example:"https://server.com/upload"`
+	DestName    string `json:"destName" doc:"Destination name for asset" example:"testpic_ingest"`
+	URL         string `json:"livesimURL" doc:"Full livesimURL without scheme and host" example:"/livesim2/segtimeline_1/testpic_2s/Manifest.mpd"`
+	TestNowMS   *int   `json:"testNowMS,omitempty" doc:"Test: start time for step-wise sending"`
+	Duration    *int   `json:"duration,omitempty" doc:"Duration in seconds for the CMAF ingest session" example:"60"`
+	StreamsURLs bool   `json:"streamsURLs,omitempty" doc:"Use streams URLs likes Streams(video.cmfv) instead of individual segment URLs" example:"false"`
 }
 
 type CmafIngesterCreateRequest struct {
@@ -27,17 +29,19 @@ type CmafIngesterCreateRequest struct {
 
 type CmafIngestCreateResponse struct {
 	Body struct {
-		Dest string `json:"destination" doc:"Destination URL for the CMAF ingest"`
-		URL  string `json:"livesim-url" doc:"livesim2 URL including /livesim2/ prefix"`
-		ID   string `json:"id" doc:"Unique ID for the CMAF ingest"`
+		DestRoot string `json:"destRoot" doc:"Destination root URL for the CMAF ingest"`
+		DestName string `json:"destName" doc:"Destination name for the CMAF ingest"`
+		URL      string `json:"livesim-url" doc:"livesim2 URL including /livesim2/ prefix"`
+		ID       string `json:"id" doc:"Unique ID for the CMAF ingest"`
 	}
 }
 
 type CmafIngestInfoResponse struct {
 	Body struct {
-		Dest string `json:"destination" doc:"Destination URL for the CMAF ingest"`
-		URL  string `json:"livesim-url" doc:"livesim2 URL including /livesim2/ prefix"`
-		ID   string `json:"id" doc:"Unique ID for the CMAF ingest"`
+		DestRoot string `json:"destRoot" doc:"Destination root URL for the CMAF ingest"`
+		DestName string `json:"destName" doc:"Destination name for the CMAF ingest"`
+		URL      string `json:"livesim-url" doc:"livesim2 URL including /livesim2/ prefix"`
+		ID       string `json:"id" doc:"Unique ID for the CMAF ingest"`
 	}
 }
 
@@ -51,9 +55,10 @@ type CmafIngestStepResponse struct {
 
 type CmafIngestDeleteResponse struct {
 	Body struct {
-		Dest string `json:"destination" doc:"Destination URL for the CMAF ingest"`
-		URL  string `json:"livesim-url" doc:"livesim2 URL including /livesim2/ prefix"`
-		ID   string `json:"id" doc:"Unique ID for the CMAF ingest"`
+		DestRoot string `json:"destRoot" doc:"Destination root URL for the CMAF ingest"`
+		DestName string `json:"destName" doc:"Destination name for the CMAF ingest"`
+		URL      string `json:"livesim-url" doc:"livesim2 URL including /livesim2/ prefix"`
+		ID       string `json:"id" doc:"Unique ID for the CMAF ingest"`
 	}
 }
 
@@ -64,7 +69,8 @@ func createCmafIngesterHdlr(s *Server) func(ctx context.Context, cfi *CmafIngest
 			s.cmafMgr.startIngester(nr)
 		}
 		resp := &CmafIngestCreateResponse{}
-		resp.Body.Dest = cfi.Body.Dest
+		resp.Body.DestRoot = cfi.Body.DestRoot
+		resp.Body.DestName = cfi.Body.DestName
 		resp.Body.URL = cfi.Body.URL
 		resp.Body.ID = fmt.Sprintf("%d", nr)
 		return resp, err

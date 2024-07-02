@@ -10,13 +10,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/Dash-Industry-Forum/livesim2/pkg/cmaf"
 	"github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/Eyevinn/mp4ff/bits"
+	"github.com/Eyevinn/mp4ff/mp4"
 )
 
 type ingesterState int
@@ -39,11 +40,13 @@ type cmafIngester struct {
 	mgr            *cmafIngesterMgr
 	user           string
 	passWord       string
-	dest           string
+	destRoot       string
+	destName       string
 	url            string
 	log            *slog.Logger
 	testNowMS      *int
 	dur            *int
+	streamsURLs    bool
 	cfg            *ResponseConfig
 	asset          *asset
 	repsData       []cmafRepData
@@ -138,14 +141,20 @@ func (cm *cmafIngesterMgr) NewCmafIngester(req CmafIngesterSetup) (nr uint64, er
 			return 0, fmt.Errorf("unknown content type: %s", contentType)
 		}
 		for _, r := range a.Representations {
-			// TODO. Add relevant BaseURLs from MPD if present
 			segTmpl := r.GetSegmentTemplate()
+			ext, err := cmaf.CMAFExtensionFromContentType(string(contentType))
+			if err != nil {
+				return 0, fmt.Errorf("error getting CMAF extension: %w", err)
+			}
 			rd := cmafRepData{
 				repID:        r.Id,
 				contentType:  string(contentType),
 				mimeType:     mimeType,
 				initPath:     replaceIdentifiers(r, segTmpl.Initialization),
+				extension:    ext,
 				mediaPattern: replaceIdentifiers(r, segTmpl.Media),
+				bandWidth:    r.Bandwidth,
+				roles:        r.Parent().Roles,
 			}
 			repsData = append(repsData, rd)
 		}
@@ -155,10 +164,12 @@ func (cm *cmafIngesterMgr) NewCmafIngester(req CmafIngesterSetup) (nr uint64, er
 		mgr:            cm,
 		user:           req.User,
 		passWord:       req.PassWord,
-		dest:           req.Dest,
+		destRoot:       req.DestRoot,
+		destName:       req.DestName,
 		url:            req.URL,
 		testNowMS:      req.TestNowMS,
 		dur:            req.Duration,
+		streamsURLs:    req.StreamsURLs,
 		log:            log,
 		cfg:            cfg,
 		asset:          asset,
@@ -193,6 +204,9 @@ type cmafRepData struct {
 	mimeType     string
 	initPath     string
 	mediaPattern string
+	extension    string
+	bandWidth    uint32
+	roles        []*mpd.DescriptorType
 }
 
 // start starts the main ingest loop for sending init and media packets.
@@ -215,6 +229,7 @@ func (c *cmafIngester) start(ctx context.Context) {
 
 	var initBin []byte
 	contentType := "application/mp4"
+	startTimeS := int64(c.cfg.StartTimeS)
 	for _, rd := range c.repsData {
 		prefix, lang, ok, err := matchTimeSubsInitLang(c.cfg, rd.initPath)
 		if ok {
@@ -225,6 +240,7 @@ func (c *cmafIngester) start(ctx context.Context) {
 				return
 			}
 			init := createTimeSubsInitSegment(prefix, lang, SUBS_TIME_TIMESCALE)
+			setInitProps(init, rd, startTimeS)
 			sw := bits.NewFixedSliceWriter(int(init.Size()))
 			err := init.EncodeSW(sw)
 			if err != nil {
@@ -247,19 +263,19 @@ func (c *cmafIngester) start(ctx context.Context) {
 				c.log.Error(msg)
 			}
 			contentType = match.rep.SegmentType()
-			initBin = match.init
-
-			assetParts := c.cfg.URLParts[2 : len(c.cfg.URLParts)-1]
-			initPathParts := append(assetParts, rd.initPath)
-			initPath := strings.Join(initPathParts, "/")
-
-			err = c.sendInitSegment(ctx, initPath, rd.mimeType, initBin)
+			initBin, err = setRawInitProps(match.init, rd, startTimeS)
 			if err != nil {
-				msg := fmt.Sprintf("error uploading init segment: %v", err)
+				msg := fmt.Sprintf("Error setting init times: %v", err)
 				c.report = append(c.report, msg)
 				c.log.Error(msg)
 			}
+		}
 
+		err = c.sendInitSegment(ctx, rd, initBin)
+		if err != nil {
+			msg := fmt.Sprintf("error uploading init segment: %v", err)
+			c.report = append(c.report, msg)
+			c.log.Error(msg)
 		}
 		c.log.Info("Sent init segment", "path", rd.initPath, "contentType", contentType, "size", len(initBin))
 	}
@@ -407,16 +423,28 @@ func (c *cmafIngester) triggerNextSegment() {
 	c.nextSegTrigger <- struct{}{}
 }
 
-func (c *cmafIngester) sendInitSegment(ctx context.Context, filename, mimeType string, data []byte) error {
-	url := fmt.Sprintf("%s/%s", c.dest, filename)
-	buf := bytes.NewBuffer(data)
+func (c *cmafIngester) dest() string {
+	d := c.destRoot
+	if c.destName != "" {
+		d = fmt.Sprintf("%s/%s", c.destRoot, c.destName)
+	}
+	return d
+}
+
+func (c *cmafIngester) sendInitSegment(ctx context.Context, rd cmafRepData, rawInitSeg []byte) error {
+	fileName := fmt.Sprintf("%s/init%s", rd.repID, rd.extension)
+	if c.streamsURLs {
+		fileName = fmt.Sprintf("Streams(%s%s)", rd.repID, rd.extension)
+	}
+	url := fmt.Sprintf("%s/%s", c.dest(), fileName)
+	buf := bytes.NewBuffer(rawInitSeg)
 	req, err := http.NewRequestWithContext(ctx, "PUT", url, buf)
 	if err != nil {
 		return fmt.Errorf("Error creating request: %w", err)
 	}
-	req.Header.Set("Content-Type", mimeType)
+	req.Header.Set("Content-Type", rd.mimeType)
 	req.Header.Set("Connection", "keep-alive")
-	slog.Info("Sending init segment", "filename", filename, "url", url)
+	slog.Info("Sending init segment", "fileName", fileName, "url", url)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("Error sending request: %w", err)
@@ -426,7 +454,7 @@ func (c *cmafIngester) sendInitSegment(ctx context.Context, filename, mimeType s
 		return fmt.Errorf("Error reading response body: %w", err)
 	}
 	defer func() {
-		slog.Debug("Closing body", "filename", filename)
+		slog.Debug("Closing body", "filename", fileName)
 		resp.Body.Close()
 	}()
 	return nil
@@ -434,7 +462,6 @@ func (c *cmafIngester) sendInitSegment(ctx context.Context, filename, mimeType s
 
 func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, nowMS int) error {
 	c.log.Debug("Start media segment", "nr", nextSegNr, "nowMS", nowMS)
-	assetParts := c.cfg.URLParts[2 : len(c.cfg.URLParts)-1]
 	wTimes := calcWrapTimes(c.asset, c.cfg, nowMS+50, mpd.Duration(100*time.Millisecond))
 	wg := sync.WaitGroup{}
 	if c.cfg.SegTimelineFlag {
@@ -459,14 +486,20 @@ func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, nowMS i
 			}
 			segTime := int(se.lastTime())
 			segPart = replaceTimeOrNr(rd.mediaPattern, segTime)
-			segPath := strings.Join(append(assetParts, segPart), "/")
+			segPath := fmt.Sprintf("%s/%d%s", rd.repID, segTime, rd.extension)
+			if c.streamsURLs {
+				segPath = fmt.Sprintf("Streams(%s%s)", rd.repID, rd.extension)
+			}
 			wg.Add(1)
 			go c.sendMediaSegment(ctx, &wg, segPath, segPart, rd.contentType, nextSegNr, nowMS)
 		}
 	} else {
 		for _, rd := range c.repsData {
 			segPart := replaceTimeOrNr(rd.mediaPattern, nextSegNr)
-			segPath := strings.Join(append(assetParts, segPart), "/")
+			segPath := fmt.Sprintf("%s/%d%s", rd.repID, nextSegNr, rd.extension)
+			if c.streamsURLs {
+				segPath = fmt.Sprintf("Streams(%s%s)", rd.repID, rd.extension)
+			}
 			wg.Add(1)
 			go c.sendMediaSegment(ctx, &wg, segPath, segPart, rd.contentType, nextSegNr, nowMS)
 		}
@@ -480,7 +513,7 @@ func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, nowMS i
 func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup, segPath, segPart, contentType string, segNr, nowMS int) {
 	defer wg.Done()
 
-	u := c.dest + "/" + segPath
+	u := fmt.Sprintf("%s/%s", c.dest(), segPath)
 	c.log.Info("send media segment", "path", segPath, "segNr", segNr, "nowMS", nowMS, "url", u)
 
 	nrBytesCh := make(chan int)
@@ -639,4 +672,53 @@ func (cs *cmafSource) Read(p []byte) (int, error) {
 		cs.writeMoreCh <- struct{}{}
 	}
 	return n, nil
+}
+
+type parentBox interface {
+	AddChild(b mp4.Box)
+}
+
+func setInitProps(initSeg *mp4.InitSegment, rd cmafRepData, startTimeS int64) {
+	moov := initSeg.Moov
+	moov.Mvhd.SetCreationTimeS(startTimeS)
+	moov.Mvhd.SetModificationTimeS(startTimeS)
+	trak := moov.Trak
+	trak.Tkhd.SetCreationTimeS(startTimeS)
+	trak.Tkhd.SetModificationTimeS(startTimeS)
+	trak.Mdia.Mdhd.SetCreationTimeS(startTimeS)
+	trak.Mdia.Mdhd.SetModificationTimeS(startTimeS)
+	stsd := trak.Mdia.Minf.Stbl.Stsd
+	btrt := stsd.GetBtrt()
+	if btrt == nil {
+		sampleEntry, ok := stsd.Children[0].(parentBox)
+		if ok {
+			sampleEntry.AddChild(&mp4.BtrtBox{BufferSizeDB: 0, MaxBitrate: rd.bandWidth, AvgBitrate: rd.bandWidth})
+		}
+	}
+	if len(rd.roles) > 0 {
+		udta := mp4.UdtaBox{}
+		for _, role := range rd.roles {
+			kind := mp4.KindBox{}
+			kind.SchemeURI = "urn:mpeg:dash:role:2011"
+			kind.Value = role.Value
+			udta.AddChild(&kind)
+		}
+		trak.AddChild(&udta)
+	}
+}
+
+func setRawInitProps(rawInit []byte, rd cmafRepData, startTimeS int64) (newRawInit []byte, err error) {
+	sr := bits.NewFixedSliceReader(rawInit)
+	f, err := mp4.DecodeFileSR(sr)
+	if err != nil {
+		return nil, err
+	}
+	initSeg := f.Init
+	setInitProps(initSeg, rd, startTimeS)
+	sw := bits.NewFixedSliceWriter(int(initSeg.Size()))
+	err = initSeg.EncodeSW(sw)
+	if err != nil {
+		return nil, err
+	}
+	return sw.Bytes(), nil
 }
