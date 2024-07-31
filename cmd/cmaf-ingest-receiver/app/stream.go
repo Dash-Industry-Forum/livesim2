@@ -17,7 +17,7 @@ import (
 	"github.com/Eyevinn/mp4ff/mp4"
 )
 
-var mpdRegexp = regexp.MustCompile(`^\/(.*)\/[^\/+]\.mpd$`)
+var mpdRegexp = regexp.MustCompile(`^\/(.*)\/[^\/]+\.mpd$`)
 var streamsRegexp = regexp.MustCompile(`^\/(.*)\/Streams\((.*)(\.cmf[vatm])\)$`)
 var segmentRegexp = regexp.MustCompile(`^\/((.*)\/)?([^\/]+)?\/([^\/]+)(\.cmf[vatm])$`)
 
@@ -164,7 +164,7 @@ func NewFullStream(assetPath string, timeShiftBufferDepthS int) *FullStream {
 // AddInitData adds representation data from the init segment of a stream to a FullStream and its MPD.
 // If needed, a new adaptation set is created.
 // If the MPD does not have availabilityTimeOffset set, it is
-// set from the the value of mvhd.CreationTime if later or equal to 1970-01-01.
+// set from the value of mvhd.CreationTime if later or equal to 1970-01-01.
 func (fs *FullStream) AddInitData(stream stream, rawInitSeg []byte) error {
 	sr := bits.NewFixedSliceReader(rawInitSeg)
 	iSeg, err := mp4.DecodeFileSR(sr)
@@ -182,11 +182,10 @@ func (fs *FullStream) AddInitData(stream stream, rawInitSeg []byte) error {
 	}
 	fs.addRep(r)
 	moov := iSeg.Moov
-	tracks := moov.Traks
-	if len(tracks) != 1 {
+	if len(moov.Traks) != 1 {
 		return fmt.Errorf("expected one track, got %d", len(moov.Traks))
 	}
-	trak := tracks[0]
+	trak := moov.Traks[0]
 	if fs.MPD.AvailabilityStartTime == "" {
 		if moov.Mvhd.CreationTimeS() >= 0 {
 			fs.MPD.AvailabilityStartTime = m.ConvertToDateTime(float64(moov.Mvhd.CreationTimeS()))

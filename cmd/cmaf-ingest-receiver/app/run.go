@@ -30,13 +30,13 @@ In both cases, the names and paths of the generated files will be
 * storage/asset/track/init.cmf?
 * storage/asset/track/sequenceNr.cmf?
 
-where seguenceNr is extraced from the mdhd box in the segment.
-These numbers are assumed increase by one for each segment.
+where sequenceNr is extracted from the mdhd box in the segment.
+These numbers are assumed to increase by one for each segment.
 
 A DASH MPD is generated for each asset and stored as storage/asset/manifest.mpd.
 The track name is mapped to RepresentationID in the MPD.
 
-MPDs can also be receieved, but will just be stored as storage/asset/received.mpd.
+MPDs can also be received, but will just be stored as storage/asset/received.mpd.
 DELETE requests are accepted, but not used, since there is a build in max buffer time
 resulting in a maximum number of segments stored. The time is reflected in the
 timeShiftBufferDepth in the MPD.

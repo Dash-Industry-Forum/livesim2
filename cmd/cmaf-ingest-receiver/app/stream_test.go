@@ -65,3 +65,21 @@ func TestGetLang(t *testing.T) {
 		assert.Equal(t, c.expected, gotLang)
 	}
 }
+
+func TestMatchMPD(t *testing.T) {
+	cases := []struct {
+		path            string
+		storage         string
+		exptectedOutDir string
+		expectedMatch   bool
+	}{
+		{path: "/asset/manifest.mpd", storage: "storage", expectedMatch: true, exptectedOutDir: "storage/asset"},
+		{path: "/asset/Streams(video.cmfv)", storage: "storage", expectedMatch: false, exptectedOutDir: ""},
+	}
+
+	for _, c := range cases {
+		outDir, match := matchMPD(c.storage, c.path)
+		assert.Equal(t, c.expectedMatch, match)
+		assert.Equal(t, c.exptectedOutDir, outDir)
+	}
+}
