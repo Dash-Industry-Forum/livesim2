@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
@@ -42,6 +43,7 @@ type CmafIngestInfoResponse struct {
 		DestName string `json:"destName" doc:"Destination name for the CMAF ingest"`
 		URL      string `json:"livesim-url" doc:"livesim2 URL including /livesim2/ prefix"`
 		ID       string `json:"id" doc:"Unique ID for the CMAF ingest"`
+		Report   string `json:"report" doc:"Report for the CMAF ingest"`
 	}
 }
 
@@ -87,12 +89,16 @@ func createGetCmafIngesterInfoHdlr(s *Server) func(ctx context.Context, input *i
 		if err != nil {
 			return nil, huma.Error400BadRequest(fmt.Sprintf("Invalid ID: %s", input.Id))
 		}
-		_, ok := s.cmafMgr.ingesters[uint64(id)]
+		ing, ok := s.cmafMgr.ingesters[uint64(id)]
 		if !ok {
 			return nil, huma.Error404NotFound(fmt.Sprintf("CMAF ingest %s not found", input.Id))
 		}
 		resp := &CmafIngestInfoResponse{}
-		resp.Body.ID = fmt.Sprintf("Info about %s!", input.Id)
+		resp.Body.DestRoot = ing.destRoot
+		resp.Body.DestName = ing.destName
+		resp.Body.URL = ing.url
+		resp.Body.ID = input.Id
+		resp.Body.Report = strings.Join(ing.report, "\n")
 		return resp, nil
 	}
 }
@@ -174,7 +180,7 @@ func createRouteAPI(s *Server) func(r chi.Router) {
 			Method:      http.MethodGet,
 			Path:        "/cmaf-ingests/{id}/step",
 			Summary:     "Step a CMAF ingest stream one step (for testing)",
-			Description: "In testing mode, send the next instance of all segment with the given ID.",
+			Description: "In testing mode (triggered by setting timeNowMS in creation), send the next segment of all tracks for the given stream ID.",
 			Tags:        []string{"CMAF-ingest"},
 			Errors:      []int{404, 410},
 		}, createStepCmafIngesterHdlr(s))

@@ -280,6 +280,7 @@ func (c *cmafIngester) start(ctx context.Context) {
 			nrInitErrors++
 		} else {
 			c.log.Info("Sent init segment", "path", rd.initPath, "contentType", contentType, "size", len(initBin))
+			c.report = append(c.report, fmt.Sprintf("Sent init segment %s", rd.initPath))
 		}
 	}
 	if nrInitErrors > 0 {
