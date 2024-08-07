@@ -21,18 +21,6 @@ var mpdRegexp = regexp.MustCompile(`^\/(.*)\/[^\/]+\.mpd$`)
 var streamsRegexp = regexp.MustCompile(`^\/(.*)\/Streams\((.*)(\.cmf[vatm])\)$`)
 var segmentRegexp = regexp.MustCompile(`^\/((.*)\/)?([^\/]+)?\/([^\/]+)(\.cmf[vatm])$`)
 
-var mimeTypeFromMediaType = map[string]string{
-	"video": "video/mp4",
-	"audio": "audio/mp4",
-	"text":  "application/mp4",
-}
-
-var extFromMediaType = map[string]string{
-	"video": ".cmfv",
-	"audio": ".cmfa",
-	"text":  ".cmft",
-}
-
 type stream struct {
 	asset     string
 	name      string
@@ -223,9 +211,9 @@ func (fs *FullStream) AddInitData(stream stream, rawInitSeg []byte) error {
 		currAsSet.Lang = lang
 		currAsSet.Id = m.Ptr(uint32(len(p.AdaptationSets) + 1))
 		currAsSet.ContentType = m.RFC6838ContentTypeType(stream.mediaType)
-		mimeType, ok := mimeTypeFromMediaType[stream.mediaType]
-		if !ok {
-			return fmt.Errorf("unknown mime type for %s", stream.mediaType)
+		mimeType, err := cmaf.MimeTypeFromCMAFExtension(stream.ext)
+		if err != nil {
+			return err
 		}
 		currAsSet.MimeType = mimeType
 		p.AppendAdaptationSet(currAsSet)
@@ -246,7 +234,10 @@ func (fs *FullStream) AddInitData(stream stream, rawInitSeg []byte) error {
 	rep := m.NewRepresentation()
 	rep.Id = stream.name
 	currAsSet.AppendRepresentation(rep)
-	ext := extFromMediaType[stream.mediaType]
+	ext, err := cmaf.CMAFExtensionFromContentType(stream.mediaType)
+	if err != nil {
+		return err
+	}
 	if currAsSet.SegmentTemplate == nil {
 		currAsSet.SegmentTemplate = m.NewSegmentTemplate()
 		currAsSet.SegmentTemplate.Timescale = m.Ptr(uint32(trak.Mdia.Mdhd.Timescale))

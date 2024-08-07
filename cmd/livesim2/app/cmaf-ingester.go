@@ -230,6 +230,7 @@ func (c *cmafIngester) start(ctx context.Context) {
 	var initBin []byte
 	contentType := "application/mp4"
 	startTimeS := int64(c.cfg.StartTimeS)
+	nrInitErrors := 0
 	for _, rd := range c.repsData {
 		prefix, lang, ok, err := matchTimeSubsInitLang(c.cfg, rd.initPath)
 		if ok {
@@ -276,8 +277,16 @@ func (c *cmafIngester) start(ctx context.Context) {
 			msg := fmt.Sprintf("error uploading init segment: %v", err)
 			c.report = append(c.report, msg)
 			c.log.Error(msg)
+			nrInitErrors++
+		} else {
+			c.log.Info("Sent init segment", "path", rd.initPath, "contentType", contentType, "size", len(initBin))
 		}
-		c.log.Info("Sent init segment", "path", rd.initPath, "contentType", contentType, "size", len(initBin))
+	}
+	if nrInitErrors > 0 {
+		msg := fmt.Sprintf("Number of init errors: %d", nrInitErrors)
+		c.report = append(c.report, msg)
+		c.log.Error("could not upload init segments", "nrErrors", nrInitErrors)
+		return
 	}
 
 	// Now calculate the availability time for the next segment
@@ -444,6 +453,9 @@ func (c *cmafIngester) sendInitSegment(ctx context.Context, rd cmafRepData, rawI
 	}
 	req.Header.Set("Content-Type", rd.mimeType)
 	req.Header.Set("Connection", "keep-alive")
+	if c.user != "" || c.passWord != "" {
+		req.SetBasicAuth(c.user, c.passWord)
+	}
 	slog.Info("Sending init segment", "fileName", fileName, "url", url)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -452,6 +464,10 @@ func (c *cmafIngester) sendInitSegment(ctx context.Context, rd cmafRepData, rawI
 	_, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("Error reading response body: %w", err)
+	}
+	if resp.StatusCode >= 300 {
+		slog.Warn("Bad status code", "code", resp.StatusCode, "url", url)
+		return fmt.Errorf("bad status code: %d", resp.StatusCode)
 	}
 	defer func() {
 		slog.Debug("Closing body", "filename", fileName)
@@ -523,11 +539,12 @@ func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup,
 	finishedSendCh := make(chan struct{})
 	defer close(finishedSendCh)
 
-	src := newCmafSource(nrBytesCh, writeMoreCh, c.log, u, contentType)
+	src := newCmafSource(nrBytesCh, writeMoreCh, c.log, u, contentType, c.user, c.passWord)
 
 	// Create media segment based on number and send it to segPath
 	go src.startReadAndSend(ctx, finishedSendCh)
 	code, err := writeSegment(ctx, src, c.log, c.cfg, c.mgr.s.assetMgr.vodFS, c.asset, segPart, nowMS, c.mgr.s.textTemplates)
+	c.log.Info("writeSegment", "code", code, "err", err)
 	if err != nil {
 		c.log.Error("writeSegment", "code", code, "err", err)
 		var tooEarly errTooEarly
@@ -567,9 +584,11 @@ type cmafSource struct {
 	buf         []byte
 	bufLevel    int // Keeping track of local buffer
 	offset      int // Offset in local buffer
+	user        string
+	password    string
 }
 
-func newCmafSource(nrBytesCh chan int, writeMoreCh chan struct{}, log *slog.Logger, url string, contentType string) *cmafSource {
+func newCmafSource(nrBytesCh chan int, writeMoreCh chan struct{}, log *slog.Logger, url string, contentType, user, password string) *cmafSource {
 	cs := cmafSource{
 		url:         url,
 		contentType: contentType,
@@ -578,6 +597,8 @@ func newCmafSource(nrBytesCh chan int, writeMoreCh chan struct{}, log *slog.Logg
 		buf:         make([]byte, 1024*64),
 		nrBytesCh:   nrBytesCh,
 		writeMoreCh: writeMoreCh,
+		user:        user,
+		password:    password,
 	}
 	return &cs
 }
@@ -591,6 +612,9 @@ func (cs *cmafSource) startReadAndSend(ctx context.Context, finishedCh chan stru
 		return
 	}
 	req.Header.Set("Connection", "keep-alive")
+	if cs.user != "" || cs.password != "" {
+		req.SetBasicAuth(cs.user, cs.password)
+	}
 	switch cs.contentType {
 	case "video":
 		req.Header.Set("Content-Type", "video/mp4")
@@ -605,6 +629,10 @@ func (cs *cmafSource) startReadAndSend(ctx context.Context, finishedCh chan stru
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		cs.log.Error("creating request", "err", err)
+		return
+	}
+	if resp.StatusCode >= 300 {
+		cs.log.Warn("Bad status code", "code", resp.StatusCode)
 		return
 	}
 	_, err = io.ReadAll(resp.Body) // Normally no body, but ready to be sure that buffers are cleared

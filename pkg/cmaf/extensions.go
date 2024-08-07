@@ -25,6 +25,20 @@ func ContentTypeFromCMAFExtension(ext string) (string, error) {
 	}
 }
 
+// MimeTypeFromCMAFExtension returns the Mime Type of a CMAF file based on file extension ext.
+func MimeTypeFromCMAFExtension(ext string) (string, error) {
+	switch ext {
+	case CMAFVideoExtension:
+		return "video/mp4", nil
+	case CMAFAudioExtension:
+		return "audio/mp4)", nil
+	case CMAFTextExtension, CMAFMetaExtension:
+		return "application/mp4", nil
+	default:
+		return "", fmt.Errorf("unknown CMAF file extension %s", ext)
+	}
+}
+
 // CMAFExtensionFromContentType returns the file extension of a CMAF file based on contentType.
 func CMAFExtensionFromContentType(contentType string) (string, error) {
 	switch contentType {

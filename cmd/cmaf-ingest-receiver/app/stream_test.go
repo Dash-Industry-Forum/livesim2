@@ -16,7 +16,7 @@ func TestAddVideoInit(t *testing.T) {
 	strm := stream{
 		asset:     "testpic",
 		name:      "video",
-		ext:       "cmfv",
+		ext:       ".cmfv",
 		mediaType: "video",
 		assetDir:  "testdir",
 	}
