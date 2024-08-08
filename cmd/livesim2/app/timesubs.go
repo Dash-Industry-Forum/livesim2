@@ -113,7 +113,7 @@ func createTimeSubsInitSegment(prefix, lang string, timescale uint32) *mp4.InitS
 
 func createSubtitlesStppInitSegment(lang string, timescale uint32) *mp4.InitSegment {
 	init := mp4.CreateEmptyInit()
-	init.AddEmptyTrack(timescale, "stpp", lang)
+	init.AddEmptyTrack(timescale, "subt", lang)
 	trak := init.Moov.Trak
 	schemaLocation := ""
 	auxiliaryMimeType := ""
