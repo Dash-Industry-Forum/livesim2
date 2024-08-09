@@ -137,7 +137,7 @@ type StppTimeCue struct {
 }
 
 // writeTimeStppMediaSegment return true and tries to write a stpp time subtitle segment if URL matches
-func writeTimeSubsMediaSegment(w http.ResponseWriter, cfg *ResponseConfig, a *asset, segmentPart string, nowMS int, tt *template.Template) (bool, error) {
+func writeTimeSubsMediaSegment(w http.ResponseWriter, cfg *ResponseConfig, a *asset, segmentPart string, nowMS int, tt *template.Template, isLast bool) (bool, error) {
 	prefix := ""
 	var langs []string
 	lang, seg, ok := timeSubsSegmentParts(SUBS_STPP_PREFIX, segmentPart)
@@ -198,6 +198,9 @@ func writeTimeSubsMediaSegment(w http.ResponseWriter, cfg *ResponseConfig, a *as
 	default: // SUBS_WVTT_PREFIX
 		mediaSeg, err = createSubtitlesWvttMediaSegment(refSegMeta.newNr, baseMediaDecodeTime, dur, lang, utcTimeMS,
 			cfg.TimeSubsDurMS, cfg.TimeSubsRegion)
+	}
+	if isLast {
+		mediaSeg.Styp.AddCompatibleBrands([]string{"lmsg"})
 	}
 	if err != nil {
 		return true, fmt.Errorf("createSubtitleStppMediaSegment: %w", err)

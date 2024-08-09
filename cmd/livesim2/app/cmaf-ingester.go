@@ -189,11 +189,7 @@ func (cm *cmafIngesterMgr) startIngester(nr uint64) {
 	}
 	var ctx context.Context
 	var cancel context.CancelFunc
-	if c.dur == nil {
-		ctx, cancel = context.WithCancel(context.Background())
-	} else {
-		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(*c.dur)*time.Second)
-	}
+	ctx, cancel = context.WithCancel(context.Background())
 	cm.cancels[nr] = cancel
 	go c.start(ctx)
 }
@@ -347,7 +343,8 @@ func (c *cmafIngester) start(ctx context.Context) {
 			c.log.Info("Context done, stopping ingest")
 			return
 		}
-		err := c.sendMediaSegments(ctx, nextSegNr, int(availabilityTime))
+		isLast := nextSegNr == lastSegNrToSend
+		err := c.sendMediaSegments(ctx, nextSegNr, int(availabilityTime), isLast)
 		if err != nil {
 			msg := fmt.Sprintf("Error sending media segments: %v", err)
 			c.report = append(c.report, msg)
@@ -376,7 +373,7 @@ func (c *cmafIngester) start(ctx context.Context) {
 				msg := fmt.Sprintf("Segment availability time in the past: %d", availabilityTime)
 				c.report = append(c.report, msg)
 				c.log.Error(msg)
-				err := c.sendMediaSegments(ctx, nextSegNr, int(availabilityTime))
+				err := c.sendMediaSegments(ctx, nextSegNr, int(availabilityTime), false /* isLast */)
 				if err != nil {
 					msg := fmt.Sprintf("Error sending media segments: %v", err)
 					c.report = append(c.report, msg)
@@ -462,7 +459,7 @@ func (c *cmafIngester) sendInitSegment(ctx context.Context, rd cmafRepData, rawI
 	buf := bytes.NewBuffer(rawInitSeg)
 	req, err := http.NewRequestWithContext(ctx, "PUT", url, buf)
 	if err != nil {
-		return fmt.Errorf("Error creating request: %w", err)
+		return fmt.Errorf("error creating request: %w", err)
 	}
 	req.Header.Set("Content-Type", rd.mimeType)
 	req.Header.Set("Connection", "keep-alive")
@@ -489,7 +486,8 @@ func (c *cmafIngester) sendInitSegment(ctx context.Context, rd cmafRepData, rawI
 	return nil
 }
 
-func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, nowMS int) error {
+// sendMediaSegments sends all media segments for all representations. isLast triggers lmsg insertion.
+func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, nowMS int, isLast bool) error {
 	c.log.Debug("Start media segment", "nr", nextSegNr, "nowMS", nowMS)
 	wTimes := calcWrapTimes(c.asset, c.cfg, nowMS+50, m.Duration(100*time.Millisecond))
 	wg := sync.WaitGroup{}
@@ -520,7 +518,7 @@ func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, nowMS i
 				segPath = fmt.Sprintf("Streams(%s%s)", rd.repID, rd.extension)
 			}
 			wg.Add(1)
-			go c.sendMediaSegment(ctx, &wg, segPath, segPart, rd.contentType, nextSegNr, nowMS)
+			go c.sendMediaSegment(ctx, &wg, segPath, segPart, rd.contentType, nextSegNr, nowMS, isLast)
 		}
 	} else {
 		for _, rd := range c.repsData {
@@ -530,7 +528,7 @@ func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, nowMS i
 				segPath = fmt.Sprintf("Streams(%s%s)", rd.repID, rd.extension)
 			}
 			wg.Add(1)
-			go c.sendMediaSegment(ctx, &wg, segPath, segPart, rd.contentType, nextSegNr, nowMS)
+			go c.sendMediaSegment(ctx, &wg, segPath, segPart, rd.contentType, nextSegNr, nowMS, isLast)
 		}
 	}
 	wg.Wait()
@@ -539,7 +537,7 @@ func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, nowMS i
 
 // sendMediaSegment sends a media segment to the destination URL.
 // The segment may be written in chunks, rather than as a whole.
-func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup, segPath, segPart, contentType string, segNr, nowMS int) {
+func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup, segPath, segPart, contentType string, segNr, nowMS int, isLast bool) {
 	defer wg.Done()
 
 	u := fmt.Sprintf("%s/%s", c.dest(), segPath)
@@ -556,7 +554,7 @@ func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup,
 
 	// Create media segment based on number and send it to segPath
 	go src.startReadAndSend(ctx, finishedSendCh)
-	code, err := writeSegment(ctx, src, c.log, c.cfg, c.mgr.s.assetMgr.vodFS, c.asset, segPart, nowMS, c.mgr.s.textTemplates)
+	code, err := writeSegment(ctx, src, c.log, c.cfg, c.mgr.s.assetMgr.vodFS, c.asset, segPart, nowMS, c.mgr.s.textTemplates, isLast)
 	c.log.Info("writeSegment", "code", code, "err", err)
 	if err != nil {
 		c.log.Error("writeSegment", "code", code, "err", err)

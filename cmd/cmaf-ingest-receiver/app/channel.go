@@ -234,8 +234,11 @@ func (ch *channel) receivedSegData(rsd recSegData) {
 	case !rsd.isComplete:
 		slog.Debug("Received chunk data", "chName", ch.name, "trName", name, "seqNr", rsd.seqNr, "chunkNr", rsd.chunkNr, "dur", rsd.dur)
 	case rsd.isComplete:
-		slog.Info("Received final segment data", "chName", ch.name, "trName", name, "seqNr", rsd.seqNr, "nrChunks", rsd.chunkNr, "dur",
-			rsd.dur, "totDur", rsd.totDur)
+		slog.Debug("Received final segment data", "chName", ch.name, "trName", name, "seqNr", rsd.seqNr, "nrChunks", rsd.chunkNr, "dur",
+			rsd.dur, "totDur", rsd.totDur, "lsmg", rsd.isLmsg)
+		if rsd.isLmsg {
+			slog.Info("Received lsmg indicating last segment", "chName", ch.name, "trName", name, "seqNr", rsd.seqNr)
+		}
 		err := sdb.add(rsd.dts, rsd.totDur, rsd.seqNr, rsd.isMissing, rsd.isSlate, rsd.isLmsg)
 		if err != nil {
 			slog.Error("Failed to add segment data", "chName", ch.name, "trName", name, "seqNr", rsd.seqNr, "err", err)

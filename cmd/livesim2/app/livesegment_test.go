@@ -97,7 +97,7 @@ func TestLiveSegment(t *testing.T) {
 				default: // "TimelineTime":
 					media = strings.Replace(media, "$NrOrTime$", fmt.Sprintf("%d", mediaTime), -1)
 				}
-				so, err := genLiveSegment(vodFS, asset, cfg, media, nowMS)
+				so, err := genLiveSegment(vodFS, asset, cfg, media, nowMS, false /*isLast */)
 				require.NoError(t, err)
 				require.Equal(t, tc.segmentMimeType, so.meta.rep.SegmentType())
 				seg := so.seg
@@ -122,7 +122,7 @@ func TestAc3Timing(t *testing.T) {
 	for sNr := 0; sNr <= 5; sNr++ {
 		media := "audio_$NrOrTime$.m4s"
 		media = strings.Replace(media, "$NrOrTime$", fmt.Sprintf("%d", sNr), -1)
-		so, err := genLiveSegment(vodFS, asset, cfg, media, nowMS)
+		so, err := genLiveSegment(vodFS, asset, cfg, media, nowMS, false /* isLast */)
 		require.NoError(t, err)
 		bmdt := int(so.seg.Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime())
 		overShoot := bmdt - (2 * sNr * 48000)
@@ -175,7 +175,7 @@ func TestCheckAudioSegmentTimeAddressing(t *testing.T) {
 				default:
 					segMedia = strings.Replace(c.media, "$NrOrTime$", fmt.Sprintf("%d", mediaTime), -1)
 				}
-				so, err := genLiveSegment(vodFS, asset, cfg, segMedia, c.nowMS)
+				so, err := genLiveSegment(vodFS, asset, cfg, segMedia, c.nowMS, false /* isLast */)
 				require.NoError(t, err)
 				trun := so.seg.Fragments[0].Moof.Traf.Trun
 				nrSamples := c.nrSamplesMod[nr%len(c.nrSamplesMod)]
@@ -227,7 +227,7 @@ func TestLiveThumbSegment(t *testing.T) {
 			media := tc.media
 			// Always number, even if MPD is timelinetime
 			media = strings.Replace(media, "$NrOrTime$", fmt.Sprintf("%d", tc.reqNr), -1)
-			so, err := genLiveSegment(vodFS, asset, cfg, media, nowMS)
+			so, err := genLiveSegment(vodFS, asset, cfg, media, nowMS, false /* isLast */)
 			require.NoError(t, err)
 			origNr := tc.reqNr%tc.nrSegs + 1 // one-based
 			require.Equal(t, tc.segmentMimeType, so.meta.rep.SegmentType())
@@ -269,7 +269,7 @@ func TestWriteChunkedSegment(t *testing.T) {
 		rr := httptest.NewRecorder()
 		segmentPart := strings.Replace(tc.media, "$NrOrTime$", "10", 1)
 		mediaTime := 80 * tc.mediaTimescale
-		err := writeChunkedSegment(context.Background(), rr, cfg, vodFS, asset, segmentPart, nowMS)
+		err := writeChunkedSegment(context.Background(), rr, cfg, vodFS, asset, segmentPart, nowMS, false /* isLast */)
 		require.NoError(t, err)
 		seg := rr.Body.Bytes()
 		sr := bits.NewFixedSliceReader(seg)
@@ -432,7 +432,7 @@ func TestStartNumber(t *testing.T) {
 		cfg := NewResponseConfig()
 		cfg.StartNr = Ptr(tc.startNr)
 		media := strings.Replace(tc.media, "$NrOrTime$", fmt.Sprintf("%d", (tc.requestNr)), 1)
-		so, err := genLiveSegment(vodFS, asset, cfg, media, tc.nowMS)
+		so, err := genLiveSegment(vodFS, asset, cfg, media, tc.nowMS, false /* isLast */)
 		if tc.expectedErr != "" {
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tc.expectedErr)
@@ -569,7 +569,7 @@ func TestLLSegmentAvailability(t *testing.T) {
 			cfg.StartNr = Ptr(tc.startNr)
 		}
 		media := strings.Replace(tc.media, "$NrOrTime$", fmt.Sprintf("%d", (tc.requestMedia)), 1)
-		so, err := genLiveSegment(vodFS, asset, cfg, media, tc.nowMS)
+		so, err := genLiveSegment(vodFS, asset, cfg, media, tc.nowMS, false /* isLast */)
 		if tc.expectedErr != "" {
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tc.expectedErr)
@@ -689,7 +689,7 @@ func TestSegmentStatusCodeResponse(t *testing.T) {
 			cfg.SegStatusCodes = tc.ss
 			media := strings.Replace(tc.media, "$NrOrTime$", fmt.Sprintf("%d", tc.nrOrTime), -1)
 			rr := httptest.NewRecorder()
-			code, err := writeSegment(context.TODO(), rr, slog.Default(), cfg, vodFS, asset, media, tc.nowMS, nil)
+			code, err := writeSegment(context.TODO(), rr, slog.Default(), cfg, vodFS, asset, media, tc.nowMS, nil, false /* isLast */)
 			require.NoError(t, err)
 			require.Equal(t, tc.expCode, code)
 		})

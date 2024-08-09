@@ -24,7 +24,8 @@ import (
 )
 
 // genLiveSegment generates a live segment from one or more VoD segments following cfg and media type
-func genLiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int) (segOut, error) {
+// isLast triggers insertion of lmsg compatibility brand
+func genLiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int, isLast bool) (segOut, error) {
 	var so segOut
 
 	outSeg, err := createOutSeg(vodFS, a, cfg, segmentPart, nowMS)
@@ -76,6 +77,9 @@ func genLiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart stri
 		}
 		outSeg.seg = seg
 		outSeg.data = nil
+	}
+	if isLast && outSeg.seg.Styp != nil {
+		outSeg.seg.Styp.AddCompatibleBrands([]string{"lmsg"})
 	}
 	return outSeg, nil
 }
@@ -328,13 +332,13 @@ func matchInit(segmentPart string, cfg *ResponseConfig, a *asset) (initMatch, er
 	return im, nil
 }
 
-func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string, nowMS int, tt *template.Template) error {
+func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string, nowMS int, tt *template.Template, isLast bool) error {
 	slog.Debug("writeLiveSegment", "segmentPart", segmentPart)
-	isTimeSubsMedia, err := writeTimeSubsMediaSegment(w, cfg, a, segmentPart, nowMS, tt)
+	isTimeSubsMedia, err := writeTimeSubsMediaSegment(w, cfg, a, segmentPart, nowMS, tt, isLast)
 	if isTimeSubsMedia {
 		return err
 	}
-	outSeg, err := genLiveSegment(vodFS, a, cfg, segmentPart, nowMS)
+	outSeg, err := genLiveSegment(vodFS, a, cfg, segmentPart, nowMS, isLast)
 	if err != nil {
 		return fmt.Errorf("convertToLive: %w", err)
 	}
@@ -541,11 +545,11 @@ func findRefSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int
 // nowMS servers as reference for the current time and can be set to any value. Media time will
 // be incremented with respect to nowMS.
 func writeChunkedSegment(ctx context.Context, w http.ResponseWriter, cfg *ResponseConfig,
-	vodFS fs.FS, a *asset, segmentPart string, nowMS int) error {
+	vodFS fs.FS, a *asset, segmentPart string, nowMS int, isLast bool) error {
 
 	slog.Debug("writeChunkedSegment", "segmentPart", segmentPart)
 
-	so, err := genLiveSegment(vodFS, a, cfg, segmentPart, nowMS)
+	so, err := genLiveSegment(vodFS, a, cfg, segmentPart, nowMS, isLast)
 	if err != nil {
 		return fmt.Errorf("convertToLive: %w", err)
 	}

@@ -142,7 +142,7 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		code, err := writeSegment(r.Context(), w, log, cfg, s.assetMgr.vodFS, a, segmentPart[1:], nowMS, s.textTemplates)
+		code, err := writeSegment(r.Context(), w, log, cfg, s.assetMgr.vodFS, a, segmentPart[1:], nowMS, s.textTemplates, false /*isLast */)
 		if err != nil {
 			log.Error("writeSegment", "code", code, "err", err)
 			var tooEarly errTooEarly
@@ -235,7 +235,7 @@ func writeLiveMPD(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, 
 
 // writeSegment writes a segment to the response writer, but may also return a special status code if configured.
 func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, cfg *ResponseConfig, vodFS fs.FS, a *asset,
-	segmentPart string, nowMS int, tt *template.Template) (code int, err error) {
+	segmentPart string, nowMS int, tt *template.Template, isLast bool) (code int, err error) {
 	// First check if init segment and return
 	log.Debug("writeSegment", "segmentPart", segmentPart)
 	isInitSegment, err := writeInitSegment(w, cfg, a, segmentPart)
@@ -255,10 +255,10 @@ func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, 
 		}
 	}
 	if cfg.AvailabilityTimeCompleteFlag {
-		return 0, writeLiveSegment(w, cfg, vodFS, a, segmentPart, nowMS, tt)
+		return 0, writeLiveSegment(w, cfg, vodFS, a, segmentPart, nowMS, tt, isLast)
 	}
 	// Chunked low-latency mode
-	return 0, writeChunkedSegment(ctx, w, cfg, vodFS, a, segmentPart, nowMS)
+	return 0, writeChunkedSegment(ctx, w, cfg, vodFS, a, segmentPart, nowMS, isLast)
 }
 
 // calcStatusCode returns the configured status code for the segment or 0 if none.
