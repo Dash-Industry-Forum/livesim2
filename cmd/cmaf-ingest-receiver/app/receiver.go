@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/chunkparser"
+	"github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/Eyevinn/mp4ff/bits"
 	"github.com/Eyevinn/mp4ff/mp4"
 )
@@ -123,6 +124,7 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 	}
 
 	trd := &recSegData{name: stream.trName}
+	defaultDur := mpd.Ptr(uint32(0))
 
 	trName := stream.trName
 
@@ -166,10 +168,10 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 				slog.Error("Failed to find track data", "trName", trName, "chName", stream.chName)
 			}
 			trex := rd.init.Moov.Mvex.Trex
-			defaultDur := trex.DefaultSampleDuration
+			*defaultDur = trex.DefaultSampleDuration
 			tfhd := moof.Traf.Tfhd
 			if tfhd.DefaultSampleDuration != 0 {
-				defaultDur = tfhd.DefaultSampleDuration
+				*defaultDur = tfhd.DefaultSampleDuration
 			}
 
 			if trd.chunkNr == 0 {
@@ -210,12 +212,11 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 					}
 				}
 			}
-			dur := uint32(moof.Traf.Trun.Duration(defaultDur))
+			dur := uint32(moof.Traf.Trun.Duration(*defaultDur))
 			ch.addChunkData(*trd)
 			trd.chunkNr++
 			trd.totDur += dur
 		}
-		defer ofh.Close()
 		n, err := ofh.Write(data)
 		if err != nil {
 			return fmt.Errorf("failed to write chunk: %w", err)
@@ -236,6 +237,9 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 	}
 	p := chunkparser.NewMP4ChunkParser(req.Body, buf, chunkParserCallback)
 	err = p.Parse()
+	if ofh != nil {
+		defer ofh.Close()
+	}
 	if err != nil {
 		slog.Error("Failed to parse MP4 chunk", "err", err)
 		http.Error(w, "Failed to parse MP4 chunk", http.StatusInternalServerError)
