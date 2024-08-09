@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/cmaf"
-	"github.com/Eyevinn/dash-mpd/mpd"
+	m "github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/Eyevinn/mp4ff/bits"
 	"github.com/Eyevinn/mp4ff/mp4"
 )
@@ -46,6 +46,7 @@ type cmafIngester struct {
 	log            *slog.Logger
 	testNowMS      *int
 	dur            *int
+	nrSegsToSend   *int // calculate from dur and segDur
 	streamsURLs    bool
 	cfg            *ResponseConfig
 	asset          *asset
@@ -111,10 +112,6 @@ func (cm *cmafIngesterMgr) NewCmafIngester(req CmafIngesterSetup) (nr uint64, er
 		return 0, fmt.Errorf("failed to generate live MPD: %w", err)
 	}
 
-	if !cfg.AvailabilityTimeCompleteFlag {
-		return 0, fmt.Errorf("availabilityTimeCompleteFlag not set. Low-latency not yet supported")
-	}
-
 	// Extract list of all representations with their information
 
 	period := liveMPD.Periods[0]
@@ -177,6 +174,9 @@ func (cm *cmafIngesterMgr) NewCmafIngester(req CmafIngesterSetup) (nr uint64, er
 		state:          ingesterStateNotStarted,
 		nextSegTrigger: make(chan struct{}),
 	}
+	if c.dur != nil {
+		c.nrSegsToSend = m.Ptr(*c.dur * 1000 / asset.SegmentDurMS)
+	}
 	cm.ingesters[nr] = &c
 
 	return nr, nil
@@ -206,7 +206,7 @@ type cmafRepData struct {
 	mediaPattern string
 	extension    string
 	bandWidth    uint32
-	roles        []*mpd.DescriptorType
+	roles        []*m.DescriptorType
 }
 
 // start starts the main ingest loop for sending init and media packets.
@@ -302,7 +302,15 @@ func (c *cmafIngester) start(ctx context.Context) {
 	refRep := c.asset.refRep
 	lastNr := findLastSegNr(c.cfg, c.asset, nowMS, refRep)
 	nextSegNr := lastNr + 1
-	c.log.Debug("Next segment number at start", "nr", nextSegNr)
+	lastSegNrToSend := -1
+
+	if c.nrSegsToSend != nil {
+		lastSegNrToSend = nextSegNr + *c.nrSegsToSend
+	}
+	if lastSegNrToSend > 0 {
+		c.log.Debug("First and last segment number to send", "first", nextSegNr, "last", lastSegNrToSend)
+	}
+
 	availabilityTime, err := calcSegmentAvailabilityTime(c.asset, refRep, uint32(nextSegNr), c.cfg)
 	if err != nil {
 		msg := fmt.Sprintf("Error calculating segment availability time: %v", err)
@@ -325,6 +333,10 @@ func (c *cmafIngester) start(ctx context.Context) {
 
 	// Main loop for sending segments
 	for {
+		if lastSegNrToSend >= 0 && nextSegNr > lastSegNrToSend {
+			c.log.Info("Last segment sent", "nr", lastSegNrToSend)
+			return
+		}
 		c.log.Info("Waiting for next segment")
 		select {
 		case <-timer.C:
@@ -479,7 +491,7 @@ func (c *cmafIngester) sendInitSegment(ctx context.Context, rd cmafRepData, rawI
 
 func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, nowMS int) error {
 	c.log.Debug("Start media segment", "nr", nextSegNr, "nowMS", nowMS)
-	wTimes := calcWrapTimes(c.asset, c.cfg, nowMS+50, mpd.Duration(100*time.Millisecond))
+	wTimes := calcWrapTimes(c.asset, c.cfg, nowMS+50, m.Duration(100*time.Millisecond))
 	wg := sync.WaitGroup{}
 	if c.cfg.SegTimelineFlag {
 		var segPart string

@@ -329,6 +329,7 @@ func matchInit(segmentPart string, cfg *ResponseConfig, a *asset) (initMatch, er
 }
 
 func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string, nowMS int, tt *template.Template) error {
+	slog.Debug("writeLiveSegment", "segmentPart", segmentPart)
 	isTimeSubsMedia, err := writeTimeSubsMediaSegment(w, cfg, a, segmentPart, nowMS, tt)
 	if isTimeSubsMedia {
 		return err
@@ -541,6 +542,8 @@ func findRefSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int
 // be incremented with respect to nowMS.
 func writeChunkedSegment(ctx context.Context, w http.ResponseWriter, cfg *ResponseConfig,
 	vodFS fs.FS, a *asset, segmentPart string, nowMS int) error {
+
+	slog.Debug("writeChunkedSegment", "segmentPart", segmentPart)
 
 	so, err := genLiveSegment(vodFS, a, cfg, segmentPart, nowMS)
 	if err != nil {
