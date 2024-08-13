@@ -22,6 +22,8 @@ import (
 
 type ingesterState int
 
+const CMAFIngestVersion = "1.1"
+
 const (
 	ingesterStateNotStarted ingesterState = iota
 	ingesterStateRunning
@@ -461,6 +463,7 @@ func (c *cmafIngester) sendInitSegment(ctx context.Context, rd cmafRepData, rawI
 	if err != nil {
 		return fmt.Errorf("error creating request: %w", err)
 	}
+	setIngestHeader(req)
 	req.Header.Set("Content-Type", rd.mimeType)
 	req.Header.Set("Connection", "keep-alive")
 	if c.user != "" || c.passWord != "" {
@@ -626,6 +629,7 @@ func (cs *cmafSource) startReadAndSend(ctx context.Context, finishedCh chan stru
 	if cs.user != "" || cs.password != "" {
 		req.SetBasicAuth(cs.user, cs.password)
 	}
+	setIngestHeader(req)
 	switch cs.contentType {
 	case "video":
 		req.Header.Set("Content-Type", "video/mp4")
@@ -760,4 +764,8 @@ func setRawInitProps(rawInit []byte, rd cmafRepData, startTimeS int64) (newRawIn
 		return nil, err
 	}
 	return sw.Bytes(), nil
+}
+
+func setIngestHeader(req *http.Request) {
+	req.Header.Set("DASH-IF-Ingest", CMAFIngestVersion)
 }

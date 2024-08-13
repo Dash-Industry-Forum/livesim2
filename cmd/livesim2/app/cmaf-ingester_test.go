@@ -108,6 +108,12 @@ func (s *cmafReceiverTestServer) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	// Get the segment name from the URL path
 	segmentName := r.URL.Path[1:]
 
+	ingestVersion := r.Header.Get("DASH-IF-Ingest")
+	if ingestVersion != CMAFIngestVersion {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	if r.Header.Get("Content-Length") != "" { // Receive full segment based on Content-Length
 		contentLen, _ := strconv.Atoi(r.Header.Get("Content-Length"))
 		buf := make([]byte, contentLen)
