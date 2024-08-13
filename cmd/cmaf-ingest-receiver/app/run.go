@@ -14,6 +14,7 @@ import (
 
 	"github.com/Dash-Industry-Forum/livesim2/internal"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
+	"github.com/caddyserver/certmagic"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -57,11 +58,15 @@ on channel name:
 
 type Options struct {
 	port                  int
+	portHttps             int
 	storage               string
 	prefix                string
 	logLevel              string
 	logFormat             string
 	configFile            string
+	domains               string
+	certPath              string
+	keyPath               string
 	timeShiftBufferDepthS int
 	version               bool
 }
@@ -69,6 +74,7 @@ type Options struct {
 const (
 	defaultStorageRoot           = "./storage"
 	defaultPort                  = 8080
+	defaultPortHttps             = 443
 	defaultLogLevel              = "info"
 	defaultLogFormat             = "text"
 	defaultPrefix                = "/upload"
@@ -78,7 +84,11 @@ const (
 
 func ParseOptions() (*Options, error) {
 	var opts Options
-	flag.IntVar(&opts.port, "port", defaultPort, "HTTP receiver port")
+	flag.IntVar(&opts.port, "port", defaultPort, "CMAF HTTP receiver port")
+	flag.IntVar(&opts.portHttps, "porthttps", defaultPortHttps, "CMAF HTTPS receiver port")
+	flag.StringVar(&opts.domains, "domains", "", "One or more DNS domains (comma-separated) for auto certificate from Let's Encrypt")
+	flag.StringVar(&opts.certPath, "certpath", "", "Path to TLS certificate file (for HTTPS). Use domains instead if possible")
+	flag.StringVar(&opts.keyPath, "keypath", "", "Path to TLS private key file (for HTTPS). Use domains instead if possible.")
 	flag.StringVar(&opts.storage, "storage", defaultStorageRoot, "Storage root directory")
 	flag.StringVar(&opts.prefix, "prefix", defaultPrefix, "Prefix to remove from upload URLS")
 	flag.StringVar(&opts.logLevel, "loglevel", defaultLogLevel, "Log level (info, debug, warn)")
@@ -141,34 +151,54 @@ func Run(opts *Options) error {
 
 	router := setupRouter(receiver)
 
-	http_srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", opts.port),
-		Handler: router,
+	var http_srv *http.Server
+
+	if opts.domains == "" && (opts.certPath == "" || opts.keyPath == "") {
+		http_srv = &http.Server{
+			Addr:    fmt.Sprintf(":%d", opts.port),
+			Handler: router,
+		}
 	}
 
 	go func() {
-		slog.Info("Server started", "port", opts.port)
-		err := http_srv.ListenAndServe()
+		var err error
+
+		switch {
+		case opts.domains != "":
+			domains := strings.Split(opts.domains, ",")
+			slog.Info("Started receiving CMAF ingest ACME HTTPS server", "domains", domains)
+			err = certmagic.HTTPS(domains, router)
+		case opts.certPath != "" && opts.keyPath != "":
+			slog.Info("Starting receiving CMAF ingest HTTPS server with explicit certpath and keypath",
+				"port", opts.portHttps)
+			err = http.ListenAndServeTLS(fmt.Sprintf(":%d", opts.portHttps),
+				opts.certPath, opts.keyPath, router)
+		default:
+			slog.Info("Starting receiving CMAF ingest HTTP server", "port", opts.port)
+			err = http_srv.ListenAndServe()
+		}
 		if err != nil && err != http.ErrServerClosed {
-			slog.Error("Server issue", "err", err)
+			slog.Default().Error(err.Error())
 			startIssue <- err
 		}
 	}()
 
 	err = <-stopServer // Wait here for stop signal
 	if err != nil {
-		return fmt.Errorf("server errorr: %w", err)
+		return fmt.Errorf("server error: %w", err)
 	}
 	slog.Info("Server to be stopped")
-	timeoutCtx, cancelTimeout := context.WithTimeout(context.Background(), 5*time.Second)
-	defer func() {
-		slog.Info("Server stopped")
-		cancelTimeout()
-		time.Sleep(gracefulShutdownWait)
-	}()
+	if http_srv != nil { // TODO. Nicer shutdown for https and ACME cases as well
+		timeoutCtx, cancelTimeout := context.WithTimeout(context.Background(), 5*time.Second)
+		defer func() {
+			slog.Info("Server stopped")
+			cancelTimeout()
+			time.Sleep(gracefulShutdownWait)
+		}()
 
-	if err := http_srv.Shutdown(timeoutCtx); err != nil {
-		return fmt.Errorf("HTTP server shutdown failed: %w", err)
+		if err := http_srv.Shutdown(timeoutCtx); err != nil {
+			return fmt.Errorf("HTTP server shutdown failed: %w", err)
+		}
 	}
 	return nil
 }
