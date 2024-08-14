@@ -9,13 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added functions and constants for CMAF file extensions in pkg/cmaf
 - Short HEVC + AC-3 test content
+- Generation of CMAF ingest streams with a REST-based API
+- New program `cmaf-ingest-receiver` that can receive one or more CMAF ingest streams
 
 ### Fixed
 
 - Will now set contentType from mimeType on AdaptationSet or Representation level.
 - If contentType and mimedType is not present, contentType will be set from codecs string.
 - Issue with audio resegmentation.
+
+### Changed
+
+- Go version changed to 1.22
 
 ## [1.4.1] - 2024-05-28
 

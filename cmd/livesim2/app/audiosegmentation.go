@@ -65,7 +65,7 @@ func (s sampleItvl) dur(sampleDur uint64) uint64 {
 }
 
 // createAudioSeg takes a recipe and creates an output audio segment with the right samples.
-func createAudioSeg(vodFS fs.FS, a *asset, cfg *ResponseConfig, rec audioRecipe) (*mp4.MediaSegment, error) {
+func createAudioSeg(vodFS fs.FS, a *asset, rec audioRecipe) (*mp4.MediaSegment, error) {
 	rep := rec.rep
 	sampleDur := uint64(*rep.ConstantSampleDuration)
 	var startSampleIdx, endSampleIdx uint32

@@ -70,7 +70,7 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	case "/urlgen/create":
 		data = createURL(r, aInfo)
 	default:
-		data, err = createInitData(r, aInfo)
+		data, err = createInitData(aInfo)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -160,7 +160,7 @@ const (
 	TimelineNumber segmentTimelineType = "tlnr"
 )
 
-func createInitData(r *http.Request, aInfo assetsInfo) (data urlGenData, err error) {
+func createInitData(aInfo assetsInfo) (data urlGenData, err error) {
 	data = initData
 	data.Assets = make([]assetWithSelect, 0, len(aInfo.Assets)+1)
 	data.MPDs = nil

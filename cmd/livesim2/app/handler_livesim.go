@@ -24,33 +24,38 @@ import (
 	"github.com/Eyevinn/dash-mpd/mpd"
 )
 
-// livesimHandlerFunc handles mpd and segment requests.
-// ?nowMS=... can be used to set the current time for testing.
-func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
-	log := logging.SubLoggerWithRequestID(slog.Default(), r)
+type errorWithHttpType struct {
+	msg        string
+	statusCode int
+}
+
+func (e errorWithHttpType) Error() string {
+	return e.msg
+}
+
+func generateAndLogHttpError(log *slog.Logger, msg string, statusCode int) *errorWithHttpType {
+	log.Error(msg)
+	return &errorWithHttpType{msg, statusCode}
+}
+
+func cfgFromRequest(r *http.Request, log *slog.Logger) (nowMS int, cfg *ResponseConfig, errHT *errorWithHttpType) {
 	uPath := r.URL.Path
-	ext := filepath.Ext(uPath)
 	u, err := url.Parse(uPath)
 	if err != nil {
-		msg := "URL parser"
-		log.Error(msg)
-		http.Error(w, msg, http.StatusInternalServerError)
-		return
+		return 0, nil, generateAndLogHttpError(log, "URL parsing", http.StatusInternalServerError)
 	}
 
 	q := r.URL.Query()
-	nowMS, err := getNowMS(q.Get("nowMS"))
+	nowMS, err = getNowMS(q.Get("nowMS"))
 	if err != nil {
-		http.Error(w, "bad nowMS query", http.StatusBadRequest)
-		return
+		return 0, nil, generateAndLogHttpError(log, "bad nowMS query", http.StatusBadRequest)
 	}
 
 	nowDate := q.Get("nowDate")
 	if nowDate != "" {
 		nowMS, err = getMSFromDate(nowDate)
 		if err != nil {
-			http.Error(w, "bad date query", http.StatusBadRequest)
-			return
+			return 0, nil, generateAndLogHttpError(log, "bad nowDate query", http.StatusBadRequest)
 		}
 	}
 
@@ -58,42 +63,53 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	if publishTime != "" {
 		nowMS, err = getMSFromDate(publishTime)
 		if err != nil {
-			http.Error(w, "bad publishTime query", http.StatusBadRequest)
-			return
+			return 0, nil, generateAndLogHttpError(log, "bad publishTime query", http.StatusBadRequest)
 		}
 	}
 
-	cfg, err := processURLCfg(u.String(), nowMS)
+	cfg, err = processURLCfg(u.String(), nowMS)
 	if err != nil {
-		msg := "processURL error"
-		log.Error(msg, "err", err)
-		http.Error(w, msg, http.StatusInternalServerError)
-		return
+		msg := fmt.Sprintf("processURL error: %q", err)
+		return 0, nil, generateAndLogHttpError(log, msg, http.StatusBadRequest)
 	}
-
-	cfg.SetHost(s.Cfg.Host, r)
 
 	if cfg.TimeOffsetS != nil {
 		offsetMS := int(*cfg.TimeOffsetS * 1000)
 		nowMS += offsetMS
 	}
 
+	if nowMS < cfg.StartTimeS*1000 {
+		tooEarlyMS := cfg.StartTimeS - nowMS
+		msg := fmt.Sprintf("%dms too early", tooEarlyMS)
+		return 0, nil, generateAndLogHttpError(log, msg, http.StatusTooEarly)
+	}
+
+	return nowMS, cfg, nil
+}
+
+// livesimHandlerFunc handles mpd and segment requests.
+// ?nowMS=... can be used to set the current time for testing.
+func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
+	log := logging.SubLoggerWithRequestID(slog.Default(), r)
+	nowMS, cfg, errHT := cfgFromRequest(r, log)
+	if errHT != nil {
+		http.Error(w, errHT.Error(), errHT.statusCode)
+		return
+	}
+
 	contentPart := cfg.URLContentPart()
 	log.Debug("requested content", "url", contentPart)
 	a, ok := s.assetMgr.findAsset(contentPart)
 	if !ok {
-		http.Error(w, "unknown asset", http.StatusNotFound)
+		msg := fmt.Sprintf("unknown asset %q", contentPart)
+		log.Error(msg)
+		http.Error(w, msg, http.StatusNotFound)
 		return
 	}
-	if nowMS < cfg.StartTimeS*1000 {
-		tooEarlyMS := cfg.StartTimeS - nowMS
-		http.Error(w, fmt.Sprintf("%dms too early", tooEarlyMS), http.StatusTooEarly)
-		return
-	}
-	switch ext {
+	cfg.SetHost(s.Cfg.Host, r)
+	switch filepath.Ext(r.URL.Path) {
 	case ".mpd":
 		_, mpdName := path.Split(contentPart)
-		cfg.SetHost(s.Cfg.Host, r)
 		err := writeLiveMPD(log, w, cfg, a, mpdName, nowMS)
 		if err != nil {
 			log.Error("liveMPD", "err", err)
@@ -126,7 +142,7 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		code, err := writeSegment(r.Context(), w, log, cfg, s.assetMgr.vodFS, a, segmentPart[1:], nowMS, s.textTemplates)
+		code, err := writeSegment(r.Context(), w, log, cfg, s.assetMgr.vodFS, a, segmentPart[1:], nowMS, s.textTemplates, false /*isLast */)
 		if err != nil {
 			log.Error("writeSegment", "code", code, "err", err)
 			var tooEarly errTooEarly
@@ -219,9 +235,10 @@ func writeLiveMPD(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, 
 
 // writeSegment writes a segment to the response writer, but may also return a special status code if configured.
 func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, cfg *ResponseConfig, vodFS fs.FS, a *asset,
-	segmentPart string, nowMS int, tt *template.Template) (code int, err error) {
+	segmentPart string, nowMS int, tt *template.Template, isLast bool) (code int, err error) {
 	// First check if init segment and return
-	isInitSegment, err := writeInitSegment(w, cfg, vodFS, a, segmentPart)
+	log.Debug("writeSegment", "segmentPart", segmentPart)
+	isInitSegment, err := writeInitSegment(w, cfg, a, segmentPart)
 	if err != nil {
 		return 0, fmt.Errorf("writeInitSegment: %w", err)
 	}
@@ -229,7 +246,7 @@ func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, 
 		return 0, nil
 	}
 	if len(cfg.SegStatusCodes) > 0 {
-		code, err = calcStatusCode(cfg, vodFS, a, segmentPart, nowMS)
+		code, err = calcStatusCode(cfg, a, segmentPart, nowMS)
 		if err != nil {
 			return 0, err
 		}
@@ -238,28 +255,28 @@ func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, 
 		}
 	}
 	if cfg.AvailabilityTimeCompleteFlag {
-		return 0, writeLiveSegment(w, cfg, vodFS, a, segmentPart, nowMS, tt)
+		return 0, writeLiveSegment(w, cfg, vodFS, a, segmentPart, nowMS, tt, isLast)
 	}
 	// Chunked low-latency mode
-	return 0, writeChunkedSegment(ctx, w, log, cfg, vodFS, a, segmentPart, nowMS)
+	return 0, writeChunkedSegment(ctx, w, cfg, vodFS, a, segmentPart, nowMS, isLast)
 }
 
 // calcStatusCode returns the configured status code for the segment or 0 if none.
-func calcStatusCode(cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string, nowMS int) (int, error) {
+func calcStatusCode(cfg *ResponseConfig, a *asset, segmentPart string, nowMS int) (int, error) {
 	rep, _, err := findRepAndSegmentID(a, segmentPart)
 	if err != nil {
 		return 0, fmt.Errorf("findRepAndSegmentID: %w", err)
 	}
 
 	// segMeta is to be used for all look up. For audio it uses reference (video) track
-	segMeta, err := findSegMeta(vodFS, a, cfg, segmentPart, nowMS)
+	segMeta, err := findSegMeta(a, cfg, segmentPart, nowMS)
 	if err != nil {
 		return 0, fmt.Errorf("findSegMeta: %w", err)
 	}
 	startTime := int(segMeta.newTime)
 	repTimescale := int(segMeta.timescale)
 	for _, ss := range cfg.SegStatusCodes {
-		if !repInReps(a, rep.ID, ss.Reps) {
+		if !repInReps(rep.ID, ss.Reps) {
 			continue
 		}
 		// Then move to the reference track and relate to cycles
@@ -310,7 +327,7 @@ func findSegStartTime(a *asset, cfg *ResponseConfig, nr int, rep *RepData) int {
 	return wrapTime + int(seg.StartTime)
 }
 
-func repInReps(a *asset, segmentPart string, reps []string) bool {
+func repInReps(segmentPart string, reps []string) bool {
 	// TODO. Make better
 	if len(reps) == 0 {
 		return true
