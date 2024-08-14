@@ -31,6 +31,9 @@
         any other configured player. However, some restrictions may apply as discussed on the Wiki page
         <a href="https://github.com/Dash-Industry-Forum/livesim2/wiki/Direct-Playback">Direct Playback</a>.</p>
 
+      <p>A new feature is <strong>CMAF ingest generation</strong>. For testing reception of such streams,
+        there is also a separate component "cmaf-ingest-receiver" available in the livesim2 Github repo.</p>
+
       <h4>Useful local URLs</h4>
 
       <p>The following URLs should work at {{.Host}}. Some of them provides streaming URLs or even URLs that start
@@ -45,7 +48,10 @@
         <li><a href="{{.Host}}/metrics">/metrics</a> return  Prometheus metrics for the system and all streaming content requests</li>
         <li><a href="{{.Host}}/reqcount">/reqcount</a> returns the number of requests if a limit is set</li>
         <li><a href="{{.Host}}/version">/version</a> returns the software version in JSON format</li>
+        <li><a href="{{.Host}}/api/docs#/">/api/docs</a> provides documentation for a REST API for <strong>CMAF ingest generation</strong> of streams to specified hosts</li>
       </ul>
+
+
 
       <h4>Further information</h4>
 
