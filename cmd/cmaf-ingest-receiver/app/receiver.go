@@ -84,6 +84,7 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 		r.streams[stream.id()] = stream
 		err := os.MkdirAll(stream.trDir, 0755)
 		if err != nil {
+			slog.Error("Failed to create directory", "err", err)
 			http.Error(w, "Failed to create directory", http.StatusInternalServerError)
 			return
 		}
@@ -134,6 +135,10 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 		data := cd.Data // Used so that you can overwrite cd.Data when needed
 		if cd.IsInitSegment {
 			filePath := filepath.Join(stream.trDir, fmt.Sprintf("%s%s", "init", stream.ext))
+			err := os.MkdirAll(stream.trDir, 0755)
+			if err != nil {
+				return fmt.Errorf("failed to create dir: %w", err)
+			}
 			slog.Debug("Init segment received", "filePath", filePath)
 			ofh, err = os.Create(filePath)
 			if err != nil {
