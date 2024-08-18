@@ -225,7 +225,7 @@ func (ch *channel) addChunkData(rsd recSegData) {
 func (ch *channel) receivedSegData(rsd recSegData) {
 	sdb, ok := ch.segDataBuffers[rsd.name]
 	if !ok {
-		slog.Error("received segData for unkown track", "chName", ch.name, "trName", rsd.name)
+		slog.Error("received segData for unknown track", "chName", ch.name, "trName", rsd.name)
 	}
 	name := rsd.name
 	switch {

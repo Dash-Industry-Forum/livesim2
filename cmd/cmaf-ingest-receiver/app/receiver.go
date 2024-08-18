@@ -124,7 +124,7 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 
-	trd := &recSegData{name: stream.trName}
+	rsd := &recSegData{name: stream.trName}
 	defaultDur := mpd.Ptr(uint32(0))
 
 	trName := stream.trName
@@ -158,58 +158,58 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 			sr := bits.NewFixedSliceReader(cd.Data)
 			chunk, err := mp4.DecodeFileSR(sr, mp4.WithDecodeFlags(mp4.DecFileFlags(mp4.DecModeLazyMdat)))
 			if err != nil {
-				slog.Error("Failed to decode chunk", "err", err, "chunkNr", trd.chunkNr, "chName", stream.chName, "trName", trName)
-				return fmt.Errorf("failed to decode chunk %d: %w", trd.chunkNr, err)
+				slog.Error("Failed to decode chunk", "err", err, "chunkNr", rsd.chunkNr, "chName", stream.chName, "trName", trName)
+				return fmt.Errorf("failed to decode chunk %d: %w", rsd.chunkNr, err)
 			}
-			slog.Debug("Chunk received", "chunkNr", trd.chunkNr, "chName", stream.chName, "trName", trName)
+			slog.Debug("Chunk received", "chunkNr", rsd.chunkNr, "chName", stream.chName, "trName", trName)
 
 			if len(chunk.Segments) == 0 || len(chunk.Segments[0].Fragments) == 0 {
 				return fmt.Errorf("no segments or fragments in chunk")
 			}
 			seg := chunk.Segments[0]
 			moof := seg.Fragments[0].Moof
-			rd, ok := ch.trDatas[trName]
+			trd, ok := ch.trDatas[trName]
 			if !ok {
 				slog.Error("Failed to find track data", "trName", trName, "chName", stream.chName)
 			}
-			trex := rd.init.Moov.Mvex.Trex
+			trex := trd.init.Moov.Mvex.Trex
 			*defaultDur = trex.DefaultSampleDuration
 			tfhd := moof.Traf.Tfhd
 			if tfhd.DefaultSampleDuration != 0 {
 				*defaultDur = tfhd.DefaultSampleDuration
 			}
 
-			if trd.chunkNr == 0 {
+			if rsd.chunkNr == 0 {
 				// Create new file path based on sequence number
-				trd.seqNr = moof.Mfhd.SequenceNumber
+				rsd.seqNr = moof.Mfhd.SequenceNumber
 				if ch.startNr != 0 {
-					newNr := int(trd.seqNr) - ch.startNr
+					newNr := int(rsd.seqNr) - ch.startNr
 					if newNr < 0 {
-						slog.Error("Sequence number less than startNr", "seqNr", trd.seqNr, "startNr", ch.startNr)
+						slog.Error("Sequence number less than startNr", "seqNr", rsd.seqNr, "startNr", ch.startNr)
 					}
-					trd.seqNr = uint32(newNr)
+					rsd.seqNr = uint32(newNr)
 				}
-				newSegPath := filepath.Join(stream.trDir, fmt.Sprintf("%d%s", trd.seqNr, stream.ext))
+				newSegPath := filepath.Join(stream.trDir, fmt.Sprintf("%d%s", rsd.seqNr, stream.ext))
 				ofh, err = os.Create(newSegPath)
 				if err != nil {
 					return fmt.Errorf("failed to create file: %w", err)
 				}
-				trd.dts = moof.Traf.Tfdt.BaseMediaDecodeTime()
+				rsd.dts = moof.Traf.Tfdt.BaseMediaDecodeTime()
 
 				if styp := chunk.Segments[0].Styp; styp != nil {
 					for _, brand := range styp.CompatibleBrands() {
 						switch brand {
 						case "lmsg": // Last segment of a live stream
-							trd.isLmsg = true
+							rsd.isLmsg = true
 						case "slat": // According to DASH-IF CMAF Ingest spec Section 6.2
-							trd.isSlate = true
+							rsd.isSlate = true
 						default:
 							// Not interesting
 						}
 					}
 				}
 				if ch.maxNrBufSegs > 0 {
-					deleteSegPath := filepath.Join(stream.trDir, fmt.Sprintf("%d%s", int(trd.seqNr)-ch.maxNrBufSegs, stream.ext))
+					deleteSegPath := filepath.Join(stream.trDir, fmt.Sprintf("%d%s", int(rsd.seqNr)-ch.maxNrBufSegs, stream.ext))
 					if fileExists(deleteSegPath) {
 						slog.Debug("Deleting old segment", "path", deleteSegPath)
 						err = os.Remove(deleteSegPath)
@@ -218,9 +218,9 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 				}
 			}
 			dur := uint32(moof.Traf.Trun.Duration(*defaultDur))
-			ch.addChunkData(*trd)
-			trd.chunkNr++
-			trd.totDur += dur
+			ch.addChunkData(*rsd)
+			rsd.chunkNr++
+			rsd.totDur += dur
 		}
 		n, err := ofh.Write(data)
 		if err != nil {
@@ -229,11 +229,11 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 		if n != len(cd.Data) {
 			return fmt.Errorf("failed to write all chunk bytes %d of %d", n, len(cd.Data))
 		}
-		trd.totSize += uint32(n)
+		rsd.totSize += uint32(n)
 		return nil
 	}
 
-	slog.Info("Receiving file", "url", path, "contentLength", contentLength, "totSize", trd.totSize)
+	slog.Info("Receiving file", "url", path, "contentLength", contentLength, "totSize", rsd.totSize)
 	var buf []byte
 	if contentLength > 0 {
 		buf = make([]byte, contentLength)
@@ -250,12 +250,12 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, "Failed to parse MP4 chunk", http.StatusInternalServerError)
 		return
 	}
-	if contentLength > 0 && trd.totSize != uint32(contentLength) {
-		slog.Error("Failed to receive all bytes", "nrBytesReceived", trd.totSize, "contentLength", contentLength)
+	if contentLength > 0 && rsd.totSize != uint32(contentLength) {
+		slog.Error("Failed to receive all bytes", "nrBytesReceived", rsd.totSize, "contentLength", contentLength)
 	}
-	if trd.chunkNr > 0 {
-		trd.isComplete = true
-		ch.addChunkData(*trd)
+	if rsd.chunkNr > 0 {
+		rsd.isComplete = true
+		ch.addChunkData(*rsd)
 	}
 
 	w.WriteHeader(http.StatusOK)
