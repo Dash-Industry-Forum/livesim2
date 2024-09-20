@@ -7,7 +7,7 @@
 # Run as "docker run -p 8888:8888 livesim2"
 
 # Build Stage
-FROM golang:1.21.3-alpine3.18 AS BuildStage
+FROM golang:1.23.1-alpine3.20 AS buildstage
 WORKDIR /work
 COPY . .
 RUN go mod download
