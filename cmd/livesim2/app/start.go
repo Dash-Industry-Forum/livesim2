@@ -47,7 +47,11 @@ func SetupServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 	l := chi.NewRouter()
 	v := chi.NewRouter()
 	if cfg.MaxRequests > 0 {
-		reqLimiter = NewIPRequestLimiter(cfg.MaxRequests, time.Duration(cfg.ReqLimitInt)*time.Second, time.Now(), cfg.ReqLimitLog)
+		reqLimiter, err = NewIPRequestLimiter(cfg.MaxRequests, time.Duration(cfg.ReqLimitInt)*time.Second,
+			time.Now(), cfg.WhiteListBlocks, cfg.ReqLimitLog)
+		if err != nil {
+			return nil, fmt.Errorf("newIPLimiter: %w", err)
+		}
 		ltrMw := NewLimiterMiddleware("Livesim2-Requests", reqLimiter)
 		l.Use(ltrMw)
 		v.Use(ltrMw)
