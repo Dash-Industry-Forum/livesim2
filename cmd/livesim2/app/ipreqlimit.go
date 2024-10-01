@@ -11,31 +11,50 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
 
 // IPRequestLimiter limits the number of requests per interval
 type IPRequestLimiter struct {
-	MaxNrRequests int            `json:"maxNrRequests"`
-	Interval      time.Duration  `json:"interval"`
-	ResetTime     time.Time      `json:"resetTime"`
-	Counters      map[string]int `json:"counters"`
-	logFile       string         `json:"-"`
-	mux           sync.Mutex     `json:"-"`
+	MaxNrRequests   int            `json:"maxNrRequests"`
+	Interval        time.Duration  `json:"interval"`
+	ResetTime       time.Time      `json:"resetTime"`
+	Counters        map[string]int `json:"counters"`
+	WhiteListBlocks string         `json:"whiteListBlocks"`
+	logFile         string         `json:"-"`
+	mux             sync.Mutex     `json:"-"`
+	cidrBlocks      []*net.IPNet   `json:"-"`
 }
 
 // NewIPRequestLimiter returns a new IPRequestLimiter with maxNrRequests per interval starting now.
 // If logFile is not empty, the IPRequestLimiter is dumped to the logFile at the end of each interval.
-func NewIPRequestLimiter(maxNrRequests int, interval time.Duration, start time.Time, logFile string) *IPRequestLimiter {
-	return &IPRequestLimiter{
-		MaxNrRequests: maxNrRequests,
-		Interval:      interval,
-		ResetTime:     start,
-		Counters:      make(map[string]int),
-		logFile:       logFile,
-		mux:           sync.Mutex{},
+func NewIPRequestLimiter(maxNrRequests int, interval time.Duration, start time.Time,
+	whiteListBlocks string, logFile string) (*IPRequestLimiter, error) {
+	var cidrBlocks []*net.IPNet
+	if whiteListBlocks != "" {
+		blocks := strings.Split(whiteListBlocks, ",")
+		cidrBlocks = make([]*net.IPNet, 0, len(blocks))
+		for _, cidrBlock := range blocks {
+			_, ciBlock, err := net.ParseCIDR(cidrBlock)
+			if err != nil {
+				return nil, fmt.Errorf("invalid CIDR block %s: %w", cidrBlock, err)
+			}
+			cidrBlocks = append(cidrBlocks, ciBlock)
+		}
 	}
+
+	return &IPRequestLimiter{
+		MaxNrRequests:   maxNrRequests,
+		Interval:        interval,
+		ResetTime:       start,
+		Counters:        make(map[string]int),
+		WhiteListBlocks: whiteListBlocks,
+		logFile:         logFile,
+		mux:             sync.Mutex{},
+		cidrBlocks:      cidrBlocks,
+	}, nil
 }
 
 // NewLimiterMiddleware returns a middleware that limits the number of requests per IP address per interval
@@ -51,16 +70,16 @@ func NewLimiterMiddleware(hdrName string, reqLimiter *IPRequestLimiter) func(nex
 				return
 			}
 			now := time.Now()
-			count, ok := reqLimiter.Inc(now, ip)
+			count, maxNr, ok := reqLimiter.Inc(now, ip)
 			if !ok {
 				if hdrName != "" {
-					w.Header().Set(hdrName, fmt.Sprintf("%d (max %d)", count, reqLimiter.MaxNrRequests))
+					w.Header().Set(hdrName, fmt.Sprintf("%d (max %d)", count, maxNr))
 				}
 				w.WriteHeader(http.StatusTooManyRequests)
 				return
 			}
 			if hdrName != "" {
-				w.Header().Set(hdrName, fmt.Sprintf("%d (max %d)", count, reqLimiter.MaxNrRequests))
+				w.Header().Set(hdrName, fmt.Sprintf("%d (max %d)", count, maxNr))
 			}
 			next.ServeHTTP(w, r)
 		}
@@ -68,8 +87,9 @@ func NewLimiterMiddleware(hdrName string, reqLimiter *IPRequestLimiter) func(nex
 	}
 }
 
-// Inc increments the number of requests and returns number and ok value
-func (il *IPRequestLimiter) Inc(now time.Time, ip string) (int, bool) {
+// Inc increments the number of requests and returns number and ok value.
+// If the address is in a white list block, maxNr is set to -1.
+func (il *IPRequestLimiter) Inc(now time.Time, ip string) (nr, maxNr int, ok bool) {
 	il.mux.Lock()
 	defer il.mux.Unlock()
 	if now.Sub(il.ResetTime) > il.Interval {
@@ -80,8 +100,20 @@ func (il *IPRequestLimiter) Inc(now time.Time, ip string) (int, bool) {
 		il.ResetTime = now
 	}
 	il.Counters[ip]++
-	val := il.Counters[ip]
-	return val, val <= il.MaxNrRequests
+	nr = il.Counters[ip]
+	maxNr = il.MaxNrRequests
+	ok = nr <= maxNr
+	if len(il.cidrBlocks) > 0 {
+		parsedIP := net.ParseIP(ip)
+		for _, cidrBlock := range il.cidrBlocks {
+			if cidrBlock.Contains(parsedIP) {
+				ok = true
+				maxNr = -1
+				break
+			}
+		}
+	}
+	return nr, maxNr, ok
 }
 
 // Count returns the counter value for an IP address

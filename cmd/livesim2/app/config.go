@@ -43,7 +43,9 @@ type ServerConfig struct {
 	LiveWindowS int    `json:"livewindowS"`
 	TimeoutS    int    `json:"timeoutS"`
 	MaxRequests int    `json:"maxrequests"`
-	VodRoot     string `json:"vodroot"`
+	// WhiteListBlocks is a comma-separated list of CIDR blocks that are not rate limited
+	WhiteListBlocks string `json:"whitelistblocks"`
+	VodRoot         string `json:"vodroot"`
 	// RepDataRoot is the root directory for representation metadata
 	RepDataRoot string `json:"repdataroot"`
 	// WriteRepData is true if representation metadata should be written (will override existing metadata)
@@ -71,9 +73,10 @@ var DefaultConfig = ServerConfig{
 	ReqLimitInt: defaultReqIntervalS,
 	VodRoot:     "./vod",
 	// MetaRoot + means follow VodRoot, _ means no metadata
-	RepDataRoot:  "+",
-	WriteRepData: false,
-	PlayURL:      defaultPlayURL,
+	RepDataRoot:     "+",
+	WriteRepData:    false,
+	PlayURL:         defaultPlayURL,
+	WhiteListBlocks: "",
 }
 
 type Config struct {
@@ -112,6 +115,7 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 	f.String("vodroot", k.String("vodroot"), "VoD root directory")
 	f.String("repdataroot", k.String("repdataroot"), `Representation metadata root directory. "+" copies vodroot value. "-" disables usage.`)
 	f.Bool("writerepdata", k.Bool("writerepdata"), "Write representation metadata if not present")
+	f.String("whitelistblocks", k.String("whitelistblocks"), "comma-separated list of CIDR blocks that are not rate limited")
 	f.Int("timeout", k.Int("timeoutS"), "timeout for all requests (seconds)")
 	f.Int("maxrequests", k.Int("maxrequests"), "max nr of request per IP address per 24 hours")
 	f.String("reqlimitlog", k.String("reqlimitlog"), "path to request limit log file (only written if maxrequests > 0)")

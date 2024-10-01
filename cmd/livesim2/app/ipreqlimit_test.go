@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestRequestLimiter(t *testing.T) {
@@ -19,8 +21,9 @@ func TestRequestLimiter(t *testing.T) {
 
 	maxNrRequests := 5
 	maxTime := 100 * time.Millisecond
-	ltr := NewIPRequestLimiter(maxNrRequests, maxTime, time.Now(), "")
-	l := NewLimiterMiddleware("limiter", ltr)
+	ltr, err := NewIPRequestLimiter(maxNrRequests, maxTime, time.Now(), "192.168.5.0/24", "")
+	require.NoError(t, err)
+	lmw := NewLimiterMiddleware("limiter", ltr)
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt64(&endpointCalledCount, 1)
@@ -29,7 +32,7 @@ func TestRequestLimiter(t *testing.T) {
 	mux := http.NewServeMux()
 
 	finalHandler := http.HandlerFunc(handler)
-	mux.Handle("/", l(finalHandler))
+	mux.Handle("/", lmw(finalHandler))
 
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
@@ -43,6 +46,32 @@ func TestRequestLimiter(t *testing.T) {
 	time.Sleep(maxTime)
 	for i := 0; i < maxNrRequests; i++ {
 		doRequestAndCheckResponse(t, ts, i+1, maxNrRequests, http.StatusOK)
+	}
+}
+
+func TestWhiteList(t *testing.T) {
+	endpointCalledCount := int64(0)
+
+	maxNrRequests := 3
+	maxTime := 100 * time.Millisecond
+	ltr, err := NewIPRequestLimiter(maxNrRequests, maxTime, time.Now(), "127.0.0.3/24", "")
+	require.NoError(t, err)
+	lmw := NewLimiterMiddleware("limiter", ltr)
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&endpointCalledCount, 1)
+	}
+
+	mux := http.NewServeMux()
+
+	finalHandler := http.HandlerFunc(handler)
+	mux.Handle("/", lmw(finalHandler))
+
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	for i := 0; i < maxNrRequests+2; i++ {
+		doRequestAndCheckResponse(t, ts, i+1, -1, http.StatusOK)
 	}
 }
 
