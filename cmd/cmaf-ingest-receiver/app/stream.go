@@ -47,7 +47,7 @@ func matchMPD(path string) (chName string, ok bool) {
 		return "", false
 	}
 	chName = matches[1]
-	return chName, true
+	return filepath.Join(chName), true
 }
 
 func findStreamMatch(storagePath, path string) (stream, bool) {

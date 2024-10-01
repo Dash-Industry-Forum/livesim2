@@ -32,7 +32,7 @@ func TestAddVideoInit(t *testing.T) {
 	decFile, err := mp4.DecodeFileSR(sr)
 	assert.NoError(t, err)
 	init := decFile.Init
-	err = ch.addInitData(strm, init)
+	err = ch.addInitDataAndUpdateTimescale(strm, init)
 	assert.NoError(t, err)
 	assert.Equal(t, m.DateTime("1970-01-01T00:00:00Z"), ch.mpd.AvailabilityStartTime)
 	p := ch.mpd.Periods[0]
@@ -74,7 +74,7 @@ func TestVideoDataFromInit(t *testing.T) {
 	decFile, err := mp4.DecodeFileSR(sr)
 	assert.NoError(t, err)
 	init := decFile.Init
-	err = ch.addInitData(strm, init)
+	err = ch.addInitDataAndUpdateTimescale(strm, init)
 	assert.NoError(t, err)
 	assert.Equal(t, m.DateTime("1970-01-01T00:00:00Z"), ch.mpd.AvailabilityStartTime)
 	p := ch.mpd.Periods[0]
@@ -92,6 +92,8 @@ func TestVideoDataFromInit(t *testing.T) {
 	assert.Equal(t, "video", rep.Id)
 	assert.Equal(t, 800000, int(rep.Bandwidth))
 	assert.Equal(t, "avc1.64001E", rep.Codecs)
+	assert.Equal(t, 640, int(rep.Width))
+	assert.Equal(t, 350, int(rep.Height))
 }
 
 func TestGetLang(t *testing.T) {

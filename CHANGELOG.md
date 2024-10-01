@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Generation of CMAF ingest streams with a REST-based API
 - New program `cmaf-ingest-receiver` that can receive one or more CMAF ingest streams
 - New option `--whitelistblocks` for unlimited number of requests to some CIDR blocks
+- Much improved `cmaf-ingest-receiver`
 
 ### Fixed
 
