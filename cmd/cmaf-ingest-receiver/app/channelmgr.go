@@ -11,15 +11,17 @@ import (
 type ChannelMgr struct {
 	mu                           sync.RWMutex
 	cfg                          *Config
-	defaultTimeShiftBufferDepthS int
+	defaultTimeShiftBufferDepthS uint32
+	defaultReceiveNrRawSegments  uint32
 	channels                     map[string]*channel
 }
 
-func NewChannelMgr(cfg *Config, defaultTimeShiftBufferDepthS int) *ChannelMgr {
+func NewChannelMgr(cfg *Config, defaultTimeShiftBufferDepthS, defaultReceiveNrRawSegments uint32) *ChannelMgr {
 	slog.Debug("Creating ChannelMgr", "timeShiftBufferDepthS", defaultTimeShiftBufferDepthS)
 	return &ChannelMgr{
 		cfg:                          cfg,
 		defaultTimeShiftBufferDepthS: defaultTimeShiftBufferDepthS,
+		defaultReceiveNrRawSegments:  defaultReceiveNrRawSegments,
 		channels:                     make(map[string]*channel),
 	}
 }
@@ -28,7 +30,8 @@ func (cm *ChannelMgr) AddChannel(ctx context.Context, chName, chDir string) {
 	cm.mu.Lock()
 
 	chCfg := ChannelConfig{
-		Name: chName,
+		Name:                 chName,
+		ReceiveNrRawSegments: cm.defaultReceiveNrRawSegments,
 	}
 	if cm.cfg != nil {
 		for _, cfg := range cm.cfg.Channels {
@@ -37,6 +40,12 @@ func (cm *ChannelMgr) AddChannel(ctx context.Context, chName, chDir string) {
 				break
 			}
 		}
+	}
+	if cm.cfg.DefaultUser != "" && chCfg.AuthUser == "" {
+		chCfg.AuthUser = cm.cfg.DefaultUser
+	}
+	if cm.cfg.DefaultPswd != "" && chCfg.AuthPswd == "" {
+		chCfg.AuthPswd = cm.cfg.DefaultPswd
 	}
 	if chCfg.TimeShiftBufferDepthS == 0 {
 		chCfg.TimeShiftBufferDepthS = cm.defaultTimeShiftBufferDepthS

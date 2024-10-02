@@ -54,17 +54,19 @@ func TestBasicAuth(t *testing.T) {
 	defer cancel()
 	receiver, err := NewReceiver(ctx, &opts, &config)
 	require.NoError(t, err)
-	router := setupRouter(receiver)
+	router := setupRouter(receiver, opts.storage, "")
 	server := httptest.NewServer(router)
 	defer server.Close()
 	for _, c := range cases {
-		buf := bytes.NewBuffer(data)
-		url := fmt.Sprintf("%s%s/%s", server.URL, opts.prefix, c.url)
-		req, err := http.NewRequest(http.MethodPut, url, buf)
-		require.NoError(t, err)
-		req.SetBasicAuth(c.user, c.password)
-		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		assert.Equal(t, c.expectedResponseCode, resp.StatusCode)
+		t.Run(c.desc, func(t *testing.T) {
+			buf := bytes.NewBuffer(data)
+			url := fmt.Sprintf("%s%s/%s", server.URL, opts.prefix, c.url)
+			req, err := http.NewRequest(http.MethodPut, url, buf)
+			require.NoError(t, err)
+			req.SetBasicAuth(c.user, c.password)
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			assert.Equal(t, c.expectedResponseCode, resp.StatusCode)
+		})
 	}
 }

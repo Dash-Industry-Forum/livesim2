@@ -38,22 +38,36 @@ In both cases, the names and paths of the generated files will be
 where sequenceNr is extracted from the mdhd box in the segment.
 These numbers are assumed to increase by one for each segment.
 
-A DASH MPD is generated for each channel and stored as storage/channel/manifest.mpd.
-The track name is mapped to RepresentationID in the MPD.
+The availabilityTimeOffset is extracted from the init segment if later than or equal
+to 1970-01-01. If not, the availabilityTimeOffset is set to 0 (interpreted as 1970-01-01).
 
 MPDs can also be received, but will just be stored as storage/channel/received.mpd.
 DELETE requests are accepted, but not used, since there is a build in max buffer time
 resulting in a maximum number of segments stored. The time is reflected in the
 timeShiftBufferDepth in the MPD.
 
-The availabilityTimeOffset is extracted from the init segment if later than or equal
-to 1970-01-01. If not, the availabilityTimeOffset is set to 0n (interpreted as 1970-01-01).
+A DASH MPD with $Number$ is generated for each channel and stored as storage/channel/manifest.mpd.
+The track name is mapped to RepresentationID in the MPD.
+
+In addition, once two video segments of the same duration have been received, a SegmentTimelineNr
+MPD is generated and stored as storage/channel/timelineNr.mpd. This MPD has a SegmentTimeline
+with $Number$ addressing and is updated for full segment arrival.
 
 There are some configuration on channel level that can be set in a config file depending
-on channel name:
+on channel name. The main parts are:
 
 1. timeShiftBufferDepthS: The timeShiftBufferDepth in seconds for circularBuffer. Default is 90s.
 2. startNr: The start number for the first segment. Default is 0. (AWS MediaLive starts at 1)
+3. authUser and authPassword: If set, all requests must have this user and password (basic auth)
+4. timeShiftBufferDepthS: The timeShiftBufferDepth in seconds for circularBuffer.
+
+Furthermore, there is a configuration on representation level for a channel.
+The main keys available are:
+
+1. language: The language of the representation
+2. role: The role of the representation
+3. displayName: The display name of the representation
+4. bitrate: The bitrate of the representation
 `
 
 type Options struct {
@@ -67,7 +81,9 @@ type Options struct {
 	domains               string
 	certPath              string
 	keyPath               string
-	timeShiftBufferDepthS int
+	fileServerPath        string
+	timeShiftBufferDepthS uint64
+	receiveNrRawSegments  uint64
 	version               bool
 }
 
@@ -84,7 +100,7 @@ const (
 
 func ParseOptions() (*Options, error) {
 	var opts Options
-	flag.IntVar(&opts.port, "port", defaultPort, "CMAF HTTP receiver port")
+	flag.IntVar(&opts.port, "port", defaultPort, "HTTP receiver port")
 	flag.IntVar(&opts.portHttps, "porthttps", defaultPortHttps, "CMAF HTTPS receiver port")
 	flag.StringVar(&opts.domains, "domains", "", "One or more DNS domains (comma-separated) for auto certificate from Let's Encrypt")
 	flag.StringVar(&opts.certPath, "certpath", "", "Path to TLS certificate file (for HTTPS). Use domains instead if possible")
@@ -93,8 +109,10 @@ func ParseOptions() (*Options, error) {
 	flag.StringVar(&opts.prefix, "prefix", defaultPrefix, "Prefix to remove from upload URLS")
 	flag.StringVar(&opts.logLevel, "loglevel", defaultLogLevel, "Log level (info, debug, warn)")
 	flag.StringVar(&opts.logFormat, "logformat", defaultLogFormat, "Log format (text, json)")
-	flag.IntVar(&opts.timeShiftBufferDepthS, "tsbd", defaultTimeShiftBufferDepthS, "Default timeShiftBufferDepth in seconds")
+	flag.Uint64Var(&opts.timeShiftBufferDepthS, "tsbd", defaultTimeShiftBufferDepthS, "Default timeShiftBufferDepth in seconds")
+	flag.Uint64Var(&opts.receiveNrRawSegments, "recRawNr", 0, "Default number of raw segments to receive and store (turns off all parsing)")
 	flag.StringVar(&opts.configFile, "config", "", "Config file with channel-specific settings")
+	flag.StringVar(&opts.fileServerPath, "fileserverpath", "", "HTTP path for generated segments and manifests (for testing)")
 	flag.BoolVar(&opts.version, "version", false, "Get version")
 
 	flag.Usage = func() {
@@ -118,7 +136,7 @@ func Run(opts *Options) error {
 	if err != nil {
 		return fmt.Errorf("failed to init logging: %w", err)
 	}
-	var cfg *Config
+	cfg := GetEmptyConfig()
 	if opts.configFile != "" {
 		cfg, err = readConfig(opts.configFile)
 		if err != nil {
@@ -149,7 +167,7 @@ func Run(opts *Options) error {
 		stopServer <- err
 	}()
 
-	router := setupRouter(receiver)
+	router := setupRouter(receiver, opts.storage, opts.fileServerPath)
 
 	var http_srv *http.Server
 
@@ -203,11 +221,52 @@ func Run(opts *Options) error {
 	return nil
 }
 
-func setupRouter(r *Receiver) *chi.Mux {
+func setupRouter(r *Receiver, storage, fileServerPath string) *chi.Mux {
 	router := chi.NewRouter()
 	router.Use(middleware.Logger)
+	router.Use(middleware.Recoverer)
+	router.Use(addCorsHeaders)
 	router.Put(fmt.Sprintf("%s/*", r.prefix), r.SegmentHandlerFunc)
 	router.Post(fmt.Sprintf("%s/*", r.prefix), r.SegmentHandlerFunc)
 	router.Delete(fmt.Sprintf("%s/*", r.prefix), r.DeleteHandlerFunc)
+	if fileServerPath != "" {
+		router.MethodFunc("GET", fmt.Sprintf("/%s/*", fileServerPath), makeDashHandlerFunc(storage))
+		router.MethodFunc("HEAD", "/*", dashHandlerFunc)
+		router.MethodFunc("OPTIONS", "/*", optionsHandlerFunc)
+	}
+
 	return router
+}
+
+func makeDashHandlerFunc(rootDir string) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rctx := chi.RouteContext(r.Context())
+		rp := rctx.RoutePattern()
+		pathPrefix := strings.TrimSuffix(rp, "/*")
+		fs := http.StripPrefix(pathPrefix, http.FileServer(http.Dir(rootDir)))
+		fs.ServeHTTP(w, r)
+	}
+}
+
+// vodHandlerFunc handles static files in tree starting at dashRoot.
+func dashHandlerFunc(w http.ResponseWriter, r *http.Request) {
+
+}
+
+// optionsHandlerFunc provides the allowed methods.
+func optionsHandlerFunc(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Allow", "OPTIONS, GET, HEAD, POST")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func addCorsHeaders(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("ew-cmaf-ingest", "v0.5")
+		w.Header().Add("Access-Control-Allow-Origin", "*")
+		w.Header().Add("Access-Control-Allow-Methods", "POST, GET, HEAD, OPTIONS")
+		w.Header().Add("Access-Control-Allow-Headers", "Content-Type, Accept")
+		w.Header().Add("Timing-Allow-Origin", "*")
+		next.ServeHTTP(w, r)
+	}
+	return http.HandlerFunc(fn)
 }
