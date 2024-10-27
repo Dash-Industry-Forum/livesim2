@@ -5,6 +5,7 @@
 package app
 
 import (
+	"log/slog"
 	"os"
 	"testing"
 
@@ -16,7 +17,8 @@ func TestLoadAsset(t *testing.T) {
 	vodFS := os.DirFS("testdata")
 	tmpDir := t.TempDir()
 	am := newAssetMgr(vodFS, tmpDir, true)
-	err := am.discoverAssets()
+	logger := slog.Default()
+	err := am.discoverAssets(logger)
 	require.NoError(t, err)
 	// This was first time
 	asset, ok := am.findAsset("assets/testpic_2s")
@@ -31,7 +33,7 @@ func TestLoadAsset(t *testing.T) {
 	assert.Equal(t, 8000, asset.LoopDurMS)
 	// Second time we load using gzipped repData files
 	am = newAssetMgr(vodFS, tmpDir, true)
-	err = am.discoverAssets()
+	err = am.discoverAssets(logger)
 	require.NoError(t, err)
 	asset, ok = am.findAsset("assets/testpic_2s")
 	require.True(t, ok)
