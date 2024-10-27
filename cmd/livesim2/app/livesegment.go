@@ -47,6 +47,16 @@ func genLiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart stri
 			return so, fmt.Errorf("not 1 but %d segments", len(segFile.Segments))
 		}
 		seg := segFile.Segments[0]
+		if seg.Sidx != nil {
+			if len(seg.Sidxs) > 1 {
+				slog.Error("more than one sidx not supported", "asset", a.AssetPath, "segment", segmentPart)
+				return so, fmt.Errorf("more than one sidx not supported")
+			}
+			if seg.Sidx.Timescale != meta.timescale {
+				seg.Sidx.Timescale = meta.timescale
+			}
+			seg.Sidx.EarliestPresentationTime = meta.newTime
+		}
 		timeShift := meta.newTime - seg.Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
 		if strings.HasPrefix(meta.rep.Codecs, "stpp") {
 			// Shift segment and TTML timestamps inside segment
@@ -56,9 +66,24 @@ func genLiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart stri
 			}
 		} else {
 			for _, frag := range seg.Fragments {
+				traf := frag.Moof.Traf
+				tfdt := traf.Tfdt
+				oldTfdtSize := tfdt.Size()
 				frag.Moof.Mfhd.SequenceNumber = meta.newNr
-				oldTime := frag.Moof.Traf.Tfdt.BaseMediaDecodeTime()
-				frag.Moof.Traf.Tfdt.SetBaseMediaDecodeTime(oldTime + timeShift)
+				oldTime := tfdt.BaseMediaDecodeTime()
+				tfdt.SetBaseMediaDecodeTime(oldTime + timeShift)
+				newTfdtSize := tfdt.Size()
+				tfdtSizeDiff := int32(newTfdtSize) - int32(oldTfdtSize)
+				if tfdtSizeDiff != 0 {
+					traf.Trun.DataOffset += tfdtSizeDiff
+				}
+				if traf.Saio != nil {
+					if saioAfterTfdt(traf) {
+						for i := range traf.Saio.Offset {
+							traf.Saio.Offset[i] += int64(tfdtSizeDiff)
+						}
+					}
+				}
 			}
 		}
 
@@ -82,6 +107,24 @@ func genLiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart stri
 		outSeg.seg.Styp.AddCompatibleBrands([]string{"lmsg"})
 	}
 	return outSeg, nil
+}
+
+// saioAfterTfdt saio box comes after tfdt in traf
+func saioAfterTfdt(traf *mp4.TrafBox) bool {
+	tfdtIndex := -1
+	saioIndex := -1
+	for i, c := range traf.Children {
+		switch c.Type() {
+		case "saio":
+			saioIndex = i
+		case "tfdt":
+			tfdtIndex = i
+		}
+	}
+	if tfdtIndex == -1 || saioIndex == -1 {
+		return false
+	}
+	return saioIndex > tfdtIndex
 }
 
 func isImage(segPath string) bool {
@@ -421,7 +464,7 @@ func createOutSeg(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string
 		return so, fmt.Errorf("findRepAndSegmentID: %w", err)
 	}
 
-	if rep.ContentType == "audio" {
+	if rep.ContentType == "audio" && !rep.PreEncrypted {
 		so, err = createAudioSegment(vodFS, a, cfg, segmentPart, nowMS, rep, segID)
 		if err != nil {
 			return so, fmt.Errorf("createAudioSegment: %w", err)
