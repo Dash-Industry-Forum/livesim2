@@ -1,9 +1,9 @@
-name: Publish Docker image
+name: Publish Docker image on new version
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'v*' # Push events to matching v*, i.e. v1.1.2
 
 jobs:
   build:
@@ -26,9 +26,9 @@ jobs:
       - name: Build Docker image
         run: |
           repo_name=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          docker build -t ghcr.io/${repo_name}/livesim2:latest .
+          docker build -t ghcr.io/${repo_name}/livesim2:"${{ github.ref_name }}" .
 
       - name: Push Docker image to GitHub Container Registry
         run: |
           repo_name=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          docker push ghcr.io/${repo_name}/livesim2:latest
+          docker push ghcr.io/${repo_name}/livesim2:"${{ github.ref_name }}"
