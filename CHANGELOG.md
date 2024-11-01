@@ -7,15 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Nothing yet
+
+## [1.5.1] - 2024-11-01
+
 ### Added
 
 - Better logging when loading asset representation data
 - Check that pre-encrypted content has the same duration for all representations
 - Test that endNumber in SegmentTemplate will limit segments used
+- Automatic build of Docker Images
 
 ### Fixed
 
 - Pre-encrypted content is not re-fragmented, but left as it
+- Dockerfile to insert version in binary (requires full repo or tag)
 
 ## [1.5.0] - 2024-10-02
 
@@ -264,7 +270,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - features and URLs listed at livesim2 root page
 - configurable generated stpp subtitles with timing info
 
-[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.3.1...v1.4.0
