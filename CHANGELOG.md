@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Better logging when loading asset representation data
 - Check that pre-encrypted content has the same duration for all representations
+- Test that endNumber in SegmentTemplate will limit segments used
 
 ### Fixed
 
