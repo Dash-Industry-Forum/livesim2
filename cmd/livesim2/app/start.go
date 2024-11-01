@@ -86,13 +86,15 @@ func SetupServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 	}
 
 	start := time.Now()
-	err = server.assetMgr.discoverAssets()
+	logger.Debug("Loading VOD assets", "vodRoot", cfg.VodRoot)
+	err = server.assetMgr.discoverAssets(logger)
 	if err != nil {
 		return nil, fmt.Errorf("findAssets: %w", err)
 	}
 	elapsedSeconds := fmt.Sprintf("%.3fs", time.Since(start).Seconds())
 
-	logger.Info("Vod asset found",
+	logger.Info("Vod assets loaded",
+		"vodRoot", cfg.VodRoot,
 		"count", len(server.assetMgr.assets),
 		"elapsed seconds", elapsedSeconds)
 	for name := range server.assetMgr.assets {
