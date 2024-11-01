@@ -180,12 +180,13 @@ func (am *assetMgr) loadRep(logger *slog.Logger, assetPath string, as *m.Adaptat
 		MpdTimescale: 1,
 	}
 	if !am.writeRepData {
-		ok, err := rp.readFromJSON(logger, am.vodFS, am.repDataDir, assetPath)
+		ok, err := rp.loadFromJSON(logger, am.vodFS, am.repDataDir, assetPath)
 		if ok {
+			logger.Debug("Loaded representation data from JSON", "rep", rp.ID, "asset", assetPath)
 			return &rp, err
 		}
 	}
-	logger.Debug("Loading full representation", "rep", rp.ID, "asset", assetPath)
+	logger.Debug("Loading full representation by reading all segments")
 	st := as.SegmentTemplate
 	if rep.SegmentTemplate != nil {
 		st = rep.SegmentTemplate
@@ -298,8 +299,8 @@ segLoop:
 	return &rp, err
 }
 
-// readFromJSON reads the representation data from a gzipped  or plain JSON file.
-func (rp *RepData) readFromJSON(logger *slog.Logger, vodFS fs.FS, repDataDir, assetPath string) (bool, error) {
+// loadFromJSON reads the representation data from a gzipped or plain JSON file.
+func (rp *RepData) loadFromJSON(logger *slog.Logger, vodFS fs.FS, repDataDir, assetPath string) (bool, error) {
 	logger = logger.With("rep", rp.ID, "assetPath", assetPath)
 	if repDataDir == "" {
 		return false, nil
@@ -398,7 +399,7 @@ func (rp *RepData) writeToJSON(logger *slog.Logger, repDataDir, assetPath string
 	if err != nil {
 		return err
 	}
-	logger.Debug("Wrote repData", "path", gzipPath)
+	logger.Info("Wrote repData", "path", gzipPath)
 	return nil
 }
 

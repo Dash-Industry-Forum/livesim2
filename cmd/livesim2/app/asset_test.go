@@ -7,44 +7,130 @@ package app
 import (
 	"log/slog"
 	"os"
+	"path"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	m "github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/stretchr/testify/require"
 )
 
+type wantedAssetData struct {
+	nrReps         int
+	loopDurationMS int
+}
+
+type wantedRepData struct {
+	nrSegs         int
+	initURI        string
+	mpdTimescale   int // SegmentTemplate timescale
+	mediaTimescale int
+	duration       int
+}
+
 func TestLoadAsset(t *testing.T) {
-	vodFS := os.DirFS("testdata")
-	tmpDir := t.TempDir()
-	am := newAssetMgr(vodFS, tmpDir, true)
 	logger := slog.Default()
-	err := am.discoverAssets(logger)
-	require.NoError(t, err)
-	// This was first time
-	asset, ok := am.findAsset("assets/testpic_2s")
-	require.True(t, ok)
-	require.Equal(t, 5, len(asset.Reps))
-	rep := asset.Reps["V300"]
-	assert.Equal(t, "V300/init.mp4", rep.InitURI)
-	assert.Equal(t, 4, len(rep.Segments))
-	assert.Equal(t, 90000, rep.MediaTimescale)
-	assert.Equal(t, 1, rep.MpdTimescale)
-	assert.Equal(t, 720_000, rep.duration())
-	assert.Equal(t, 8000, asset.LoopDurMS)
-	// Second time we load using gzipped repData files
-	am = newAssetMgr(vodFS, tmpDir, true)
-	err = am.discoverAssets(logger)
-	require.NoError(t, err)
-	asset, ok = am.findAsset("assets/testpic_2s")
-	require.True(t, ok)
-	require.Equal(t, 5, len(asset.Reps))
-	rep = asset.Reps["V300"]
-	assert.Equal(t, "V300/init.mp4", rep.InitURI)
-	assert.Equal(t, 4, len(rep.Segments))
-	assert.Equal(t, 90000, rep.MediaTimescale)
-	assert.Equal(t, 1, rep.MpdTimescale)
-	assert.Equal(t, 720_000, rep.duration())
-	assert.Equal(t, 8000, asset.LoopDurMS)
+	testCases := []struct {
+		desc         string
+		assetPath    string
+		segmentEndNr uint32
+		ad           wantedAssetData
+		rds          map[string]wantedRepData
+	}{
+		{
+			desc:         "testpic_2s",
+			assetPath:    "assets/testpic_2s",
+			segmentEndNr: 0, // Will not be used
+			ad: wantedAssetData{
+				nrReps:         5,
+				loopDurationMS: 8000,
+			},
+			rds: map[string]wantedRepData{
+				"V300": {
+					nrSegs:         4,
+					initURI:        "V300/init.mp4",
+					mpdTimescale:   1,
+					mediaTimescale: 90_000,
+					duration:       720_000,
+				},
+				"A48": {
+					nrSegs:         4,
+					initURI:        "A48/init.mp4",
+					mpdTimescale:   1,
+					mediaTimescale: 48_000,
+					duration:       384_000,
+				},
+			},
+		},
+		{
+			desc:         "testpic_2s with endNumber == 2",
+			assetPath:    "assets/testpic_2s",
+			segmentEndNr: 2, // Shorten representations to 2 segments via SegmentTemplate,
+			ad: wantedAssetData{
+				nrReps:         5,
+				loopDurationMS: 4000,
+			},
+			rds: map[string]wantedRepData{
+				"V300": {
+					nrSegs:         2,
+					initURI:        "V300/init.mp4",
+					mpdTimescale:   1,
+					mediaTimescale: 90_000,
+					duration:       360_000,
+				},
+				"A48": {
+					nrSegs:         2,
+					initURI:        "A48/init.mp4",
+					mpdTimescale:   1,
+					mediaTimescale: 48_000,
+					duration:       192_512,
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			vodRoot := "testdata"
+			tmpDir := t.TempDir()
+			if tc.segmentEndNr > 0 {
+				if runtime.GOOS == "windows" {
+					return // Skip test on Windows since the tree copy does not work properly
+				}
+				// Copy the the asset part of testdata to a temporary directory and shorten the representations
+				src := path.Join(vodRoot, tc.assetPath)
+				dst := path.Join(tmpDir, tc.assetPath)
+				err := copyDir(src, dst)
+				require.NoError(t, err)
+				vodRoot = tmpDir
+				err = setSegmentEndNr(path.Join(vodRoot, tc.assetPath), tc.segmentEndNr)
+				require.NoError(t, err)
+			}
+			vodFS := os.DirFS(vodRoot)
+			for _, writeRepData := range []bool{true, false} {
+				// Write repData files the first time, and read them the second
+				am := newAssetMgr(vodFS, tmpDir, writeRepData)
+				err := am.discoverAssets(logger)
+				require.NoError(t, err)
+				asset, ok := am.findAsset(tc.assetPath)
+				require.True(t, ok)
+				require.NotNil(t, asset)
+				require.Equal(t, tc.ad.nrReps, len(asset.Reps))
+				require.Equal(t, tc.ad.loopDurationMS, asset.LoopDurMS)
+				for repID, wrd := range tc.rds {
+					rep, ok := asset.Reps[repID]
+					require.True(t, ok)
+					require.NotNil(t, rep)
+					require.Equal(t, wrd.nrSegs, len(rep.Segments))
+					require.Equal(t, wrd.initURI, rep.InitURI)
+					require.Equal(t, wrd.mpdTimescale, rep.MpdTimescale)
+					require.Equal(t, wrd.mediaTimescale, rep.MediaTimescale)
+					require.Equal(t, wrd.duration, rep.duration())
+				}
+			}
+		})
+	}
 }
 
 func TestAssetLookupForNameOverlap(t *testing.T) {
@@ -56,4 +142,57 @@ func TestAssetLookupForNameOverlap(t *testing.T) {
 	a, ok := am.findAsset(uri)
 	require.True(t, ok)
 	require.Equal(t, "assets/testpic_2s_1", a.AssetPath)
+}
+
+func copyDir(srcDir, dstDir string) error {
+	if err := os.MkdirAll(dstDir, 0755); err != nil {
+		return err
+	}
+	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+		var relPath string = strings.Replace(path, srcDir, "", 1)
+		if relPath == "" {
+			return nil
+		}
+		if info.IsDir() {
+			return os.Mkdir(filepath.Join(dstDir, relPath), 0755)
+		} else {
+			var data, err = os.ReadFile(filepath.Join(srcDir, relPath))
+			if err != nil {
+				return err
+			}
+			return os.WriteFile(filepath.Join(dstDir, relPath), data, 0644)
+		}
+	})
+}
+
+// Set the endNumber attribute in all MPDs SegmentTemplate elements
+func setSegmentEndNr(assetDir string, endNumber uint32) error {
+	files, err := os.ReadDir(assetDir)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		if filepath.Ext(file.Name()) == ".mpd" {
+			mpdPath := filepath.Join(assetDir, file.Name())
+
+			mpd, err := m.ReadFromFile(mpdPath)
+			if err != nil {
+				return err
+			}
+			p := mpd.Periods[0]
+			for _, a := range p.AdaptationSets {
+				stl := a.SegmentTemplate
+				stl.EndNumber = &endNumber
+			}
+			mpdRaw, err := mpd.WriteToString("", false)
+			if err != nil {
+				return err
+			}
+			err = os.WriteFile(mpdPath, []byte(mpdRaw), 0644)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
