@@ -20,9 +20,10 @@ type assetsInfo struct {
 }
 
 type assetInfo struct {
-	Path      string
-	LoopDurMS int
-	MPDs      []mpdInfo
+	Path         string
+	LoopDurMS    int
+	MPDs         []mpdInfo
+	PreEncrypted bool
 }
 
 type mpdInfo struct {
@@ -66,9 +67,10 @@ func (s *Server) assetsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 			return mpds[i].Path < mpds[j].Path
 		})
 		assetInfo := assetInfo{
-			Path:      asset.AssetPath,
-			LoopDurMS: asset.LoopDurMS,
-			MPDs:      mpds,
+			Path:         asset.AssetPath,
+			LoopDurMS:    asset.LoopDurMS,
+			MPDs:         mpds,
+			PreEncrypted: asset.refRep.PreEncrypted,
 		}
 		aInfo.Assets = append(aInfo.Assets, &assetInfo)
 	}

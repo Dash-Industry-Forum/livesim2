@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Nothing yet
+### Added
+
+- On-the-fly encryption with keys from commercial DRM (Widevine and PlayReady) via CPIX document
+- DRM configuration and URL generation on `urlgen` page
+- Unified ECCP and other DRMs using the new URL parameter `/drm_X`
+
+### Fixed
+
+- CLI parameter -h for livesim2
 
 ## [1.5.2] - 2024-11-05
 

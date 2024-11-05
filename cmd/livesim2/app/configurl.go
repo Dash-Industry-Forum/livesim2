@@ -102,10 +102,9 @@ type ResponseConfig struct {
 	TimeSubsRegion               int               `json:"TimeSubsRegion,omitempty"`
 	Host                         string            `json:"Host,omitempty"`
 	PatchTTL                     int               `json:"Patch,omitempty"`
-	// DashIFECCP is DASH-IF Enhanced Clear Key Content Protection
-	DashIFECCP     string           `json:"ECCP,omitempty"`
-	SegStatusCodes []SegStatusCodes `json:"SegStatus,omitempty"`
-	Traffic        []LossItvls      `json:"Traffic,omitempty"`
+	DRM                          string            `json:"DRM,omitempty"` // Includes ECCP as eccp-cbcs or eccp-cenc
+	SegStatusCodes               []SegStatusCodes  `json:"SegStatus,omitempty"`
+	Traffic                      []LossItvls       `json:"Traffic,omitempty"`
 }
 
 // SegStatusCodes configures regular extraordinary segment response codes
@@ -374,8 +373,10 @@ cfgLoop:
 			cfg.SegStatusCodes = sc.ParseSegStatusCodes(key, val)
 		case "traffic":
 			cfg.Traffic = sc.ParseLossItvls(key, val)
+		case "drm":
+			cfg.DRM = val
 		case "eccp":
-			cfg.DashIFECCP = val
+			cfg.DRM = "eccp-" + val
 		case "patch":
 			ttl := sc.Atoi(key, val)
 			if ttl > 0 {
@@ -432,12 +433,8 @@ func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 			return err
 		}
 	}
-	switch cfg.DashIFECCP {
-	case "", "cenc", "cbcs":
-		// OK
-	default:
-		return fmt.Errorf("invalid DASH-IF Enhanced Clear Key Content Protection eccp  %q", cfg.DashIFECCP)
-	}
+	// We do not check here that the drm is one that has been configured,
+	// since pre-encrypted content will influence what is valid.
 	return nil
 }
 

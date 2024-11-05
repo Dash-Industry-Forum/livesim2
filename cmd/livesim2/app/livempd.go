@@ -5,6 +5,7 @@
 package app
 
 import (
+	"bytes"
 	"fmt"
 	"log/slog"
 	"math"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Dash-Industry-Forum/livesim2/pkg/drm"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/scte35"
 	m "github.com/Eyevinn/dash-mpd/mpd"
 )
@@ -51,7 +53,7 @@ func genLaURL(cfg *ResponseConfig) string {
 }
 
 // LiveMPD generates a dynamic configured MPD for a VoD asset.
-func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, error) {
+func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfig, nowMS int) (*m.MPD, error) {
 	mpd, err := a.getVodMPD(mpdName)
 	if err != nil {
 		return nil, err
@@ -134,25 +136,81 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 				slog.Debug("Inserting ID for AdaptationSet for patch", "contentType", as.ContentType, "id", asIdx+1)
 				as.Id = Ptr(uint32(asIdx + 1))
 			}
-			if cfg.DashIFECCP != "" {
+			if cfg.DRM != "" {
 				if a.refRep.PreEncrypted {
-					return nil, fmt.Errorf("pre-encrypted asset %s cannot be encrypted again", a.AssetPath)
+					return nil, fmt.Errorf("drm parameter %q, but pre-encrypted asset %s cannot be encrypted again",
+						cfg.DRM, a.AssetPath)
 				}
-				laURL := genLaURL(cfg)
-				cp := m.NewContentProtection()
-				cp.SchemeIdUri = "urn:mpeg:dash:mp4protection:2011"
-				cp.Value = cfg.DashIFECCP
-				cp.DefaultKID = kidFromString(laURL).String()
-				as.ContentProtections = append(as.ContentProtections, cp)
-				cp = m.NewContentProtection()
-				cp.SchemeIdUri = m.DRM_CLEAR_KEY_DASHIF
-				cp.Value = "ClearKey1.0"
-				laUrl := genLaURL(cfg)
-				cp.LaURL = &m.LaURLType{
-					LicenseType: "EME-1.0",
-					Value:       m.AnyURI(laUrl),
+				switch cfg.DRM {
+				case "eccp-cenc", "eccp-cbcs":
+					if a.refRep.PreEncrypted {
+						return nil, fmt.Errorf("pre-encrypted asset %s cannot be encrypted again", a.AssetPath)
+					}
+					laURL := genLaURL(cfg)
+					cp := m.NewContentProtection()
+					cp.SchemeIdUri = "urn:mpeg:dash:mp4protection:2011"
+					cp.Value = cfg.DRM[5:]
+					cp.DefaultKID = kidFromString(laURL).String()
+					as.ContentProtections = append(as.ContentProtections, cp)
+					cp = m.NewContentProtection()
+					cp.SchemeIdUri = m.DRM_CLEAR_KEY_DASHIF
+					cp.Value = "ClearKey1.0"
+					cp.LaURL = &m.LaURLType{
+						LicenseType: "EME-1.0",
+						Value:       m.AnyURI(laURL),
+					}
+					as.ContentProtections = append(as.ContentProtections, cp)
+				default:
+					if drmCfg == nil {
+						return nil, fmt.Errorf("drm parameter %q, but no DRM configured", cfg.DRM)
+					}
+					d, ok := drmCfg.Map[cfg.DRM]
+					if !ok {
+						return nil, fmt.Errorf("drm parameter %q, but no matching  DRM configuration found", cfg.DRM)
+					}
+					key, err := d.CPIXData.GetContentKey(string(as.ContentType))
+					if err != nil {
+						return nil, fmt.Errorf("get content key: %w", err)
+					}
+					keyID := key.KeyID
+					cp := m.NewContentProtection()
+					cp.SchemeIdUri = "urn:mpeg:dash:mp4protection:2011"
+					cp.DefaultKID = keyID.String()
+					cp.Value = key.CommonEncryptionScheme
+					as.ContentProtections = append(as.ContentProtections, cp)
+					for _, drmSys := range d.CPIXData.DRMSystems {
+						if !bytes.Equal(drmSys.KeyID, keyID) {
+							continue
+						}
+						fullURN := fmt.Sprintf("urn:uuid:%s", drmSys.SystemID)
+						drmSystem, ok := drm.DrmNames[fullURN]
+						if !ok {
+							return nil, fmt.Errorf("unknown DRM system %s", fullURN)
+						}
+						cpValue, ok := drm.ContentProtectionValues[fullURN]
+						if !ok {
+							return nil, fmt.Errorf("unknown DRM system %s", fullURN)
+						}
+						cp = m.NewContentProtection()
+						cp.SchemeIdUri = m.AnyURI(fullURN)
+						cp.Value = cpValue
+						if drmSys.PSSH != "" {
+							cp.Pssh = &m.PsshType{
+								Value: drmSys.PSSH,
+							}
+						}
+						cp.LaURL = &m.LaURLType{
+							LicenseType: "EME-1.0",
+							Value:       m.AnyURI(d.URLs[drmSystem].LaURL),
+						}
+						if drmSys.SmoothStreamingProtectionHeaderData != "" {
+							cp.MSPro = &m.MSProType{
+								Value: drmSys.SmoothStreamingProtectionHeaderData,
+							}
+						}
+						as.ContentProtections = append(as.ContentProtections, cp)
+					}
 				}
-				as.ContentProtections = append(as.ContentProtections, cp)
 			}
 		}
 		if as.ContentType == "video" && cfg.SCTE35PerMinute != nil {
@@ -259,7 +317,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, nowMS int) (*m.MPD, 
 	return mpd, nil
 }
 
-// lastSegInfo returns the absolute startTime of the last Period.
+// lastPeriodStartTime returns the absolute startTime of the last Period.
 func lastPeriodStartTime(mpd *m.MPD) (m.DateTime, error) {
 	lastPeriod := mpd.Periods[len(mpd.Periods)-1]
 	lastRelStartS := time.Duration(*lastPeriod.Start).Seconds()

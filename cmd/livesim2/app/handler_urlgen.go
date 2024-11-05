@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/Dash-Industry-Forum/livesim2/pkg/drm"
 )
 
 // urlGenHandlerFunc returns page for generating URLs
@@ -47,9 +49,10 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 			return mpds[i].Path < mpds[j].Path
 		})
 		assetInfo := assetInfo{
-			Path:      asset.AssetPath,
-			LoopDurMS: asset.LoopDurMS,
-			MPDs:      mpds,
+			Path:         asset.AssetPath,
+			LoopDurMS:    asset.LoopDurMS,
+			MPDs:         mpds,
+			PreEncrypted: asset.refRep.PreEncrypted,
 		}
 		aInfo.Assets = append(aInfo.Assets, &assetInfo)
 	}
@@ -67,10 +70,19 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		templateName = "mpds"
+	case "/urlgen/drms":
+		asset := r.URL.Query().Get("asset")
+		for _, aI := range aInfo.Assets {
+			if aI.Path == asset {
+				data.DRMs = drmsFromAssetInfo(aI, s.Cfg.DrmCfg.Packages, "")
+				data.DRMs[0].Selected = true
+			}
+		}
+		templateName = "drms"
 	case "/urlgen/create":
-		data = createURL(r, aInfo)
+		data = createURL(r, aInfo, s.Cfg.DrmCfg.Packages)
 	default:
-		data, err = createInitData(aInfo)
+		data, err = s.createInitData(aInfo)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -82,12 +94,27 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func mpdsFromAssetInfo(a *assetInfo) []mpdWithSelect {
-	mpds := make([]mpdWithSelect, len(a.MPDs))
+func mpdsFromAssetInfo(a *assetInfo) []nameWithSelect {
+	mpds := make([]nameWithSelect, len(a.MPDs))
 	for i, mpd := range a.MPDs {
-		mpds[i] = mpdWithSelect{Name: mpd.Path}
+		mpds[i] = nameWithSelect{Name: mpd.Path}
 	}
 	return mpds
+}
+
+func drmsFromAssetInfo(a *assetInfo, drmPkgs []*drm.Package, selected string) []nameWithSelect {
+	if a != nil && a.PreEncrypted {
+		return []nameWithSelect{{Name: "None", Selected: true,
+			Desc: fmt.Sprintf("No DRM choice available because asset %q is pre-encrypted", a.Path)}}
+	}
+	drms := make([]nameWithSelect, 0, 3+len(drmPkgs))
+	drms = append(drms, nameWithSelect{Name: "None", Desc: "No DRM", Selected: selected == ""})
+	drms = append(drms, nameWithSelect{Name: "eccp-cbcs", Desc: "ECCP with cbcs encryption", Selected: selected == "eccp-cbcs"})
+	drms = append(drms, nameWithSelect{Name: "eccp-cenc", Desc: "ECCP with cenc encryption", Selected: selected == "eccp-cenc"})
+	for _, pkg := range drmPkgs {
+		drms = append(drms, nameWithSelect{Name: pkg.Name, Desc: pkg.Desc, Selected: selected == pkg.Name})
+	}
+	return drms
 }
 
 const (
@@ -100,7 +127,8 @@ type urlGenData struct {
 	URL                         string
 	Host                        string
 	Assets                      []assetWithSelect
-	MPDs                        []mpdWithSelect
+	MPDs                        []nameWithSelect
+	DRMs                        []nameWithSelect
 	Stl                         segmentTimelineType
 	Tsbd                        int // time-shift buffer depth in seconds
 	MinimumUpdatePeriodS        string
@@ -112,7 +140,7 @@ type urlGenData struct {
 	TimeSubsWvtt                string // languages for generated subtitles in wvtt-format (comma-separated)
 	TimeSubsDur                 string // cue duration of generated subtitles (in milliseconds)
 	TimeSubsReg                 string // 0 for bottom and 1 for top
-	EccpEnc                     string // empty, cbcs or cenc depending on encryption type
+	Drm                         string // empty means no DRM setup
 	UTCTiming                   string
 	Periods                     string   // number of periods per hour (1-60)
 	Continuous                  bool     // period continuity signaling
@@ -132,7 +160,7 @@ var initData urlGenData
 
 func init() {
 	initData.Assets = []assetWithSelect{
-		{AssetPath: "Choose an asset...", MPDs: []mpdWithSelect{{Name: "Choose an asset first"}}},
+		{AssetPath: "Choose an asset...", MPDs: []nameWithSelect{{Name: "Choose an asset first"}}},
 	}
 	initData.Stl = Number
 	initData.Tsbd = defaultTimeShiftBufferDepthS
@@ -144,11 +172,12 @@ func init() {
 type assetWithSelect struct {
 	AssetPath string
 	Selected  bool
-	MPDs      []mpdWithSelect
+	MPDs      []nameWithSelect
 }
 
-type mpdWithSelect struct {
+type nameWithSelect struct {
 	Name     string
+	Desc     string
 	Selected bool
 }
 
@@ -160,23 +189,24 @@ const (
 	TimelineNumber segmentTimelineType = "tlnr"
 )
 
-func createInitData(aInfo assetsInfo) (data urlGenData, err error) {
+func (s *Server) createInitData(aInfo assetsInfo) (data urlGenData, err error) {
 	data = initData
 	data.Assets = make([]assetWithSelect, 0, len(aInfo.Assets)+1)
 	data.MPDs = nil
 	data.Assets = append(data.Assets, assetWithSelect{
 		AssetPath: "Choose an asset...", Selected: true,
-		MPDs: []mpdWithSelect{{Name: "Choose an asset first"}},
+		MPDs: []nameWithSelect{{Name: "Choose an asset first"}},
 	})
 	for i := range aInfo.Assets {
 		data.Assets = append(data.Assets, assetWithSelect{AssetPath: aInfo.Assets[i].Path})
 	}
 	data.Host = aInfo.Host
+	data.DRMs = drmsFromAssetInfo(nil, s.Cfg.DrmCfg.Packages, "")
 	return data, nil
 }
 
 // createURL creates a URL from the request parameters. Errors are returned in ErrorMsg field.
-func createURL(r *http.Request, aInfo assetsInfo) urlGenData {
+func createURL(r *http.Request, aInfo assetsInfo, drmPkgs []*drm.Package) urlGenData {
 	q := r.URL.Query()
 	var sb strings.Builder // Used to build URL
 	asset := q.Get("asset")
@@ -185,15 +215,17 @@ func createURL(r *http.Request, aInfo assetsInfo) urlGenData {
 	data := initData
 	data.Assets = make([]assetWithSelect, 0, len(aInfo.Assets))
 	data.MPDs = nil
+	var aI *assetInfo
 	for i := range aInfo.Assets {
 		a := assetWithSelect{AssetPath: aInfo.Assets[i].Path}
 		if a.AssetPath == asset {
 			a.Selected = true
-			data.MPDs = make([]mpdWithSelect, 0, len(a.MPDs)+1)
+			aI = aInfo.Assets[i]
+			data.MPDs = make([]nameWithSelect, 0, len(a.MPDs)+1)
 			for j := range aInfo.Assets[i].MPDs {
 				name := aInfo.Assets[i].MPDs[j].Path
 				selected := name == mpd
-				data.MPDs = append(data.MPDs, mpdWithSelect{Name: name, Selected: selected})
+				data.MPDs = append(data.MPDs, nameWithSelect{Name: name, Selected: selected})
 			}
 		}
 		data.Assets = append(data.Assets, a)
@@ -324,20 +356,14 @@ func createURL(r *http.Request, aInfo assetsInfo) urlGenData {
 		data.TimeSubsReg = timeSubsReg
 		sb.WriteString(fmt.Sprintf("timesubsreg_%s/", timeSubsReg))
 	}
-	eccpEnc := q.Get("eccp")
-	switch eccpEnc {
-	case "cbcs":
-		data.EccpEnc = "cbcs"
-		sb.WriteString("eccp_cbcs/")
-	case "cenc":
-		data.EccpEnc = "cenc"
-		sb.WriteString("eccp_cenc/")
-	case "":
-		data.EccpEnc = ""
+	drm := q.Get("drm")
+	switch drm {
+	case "", "None":
+		data.Drm = drm
 	default:
-		data.Errors = append(data.Errors, fmt.Sprintf("bad eccp: %s", eccpEnc))
-
+		sb.WriteString(fmt.Sprintf("drm_%s/", drm))
 	}
+	data.DRMs = drmsFromAssetInfo(aI, drmPkgs, q.Get("drm"))
 	scte35 := q.Get("scte35")
 	if scte35 != "" {
 		data.Scte35Var = scte35

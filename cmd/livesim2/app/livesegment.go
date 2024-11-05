@@ -6,6 +6,7 @@ package app
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -18,6 +19,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/Dash-Industry-Forum/livesim2/pkg/drm"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/scte35"
 	"github.com/Eyevinn/mp4ff/bits"
 	"github.com/Eyevinn/mp4ff/mp4"
@@ -25,7 +27,8 @@ import (
 
 // genLiveSegment generates a live segment from one or more VoD segments following cfg and media type
 // isLast triggers insertion of lmsg compatibility brand
-func genLiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int, isLast bool) (segOut, error) {
+func genLiveSegment(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig,
+	segmentPart string, nowMS int, isLast bool) (segOut, error) {
 	var so segOut
 
 	outSeg, err := createOutSeg(vodFS, a, cfg, segmentPart, nowMS)
@@ -49,7 +52,7 @@ func genLiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart stri
 		seg := segFile.Segments[0]
 		if seg.Sidx != nil {
 			if len(seg.Sidxs) > 1 {
-				slog.Error("more than one sidx not supported", "asset", a.AssetPath, "segment", segmentPart)
+				log.Error("more than one sidx not supported", "asset", a.AssetPath, "segment", segmentPart)
 				return so, fmt.Errorf("more than one sidx not supported")
 			}
 			if seg.Sidx.Timescale != meta.timescale {
@@ -98,7 +101,7 @@ func genLiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart stri
 			}
 			if emsg != nil {
 				seg.Fragments[0].AddEmsg(emsg)
-				slog.Debug("added SCTE-35 emsg message", "asset", a.AssetPath, "segment", segmentPart)
+				log.Debug("added SCTE-35 emsg message", "asset", a.AssetPath, "segment", segmentPart)
 			}
 		}
 		outSeg.seg = seg
@@ -330,12 +333,13 @@ type initMatch struct {
 	rep    *RepData
 }
 
-func writeInitSegment(w http.ResponseWriter, cfg *ResponseConfig, a *asset, segmentPart string) (isInit bool, err error) {
+func writeInitSegment(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
+	a *asset, segmentPart string) (isInit bool, err error) {
 	isTimeSubsInit, err := writeTimeSubsInitSegment(w, cfg, segmentPart)
 	if isTimeSubsInit {
 		return true, err
 	}
-	match, err := matchInit(segmentPart, cfg, a)
+	match, err := matchInit(segmentPart, cfg, drmCfg, a)
 	if err != nil {
 		return false, fmt.Errorf("getInitBytes: %w", err)
 	}
@@ -347,25 +351,50 @@ func writeInitSegment(w http.ResponseWriter, cfg *ResponseConfig, a *asset, segm
 	w.Header().Set("Content-Type", match.rep.SegmentType())
 	_, err = w.Write(match.init)
 	if err != nil {
-		slog.Error("writing response", "error", err)
+		log.Error("writing response", "error", err)
 		return false, err
 	}
 	return true, nil
 }
 
-func matchInit(segmentPart string, cfg *ResponseConfig, a *asset) (initMatch, error) {
+func matchInit(segmentPart string, cfg *ResponseConfig, drmCfg *drm.DrmConfig, a *asset) (initMatch, error) {
 	var im initMatch
 	for _, rep := range a.Reps {
 		if segmentPart == rep.InitURI {
 			im.init = rep.initBytes
-			if rep.encData != nil && cfg.DashIFECCP != "" {
-				switch cfg.DashIFECCP {
-				case "cbcs":
-					im.init = rep.encData.cbcsInitBytes
-				case "cenc":
-					im.init = rep.encData.cencInitBytes
+			if rep.encData == nil { // pre-encrypted or subtitle track
+				im.isInit = true
+				im.rep = rep
+				return im, nil
+			}
+			if cfg.DRM != "" {
+				switch cfg.DRM {
+				case "eccp-cenc", "eccp-cbcs":
+					scheme := strings.TrimPrefix(cfg.DRM, "eccp-")
+					im.init = rep.encData.initEnc[scheme].initRaw
 				default:
-					return im, fmt.Errorf("unknown DashIFECCP %s", cfg.DashIFECCP)
+					// Here we should encrypt the raw init segment (and possibly add PSSH boxes)
+					drmCfg, ok := drmCfg.Map[cfg.DRM]
+					if !ok {
+						return im, fmt.Errorf("drm configuration %q not found", cfg.DRM)
+					}
+					keyData, err := drmCfg.CPIXData.GetContentKey(rep.ContentType)
+					if err != nil {
+						return im, fmt.Errorf("get content key: %w", err)
+					}
+					scheme := keyData.CommonEncryptionScheme
+					kid := sliceToId16(keyData.KeyID)
+					iv := keyData.ExplicitIV
+					_, initSeg, err := genEncInit(rep.initBytes, kid, iv, scheme)
+					if err != nil {
+						return im, fmt.Errorf("genEncInit: %w", err)
+					}
+					sw := bits.NewFixedSliceWriter(int(initSeg.Size()))
+					err = initSeg.EncodeSW(sw)
+					if err != nil {
+						return im, fmt.Errorf("encode init segment: %w", err)
+					}
+					im.init = sw.Bytes()
 				}
 			}
 			im.rep = rep
@@ -376,38 +405,30 @@ func matchInit(segmentPart string, cfg *ResponseConfig, a *asset) (initMatch, er
 	return im, nil
 }
 
-func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a *asset, segmentPart string, nowMS int, tt *template.Template, isLast bool) error {
-	slog.Debug("writeLiveSegment", "segmentPart", segmentPart)
+func writeLiveSegment(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, drmCfg *drm.DrmConfig, vodFS fs.FS,
+	a *asset, segmentPart string, nowMS int, tt *template.Template, isLast bool) error {
+	log.Debug("writeLiveSegment", "segmentPart", segmentPart)
 	isTimeSubsMedia, err := writeTimeSubsMediaSegment(w, cfg, a, segmentPart, nowMS, tt, isLast)
 	if isTimeSubsMedia {
 		return err
 	}
-	outSeg, err := genLiveSegment(vodFS, a, cfg, segmentPart, nowMS, isLast)
+	outSeg, err := genLiveSegment(log, vodFS, a, cfg, segmentPart, nowMS, isLast)
 	if err != nil {
 		return fmt.Errorf("convertToLive: %w", err)
 	}
 	var data []byte
 	if outSeg.seg != nil {
-		ed := outSeg.meta.rep.encData
-		if ed != nil && cfg.DashIFECCP != "" {
-			// Encrypt segment
-			for _, f := range outSeg.seg.Fragments {
-				ipd := ed.cbcsPD
-				if cfg.DashIFECCP == "cenc" {
-					ipd = ed.cencPD
-				}
-				err = mp4.EncryptFragment(f, ed.key[:], ed.iv, ipd)
-				if err != nil {
-					slog.Error("encrypting fragment", "error", err)
-					return err
-				}
+		if cfg.DRM != "" {
+			frags := outSeg.seg.Fragments
+			err := encryptFrags(log, cfg, drmCfg, outSeg.meta.rep, frags)
+			if err != nil {
+				return fmt.Errorf("encryptFrags: %w", err)
 			}
 		}
-
 		sw := bits.NewFixedSliceWriter(int(outSeg.seg.Size()))
 		err = outSeg.seg.EncodeSW(sw)
 		if err != nil {
-			slog.Error("write live segment response", "error", err)
+			log.Error("write live segment response", "error", err)
 			return err
 		}
 		data = sw.Bytes()
@@ -420,7 +441,7 @@ func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a
 	for {
 		n, err := w.Write(data[nrWritten:])
 		if err != nil {
-			slog.Error("write live segment response", "error", err)
+			log.Error("write live segment response", "error", err)
 			return err
 		}
 		nrWritten += n
@@ -429,6 +450,47 @@ func writeLiveSegment(w http.ResponseWriter, cfg *ResponseConfig, vodFS fs.FS, a
 		}
 	}
 
+	return nil
+}
+
+func encryptFrags(log *slog.Logger, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
+	rp *RepData, frags []*mp4.Fragment) error {
+	var ipd *mp4.InitProtectData
+	var key, kid, iv []byte
+	var scheme string
+	ed := rp.encData
+	switch cfg.DRM {
+	case "eccp-cenc", "eccp-cbcs":
+		scheme = strings.TrimPrefix(cfg.DRM, "eccp-")
+		ipd = ed.initEnc[scheme].pd
+		key = ed.key[:]
+		iv = ed.iv[:]
+	default: //  cfg.DRM != ""
+		dd, ok := drmCfg.Map[cfg.DRM]
+		if !ok {
+			return fmt.Errorf("drm configuration %q not found", cfg.DRM)
+		}
+		keyData, err := dd.CPIXData.GetContentKey(rp.ContentType)
+		if err != nil {
+			return fmt.Errorf("get content key for %s: %w", rp.ContentType, err)
+		}
+		scheme = keyData.CommonEncryptionScheme
+		ipdStart := *ed.initEnc[scheme].pd
+		ipd = &ipdStart
+		tenc := *ipd.Tenc
+		tenc.DefaultKID = keyData.KeyID
+		tenc.DefaultConstantIV = keyData.ExplicitIV
+		iv = keyData.ExplicitIV
+		ipd.Tenc = &tenc
+		key = keyData.Key
+	}
+	log.Debug("encrypting with DRM", "scheme", scheme, "kid", hex.EncodeToString(kid), "iv", hex.EncodeToString(iv))
+	for i, f := range frags {
+		err := mp4.EncryptFragment(f, key, iv, ipd)
+		if err != nil {
+			return fmt.Errorf("encrypt fragment %d: %w", i, err)
+		}
+	}
 	return nil
 }
 
@@ -588,12 +650,12 @@ func findRefSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int
 //
 // nowMS servers as reference for the current time and can be set to any value. Media time will
 // be incremented with respect to nowMS.
-func writeChunkedSegment(ctx context.Context, w http.ResponseWriter, cfg *ResponseConfig,
+func writeChunkedSegment(ctx context.Context, log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
 	vodFS fs.FS, a *asset, segmentPart string, nowMS int, isLast bool) error {
 
-	slog.Debug("writeChunkedSegment", "segmentPart", segmentPart)
+	log.Debug("writeChunkedSegment", "segmentPart", segmentPart)
 
-	so, err := genLiveSegment(vodFS, a, cfg, segmentPart, nowMS, isLast)
+	so, err := genLiveSegment(log, vodFS, a, cfg, segmentPart, nowMS, isLast)
 	if err != nil {
 		return fmt.Errorf("convertToLive: %w", err)
 	}
@@ -619,19 +681,14 @@ func writeChunkedSegment(ctx context.Context, w http.ResponseWriter, cfg *Respon
 	if err != nil {
 		return fmt.Errorf("chunkSegment: %w", err)
 	}
-	ed := rep.encData
-	if ed != nil && cfg.DashIFECCP != "" {
-		// Encrypt chunks
-		ipd := ed.cbcsPD
-		if cfg.DashIFECCP == "cenc" {
-			ipd = ed.cencPD
-		}
+	if cfg.DRM != "" {
+		frags := make([]*mp4.Fragment, len(chunks))
 		for i, chk := range chunks {
-			f := chk.frag
-			err = mp4.EncryptFragment(f, ed.key[:], ed.iv, ipd)
-			if err != nil {
-				slog.Error("encrypting fragment", "nr", i, "error", err)
-			}
+			frags[i] = chk.frag
+		}
+		err := encryptFrags(log, cfg, drmCfg, rep, frags)
+		if err != nil {
+			return fmt.Errorf("encryptFrags: %w", err)
 		}
 	}
 

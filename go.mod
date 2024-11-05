@@ -5,7 +5,7 @@ go 1.22
 require (
 	github.com/Comcast/gots/v2 v2.2.1
 	github.com/Eyevinn/dash-mpd v0.11.1
-	github.com/Eyevinn/mp4ff v0.46.0
+	github.com/Eyevinn/mp4ff v0.47.0
 	github.com/beevik/etree v1.4.0
 	github.com/caddyserver/certmagic v0.21.3
 	github.com/danielgtaylor/huma/v2 v2.18.0

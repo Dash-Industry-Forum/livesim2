@@ -4,9 +4,9 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<meta charset="utf-8">
 
-		<script src="/static/htmx.min.js"></script>
-        <link rel="stylesheet" href="/static/pico.min.css">
-		<link rel="stylesheet" href="/static/custom.css">
+		<script src="{{.Host}}/static/htmx.min.js"></script>
+        <link rel="stylesheet" href="{{.Host}}/static/pico.min.css">
+		<link rel="stylesheet" href="{{.Host}}/static/custom.css">
 		<title>Livesim2 URL generator</title>
 	</head>
 	<body>
@@ -33,10 +33,10 @@
 		</article>
 		{{end}}
 
-		<form action="/urlgen/create" method="get">
+		<form action="{{.Host}}/urlgen/create" method="get">
 
 		<label for="asset">Asset
-		<select name="asset" hx-get="/urlgen/mpds" hx-target="#mpd" hx-indicator=".htmx-indicator">
+		<select name="asset" hx-get="{{.Host}}/urlgen/mpds" hx-target="#mpd" hx-indicator=".htmx-indicator">
 			{{range .Assets}}
 			<option value="{{.AssetPath}}" {{if .Selected}} selected {{end}}>{{.AssetPath}} </option>
 			{{end}}
@@ -214,23 +214,25 @@
 		</details>
 
 		<details>
-			<summary>Encrypt with DASH-IF ECCP</summary>
+			<summary>Encryption and DRM</summary>
 			<fieldset>
-			<legend><a href="https://dashif.org/docs/IOP-Guidelines/DASH-IF-IOP-Part6-v5.0.0.pdf" target="_blank">
-				DASH-IF Enhanced Clear Key Content Protection (encrypted on the fly)</a></legend>
-			<label for="eccp-none">
-				<input type="radio" id="eccp-none" name="eccp" value="" {{if eq .EccpEnc ""}}checked{{end}}>
-				No on-the-fly encryption
-			</label>
-				<label for="eccp-cbcs">
-					<input type="radio" id="eccp-cbcs" name="eccp" value="cbcs" {{if eq .EccpEnc "cbcs"}}checked{{end}}>
-					ECCP with cbcs common encryption scheme
+				<legend>Encryption on-the-fly with keys via ECCP or commercial DRM systems. Pre-encrypted assets cannot be changed.</legend>
+				<!-- This should be asset dependent, but not got the right htmx to do that yet -->
+				 <div name="drms" id="drms">
+				{{block "drms" .}}
+				{{range .DRMs}}
+				<label for="drm-{{.Name}}">
+					<input type="radio" id="drm-{{.Name}}" name="drm" value="{{.Name}}" {{if .Selected}} checked {{end}}>
+					{{.Desc}}
 				</label>
-				<label for="eccp-cenc">
-					<input type="radio" id="eccp-cenc" name="eccp" value="cenc" {{if eq .EccpEnc "cenc"}}checked{{end}}>
-					ECCP with cenc common encryption scheme
-				</label>
-
+			    {{end}}
+				{{end}}
+				</div>
+				<div>
+				See <a href="{{.Host}}/config">/config</a> for what commercial DRMs are configured.<br/>
+				For more about DASH-IF ECCP see <a href="https://dashif.org/docs/IOP-Guidelines/DASH-IF-IOP-Part6-v5.0.0.pdf" target="_blank">DASH-IF IOP Part 6</a>
+				</a>
+				</div>
 			</fieldset>
 		</details>
 

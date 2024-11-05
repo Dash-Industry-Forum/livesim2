@@ -109,7 +109,7 @@ func (cm *cmafIngesterMgr) NewCmafIngester(req CmafIngesterSetup) (nr uint64, er
 		return 0, fmt.Errorf("unknown asset %q", contentPart)
 	}
 	_, mpdName := path.Split(contentPart)
-	liveMPD, err := LiveMPD(asset, mpdName, cfg, nowMS)
+	liveMPD, err := LiveMPD(asset, mpdName, cfg, nil, nowMS)
 	if err != nil {
 		return 0, fmt.Errorf("failed to generate live MPD: %w", err)
 	}
@@ -250,7 +250,7 @@ func (c *cmafIngester) start(ctx context.Context) {
 			}
 			initBin = sw.Bytes()
 		} else {
-			match, err := matchInit(rd.initPath, c.cfg, c.asset)
+			match, err := matchInit(rd.initPath, c.cfg, c.mgr.s.Cfg.DrmCfg, c.asset)
 			if err != nil {
 				msg := fmt.Sprintf("Error matching init segment: %v", err)
 				c.report = append(c.report, msg)
@@ -557,7 +557,8 @@ func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup,
 
 	// Create media segment based on number and send it to segPath
 	go src.startReadAndSend(ctx, finishedSendCh)
-	code, err := writeSegment(ctx, src, c.log, c.cfg, c.mgr.s.assetMgr.vodFS, c.asset, segPart, nowMS, c.mgr.s.textTemplates, isLast)
+	code, err := writeSegment(ctx, src, c.log, c.cfg, c.mgr.s.Cfg.DrmCfg, c.mgr.s.assetMgr.vodFS,
+		c.asset, segPart, nowMS, c.mgr.s.textTemplates, isLast)
 	c.log.Info("writeSegment", "code", code, "err", err)
 	if err != nil {
 		c.log.Error("writeSegment", "code", code, "err", err)

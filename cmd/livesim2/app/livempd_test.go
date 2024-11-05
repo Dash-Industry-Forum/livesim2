@@ -78,7 +78,7 @@ func TestLiveMPDStart(t *testing.T) {
 		cfg.StartNr = Ptr(tc.startNr)
 		nowMS := 100_000
 		// Number template
-		liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nowMS)
+		liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nil, nowMS)
 		assert.NoError(t, err)
 		assert.Equal(t, "dynamic", *liveMPD.Type)
 		assert.Equal(t, m.DateTime("1970-01-01T00:00:00Z"), liveMPD.AvailabilityStartTime)
@@ -97,7 +97,7 @@ func TestLiveMPDStart(t *testing.T) {
 		}
 		// SegmentTimeline with $Time$
 		cfg.SegTimelineFlag = true
-		liveMPD, err = LiveMPD(asset, tc.mpdName, cfg, nowMS)
+		liveMPD, err = LiveMPD(asset, tc.mpdName, cfg, nil, nowMS)
 		assert.NoError(t, err)
 		assert.Equal(t, "dynamic", *liveMPD.Type)
 		assert.Equal(t, m.DateTime("1970-01-01T00:00:00Z"), liveMPD.AvailabilityStartTime)
@@ -152,7 +152,7 @@ func TestLiveMPDWithTimeSubs(t *testing.T) {
 		cfg.TimeSubsStpp = []string{"en", "sv"}
 		nowMS := 100_000
 		// Number template
-		liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nowMS)
+		liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nil, nowMS)
 		assert.NoError(t, err)
 		assert.Equal(t, "dynamic", *liveMPD.Type)
 		aSets := liveMPD.Periods[0].AdaptationSets
@@ -229,7 +229,7 @@ func TestSegmentTimes(t *testing.T) {
 		}
 		for nowS := tc.startTimeS; nowS < tc.endTimeS; nowS++ {
 			nowMS := nowS * 1000
-			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nowMS)
+			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nil, nowMS)
 			wantedStartNr := (nowS - 62) / 2 // Sliding window of 60s + one segment
 			assert.NoError(t, err)
 			for _, as := range liveMPD.Periods[0].AdaptationSets {
@@ -539,7 +539,7 @@ func TestPublishTime(t *testing.T) {
 			}
 			err := verifyAndFillConfig(cfg, tc.nowMS)
 			require.NoError(t, err)
-			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
+			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nil, tc.nowMS)
 			assert.NoError(t, err)
 			assert.Equal(t, m.ConvertToDateTimeS(int64(tc.availabilityStartTime)), liveMPD.AvailabilityStartTime)
 			assert.Equal(t, m.DateTime(tc.wantedPublishTime), liveMPD.PublishTime)
@@ -612,7 +612,7 @@ func TestNormalAvailabilityTimeOffset(t *testing.T) {
 			cfg.SegTimelineFlag = tc.segTimelineTime
 			sc := strConvAccErr{}
 			cfg.AvailabilityTimeOffsetS = sc.AtofInf("ato", tc.ato)
-			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
+			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nil, tc.nowMS)
 			if tc.wantedErr != "" {
 				assert.EqualError(t, err, tc.wantedErr)
 				return
@@ -683,7 +683,7 @@ func TestUTCTiming(t *testing.T) {
 			}
 			err := verifyAndFillConfig(cfg, tc.nowMS)
 			require.NoError(t, err)
-			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
+			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nil, tc.nowMS)
 			assert.NoError(t, err)
 			assert.Equal(t, m.DateTime(tc.wantedPublishTime), liveMPD.PublishTime)
 			assert.Equal(t, tc.wantedUTCTimings, len(liveMPD.UTCTimings))
@@ -757,7 +757,7 @@ func TestAudioSegmentTimeFollowsVideo(t *testing.T) {
 			default: // $Number$
 				// no flag
 			}
-			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
+			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nil, tc.nowMS)
 			if tc.wantedErr != "" {
 				assert.EqualError(t, err, tc.wantedErr)
 				return
@@ -877,7 +877,7 @@ func TestMultiPeriod(t *testing.T) {
 			default: // $Number$
 				// no flag
 			}
-			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, tc.nowMS)
+			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nil, tc.nowMS)
 			if tc.wantedErr != "" {
 				assert.EqualError(t, err, tc.wantedErr)
 				return
@@ -929,7 +929,7 @@ func TestRelStartStopTimeIntoLocation(t *testing.T) {
 		asset, ok := am.findAsset(contentPart)
 		require.True(t, ok)
 		_, mpdName := path.Split(contentPart)
-		liveMPD, err := LiveMPD(asset, mpdName, cfg, c.nowMS)
+		liveMPD, err := LiveMPD(asset, mpdName, cfg, nil, c.nowMS)
 		require.NoError(t, err)
 		require.Equal(t, c.wantedLocation, string(liveMPD.Location[0]), "the right location element is not inserted")
 	}
@@ -966,7 +966,7 @@ func TestFractionalFramerateMPDs(t *testing.T) {
 		cfg := NewResponseConfig()
 		nowMS := 100_000
 		// Number template
-		liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nowMS)
+		liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nil, nowMS)
 		assert.NoError(t, err)
 		assert.Equal(t, "dynamic", *liveMPD.Type)
 		assert.Equal(t, m.DateTime("1970-01-01T00:00:00Z"), liveMPD.AvailabilityStartTime)
