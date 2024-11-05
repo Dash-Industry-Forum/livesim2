@@ -116,7 +116,7 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 	f.String("repdataroot", k.String("repdataroot"), `Representation metadata root directory. "+" copies vodroot value. "-" disables usage.`)
 	f.Bool("writerepdata", k.Bool("writerepdata"), "Write representation metadata if not present")
 	f.String("whitelistblocks", k.String("whitelistblocks"), "comma-separated list of CIDR blocks that are not rate limited")
-	f.Int("timeout", k.Int("timeoutS"), "timeout for all requests (seconds)")
+	f.Int("timeoutS", k.Int("timeouts"), "timeout for all requests (seconds)")
 	f.Int("maxrequests", k.Int("maxrequests"), "max nr of request per IP address per 24 hours")
 	f.String("reqlimitlog", k.String("reqlimitlog"), "path to request limit log file (only written if maxrequests > 0)")
 	f.Int("reqlimitint", k.Int("reqlimitint"), "interval for request limit i seconds (only used if maxrequests > 0)")
