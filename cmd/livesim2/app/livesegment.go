@@ -76,6 +76,7 @@ func genLiveSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart stri
 				tfdtSizeDiff := int32(newTfdtSize) - int32(oldTfdtSize)
 				if tfdtSizeDiff != 0 {
 					traf.Trun.DataOffset += tfdtSizeDiff
+					frag.Mdat.StartPos += uint64(tfdtSizeDiff)
 				}
 				if traf.Saio != nil {
 					if saioAfterTfdt(traf) {
