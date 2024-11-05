@@ -22,6 +22,7 @@ func TestCmafIngesterMgr(t *testing.T) {
 	// Create a HTTP server that can receive data
 	// Create a new CMAF ingester with the manager
 	// Check that init and media segments are received.
+	// TODO: Add test for DRM
 
 	cfg := ServerConfig{
 		VodRoot:   "testdata/assets",

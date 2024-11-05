@@ -20,6 +20,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/Dash-Industry-Forum/livesim2/pkg/drm"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
 	"github.com/Eyevinn/dash-mpd/mpd"
 )
@@ -110,7 +111,7 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	switch filepath.Ext(r.URL.Path) {
 	case ".mpd":
 		_, mpdName := path.Split(contentPart)
-		err := writeLiveMPD(log, w, cfg, a, mpdName, nowMS)
+		err := writeLiveMPD(log, w, cfg, s.Cfg.DrmCfg, a, mpdName, nowMS)
 		if err != nil {
 			log.Error("liveMPD", "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -142,7 +143,8 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		code, err := writeSegment(r.Context(), w, log, cfg, s.assetMgr.vodFS, a, segmentPart[1:], nowMS, s.textTemplates, false /*isLast */)
+		code, err := writeSegment(r.Context(), w, log, cfg, s.Cfg.DrmCfg, s.assetMgr.vodFS, a, segmentPart[1:],
+			nowMS, s.textTemplates, false /*isLast */)
 		if err != nil {
 			log.Error("writeSegment", "code", code, "err", err)
 			var tooEarly errTooEarly
@@ -206,10 +208,11 @@ func extractPattern(segmentPart string) (int, string) {
 	return nr, strings.Join(parts, "/")
 }
 
-func writeLiveMPD(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, a *asset, mpdName string, nowMS int) error {
+func writeLiveMPD(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
+	a *asset, mpdName string, nowMS int) error {
 	work := make([]byte, 0, 1024)
 	buf := bytes.NewBuffer(work)
-	lMPD, err := LiveMPD(a, mpdName, cfg, nowMS)
+	lMPD, err := LiveMPD(a, mpdName, cfg, drmCfg, nowMS)
 	if err != nil {
 		return fmt.Errorf("convertToLive: %w", err)
 	}
@@ -234,11 +237,11 @@ func writeLiveMPD(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, 
 }
 
 // writeSegment writes a segment to the response writer, but may also return a special status code if configured.
-func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, cfg *ResponseConfig, vodFS fs.FS, a *asset,
-	segmentPart string, nowMS int, tt *template.Template, isLast bool) (code int, err error) {
+func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
+	vodFS fs.FS, a *asset, segmentPart string, nowMS int, tt *template.Template, isLast bool) (code int, err error) {
 	// First check if init segment and return
 	log.Debug("writeSegment", "segmentPart", segmentPart)
-	isInitSegment, err := writeInitSegment(w, cfg, a, segmentPart)
+	isInitSegment, err := writeInitSegment(log, w, cfg, drmCfg, a, segmentPart)
 	if err != nil {
 		return 0, fmt.Errorf("writeInitSegment: %w", err)
 	}
@@ -255,10 +258,10 @@ func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, 
 		}
 	}
 	if cfg.AvailabilityTimeCompleteFlag {
-		return 0, writeLiveSegment(w, cfg, vodFS, a, segmentPart, nowMS, tt, isLast)
+		return 0, writeLiveSegment(log, w, cfg, drmCfg, vodFS, a, segmentPart, nowMS, tt, isLast)
 	}
 	// Chunked low-latency mode
-	return 0, writeChunkedSegment(ctx, w, cfg, vodFS, a, segmentPart, nowMS, isLast)
+	return 0, writeChunkedSegment(ctx, log, w, cfg, drmCfg, vodFS, a, segmentPart, nowMS, isLast)
 }
 
 // calcStatusCode returns the configured status code for the segment or 0 if none.

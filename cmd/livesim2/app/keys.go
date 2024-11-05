@@ -41,6 +41,23 @@ func unpackBase64(b64 string) string {
 	return b64
 }
 
+// sliceToId16 converts a slice with 16 bytes to id16
+func sliceToId16(in []byte) id16 {
+	var i16 id16
+	copy(i16[:], in)
+	return i16
+}
+
+/*
+// id16ToSlice converts id16 to slice with 16 bytes
+func id16ToSlice(in id16) []byte {
+	i16 := make([]byte, 16)
+	copy(i16, in[:])
+	return i16
+}
+
+*/
+
 // id16FromTruncatedBase64 returns a Key16 from a base64-encoded string after unpacking
 func id16FromTruncatedBase64(b64 string) (id16, error) {
 	b64 = unpackBase64(b64)

@@ -16,6 +16,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/Dash-Industry-Forum/livesim2/internal"
+	"github.com/Dash-Industry-Forum/livesim2/pkg/drm"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
 )
 
@@ -102,6 +103,15 @@ func SetupServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 		for mpdName := range a.MPDs {
 			logger.Info("Available MPD", "assetPath", name, "mpdName", mpdName)
 		}
+	}
+
+	if cfg.DrmCfgFile != "" {
+		drmCfg, err := drm.ReadDrmConfig(cfg.DrmCfgFile)
+		if err != nil {
+			return nil, fmt.Errorf("readDrmConfigs: %w", err)
+		}
+		logger.Info("DRM configurations loaded", "path", cfg.DrmCfgFile, "count", len(drmCfg.Packages))
+		cfg.DrmCfg = drmCfg
 	}
 
 	logger.Info("livesim2 starting", "version", internal.GetVersion(), "port", cfg.Port)

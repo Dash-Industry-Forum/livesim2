@@ -41,7 +41,7 @@ func TestConfigFile(t *testing.T) {
 }
 
 func TestCommandLine(t *testing.T) {
-	osArgs := []string{"/path/livesim2", "--loglevel", "debug", "--domains", "livesim2.dashif.org"}
+	osArgs := []string{"/path/livesim2", "--loglevel", "debug", "--domains", "livesim2.dashif.org", "--drmcfgfile", "/testdata/drm_config.json"}
 	cfg, err := LoadConfig(osArgs, "/root")
 	assert.NoError(t, err)
 	c := DefaultConfig
@@ -50,6 +50,7 @@ func TestCommandLine(t *testing.T) {
 	c.LogLevel = "debug"
 	c.Port = 443
 	c.Domains = "livesim2.dashif.org"
+	c.DrmCfgFile = "/testdata/drm_config.json"
 	assert.Equal(t, c, *cfg)
 }
 

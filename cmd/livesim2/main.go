@@ -31,6 +31,9 @@ func run() (exitCode int) {
 	}
 	cfg, err := app.LoadConfig(os.Args, cwd)
 	if err != nil {
+		if strings.Contains(err.Error(), "help requested") {
+			return 0
+		}
 		_, _ = fmt.Fprintf(os.Stderr, "Error loading config: %s\n", err.Error())
 		os.Exit(1)
 	}

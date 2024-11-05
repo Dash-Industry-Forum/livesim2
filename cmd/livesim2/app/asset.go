@@ -173,7 +173,7 @@ func (am *assetMgr) loadAsset(logger *slog.Logger, mpdPath string) error {
 }
 
 func (am *assetMgr) loadRep(logger *slog.Logger, assetPath string, as *m.AdaptationSetType, rep *m.RepresentationType) (*RepData, error) {
-	logger = logger.With("rep", rep.Id, "assetPath", assetPath)
+	logger = logger.With("rep", rep.Id)
 	rp := RepData{ID: rep.Id,
 		ContentType:  string(as.ContentType),
 		Codecs:       as.Codecs,
@@ -182,7 +182,7 @@ func (am *assetMgr) loadRep(logger *slog.Logger, assetPath string, as *m.Adaptat
 	if !am.writeRepData {
 		ok, err := rp.loadFromJSON(logger, am.vodFS, am.repDataDir, assetPath)
 		if ok {
-			logger.Debug("Loaded representation data from JSON", "rep", rp.ID, "asset", assetPath)
+			logger.Debug("Loaded representation data from JSON")
 			return &rp, err
 		}
 	}
@@ -301,7 +301,6 @@ segLoop:
 
 // loadFromJSON reads the representation data from a gzipped or plain JSON file.
 func (rp *RepData) loadFromJSON(logger *slog.Logger, vodFS fs.FS, repDataDir, assetPath string) (bool, error) {
-	logger = logger.With("rep", rp.ID, "assetPath", assetPath)
 	if repDataDir == "" {
 		return false, nil
 	}
@@ -677,15 +676,17 @@ type RepData struct {
 }
 
 type repEncData struct {
-	keyID         id16   // Should be common within one AdaptationSet, but for now common for one asset
-	key           id16   // Should be common within one AdaptationSet, but for now common for one asset
-	iv            []byte // Can be random, but we use a constant default value at start
-	cbcsPD        *mp4.InitProtectData
-	cencPD        *mp4.InitProtectData
-	cbcsInitSeg   *mp4.InitSegment
-	cencInitSeg   *mp4.InitSegment
-	cbcsInitBytes []byte
-	cencInitBytes []byte
+	keyID   id16   // Should be common within one AdaptationSet, but for now common for one asset
+	key     id16   // Should be common within one AdaptationSet, but for now common for one asset
+	iv      []byte // Can be random, but we use a constant default value at start
+	initEnc map[string]initEncData
+}
+
+type initEncData struct {
+	scheme  string
+	pd      *mp4.InitProtectData
+	init    *mp4.InitSegment
+	initRaw []byte
 }
 
 var defaultIV = []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07}
@@ -750,11 +751,11 @@ func prepareForEncryption(codec string) bool {
 }
 
 func (r *RepData) readInit(logger *slog.Logger, vodFS fs.FS, assetPath string) error {
-	data, err := fs.ReadFile(vodFS, path.Join(assetPath, r.InitURI))
+	rawInit, err := fs.ReadFile(vodFS, path.Join(assetPath, r.InitURI))
 	if err != nil {
 		return fmt.Errorf("read initURI %q: %w", r.InitURI, err)
 	}
-	r.initSeg, err = getInitSeg(data)
+	r.initSeg, err = getInitSeg(rawInit)
 	if err != nil {
 		return fmt.Errorf("decode init: %w", err)
 	}
@@ -765,7 +766,7 @@ func (r *RepData) readInit(logger *slog.Logger, vodFS fs.FS, assetPath string) e
 
 	if prepareForEncryption(r.Codecs) {
 		assetName := path.Base(assetPath)
-		err = r.addEncryption(logger, assetName, data)
+		err = r.addEncryption(logger, assetName)
 		if err != nil {
 			return fmt.Errorf("addEncryption: %w", err)
 		}
@@ -782,68 +783,86 @@ func (r *RepData) readInit(logger *slog.Logger, vodFS fs.FS, assetPath string) e
 	return nil
 }
 
-func (r *RepData) addEncryption(logger *slog.Logger, assetName string, data []byte) error {
-	// Set up the encryption data for this representation given asset
-	ed := repEncData{}
-	ed.keyID = kidFromString(assetName)
-	ed.key = kidToKey(ed.keyID)
-	ed.iv = defaultIV
-
-	// Generate cbcs data, but exit if already encrypted
-	initSeg, err := getInitSeg(data)
+func checkPreEncrypted(logger *slog.Logger, rawInit []byte) (bool, error) {
+	initSeg, err := getInitSeg(rawInit)
 	if err != nil {
-		return fmt.Errorf("decode init: %w", err)
+		return false, fmt.Errorf("decode init: %w", err)
 	}
 	stsd := initSeg.Moov.Trak.Mdia.Minf.Stbl.Stsd
 	for _, c := range stsd.Children {
 		switch box := c.(type) {
 		case *mp4.VisualSampleEntryBox:
 			if box.Type() == "encv" && box.Sinf != nil && box.Sinf.Schm != nil {
-				logger.Info("Video pre-encrypted", "repID", r.ID, "scheme", box.Sinf.Schm.SchemeType, "init", r.InitURI)
-				r.PreEncrypted = true
-				return nil
+				logger.Info("Video pre-encrypted", "scheme", box.Sinf.Schm.SchemeType)
+				return true, nil
 			}
 		case *mp4.AudioSampleEntryBox:
 			if box.Type() == "enca" && box.Sinf != nil && box.Sinf.Schm != nil {
-				logger.Info("Video pre-encrypted", "repID", r.ID, "scheme", box.Sinf.Schm.SchemeType, "init", r.InitURI)
-				r.PreEncrypted = true
-				return nil
+				logger.Info("Audio pre-encrypted", "scheme", box.Sinf.Schm.SchemeType)
+				return true, nil
 			}
 		}
 	}
-	kid, err := mp4.NewUUIDFromHex(hex.EncodeToString(ed.keyID[:]))
+	return false, nil
+}
+
+// genEncInit generates an init segment adapted for encrypted content
+func genEncInit(rawInit []byte, kid id16, iv []byte, scheme string) (*mp4.InitProtectData, *mp4.InitSegment, error) {
+	initSeg, err := getInitSeg(rawInit)
 	if err != nil {
-		return fmt.Errorf("new uuid: %w", err)
+		return nil, nil, fmt.Errorf("decode init: %w", err)
 	}
-	ipd, err := mp4.InitProtect(initSeg, nil, ed.iv, "cbcs", kid, nil)
+	kidUUI, err := mp4.NewUUIDFromHex(hex.EncodeToString(kid[:]))
 	if err != nil {
-		return fmt.Errorf("init protect cbcs: %w", err)
+		return nil, nil, fmt.Errorf("new uuid: %w", err)
 	}
-	logger.Info("Generate init segment for encryption", "scheme", "cbcs", "repID", r.ID)
-	ed.cbcsPD = ipd
-	ed.cbcsInitSeg = initSeg
-	ed.cbcsInitBytes, err = getInitBytes(initSeg)
+	ipd, err := mp4.InitProtect(initSeg, nil, iv, scheme, kidUUI, nil)
 	if err != nil {
-		return fmt.Errorf("getInitBytes: %w", err)
+		return nil, nil, fmt.Errorf("init protect %s: %w", scheme, err)
+	}
+	return ipd, initSeg, nil
+}
+
+func (r *RepData) addEncryption(logger *slog.Logger, assetName string) error {
+	logger = logger.With("init", r.InitURI)
+	// Set up the encryption data for this representation given asset
+	kid := kidFromString(assetName)
+	red := repEncData{
+		keyID:   kid,
+		key:     kidToKey(kid),
+		iv:      defaultIV,
+		initEnc: make(map[string]initEncData, 2),
 	}
 
-	// Generate cenc data
-	initSeg, err = getInitSeg(data)
+	preEncrypted, err := checkPreEncrypted(logger, r.initBytes)
 	if err != nil {
-		return fmt.Errorf("decode init: %w", err)
+		return fmt.Errorf("checkPreEncrypted: %w", err)
 	}
-	ipd, err = mp4.InitProtect(initSeg, nil, ed.iv, "cenc", kid, nil)
-	if err != nil {
-		return fmt.Errorf("init protect cenc: %w", err)
+	if preEncrypted {
+		r.PreEncrypted = true
+		return nil
 	}
-	logger.Info("Generate init segment for encryption", "scheme", "cenc", "repID", r.ID)
-	ed.cencPD = ipd
-	ed.cencInitSeg = initSeg
-	ed.cencInitBytes, err = getInitBytes(initSeg)
-	if err != nil {
-		return fmt.Errorf("getInitBytes: %w", err)
+
+	rawInit := r.initBytes
+	for _, scheme := range []string{"cbcs", "cenc"} {
+		initProtect, initSeg, error := genEncInit(rawInit, red.keyID, red.iv, scheme)
+		if error != nil {
+			return fmt.Errorf("genEncInit: %w", error)
+		}
+		logger.Info("Generated init segment for encryption", "scheme", scheme)
+		rawEncInit, err := getInitBytes(initSeg)
+		if err != nil {
+			return fmt.Errorf("getInitBytes: %w", err)
+		}
+		rd := initEncData{
+			scheme:  scheme,
+			pd:      initProtect,
+			init:    initSeg,
+			initRaw: rawEncInit,
+		}
+		red.initEnc[scheme] = rd
 	}
-	r.encData = &ed
+	r.encData = &red
 	return nil
 }
 
