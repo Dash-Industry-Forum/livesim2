@@ -2,13 +2,13 @@
 all: test check coverage build
 
 .PHONY: build
-build: livesim2 dashfetcher
+build: livesim2 dashfetcher cmaf-ingest-receiver
 
 .PHONY: prepare
 prepare:
 	go mod vendor
 
-livesim2 dashfetcher:
+livesim2 dashfetcher cmaf-ingest-receiver:
 	go build -ldflags "-X github.com/Dash-Industry-Forum/livesim2/internal.commitVersion=$$(git describe --tags HEAD) -X github.com/Dash-Industry-Forum/livesim2/internal.commitDate=$$(git log -1 --format=%ct)" -o out/$@ ./cmd/$@/main.go
 
 forlinux: prepare
