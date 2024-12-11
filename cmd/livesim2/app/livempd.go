@@ -130,6 +130,9 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 	adaptationSets := orderAdaptationSetsByContentType(period.AdaptationSets)
 	var refSegEntries segEntries
 	for asIdx, as := range adaptationSets {
+		if as.SegmentTemplate != nil {
+			as.SegmentTemplate.EndNumber = nil // Never output endNumber
+		}
 		switch as.ContentType {
 		case "video", "audio":
 			if cfg.PatchTTL > 0 && as.Id == nil {
