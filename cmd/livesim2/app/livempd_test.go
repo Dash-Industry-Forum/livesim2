@@ -1013,3 +1013,27 @@ func TestFillContentTypes(t *testing.T) {
 	assert.Equal(t, m.RFC6838ContentTypeType("video"), p.AdaptationSets[5].ContentType)
 	assert.Equal(t, m.RFC6838ContentTypeType("audio"), p.AdaptationSets[6].ContentType)
 }
+
+func TestEndNumberRemovedFromMPD(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	tmpDir := t.TempDir()
+	am := newAssetMgr(vodFS, tmpDir, false)
+	logger := slog.Default()
+	err := am.discoverAssets(logger)
+	require.NoError(t, err)
+	assetName := "testpic_2s"
+	asset, ok := am.findAsset(assetName)
+	require.True(t, ok)
+	require.NoError(t, err)
+	cfg := NewResponseConfig()
+	nowMS := 100_000
+	mpdName := "Manifest_endNumber.mpd"
+	liveMPD, err := LiveMPD(asset, mpdName, cfg, nil, nowMS)
+	assert.NoError(t, err)
+	aSets := liveMPD.Periods[0].AdaptationSets
+	assert.Len(t, aSets, 2)
+	for _, as := range aSets {
+		stl := as.SegmentTemplate
+		assert.Nil(t, stl.EndNumber)
+	}
+}
