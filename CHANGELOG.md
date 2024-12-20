@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - endNumber in live MPD (Issue #235)
 
+### Chore
+
+- updated dependencies
+
 ## [1.6.0] - 2024-12-03
 
 ### Added
