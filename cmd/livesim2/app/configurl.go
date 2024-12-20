@@ -64,6 +64,10 @@ const (
 	UtcTimingHeadAsset       = "/static/time.txt"
 )
 
+const (
+	UrlParamSchemeIdUri = "urn:mpeg:dash:urlparam:2014"
+)
+
 type ResponseConfig struct {
 	URLParts                     []string          `json:"-"`
 	URLContentIdx                int               `json:"-"`
@@ -105,6 +109,7 @@ type ResponseConfig struct {
 	DRM                          string            `json:"DRM,omitempty"` // Includes ECCP as eccp-cbcs or eccp-cenc
 	SegStatusCodes               []SegStatusCodes  `json:"SegStatus,omitempty"`
 	Traffic                      []LossItvls       `json:"Traffic,omitempty"`
+	Query                        *Query            `json:"Query,omitempty"`
 }
 
 // SegStatusCodes configures regular extraordinary segment response codes
@@ -220,6 +225,11 @@ func CreateLossItvls(pattern string) (LossItvls, error) {
 type LossItvl struct {
 	durS  int
 	state lossState
+}
+
+type Query struct {
+	raw   string
+	parts url.Values
 }
 
 func baseURL(nr int) string {
@@ -382,6 +392,8 @@ cfgLoop:
 			if ttl > 0 {
 				cfg.PatchTTL = ttl
 			}
+		case "annexI":
+			cfg.Query = sc.ParseQuery(key, val)
 		default:
 			contentStartIdx = i
 			break cfgLoop
