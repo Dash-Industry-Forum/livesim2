@@ -86,6 +86,22 @@ func TestParamToMPD(t *testing.T) {
 				`<PatchLocation ttl="60">/patch/livesim2/patch_60/testpic_6s/Manifest.mpp?publishTime=`, // PatchLocation
 			},
 		},
+		{
+			desc:             "annexI without url query",
+			mpd:              "testpic_2s/Manifest.mpd",
+			params:           "annexI_a=1,b=3,a=3/",
+			wantedStatusCode: http.StatusBadRequest,
+			wantedInMPD:      nil,
+		},
+		{
+			desc:             "annexI with url query",
+			mpd:              "testpic_2s/Manifest.mpd?a=1&b=3&a=3",
+			params:           "annexI_a=1,b=3,a=3/",
+			wantedStatusCode: http.StatusOK,
+			wantedInMPD: []string{
+				`<up:UrlQueryInfo xmlns:up="urn:mpeg:dash:schema:urlparam:2014" queryTemplate="$querypart$" useMPDUrlQuery="true"></up:UrlQueryInfo>`,
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -124,6 +140,13 @@ func TestFetches(t *testing.T) {
 		wantedStatusCode  int
 		wantedContentType string
 	}{
+		{
+			desc:              "mpd",
+			url:               "testpic_2s/Manifest_thumbs.mpd",
+			params:            "",
+			wantedStatusCode:  http.StatusOK,
+			wantedContentType: `application/dash+xml`,
+		},
 		{
 			desc:              "mpd",
 			url:               "testpic_2s/Manifest_thumbs.mpd",
@@ -186,6 +209,26 @@ func TestFetches(t *testing.T) {
 			params:            "",
 			wantedStatusCode:  425,
 			wantedContentType: `video/mp4`,
+		},
+		{
+			desc:             "video init segment Annex I, without query",
+			url:              "testpic_2s/V300/init.mp4",
+			params:           "annexI_a=1/",
+			wantedStatusCode: http.StatusBadRequest,
+		},
+		{
+			desc:              "video init segment Annex I, with query",
+			url:               "testpic_2s/V300/init.mp4?a=1",
+			params:            "annexI_a=1/",
+			wantedStatusCode:  http.StatusOK,
+			wantedContentType: `video/mp4`,
+		},
+		{
+			desc:              "audio init segment Annex I, without query",
+			url:               "testpic_2s/A48/init.mp4",
+			params:            "annexI_a=1/",
+			wantedStatusCode:  http.StatusOK,
+			wantedContentType: `audio/mp4`,
 		},
 	}
 

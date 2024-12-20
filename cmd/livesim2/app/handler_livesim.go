@@ -110,6 +110,13 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	cfg.SetHost(s.Cfg.Host, r)
 	switch filepath.Ext(r.URL.Path) {
 	case ".mpd":
+		if !checkQuery(cfg.Query, r.URL) {
+			if !checkQuery(cfg.Query, r.URL) {
+				log.Error("query check mismatch", "cfg", cfg.Query.raw, "url", r.URL.RawQuery)
+				http.Error(w, "query check mismatch ", http.StatusBadRequest)
+				return
+			}
+		}
 		_, mpdName := path.Split(contentPart)
 		err := writeLiveMPD(log, w, cfg, s.Cfg.DrmCfg, a, mpdName, nowMS)
 		if err != nil {
@@ -143,6 +150,13 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+		if cfg.Query != nil && contentTypeFromURL(cfg, a, segmentPart[1:]) == "video" {
+			if !checkQuery(cfg.Query, r.URL) {
+				log.Error("query check mismatch", "cfg", cfg.Query.raw, "url", r.URL.RawQuery)
+				http.Error(w, "query check mismatch ", http.StatusBadRequest)
+				return
+			}
+		}
 		code, err := writeSegment(r.Context(), w, log, cfg, s.Cfg.DrmCfg, s.assetMgr.vodFS, a, segmentPart[1:],
 			nowMS, s.textTemplates, false /*isLast */)
 		if err != nil {
@@ -170,6 +184,50 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown file extension", http.StatusNotFound)
 		return
 	}
+}
+
+func checkQuery(cfgQuery *Query, u *url.URL) bool {
+	if cfgQuery == nil {
+		return true
+	}
+	uq := u.Query()
+	for key, val := range cfgQuery.parts {
+		uVal, ok := uq[key]
+		if !ok {
+			return false
+		}
+		if len(val) != len(uVal) {
+			return false
+		}
+		for i := range val {
+			if val[i] != uVal[i] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// contentTypeFromURL returns the content type of the segment.
+// Should work for both init and media segments.
+func contentTypeFromURL(cfg *ResponseConfig, a *asset, segmentPart string) string {
+	// First check imit for time subs
+	_, _, ok, err := matchTimeSubsInitLang(cfg, segmentPart)
+	if ok && err == nil {
+		return "subtitle"
+	}
+	// Next match against init segments
+	for _, rep := range a.Reps {
+		if segmentPart == rep.InitURI {
+			return rep.ContentType
+		}
+	}
+	// Finally match against media segments
+	rep, _, err := findRepAndSegmentID(a, segmentPart)
+	if err != nil {
+		return "unknown"
+	}
+	return rep.ContentType
 }
 
 // getNowMS returns value from query or local clock.

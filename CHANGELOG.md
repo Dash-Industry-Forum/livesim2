@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Basic Annex I support for announcing that MPD query parameters should be used in all video segment requests
+- Verification that the MPD and the video segments carry the URL-specified query parameters
+
 ### Fixed
 
 - endNumber in live MPD (Issue #235)
