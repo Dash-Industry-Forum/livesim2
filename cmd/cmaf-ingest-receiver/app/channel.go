@@ -180,7 +180,7 @@ func (ch *channel) addInitDataAndUpdateTimescale(stream stream, init *mp4.InitSe
 
 	ch.addTrData(r)
 	switch sampleEntry {
-	case "avc1", "hvc1", "mp4a", "stpp", "wvtt":
+	case "avc1", "hvc1", "mp4a", "ac-3", "ec-3", "stpp", "wvtt":
 		// OK
 	case "evte": // Event stream. Don't add to MPD or contentinfo, but keep the segments.
 		// TODO. Handle event streams for SCTE-35 events and other cases

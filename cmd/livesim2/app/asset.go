@@ -706,6 +706,9 @@ func (r RepData) sampleDur() uint32 {
 	switch {
 	case strings.HasPrefix(r.Codecs, "mp4a.40") && r.MediaTimescale == 48000:
 		return 1024
+	// TODO support other timescale such as 32kHz and 44.1kHz
+	case (strings.HasPrefix(r.Codecs, "ac-3") || strings.HasPrefix(r.Codecs, "ec-3")) && r.MediaTimescale == 48000:
+		return 1536
 	default:
 		return 0
 	}
