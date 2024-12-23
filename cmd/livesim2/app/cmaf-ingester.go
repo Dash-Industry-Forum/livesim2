@@ -683,6 +683,7 @@ func (cs *cmafSource) Write(b []byte) (int, error) {
 		if nrWritten == len(b) {
 			break
 		}
+		<-cs.writeMoreCh
 	}
 	return len(b), nil
 }
