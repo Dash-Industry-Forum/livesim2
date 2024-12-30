@@ -182,3 +182,28 @@ func (s *strConvAccErr) ParseLossItvls(key, val string) []LossItvls {
 	}
 	return itvls
 }
+
+func (s *strConvAccErr) ParseQuery(key, val string) *Query {
+	if s.err != nil {
+		return nil
+	}
+	q := &Query{
+		parts: make(map[string][]string),
+	}
+	pairs := strings.Split(val, ",")
+	parts := make([]string, 0, len(pairs))
+	for _, pair := range pairs {
+		kv := strings.Split(pair, "=")
+		switch len(kv) {
+		case 2:
+			q.parts[kv[0]] = append(q.parts[kv[0]], kv[1])
+			parts = append(parts, fmt.Sprintf("%s=%s", kv[0], kv[1]))
+		case 1:
+			parts = append(parts, fmt.Sprintf("%s=%s", kv[0], kv[1]))
+		default:
+			s.err = fmt.Errorf("key=%s, err=%s", key, "invalid query pair")
+		}
+	}
+	q.raw = strings.Join(parts, "&")
+	return q
+}

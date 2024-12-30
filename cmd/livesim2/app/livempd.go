@@ -216,6 +216,15 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 				}
 			}
 		}
+		if as.ContentType == "video" && cfg.Query != nil {
+			ep := m.NewDescriptor(m.UrlParameterNamespace2014, "", "")
+			ep.UrlQueryInfo = &m.UrlQueryInfoType{
+				QueryTemplate:  "$querypart$",
+				UseMPDUrlQuery: true,
+			}
+			as.EssentialProperties = append(as.EssentialProperties, ep)
+		}
+
 		if as.ContentType == "video" && cfg.SCTE35PerMinute != nil {
 			// Add SCTE35 signaling
 			as.InbandEventStreams = append(as.InbandEventStreams,
