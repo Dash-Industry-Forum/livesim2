@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - endNumber in live MPD (Issue #235)
+- urlgen page crashed when no DRM configuration
 
 ### Chore
 

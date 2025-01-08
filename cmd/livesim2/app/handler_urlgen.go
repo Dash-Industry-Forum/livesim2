@@ -74,13 +74,13 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		asset := r.URL.Query().Get("asset")
 		for _, aI := range aInfo.Assets {
 			if aI.Path == asset {
-				data.DRMs = drmsFromAssetInfo(aI, s.Cfg.DrmCfg.Packages, "")
+				data.DRMs = drmsFromAssetInfo(aI, s.Cfg.DrmCfg, "")
 				data.DRMs[0].Selected = true
 			}
 		}
 		templateName = "drms"
 	case "/urlgen/create":
-		data = createURL(r, aInfo, s.Cfg.DrmCfg.Packages)
+		data = createURL(r, aInfo, s.Cfg.DrmCfg)
 	default:
 		data, err = s.createInitData(aInfo)
 		if err != nil {
@@ -102,7 +102,11 @@ func mpdsFromAssetInfo(a *assetInfo) []nameWithSelect {
 	return mpds
 }
 
-func drmsFromAssetInfo(a *assetInfo, drmPkgs []*drm.Package, selected string) []nameWithSelect {
+func drmsFromAssetInfo(a *assetInfo, drmCfg *drm.DrmConfig, selected string) []nameWithSelect {
+	if drmCfg == nil {
+		return nil
+	}
+	drmPkgs := drmCfg.Packages
 	if a != nil && a.PreEncrypted {
 		return []nameWithSelect{{Name: "None", Selected: true,
 			Desc: fmt.Sprintf("No DRM choice available because asset %q is pre-encrypted", a.Path)}}
@@ -201,12 +205,12 @@ func (s *Server) createInitData(aInfo assetsInfo) (data urlGenData, err error) {
 		data.Assets = append(data.Assets, assetWithSelect{AssetPath: aInfo.Assets[i].Path})
 	}
 	data.Host = aInfo.Host
-	data.DRMs = drmsFromAssetInfo(nil, s.Cfg.DrmCfg.Packages, "")
+	data.DRMs = drmsFromAssetInfo(nil, s.Cfg.DrmCfg, "")
 	return data, nil
 }
 
 // createURL creates a URL from the request parameters. Errors are returned in ErrorMsg field.
-func createURL(r *http.Request, aInfo assetsInfo, drmPkgs []*drm.Package) urlGenData {
+func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenData {
 	q := r.URL.Query()
 	var sb strings.Builder // Used to build URL
 	asset := q.Get("asset")
@@ -363,7 +367,7 @@ func createURL(r *http.Request, aInfo assetsInfo, drmPkgs []*drm.Package) urlGen
 	default:
 		sb.WriteString(fmt.Sprintf("drm_%s/", drm))
 	}
-	data.DRMs = drmsFromAssetInfo(aI, drmPkgs, q.Get("drm"))
+	data.DRMs = drmsFromAssetInfo(aI, drmCfg, q.Get("drm"))
 	scte35 := q.Get("scte35")
 	if scte35 != "" {
 		data.Scte35Var = scte35
