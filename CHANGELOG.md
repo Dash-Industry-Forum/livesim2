@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- CMAF ingest of full segments now send Content-Length header
+
 ### Fixed
 
 - endNumber in live MPD (Issue #235)
