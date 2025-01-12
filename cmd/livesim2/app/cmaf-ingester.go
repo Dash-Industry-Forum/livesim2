@@ -626,21 +626,7 @@ func (cs *cmafSource) startReadAndSend(ctx context.Context, finishedCh chan stru
 		cs.log.Error("creating request", "err", err)
 		return
 	}
-	req.Header.Set("Connection", "keep-alive")
-	if cs.user != "" || cs.password != "" {
-		req.SetBasicAuth(cs.user, cs.password)
-	}
-	setIngestHeader(req)
-	switch cs.contentType {
-	case "video":
-		req.Header.Set("Content-Type", "video/mp4")
-	case "audio":
-		req.Header.Set("Content-Type", "audio/mp4")
-	case "text":
-		req.Header.Set("Content-Type", "application/mp4")
-	default:
-		cs.log.Warn("unknown content type", "type", cs.contentType)
-	}
+	cs.setReqHeaders(req)
 	cs.req = req
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -660,6 +646,24 @@ func (cs *cmafSource) startReadAndSend(ctx context.Context, finishedCh chan stru
 		resp.Body.Close()
 	}()
 	finishedCh <- struct{}{}
+}
+
+func (cs *cmafSource) setReqHeaders(req *http.Request) {
+	req.Header.Set("Connection", "keep-alive")
+	if cs.user != "" || cs.password != "" {
+		req.SetBasicAuth(cs.user, cs.password)
+	}
+	setIngestHeader(req)
+	switch cs.contentType {
+	case "video":
+		req.Header.Set("Content-Type", "video/mp4")
+	case "audio":
+		req.Header.Set("Content-Type", "audio/mp4")
+	case "text":
+		req.Header.Set("Content-Type", "application/mp4")
+	default:
+		cs.log.Warn("unknown content type", "type", cs.contentType)
+	}
 }
 
 func (cs *cmafSource) Header() http.Header {
