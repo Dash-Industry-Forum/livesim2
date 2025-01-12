@@ -580,7 +580,7 @@ func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup,
 		}
 	}
 	<-writeMoreCh   // Capture final message
-	nrBytesCh <- -1 // Signal that we are done
+	nrBytesCh <- -1 // Signal that we are done to Read (that reads and pushes to remote)
 	<-finishedSendCh
 }
 
@@ -683,7 +683,7 @@ func (cs *cmafSource) Write(b []byte) (int, error) {
 		if nrWritten == len(b) {
 			break
 		}
-		<-cs.writeMoreCh
+		<-cs.writeMoreCh // Wait for OK from reader
 	}
 	return len(b), nil
 }
