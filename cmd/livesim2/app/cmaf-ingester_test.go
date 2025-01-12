@@ -44,6 +44,7 @@ func TestCmafIngesterMgr(t *testing.T) {
 		nrTriggers         int
 		expectedNrSegments int
 	}{
+		{"/livesim2/segtimeline_1/ato_1/chunkdur_1000/testpic_2s/Manifest.mpd", mpd.Ptr(int(10000)), false, 2, 4},
 		{"/livesim2/segtimeline_1/testpic_2s/Manifest.mpd", mpd.Ptr(int(10000)), true, 2, 2},
 		{"/livesim2/segtimeline_1/testpic_2s/Manifest.mpd", mpd.Ptr(int(10000)), false, 2, 6},
 	}
@@ -118,8 +119,8 @@ func (s *cmafReceiverTestServer) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	if r.Header.Get("Content-Length") != "" { // Receive full segment based on Content-Length
 		contentLen, _ := strconv.Atoi(r.Header.Get("Content-Length"))
 		buf := make([]byte, contentLen)
-		n, err := r.Body.Read(buf)
-		if err != nil && err != io.EOF {
+		n, err := io.ReadFull(r.Body, buf)
+		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 		if n != contentLen {
