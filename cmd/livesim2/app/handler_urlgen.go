@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -156,6 +157,7 @@ type urlGenData struct {
 	Scte35Var                   string   // SCTE-35 insertion variant
 	PatchTTL                    string   // MPD Patch TTL  inv value in seconds (> 0 to be valid))
 	StatusCodes                 string   // comma-separated list of response code patterns to return
+	AnnexI                      string   // comma-separated list of Annex I parameters as key=value pairs
 	Traffic                     string   // comma-separated list of up/down/slow/hang intervals for one or more BaseURLs in MPD
 	Errors                      []string // error messages to display due to bad configuration
 }
@@ -373,6 +375,11 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 		data.Scte35Var = scte35
 		sb.WriteString(fmt.Sprintf("scte35_%s/", scte35))
 	}
+	annexI := q.Get("annexI")
+	if annexI != "" {
+		data.AnnexI = annexI
+		sb.WriteString(fmt.Sprintf("annexI_%s/", annexI))
+	}
 	statusCodes := q.Get("statuscode")
 	if statusCodes != "" {
 		sc := newStringConverter()
@@ -393,13 +400,37 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 		sb.WriteString(fmt.Sprintf("traffic_%s/", traffic))
 	}
 	sb.WriteString(fmt.Sprintf("%s/%s", asset, mpd))
+	if annexI != "" {
+		query, err := queryFromAnnexI(annexI)
+		if err != nil {
+			data.Errors = append(data.Errors, fmt.Sprintf("bad annexI: %s", err.Error()))
+		}
+		sb.WriteString(query)
+	}
 	if len(data.Errors) > 0 {
 		data.URL = ""
 		data.PlayURL = ""
 	} else {
 		data.URL = sb.String()
-		data.PlayURL = aInfo.PlayURL
+		data.PlayURL = fmt.Sprintf(aInfo.PlayURL, url.QueryEscape(data.URL))
 	}
 	data.Host = aInfo.Host
 	return data
+}
+
+func queryFromAnnexI(annexI string) (string, error) {
+	out := ""
+	pairs := strings.Split(annexI, ",")
+	for i, p := range pairs {
+		parts := strings.Split(p, "=")
+		if len(parts) != 2 {
+			return "", fmt.Errorf("bad key-value pair: %s", p)
+		}
+		if i == 0 {
+			out += fmt.Sprintf("?%s=%s", parts[0], parts[1])
+		} else {
+			out += fmt.Sprintf("&%s=%s", parts[0], parts[1])
+		}
+	}
+	return out, nil
 }

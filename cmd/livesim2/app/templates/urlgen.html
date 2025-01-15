@@ -20,7 +20,7 @@
 			URL= {{.URL}}<br />
 			<div class="grid">
 			<span onclick="navigator.clipboard.writeText({{.URL}})" role="button">Copy</span>
-			<a href="{{(printf .PlayURL .URL)}}" target="_blank" role="button">Play</a>
+			<a href="{{(print .PlayURL)}}" target="_blank" role="button">Play</a>
 			<span onclick="window.location.href='/urlgen/';" role="button" class="secondary">Reset</span>
 			</div>
 		</article>
@@ -234,6 +234,15 @@
 				</a>
 				</div>
 			</fieldset>
+		</details>
+
+		<details>
+			<summary>Annex I URL Parameters...</summary>
+
+			<label for="annexI">
+			query parameters in MPD to propagate to all video segment requests.Comma-separated key=value pairs.
+				<input type="text" id="annexI" name="annexI" value="{{.AnnexI}}" />
+			</label>
 		</details>
 
 		<details>
