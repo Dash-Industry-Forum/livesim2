@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Dash-Industry-Forum/livesim2/internal"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/cmaf"
 	m "github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/Eyevinn/mp4ff/bits"
@@ -509,7 +510,8 @@ func setReqHeaders(req *http.Request, contentType, user, password string) {
 	default:
 		slog.Warn("unknown content type", "type", contentType)
 	}
-	setIngestHeader(req)
+	req.Header.Set("DASH-IF-Ingest", CMAFIngestVersion)
+	req.Header.Set("DASH-IF-livesim2", internal.GetVersion())
 }
 
 // sendMediaSegments sends all media segments for all representations. isLast triggers lmsg insertion.
@@ -616,7 +618,7 @@ func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup,
 			http.Error(src, "writeSegment", http.StatusInternalServerError)
 			return
 		}
-		src.setReqHeaders(req)
+		setReqHeaders(req, src.contentType, src.user, src.password)
 		slog.Info("Sending media segment", "url", u)
 		err = c.sendRequest(ctx, req, u)
 		if err != nil {
@@ -675,7 +677,7 @@ func (cs *cmafSource) startReadAndSendChunked(ctx context.Context, finishedCh ch
 		cs.log.Error("creating request", "err", err)
 		return
 	}
-	cs.setReqHeaders(req)
+	setReqHeaders(req, cs.contentType, cs.user, cs.password)
 	cs.req = req
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -695,11 +697,6 @@ func (cs *cmafSource) startReadAndSendChunked(ctx context.Context, finishedCh ch
 		resp.Body.Close()
 	}()
 	finishedCh <- struct{}{}
-}
-
-func (cs *cmafSource) setReqHeaders(req *http.Request) {
-	setReqHeaders(req, cs.contentType, cs.user, cs.password)
-	req.Header.Set("Connection", "keep-alive")
 }
 
 func (cs *cmafSource) Header() http.Header {
@@ -832,8 +829,4 @@ func setRawInitProps(rawInit []byte, rd cmafRepData, startTimeS int64) (newRawIn
 		return nil, err
 	}
 	return sw.Bytes(), nil
-}
-
-func setIngestHeader(req *http.Request) {
-	req.Header.Set("DASH-IF-Ingest", CMAFIngestVersion)
 }
