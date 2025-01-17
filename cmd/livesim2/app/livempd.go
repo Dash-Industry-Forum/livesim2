@@ -194,6 +194,12 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 						if !ok {
 							return nil, fmt.Errorf("unknown DRM system %s", fullURN)
 						}
+						laURL := d.URLs[drmSystem].LaURL
+						if laURL == "" {
+							slog.Info("no LaURL for CPIX DRM", "DRM", drmSystem)
+							continue
+						}
+
 						cp = m.NewContentProtection()
 						cp.SchemeIdUri = m.AnyURI(fullURN)
 						cp.Value = cpValue
@@ -204,7 +210,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 						}
 						cp.LaURL = &m.LaURLType{
 							LicenseType: "EME-1.0",
-							Value:       m.AnyURI(d.URLs[drmSystem].LaURL),
+							Value:       m.AnyURI(laURL),
 						}
 						if drmSys.SmoothStreamingProtectionHeaderData != "" {
 							cp.MSPro = &m.MSProType{
