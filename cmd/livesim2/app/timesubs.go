@@ -15,6 +15,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/Eyevinn/mp4ff/bits"
 	"github.com/Eyevinn/mp4ff/mp4"
 )
 
@@ -205,12 +206,19 @@ func writeTimeSubsMediaSegment(w http.ResponseWriter, cfg *ResponseConfig, a *as
 	if err != nil {
 		return true, fmt.Errorf("createSubtitleStppMediaSegment: %w", err)
 	}
+	length := int(mediaSeg.Size())
 	w.Header().Set("Content-Type", "application/mp4")
-	w.Header().Set("Content-Length", strconv.Itoa(int(mediaSeg.Size())))
-	err = mediaSeg.Encode(w)
+	w.Header().Set("Content-Length", strconv.Itoa(length))
+	sw := bits.NewFixedSliceWriter(length)
+	err = mediaSeg.EncodeSW(sw)
+	if err != nil {
+		slog.Error("generate media segment", "error", err)
+		return true, fmt.Errorf("mediaSegGen: %w", err)
+	}
+	_, err = w.Write(sw.Bytes())
 	if err != nil {
 		slog.Error("write media segment response", "error", err)
-		return true, fmt.Errorf("mediaSeg: %w", err)
+		return true, fmt.Errorf("mediaSegSend: %w", err)
 	}
 	return true, nil
 }
