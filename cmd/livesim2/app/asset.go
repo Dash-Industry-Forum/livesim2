@@ -8,6 +8,7 @@ import (
 	"compress/gzip"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -251,13 +252,16 @@ func (am *assetMgr) loadRep(logger *slog.Logger, assetPath string, as *m.Adaptat
 			rp.MediaTimescale = int(as.SegmentTemplate.GetTimescale())
 		}
 		for {
-			// Loop until we get an error when reading the segment
+			// Loop until we cannot find more files
 			if rp.ContentType != "image" {
 				seg, err = rp.readMP4Segment(am.vodFS, assetPath, 0, nr)
 			} else {
 				seg, err = rp.readThumbSegment(am.vodFS, assetPath, nr, startNr, segDur)
 			}
 			if err != nil {
+				if !errors.Is(err, fs.ErrNotExist) {
+					return nil, fmt.Errorf("readSegment %w", err)
+				}
 				endNr = nr - 1
 				break
 			}
