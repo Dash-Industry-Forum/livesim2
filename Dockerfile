@@ -5,6 +5,7 @@
 
 # Build as "docker build -t livesim2 ."
 # Run as "docker run -p 8888:8888 livesim2"
+# Mount a volume with VoD Content at /vod to have livesim2 serve everything below it
 
 # Build Stage
 FROM golang:1.23.1-alpine3.20 AS BuildStage

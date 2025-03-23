@@ -354,17 +354,29 @@ access the server's root URL.
 
 ### Docker
 
-A simple `Dockerfile` is also provided. It builds a stand-alone livesim2
-image bundled with the test content that is provided in this repo.
-Some comments are included in the Dockerfile. Check the options of livesim2
-to find out how to add other content, HTTPs etc.
+A `Dockerfile` is also provided. It builds a stand-alone livesim2 service.
+A new image is automatically built and uploaded to the Github Container Registry (ghcr.io)
+for each new release. To use the v1.7.0 image with a folder `test_streams` with
+VoD assets, you can use docker compose to mount `test_streams` in the
+default folder path `/vod` by using a compose.yml file like this:
+
+```yaml
+services:
+  livesim2:
+    image: ghcr.io/dash-industry-forum/livesim2/livesim2:v1.7.0
+    ports:
+      - 8888:8888
+    volumes:
+      - ./test_streams:/vod/test_streams
+    restart: always
+```
 
 ## List of functionality and options
 
 The most direct information about the URL parameters
-and how to find them, is available via the `urlgen`
+and how to find them, is available via the `/urlgen/`
 page that can be reached once the server is running.
-The livesim2 online page is [urlgen][urlgen].
+The livesim2 online page is [/urlgen/][urlgen].
 
 The URL parameters are also listed on this project's Wiki page
 [URL-parameters][urlparams]. Some more information
