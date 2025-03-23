@@ -157,7 +157,7 @@ the 1970 Epoch start, and makes it possible to test time-dependent requests in a
 
 ## Get Started
 
-Install Go 1.19 or later.
+Install Go 1.23 or later.
 
 Then run
 
@@ -206,21 +206,38 @@ and set the `port` to 443.`
 
 The content must be a DASH VoD asset in `isoff-live` format
 (individual segment files) with either `SegmentTimeline with $Time$` or
-`SegmentTemplate with $Number$`. The video segment duration must
-be constant and an integral number of milliseconds. Audio output segments will be
-adjusted to start at, or less than one audio frame after, each video segment start.
+`SegmentTemplate with $Number$`. The video segments duration must have an
+exact average duration so that the total duration is the number of segments
+time that average. The total duration must be an integral number of milliseconds.
+For example, an asset with alternating segment duration sof 8s and 4s, is fine
+as long as there are an equal number of each leading so that the avererage duration is
+6s. The segment duration is not allowed to vary more than 50% compared to that
+average duration in order for livesim2 to be able to generate MPDs with SegmentTemplate
+with \$Number\$.
+
+The input audio segment do not need to follow the duration of the video segments,
+although it is beneficial if they are the same, as for example 1.92s segments for
+50fps video and 48kHz AAC audio. If the audio segment duration is not identical to
+the corresponding video segment, the audio will be resegmented as to follow the
+video segments as far as possible. Every audio segment will start less than one audio
+frame after the video segment starts.
 
 There are multiple ways to get content to the livesim2 server.
 
-1. Use the bundled test content (only 8s long)
+1. Use the bundled test content (only 8s or 12s long)
 2. Fetch content that was used with [livesim1][1] from
    github at [livesim-content][livesim-content]
 3. Use the `dashfetcher` tool to download a DASH asset
-4. Copy an existing VoD asset in `isoff-live`
+4. Use an existing VoD asset in `isoff-live` profile
 
-There is special representation data that can be used for quicker loading of the
-assets. The generation of such data is controlled via the `writerepdata` and
-`repdataroot` configuration parameters.
+livesim2 will scan all the segments of all representations and store metadata about
+each segments timing in memory.
+
+To avoid doing this at every startup, livesim2 supports storing and reading
+such representation data from a file. The generation of such data is controlled via the `writerepdata` and `repdataroot` configuration parameters.
+
+If such files are detected at startup, they will be used instead of scanning the files,
+unles the `writerepdata` parameter is set.
 
 ### Bundled test streams with the livesim2 server
 
