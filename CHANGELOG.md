@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed typo in urlgen template
 - Lost error reporting in initial segment parsing
 
+### Added
+
+- Test asset with varying segment duration (4s and 8s) with exact 6s average
+
 ## [1.7.0] - 2025-01-17
 
 ### Changed
