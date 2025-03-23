@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Test asset with varying segment duration (4s and 8s) with exact 6s average
+- Described how to use Dockerfile from Github Container repository (ghcr.io)
 
 ## [1.7.0] - 2025-01-17
 
