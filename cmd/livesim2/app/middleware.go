@@ -15,6 +15,7 @@ func addVersionAndCORSHeaders(next http.Handler) http.Handler {
 		w.Header().Add("DASH-IF-livesim2", internal.GetVersion())
 		w.Header().Add("Access-Control-Allow-Origin", "*")
 		w.Header().Add("Access-Control-Allow-Methods", "POST, GET, HEAD, OPTIONS")
+		w.Header().Add("Access-Control-Expose-Headers", "*")
 		w.Header().Add("Access-Control-Allow-Headers", "Content-Type, Accept")
 		w.Header().Add("Timing-Allow-Origin", "*")
 		next.ServeHTTP(w, r)

@@ -264,6 +264,7 @@ func addCorsHeaders(next http.Handler) http.Handler {
 		w.Header().Add("ew-cmaf-ingest", "v0.5")
 		w.Header().Add("Access-Control-Allow-Origin", "*")
 		w.Header().Add("Access-Control-Allow-Methods", "POST, GET, HEAD, OPTIONS")
+		w.Header().Add("Access-Control-Expose-Headers", "*")
 		w.Header().Add("Access-Control-Allow-Headers", "Content-Type, Accept")
 		w.Header().Add("Timing-Allow-Origin", "*")
 		next.ServeHTTP(w, r)

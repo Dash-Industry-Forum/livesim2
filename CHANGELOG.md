@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - One HTTP PUT with Content-Length in cmaf-ingest
 - Fixed typo in urlgen template
 - Lost error reporting in initial segment parsing
+- Added `Access-Control-Expose-Header` to make UTCTiming HEAD work (Issue #251)
 
 ### Added
 
