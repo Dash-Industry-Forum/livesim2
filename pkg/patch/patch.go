@@ -363,10 +363,7 @@ func compareAttributes(old, new []etree.Attr) (attrChange, error) {
 	nIdx := 0
 	var a attrChange
 
-	for {
-		if oIdx >= len(old) && nIdx >= len(new) {
-			break
-		}
+	for oIdx < len(old) || nIdx < len(new) {
 		cmp := 0
 		if oIdx < len(old) && nIdx < len(new) {
 			cmp = compareAttrNames(old[oIdx], new[nIdx])

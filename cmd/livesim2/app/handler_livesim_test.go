@@ -68,6 +68,7 @@ func TestParamToMPD(t *testing.T) {
 			mpd:              "testpic_2s/Manifest.mpd",
 			params:           "eccp_cbcs/",
 			wantedStatusCode: http.StatusOK,
+			//nolint:lll
 			wantedInMPD: []string{
 				`<ContentProtection xmlns:cenc="urn:mpeg:cenc:2013" cenc:default_KID="2880fe36-e44b-f9bf-79d2-752e234818a5" schemeIdUri="urn:mpeg:dash:mp4protection:2011" value="cbcs"></ContentProtection>`,
 				`<ContentProtection schemeIdUri="urn:uuid:e2719d58-a985-b3c9-781a-b030af78d30e" value="ClearKey1.0">`,

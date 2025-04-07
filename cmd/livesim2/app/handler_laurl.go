@@ -82,7 +82,7 @@ func (s *Server) laURLHandlerFunc(w http.ResponseWriter, r *http.Request) {
 }
 
 func urlSafeBase64(b64 string) string {
-	b := strings.Replace(b64, "=", "", -1)
+	b := strings.ReplaceAll(b64, "=", "")
 	b = strings.ReplaceAll(b, "+", "-")
 	b = strings.ReplaceAll(b, "/", "_")
 	return b

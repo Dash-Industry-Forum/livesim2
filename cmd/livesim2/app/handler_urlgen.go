@@ -127,6 +127,7 @@ const (
 	defaultTimeSubsReg = "0"
 )
 
+//nolint:lll
 type urlGenData struct {
 	PlayURL                     string
 	URL                         string

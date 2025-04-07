@@ -14,14 +14,16 @@ import (
 
 // CmafIngesterRequest represents the CMAF ingest start request.
 type CmafIngesterSetup struct {
-	User        string `json:"user,omitempty" doc:"User name for basic auth" example:""`
-	PassWord    string `json:"password,omitempty" doc:"Password for basic auth" example:""`
-	DestRoot    string `json:"destRoot" doc:"Destination URL root for assets" example:"https://server.com/upload"`
-	DestName    string `json:"destName" doc:"Destination name for asset" example:"testpic_ingest"`
-	URL         string `json:"livesimURL" doc:"Full livesimURL without scheme and host" example:"/livesim2/segtimeline_1/testpic_2s/Manifest.mpd"`
-	TestNowMS   *int   `json:"testNowMS,omitempty" doc:"Test: start time for step-wise sending"`
-	Duration    *int   `json:"duration,omitempty" doc:"Duration in seconds for the CMAF ingest session" example:"60"`
-	StreamsURLs bool   `json:"streamsURLs,omitempty" doc:"Use streams URLs likes Streams(video.cmfv) instead of individual segment URLs" example:"false"`
+	User     string `json:"user,omitempty" doc:"User name for basic auth" example:""`
+	PassWord string `json:"password,omitempty" doc:"Password for basic auth" example:""`
+	DestRoot string `json:"destRoot" doc:"Destination URL root for assets" example:"https://server.com/upload"`
+	DestName string `json:"destName" doc:"Destination name for asset" example:"testpic_ingest"`
+	//nolint:lll
+	URL       string `json:"livesimURL" doc:"Full livesimURL without scheme and host" example:"/livesim2/segtimeline_1/testpic_2s/Manifest.mpd"`
+	TestNowMS *int   `json:"testNowMS,omitempty" doc:"Test: start time for step-wise sending"`
+	Duration  *int   `json:"duration,omitempty" doc:"Duration in seconds for the CMAF ingest session" example:"60"`
+	//nolint:lll
+	StreamsURLs bool `json:"streamsURLs,omitempty" doc:"Use streams URLs likes Streams(video.cmfv) instead of individual segment URLs" example:"false"`
 }
 
 type CmafIngesterCreateRequest struct {
@@ -180,6 +182,7 @@ func createRouteAPI(s *Server) func(r chi.Router) {
 			Method:      http.MethodGet,
 			Path:        "/cmaf-ingests/{id}/step",
 			Summary:     "Step a CMAF ingest stream one step (for testing)",
+			//nolint: lll
 			Description: "In testing mode (triggered by setting timeNowMS in creation), send the next segment of all tracks for the given stream ID.",
 			Tags:        []string{"CMAF-ingest"},
 			Errors:      []int{404, 410},

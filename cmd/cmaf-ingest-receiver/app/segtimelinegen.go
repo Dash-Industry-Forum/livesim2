@@ -116,10 +116,11 @@ func (sg *segmentTimelineGenerator) generateSegmentTimelineNrMPD(log *slog.Logge
 	_, err = manifest.Write(ofh, "  ", true)
 	if err != nil {
 		log.Error("Failed to write MPD", "err", err)
-		ofh.Close()
+		finalClose(ofh)
 		return err
 	}
-	ofh.Close()
+	finalClose(ofh)
+
 	mpdFileName := filepath.Join(ch.dir, timelineNrMPD)
 	err = os.Rename(tmpFile, mpdFileName)
 	if err != nil {

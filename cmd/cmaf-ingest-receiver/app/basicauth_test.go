@@ -13,6 +13,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func finalRemove(dir string) {
+	if err := os.RemoveAll(dir); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to remove temp dir: %s\n", err)
+	}
+}
+
 func TestBasicAuth(t *testing.T) {
 
 	config := Config{
@@ -39,7 +45,8 @@ func TestBasicAuth(t *testing.T) {
 	}
 
 	tmpDir, err := os.MkdirTemp("", "ew-cmaf-ingest-test")
-	defer os.RemoveAll(tmpDir)
+
+	defer finalRemove(tmpDir)
 	assert.NoError(t, err)
 	opts := Options{
 		prefix:                "/upload",

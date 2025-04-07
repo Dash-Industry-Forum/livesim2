@@ -138,7 +138,8 @@ type StppTimeCue struct {
 }
 
 // writeTimeStppMediaSegment return true and tries to write a stpp time subtitle segment if URL matches
-func writeTimeSubsMediaSegment(w http.ResponseWriter, cfg *ResponseConfig, a *asset, segmentPart string, nowMS int, tt *template.Template, isLast bool) (bool, error) {
+func writeTimeSubsMediaSegment(w http.ResponseWriter, cfg *ResponseConfig, a *asset, segmentPart string, nowMS int,
+	tt *template.Template, isLast bool) (bool, error) {
 	prefix := ""
 	var langs []string
 	lang, seg, ok := timeSubsSegmentParts(SUBS_STPP_PREFIX, segmentPart)

@@ -29,10 +29,7 @@ type MPDData struct {
 func WriteMPDData(dirPath string, name, uri string) error {
 	filePath := path.Join(dirPath, MPDListFile)
 	_, err := os.Stat(filePath)
-	exists := true
-	if os.IsNotExist(err) {
-		exists = false
-	}
+	exists := !os.IsNotExist(err)
 	var mpds []MPDData
 	if exists {
 		data, err := os.ReadFile(filePath)

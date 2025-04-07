@@ -377,8 +377,9 @@ func TestTimeSubsMediaSegment(t *testing.T) {
 			expectedStatusCode: http.StatusOK,
 		},
 		{
-			desc:               "wvtt segment 1800 for segtimeline nr",
-			asset:              "testpic_2s",
+			desc:  "wvtt segment 1800 for segtimeline nr",
+			asset: "testpic_2s",
+			//nolint:lll
 			url:                "/livesim2/segtimelinenr_1/timesubswvtt_en,sv/timesubsdur_600/timesubsreg_1/testpic_2s/timewvtt-en/1800.m4s?nowMS=3610000",
 			segmentMimeType:    "application/mp4",
 			startTime:          3600_000,
@@ -386,8 +387,9 @@ func TestTimeSubsMediaSegment(t *testing.T) {
 			expectedStatusCode: http.StatusOK,
 		},
 		{
-			desc:               "wvtt segment 1800 for segtimeline time",
-			asset:              "testpic_2s",
+			desc:  "wvtt segment 1800 for segtimeline time",
+			asset: "testpic_2s",
+			//nolint:lll
 			url:                "/livesim2/segtimeline_1/timesubswvtt_en,sv/timesubsdur_600/timesubsreg_1/testpic_2s/timewvtt-en/3600000.m4s?nowMS=3610000",
 			segmentMimeType:    "application/mp4",
 			startTime:          3600_000,
