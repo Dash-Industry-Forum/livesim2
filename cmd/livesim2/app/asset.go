@@ -616,7 +616,8 @@ func (a *asset) consolidateAsset(logger *slog.Logger) error {
 		}
 		repDurMS := 1000 * rep.duration() / rep.MediaTimescale
 		if repDurMS != a.LoopDurMS {
-			logger.Warn("Duration differs", "representation", rep.ID, "referenceRepresentation", refRep.ID, "refDurMS", a.LoopDurMS, "repDurMS", repDurMS)
+			logger.Warn("Duration differs", "representation", rep.ID, "referenceRepresentation", refRep.ID, "refDurMS",
+				a.LoopDurMS, "repDurMS", repDurMS)
 			badPreEncrypted = true
 		}
 	}

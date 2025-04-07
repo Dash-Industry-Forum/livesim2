@@ -22,6 +22,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func finalTestClose(closer io.Closer) {
+	if err := closer.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to close: %s\n", err)
+	}
+}
+
 func TestReceivingMediaLiveInput(t *testing.T) {
 	cases := []struct {
 		name             string
@@ -38,7 +44,7 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			tmpDir, err := os.MkdirTemp("", "ew-cmaf-ingest-test")
-			defer os.RemoveAll(tmpDir)
+			defer finalRemove(tmpDir)
 			assert.NoError(t, err)
 			chName := "awsMediaLiveScte35"
 			srcDir := filepath.Join("testdata")
@@ -251,7 +257,7 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 func TestReceivingNonIdealInput(t *testing.T) {
 	streamsURLFormat := true
 	tmpDir, err := os.MkdirTemp("", "ew-cmaf-ingest-test-nonideal")
-	defer os.RemoveAll(tmpDir)
+	defer finalRemove(tmpDir)
 	assert.NoError(t, err)
 	chName := "zero_3.84s"
 	srcDir := filepath.Join("testdata")
@@ -379,7 +385,8 @@ func TestReceivingNonIdealInput(t *testing.T) {
 					assert.Equal(t, "Norwegian subtitles", string(rep.Labels[0].Value), "Norwegian subtitles should have correct label")
 					assert.Equal(t, "subtitle", as.Roles[0].Value, "Norwegian subtitles should have correct role")
 				case "text-nor-1_hearing_impaired":
-					assert.Equal(t, "Norwegian hearing impaired", string(rep.Labels[0].Value), "Norwegian hearing impaired should have correct label")
+					assert.Equal(t, "Norwegian hearing impaired", string(rep.Labels[0].Value),
+						"Norwegian hearing impaired should have correct label")
 					assert.Equal(t, "caption", as.Roles[0].Value, "Norwegian hearing impaired should have correct role")
 				default:
 					t.Fatalf("Unknown representation %s", rep.Id)
@@ -581,12 +588,12 @@ func addOrigInitSegments(srcDir, chName, tmpDir string, ttd []trTestData) error 
 		if err != nil {
 			return err
 		}
-		defer ifh.Close()
+		defer finalTestClose(ifh)
 		ofh, err := os.Create(dstInitPath)
 		if err != nil {
 			return err
 		}
-		defer ofh.Close()
+		defer finalTestClose(ofh)
 		_, err = io.Copy(ofh, ifh)
 		if err != nil {
 			return err

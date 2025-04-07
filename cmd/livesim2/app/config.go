@@ -32,7 +32,8 @@ const (
 	timeShiftBufferDepthMarginS     = 10
 	defaultTimeSubsDurMS            = 900
 	defaultLatencyTargetMS          = 3500
-	defaultPlayURL                  = "https://reference.dashif.org/dash.js/latest/samples/dash-if-reference-player/index.html?mpd=%s&autoLoad=true&muted=true"
+	//nolint:lll
+	defaultPlayURL = "https://reference.dashif.org/dash.js/latest/samples/dash-if-reference-player/index.html?mpd=%s&autoLoad=true&muted=true"
 )
 
 type ServerConfig struct {
@@ -150,8 +151,8 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 
 	// Overload with environment variables
 	err = k.Load(env.Provider("LIVESIM_", ".", func(s string) string {
-		return strings.Replace(strings.ToLower(
-			strings.TrimPrefix(s, "LIVESIM_")), "_", ".", -1)
+		return strings.ReplaceAll(strings.ToLower(
+			strings.TrimPrefix(s, "LIVESIM_")), "_", ".")
 	}), nil)
 	if err != nil {
 		return nil, err

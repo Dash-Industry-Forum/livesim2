@@ -99,7 +99,10 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 	}
 	defer func() {
 		log.Debug("Closing body", "url", path)
-		req.Body.Close()
+		err := req.Body.Close()
+		if err != nil {
+			log.Error("Failed to close request body", "err", err)
+		}
 	}()
 	log.Debug("Headers", "path", path, "headers", req.Header)
 
@@ -288,7 +291,7 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 		p := chunkparser.NewMP4ChunkParser(req.Body, buf, chunkParserCallback)
 		err = p.Parse()
 		if ofh != nil {
-			defer ofh.Close()
+			defer finalClose(ofh)
 		}
 		if err != nil {
 			log.Error("Failed to parse MP4 chunk", "err", err)
@@ -320,7 +323,10 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 	if trD.nrSegsReceived >= ch.receiveNrRaws && (contentLength == 0 || contentLength >= 4096) {
 		log.Debug("Max number of raw segments received. Will not store.", "nrSegsReceived",
 			trD.nrSegsReceived, "receiveNrRaws", ch.receiveNrRaws)
-		req.Body.Close()
+		err = req.Body.Close()
+		if err != nil {
+			log.Error("Failed to close request body", "err", err)
+		}
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -337,7 +343,7 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
 		return
 	}
-	defer ofh.Close()
+	defer finalClose(ofh)
 	for {
 		n, err := req.Body.Read(buf)
 		if err != nil && err != io.EOF {
@@ -377,7 +383,10 @@ func discardUpload(w http.ResponseWriter, req *http.Request, statusCode int) {
 		slog.Warn("Failed to discard bytes", "path", path, "err", err)
 	}
 	slog.Debug("Discarded bytes", "path", path, "nrBytes", n)
-	req.Body.Close()
+	err = req.Body.Close()
+	if err != nil {
+		slog.Error("Failed to close request body", "path", path, "err", err)
+	}
 	w.WriteHeader(statusCode)
 }
 
@@ -458,14 +467,14 @@ func handleMPD(w http.ResponseWriter, req *http.Request, storage, chName string)
 		http.Error(w, "Failed to create file", http.StatusInternalServerError)
 		return
 	}
-	defer ofh.Close()
+	defer finalClose(ofh)
 	_, err = io.Copy(ofh, req.Body)
 	if err != nil {
 		slog.Error("Failed to write MPD", "err", err)
 		http.Error(w, "Failed to write MPD", http.StatusInternalServerError)
 		return
 	}
-	req.Body.Close()
+	finalClose(req.Body)
 	slog.Info("MPD received", "path", req.URL.Path, "storedPath", receivedMpdPath)
 	w.WriteHeader(http.StatusOK)
 }

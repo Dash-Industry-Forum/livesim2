@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//nolint:lll
 var wantedPatchSegTimelineTime = `<?xml version="1.0" encoding="UTF-8"?>
 <Patch xmlns="urn:mpeg:dash:schema:mpd-patch:2020" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd-patch:2020 DASH-MPD-PATCH.xsd" mpdId="base" originalPublishTime="2024-04-02T15:50:56Z" publishTime="2024-04-02T15:51:40Z">
   <replace sel="/MPD/@publishTime">2024-04-02T15:51:40Z</replace>
@@ -31,6 +32,7 @@ var wantedPatchSegTimelineTime = `<?xml version="1.0" encoding="UTF-8"?>
 </Patch>
 `
 
+//nolint:lll
 var wantedPatchSegTimelineNumberWithAddAtEnd = `<?xml version="1.0" encoding="UTF-8"?>
 <Patch xmlns="urn:mpeg:dash:schema:mpd-patch:2020" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd-patch:2020 DASH-MPD-PATCH.xsd" mpdId="base" originalPublishTime="2024-04-16T07:34:38Z" publishTime="2024-04-16T07:34:56Z">
   <replace sel="/MPD/@publishTime">2024-04-16T07:34:56Z</replace>
@@ -74,21 +76,24 @@ func TestPatchHandler(t *testing.T) {
 		wantedExpires     string
 	}{
 		{
-			desc:              "segTimeline no update yet",
+			desc: "segTimeline no update yet",
+			//nolint:lll
 			url:               "/patch/livesim2/patch_60/segtimeline_1/testpic_2s/Manifest.mpp?publishTime=2024-04-16T07:34:38Z&nowDate=2024-04-16T07:34:39Z",
 			wantedStatusCode:  http.StatusTooEarly,
 			wantedContentType: "text/plain; charset=utf-8",
 			wantedBody:        "",
 		},
 		{
-			desc:              "segTimeline too late",
+			desc: "segTimeline too late",
+			//nolint:lll
 			url:               "/patch/livesim2/patch_60/segtimeline_1/testpic_2s/Manifest.mpp?publishTime=2024-04-16T07:34:38Z&nowDate=2024-04-16T07:44:39Z",
 			wantedStatusCode:  http.StatusGone,
 			wantedContentType: "text/plain; charset=utf-8",
 			wantedBody:        "",
 		},
 		{
-			desc:              "segTimeline",
+			desc: "segTimeline",
+			//nolint:lll
 			url:               "/patch/livesim2/patch_60/segtimeline_1/testpic_2s/Manifest.mpp?publishTime=2024-04-02T15:50:56Z&nowDate=2024-04-02T15:51:40Z",
 			wantedStatusCode:  http.StatusOK,
 			wantedContentType: "application/dash-patch+xml",
@@ -96,7 +101,8 @@ func TestPatchHandler(t *testing.T) {
 			wantedExpires:     "Tue, 02 Apr 2024 15:52:06 GMT",
 		},
 		{
-			desc:              "segTimeline with Number",
+			desc: "segTimeline with Number",
+			//nolint:lll
 			url:               "/patch/livesim2/patch_60/segtimelinenr_1/testpic_2s/Manifest.mpp?publishTime=2024-04-16T07:34:38Z&nowDate=2024-04-16T07:34:57Z",
 			wantedStatusCode:  http.StatusOK,
 			wantedContentType: "application/dash-patch+xml",

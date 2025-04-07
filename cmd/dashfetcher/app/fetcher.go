@@ -173,7 +173,8 @@ func downloadInit(ctx context.Context, segTmpl *m.SegmentTemplateType, outDir, b
 	return cnt
 }
 
-func downloadSegmentTimeLineWithTime(ctx context.Context, stl *m.SegmentTimelineType, mediaPattern, outDir, baseURL string, cnt counts, force bool) counts {
+func downloadSegmentTimeLineWithTime(ctx context.Context, stl *m.SegmentTimelineType, mediaPattern, outDir, baseURL string,
+	cnt counts, force bool) counts {
 	startTime := uint64(0)
 	var err error
 	for _, segItvl := range stl.S {
@@ -203,7 +204,8 @@ func downloadSegmentTimeLineWithTime(ctx context.Context, stl *m.SegmentTimeline
 	return cnt
 }
 
-func downloadSegmentNumber(ctx context.Context, stpl *m.SegmentTemplateType, totDurMS uint32, mediaPattern, outDir, baseURL string, cnt counts, force bool) counts {
+func downloadSegmentNumber(ctx context.Context, stpl *m.SegmentTemplateType, totDurMS uint32, mediaPattern, outDir, baseURL string,
+	cnt counts, force bool) counts {
 	startNr := uint32(1)
 	if stpl.StartNumber != nil {
 		startNr = *stpl.StartNumber

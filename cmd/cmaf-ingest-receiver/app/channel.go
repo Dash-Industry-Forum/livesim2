@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -575,10 +576,17 @@ func writeMPD(mpd *m.MPD, filePath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create MPD file: %w", err)
 	}
-	defer fh.Close()
+	defer finalClose(fh)
 	_, err = mpd.Write(fh, "  ", true)
 	if err != nil {
 		return fmt.Errorf("failed to write MPD: %w", err)
 	}
 	return nil
+}
+
+func finalClose(closer io.Closer) {
+	err := closer.Close()
+	if err != nil {
+		slog.Error("Failed to close", "err", err)
+	}
 }

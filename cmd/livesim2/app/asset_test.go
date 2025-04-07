@@ -149,7 +149,7 @@ func copyDir(srcDir, dstDir string) error {
 		return err
 	}
 	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
-		var relPath string = strings.Replace(path, srcDir, "", 1)
+		var relPath = strings.Replace(path, srcDir, "", 1)
 		if relPath == "" {
 			return nil
 		}

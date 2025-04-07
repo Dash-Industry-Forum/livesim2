@@ -587,7 +587,7 @@ func adjustAdaptationSetForTimelineTime(se segEntries, as *m.AdaptationSetType) 
 	}
 	as.SegmentTemplate.StartNumber = nil
 	as.SegmentTemplate.Duration = nil
-	as.SegmentTemplate.Media = strings.Replace(as.SegmentTemplate.Media, "$Number$", "$Time$", -1)
+	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Time$")
 	as.SegmentTemplate.Timescale = Ptr(se.mediaTimescale)
 	as.SegmentTemplate.SegmentTimeline.S = se.entries
 	return nil
@@ -599,7 +599,7 @@ func adjustAdaptationSetForTimelineNr(se segEntries, as *m.AdaptationSetType) er
 	}
 	as.SegmentTemplate.StartNumber = nil
 	as.SegmentTemplate.Duration = nil
-	as.SegmentTemplate.Media = strings.Replace(as.SegmentTemplate.Media, "$Time$", "$Number$", -1)
+	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
 	as.SegmentTemplate.Timescale = Ptr(se.mediaTimescale)
 	as.SegmentTemplate.SegmentTimeline.S = se.entries
 
@@ -629,7 +629,7 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 		startNr := Ptr(uint32(*cfg.StartNr))
 		as.SegmentTemplate.StartNumber = startNr
 	}
-	as.SegmentTemplate.Media = strings.Replace(as.SegmentTemplate.Media, "$Time$", "$Number$", -1)
+	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
 	return nil
 }
 

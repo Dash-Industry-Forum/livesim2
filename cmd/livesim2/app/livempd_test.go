@@ -172,6 +172,7 @@ func TestLiveMPDWithTimeSubs(t *testing.T) {
 	}
 }
 
+// nolint:lll
 var liveSubEn = "" +
 	` <AdaptationSetType id="100" lang="en" contentType="text" segmentAlignment="true" mimeType="application/mp4" codecs="stpp">
  <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle"></Role>
@@ -737,9 +738,11 @@ func TestAudioSegmentTimeFollowsVideo(t *testing.T) {
 			mpdStlType:            "timelineTime",
 			wantedVideoTimescale:  90000,
 			wantedAudioTimescale:  48000,
-			wantedVideoSegTimings: []segTiming{{t: 89100000, d: 180000}, {89280000, 180000}, {89460000, 180000}, {89640000, 180000}, {89820000, 180000}},
-			wantedAudioSegTimings: []segTiming{{t: 47520768, d: 95232}, {47616000, 96256}, {47712256, 96256}, {47808512, 96256}, {47904768, 95232}},
-			wantedErr:             "",
+			wantedVideoSegTimings: []segTiming{{t: 89100000, d: 180000}, {89280000, 180000}, {89460000, 180000},
+				{89640000, 180000}, {89820000, 180000}},
+			wantedAudioSegTimings: []segTiming{{t: 47520768, d: 95232}, {47616000, 96256}, {47712256, 96256},
+				{47808512, 96256}, {47904768, 95232}},
+			wantedErr: "",
 		},
 	}
 

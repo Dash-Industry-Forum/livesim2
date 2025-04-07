@@ -593,7 +593,8 @@ func findSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int) (
 	return sm, nil
 }
 
-func createAudioSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int, rep *RepData, segID int) (segOut, error) {
+func createAudioSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int,
+	rep *RepData, segID int) (segOut, error) {
 	refRep := a.refRep
 	refTimescale := uint64(refRep.MediaTimescale)
 
@@ -761,7 +762,7 @@ func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta,
 	ch := createChunk(seg.Styp, trackID, segMeta.newNr)
 	chunkNr := 1
 	var accChunkDur uint32 = 0
-	var totalDur int = 0
+	var totalDur = 0
 	sampleDecodeTime := segMeta.newTime
 	var thisChunkDur uint32 = 0
 	for i := range fs {

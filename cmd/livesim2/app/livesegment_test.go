@@ -97,9 +97,9 @@ func TestLiveSegment(t *testing.T) {
 				mediaTime := nr * 2 * mediaTimescale // This is exact even for audio for nr == 40
 				switch mpdType {
 				case "Number", "TimelineNumber":
-					media = strings.Replace(media, "$NrOrTime$", fmt.Sprintf("%d", nr), -1)
+					media = strings.ReplaceAll(media, "$NrOrTime$", fmt.Sprintf("%d", nr))
 				default: // "TimelineTime":
-					media = strings.Replace(media, "$NrOrTime$", fmt.Sprintf("%d", mediaTime), -1)
+					media = strings.ReplaceAll(media, "$NrOrTime$", fmt.Sprintf("%d", mediaTime))
 				}
 				so, err := genLiveSegment(log, vodFS, asset, cfg, media, nowMS, false /*isLast */)
 				require.NoError(t, err)
@@ -126,7 +126,7 @@ func TestAc3Timing(t *testing.T) {
 	nowMS := 20_000
 	for sNr := 0; sNr <= 5; sNr++ {
 		media := "audio_$NrOrTime$.m4s"
-		media = strings.Replace(media, "$NrOrTime$", fmt.Sprintf("%d", sNr), -1)
+		media = strings.ReplaceAll(media, "$NrOrTime$", fmt.Sprintf("%d", sNr))
 		so, err := genLiveSegment(log, vodFS, asset, cfg, media, nowMS, false /* isLast */)
 		require.NoError(t, err)
 		bmdt := int(so.seg.Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime())
@@ -177,9 +177,9 @@ func TestCheckAudioSegmentTimeAddressing(t *testing.T) {
 				var segMedia string
 				switch mpdType {
 				case "Number", "TimelineNumber":
-					segMedia = strings.Replace(c.media, "$NrOrTime$", fmt.Sprintf("%d", nr), -1)
+					segMedia = strings.ReplaceAll(c.media, "$NrOrTime$", fmt.Sprintf("%d", nr))
 				default:
-					segMedia = strings.Replace(c.media, "$NrOrTime$", fmt.Sprintf("%d", mediaTime), -1)
+					segMedia = strings.ReplaceAll(c.media, "$NrOrTime$", fmt.Sprintf("%d", mediaTime))
 				}
 				so, err := genLiveSegment(log, vodFS, asset, cfg, segMedia, c.nowMS, false /* isLast */)
 				require.NoError(t, err)
@@ -233,7 +233,7 @@ func TestLiveThumbSegment(t *testing.T) {
 			nowMS := 100_000
 			media := tc.media
 			// Always number, even if MPD is timelinetime
-			media = strings.Replace(media, "$NrOrTime$", fmt.Sprintf("%d", tc.reqNr), -1)
+			media = strings.ReplaceAll(media, "$NrOrTime$", fmt.Sprintf("%d", tc.reqNr))
 			so, err := genLiveSegment(log, vodFS, asset, cfg, media, nowMS, false /* isLast */)
 			require.NoError(t, err)
 			origNr := tc.reqNr%tc.nrSegs + 1 // one-based
@@ -698,7 +698,7 @@ func TestSegmentStatusCodeResponse(t *testing.T) {
 				cfg.SegTimelineNrFlag = true
 			}
 			cfg.SegStatusCodes = tc.ss
-			media := strings.Replace(tc.media, "$NrOrTime$", fmt.Sprintf("%d", tc.nrOrTime), -1)
+			media := strings.ReplaceAll(tc.media, "$NrOrTime$", fmt.Sprintf("%d", tc.nrOrTime))
 			rr := httptest.NewRecorder()
 			code, err := writeSegment(context.TODO(), rr, slog.Default(), cfg, nil,
 				vodFS, asset, media, tc.nowMS, nil, false /* isLast */)

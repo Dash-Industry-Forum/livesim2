@@ -25,6 +25,7 @@ func TestNewPatchDoc(t *testing.T) {
 	require.NotNil(t, pDoc)
 }
 
+//nolint:lll
 const wantedPatchSegmentTimelineTime = (`<?xml version="1.0" encoding="UTF-8"?>` + "\n" +
 	`<Patch xmlns="urn:mpeg:dash:schema:mpd-patch:2020" ` +
 	`xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd-patch:2020 DASH-MPD-PATCH.xsd" ` +
@@ -43,6 +44,7 @@ const wantedPatchSegmentTimelineTime = (`<?xml version="1.0" encoding="UTF-8"?>`
 	`  </add>` + "\n" +
 	`</Patch>` + "\n")
 
+//nolint:lll
 const wantedPatchSegmentTimelineNumber = (`<?xml version="1.0" encoding="UTF-8"?>` + "\n" +
 	`<Patch xmlns="urn:mpeg:dash:schema:mpd-patch:2020" ` +
 	`xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:dash:schema:mpd-patch:2020 DASH-MPD-PATCH.xsd" ` +
@@ -136,7 +138,7 @@ func TestDiff(t *testing.T) {
 				d, err := os.ReadFile(c.wantedDiffFile)
 				require.NoError(t, err)
 				wantedDiff = string(d)
-				wantedDiff = strings.Replace(wantedDiff, "\r\n", "\n", -1) // Windows line endings
+				wantedDiff = strings.ReplaceAll(wantedDiff, "\r\n", "\n") // Windows line endings
 			}
 			require.NoError(t, err)
 			require.Equal(t, wantedDiff, out)

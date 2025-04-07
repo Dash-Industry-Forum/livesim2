@@ -372,10 +372,7 @@ func (c *cmafIngester) start(ctx context.Context) {
 		c.log.Info("Next segment availability time", "time", availabilityTime)
 		if c.testNowMS == nil {
 			deltaTime := time.Duration(availabilityTime-int64(nowMS)) * time.Millisecond
-			for {
-				if deltaTime > 0 {
-					break
-				}
+			for deltaTime <= 0 {
 				msg := fmt.Sprintf("Segment availability time in the past: %d", availabilityTime)
 				c.report = append(c.report, msg)
 				c.log.Error(msg)
@@ -565,7 +562,8 @@ func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, nowMS i
 
 // sendMediaSegment sends a media segment to the destination URL.
 // The segment may be written in chunks, rather than as a whole.
-func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup, segPath, segPart, contentType string, segNr, nowMS int, isLast bool) {
+func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup, segPath, segPart, contentType string,
+	segNr, nowMS int, isLast bool) {
 	defer wg.Done()
 
 	u := fmt.Sprintf("%s/%s", c.dest(), segPath)
@@ -651,7 +649,8 @@ type cmafSource struct {
 	useChunked  bool
 }
 
-func newCmafSource(nrBytesCh chan int, writeMoreCh chan struct{}, log *slog.Logger, url string, contentType, user, password string, useChunked bool) *cmafSource {
+func newCmafSource(nrBytesCh chan int, writeMoreCh chan struct{}, log *slog.Logger, url string, contentType, user, password string,
+	useChunked bool) *cmafSource {
 	cs := cmafSource{
 		url:         url,
 		contentType: contentType,

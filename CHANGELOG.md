@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - urlgen page crashed when no DRM configuration
 - mpd part of play URL in urlgen is now query escaped
 - ContentProtect for DRMs in CPIX file with no configured LaURL
+- Updated to golangci-lint v2 and fixed all remarks
 
 ### Chore
 

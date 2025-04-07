@@ -91,7 +91,7 @@ func TestBase64Transform(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			hexID := strings.Replace(c.keyID, "-", "", -1)
+			hexID := strings.ReplaceAll(c.keyID, "-", "")
 			kid, err := id16FromHex(hexID)
 			require.NoError(t, err)
 			b64 := kid.PackBase64()
