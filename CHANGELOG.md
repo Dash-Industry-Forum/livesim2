@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- HEVC encryption support
+
 ### Changed
 
 - Minimal Go version is now 1.23
