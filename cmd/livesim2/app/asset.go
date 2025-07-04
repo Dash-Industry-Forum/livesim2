@@ -755,7 +755,13 @@ func (r RepData) typeURI() mediaURIType {
 }
 
 func prepareForEncryption(codec string) bool {
-	return strings.HasPrefix(codec, "avc") || strings.HasPrefix(codec, "mp4a.40")
+	encryptionCodecPrefixes := []string{"avc", "mp4"}
+	for _, prefix := range encryptionCodecPrefixes {
+		if strings.HasPrefix(codec, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *RepData) readInit(logger *slog.Logger, vodFS fs.FS, assetPath string) error {
@@ -820,7 +826,7 @@ func genEncInit(rawInit []byte, kid id16, iv []byte, scheme string) (*mp4.InitPr
 	if err != nil {
 		return nil, nil, fmt.Errorf("decode init: %w", err)
 	}
-	kidUUI, err := mp4.NewUUIDFromHex(hex.EncodeToString(kid[:]))
+	kidUUI, err := mp4.NewUUIDFromString(hex.EncodeToString(kid[:]))
 	if err != nil {
 		return nil, nil, fmt.Errorf("new uuid: %w", err)
 	}

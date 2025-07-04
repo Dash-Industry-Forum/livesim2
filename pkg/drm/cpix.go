@@ -87,7 +87,7 @@ func ParseCPIX(raw []byte) (*CPIXData, error) {
 	keyElems := root.FindElements("./ContentKeyList/ContentKey")
 	for _, ke := range keyElems {
 		kc := ContentKey{}
-		kc.KeyID, err = mp4.NewUUIDFromHex(getAttrValue(ke, "kid"))
+		kc.KeyID, err = mp4.NewUUIDFromString(getAttrValue(ke, "kid"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse key ID: %w", err)
 		}
@@ -113,7 +113,7 @@ func ParseCPIX(raw []byte) (*CPIXData, error) {
 	for _, ds := range drmSystems {
 		drm := DRMSystem{}
 		drm.SystemID = getAttrValue(ds, "systemId")
-		drm.KeyID, err = mp4.NewUUIDFromHex(getAttrValue(ds, "kid"))
+		drm.KeyID, err = mp4.NewUUIDFromString(getAttrValue(ds, "kid"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse key ID: %w", err)
 		}
@@ -130,7 +130,7 @@ func ParseCPIX(raw []byte) (*CPIXData, error) {
 	usageRules := root.FindElements("./ContentKeyUsageRuleList/ContentKeyUsageRule")
 	for _, ur := range usageRules {
 		rule := ContentKeyUsageRule{}
-		rule.KeyID, err = mp4.NewUUIDFromHex(getAttrValue(ur, "kid"))
+		rule.KeyID, err = mp4.NewUUIDFromString(getAttrValue(ur, "kid"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse key ID: %w", err)
 		}
