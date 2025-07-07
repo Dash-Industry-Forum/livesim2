@@ -74,6 +74,10 @@ func cfgFromRequest(r *http.Request, log *slog.Logger) (nowMS int, cfg *Response
 		return 0, nil, generateAndLogHttpError(log, msg, http.StatusBadRequest)
 	}
 
+	if q.Get("lowdelay") == "1" {
+		cfg.LowDelayFlag = true
+	}
+
 	if cfg.TimeOffsetS != nil {
 		offsetMS := int(*cfg.TimeOffsetS * 1000)
 		nowMS += offsetMS

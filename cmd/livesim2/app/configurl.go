@@ -110,6 +110,8 @@ type ResponseConfig struct {
 	SegStatusCodes               []SegStatusCodes  `json:"SegStatus,omitempty"`
 	Traffic                      []LossItvls       `json:"Traffic,omitempty"`
 	Query                        *Query            `json:"Query,omitempty"`
+	LowDelayFlag				 bool			   `json:"LowDelayFlag,omitempty"`
+
 }
 
 // SegStatusCodes configures regular extraordinary segment response codes

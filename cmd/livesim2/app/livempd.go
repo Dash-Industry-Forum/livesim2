@@ -92,6 +92,10 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		mpd.Location = []m.AnyURI{m.AnyURI(strBuf.String())}
 	}
 
+	if cfg.LowDelayFlag {
+		// Low Delay Logic
+	}
+
 	if cfg.getAvailabilityTimeOffsetS() > 0 {
 		if !cfg.AvailabilityTimeCompleteFlag {
 			if cfg.LatencyTargetMS == nil {
