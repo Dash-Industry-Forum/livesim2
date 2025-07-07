@@ -755,7 +755,7 @@ func (r RepData) typeURI() mediaURIType {
 }
 
 func prepareForEncryption(codec string) bool {
-	encryptionCodecPrefixes := []string{"avc", "hev", "hvc", "mp4"}
+	encryptionCodecPrefixes := []string{"avc", "hev", "hvc", "mp4", "ac-3", "ec-3", "ac-4"}
 	for _, prefix := range encryptionCodecPrefixes {
 		if strings.HasPrefix(codec, prefix) {
 			return true
