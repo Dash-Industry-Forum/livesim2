@@ -141,6 +141,12 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		if as.SegmentTemplate != nil {
 			as.SegmentTemplate.EndNumber = nil // Never output endNumber
 		}
+		if cfg.LowDelayFlag {
+			for _, rep := range as.Representations {
+				ep := m.NewDescriptor(SchemeIdUriSSR, "", "")
+				rep.EssentialProperties = append(rep.EssentialProperties, ep)
+			}
+		}
 		switch as.ContentType {
 		case "video", "audio":
 			if cfg.PatchTTL > 0 && as.Id == nil {

@@ -66,6 +66,7 @@ const (
 
 const (
 	UrlParamSchemeIdUri = "urn:mpeg:dash:urlparam:2014"
+	SchemeIdUriSSR      = "urn:mpeg:dash:ssr:2023"
 )
 
 type ResponseConfig struct {
