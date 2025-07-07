@@ -18,6 +18,10 @@ import (
 	m "github.com/Eyevinn/dash-mpd/mpd"
 )
 
+const (
+	DASHProfileLinear = "urn:mpeg:dash:profile:advanced-linear:2025"
+)
+
 type wrapTimes struct {
 	startWraps  int
 	startWrapMS int
@@ -93,7 +97,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 	}
 
 	if cfg.LowDelayFlag {
-		// Low Delay Logic
+		mpd.Profiles = DASHProfileLinear
 	}
 
 	if cfg.getAvailabilityTimeOffsetS() > 0 {
