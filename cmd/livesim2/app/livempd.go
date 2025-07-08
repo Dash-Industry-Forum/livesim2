@@ -141,6 +141,19 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		if as.SegmentTemplate != nil {
 			as.SegmentTemplate.EndNumber = nil // Never output endNumber
 		}
+
+		if cfg.LowDelayFlag {
+			// EssentialProperty schemeIdUri="urn:mpeg:dash:ssr:2023"
+			ep := m.NewDescriptor(SchemeIdUriSSR, "", "")
+			as.EssentialProperties = append(as.EssentialProperties, ep)
+
+			// Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"
+			role := m.NewDescriptor("urn:mpeg:dash:role:2011", "main", "")
+			as.Roles = append(as.Roles, role)
+
+			// AdaptationSet@startWithSAP = 1
+			as.StartWithSAP = 1
+		}
 		
 		switch as.ContentType {
 		case "video", "audio":
