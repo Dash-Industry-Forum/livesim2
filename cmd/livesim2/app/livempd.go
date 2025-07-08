@@ -137,30 +137,11 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 
 	adaptationSets := orderAdaptationSetsByContentType(period.AdaptationSets)
 	var refSegEntries segEntries
-	isMainSet := true
 	for asIdx, as := range adaptationSets {
 		if as.SegmentTemplate != nil {
 			as.SegmentTemplate.EndNumber = nil // Never output endNumber
 		}
-		if isMainSet && cfg.LowDelayFlag {
-			hasMainRole := false
-			for _, role := range as.Roles {
-				if role.Value == "main" {
-					hasMainRole = true
-					break
-				}
-			}
-			if !hasMainRole {
-				as.Roles = append(as.Roles, &m.DescriptorType{Value: "main"})
-			}
-			isMainSet = false
-		}
-		if cfg.LowDelayFlag {
-			for _, rep := range as.Representations {
-				ep := m.NewDescriptor(SchemeIdUriSSR, "", "")
-				rep.EssentialProperties = append(rep.EssentialProperties, ep)
-			}
-		}
+		
 		switch as.ContentType {
 		case "video", "audio":
 			if cfg.PatchTTL > 0 && as.Id == nil {
