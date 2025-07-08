@@ -241,8 +241,9 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 	}
 	sb.WriteString(aInfo.Host)
 	sb.WriteString("/livesim2/")
-	if q.Get("lowdelay") != "" {
+	if q.Get("lowdelay") != "" { // This is from the checkbox
 		data.LowDelay = true
+		sb.WriteString("lowdelay/")
 	}
 		stl := segmentTimelineType(q.Get("stl"))
 	switch stl {
@@ -406,12 +407,8 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 		sb.WriteString(fmt.Sprintf("traffic_%s/", traffic))
 	}
 
-	if data.LowDelay {
-		sb.WriteString(fmt.Sprintf("%s/%s?lowdelay=1", asset, mpd))
-	} else {
-		sb.WriteString(fmt.Sprintf("%s/%s", asset, mpd))
-	}
-	
+	sb.WriteString(fmt.Sprintf("%s/%s", asset, mpd))
+
 	if annexI != "" {
 		query, err := queryFromAnnexI(annexI)
 		if err != nil {

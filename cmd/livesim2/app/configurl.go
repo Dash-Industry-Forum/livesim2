@@ -306,6 +306,10 @@ cfgLoop:
 		}
 		key, val, ok := strings.Cut(part, "_")
 		if !ok {
+			if part == "lowdelay" {
+				cfg.LowDelayFlag = true
+				continue
+			}
 			contentStartIdx = i
 			break cfgLoop
 		}
