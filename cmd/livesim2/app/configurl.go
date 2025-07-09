@@ -111,8 +111,8 @@ type ResponseConfig struct {
 	SegStatusCodes               []SegStatusCodes  `json:"SegStatus,omitempty"`
 	Traffic                      []LossItvls       `json:"Traffic,omitempty"`
 	Query                        *Query            `json:"Query,omitempty"`
-	LowDelayFlag				 bool			   `json:"LowDelayFlag,omitempty"`
-
+	LowDelayFlag                 bool              `json:"LowDelayFlag,omitempty"`
+	PartialSegments              int              `json:"PartialSegments,omitempty"`
 }
 
 // SegStatusCodes configures regular extraordinary segment response codes
@@ -378,6 +378,8 @@ cfgLoop:
 		case "chunkdur": // chunk duration in seconds
 			cfg.ChunkDurS = sc.AtofPosPtr(key, val)
 			cfg.AvailabilityTimeCompleteFlag = false
+		case "partialsegments": //ammount of partial segments
+			cfg.PartialSegments = sc.Atoi(key, val)
 		case "timesubsstpp": // comma-separated list of languages
 			cfg.TimeSubsStpp = strings.Split(val, ",")
 		case "timesubswvtt": // comma-separated list of languages
