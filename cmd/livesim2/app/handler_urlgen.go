@@ -143,7 +143,6 @@ type urlGenData struct {
 	ChunkDur                    string // chunk duration (float in seconds)
 	LlTarget                    int    // low-latency target (in milliseconds)
 	LowDelay                    bool   // low-latency mode enabled
-	PartialSegments             int // Number of partial segments for SSR
 	TimeSubsStpp                string // languages for generated subtitles in stpp-format (comma-separated)
 	TimeSubsWvtt                string // languages for generated subtitles in wvtt-format (comma-separated)
 	TimeSubsDur                 string // cue duration of generated subtitles (in milliseconds)
@@ -246,16 +245,7 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 		data.LowDelay = true
 		sb.WriteString("lowdelay/")
 	}
-	if partialSegments := q.Get("partialsegments"); partialSegments != "" {
-		ps, err := strconv.Atoi(partialSegments)
-		if err != nil {
-			panic("bad partialsegments")
-		}
-		data.PartialSegments = ps
-		sb.WriteString(fmt.Sprintf("partialsegments_%s/", partialSegments))
-	}
-
-	stl := segmentTimelineType(q.Get("stl"))
+		stl := segmentTimelineType(q.Get("stl"))
 	switch stl {
 	case Number:
 		data.Stl = Number
