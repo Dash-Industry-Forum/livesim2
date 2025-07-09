@@ -295,7 +295,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 				mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, se.lsi))
 			}
 		case timeLineNumber:
-			err := adjustAdaptationSetForTimelineNr(se, as)
+			err := adjustAdaptationSetForTimelineNr(se, as, cfg)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForTimelineNr: %w", err)
 			}
@@ -615,13 +615,16 @@ func adjustAdaptationSetForTimelineTime(se segEntries, as *m.AdaptationSetType) 
 	return nil
 }
 
-func adjustAdaptationSetForTimelineNr(se segEntries, as *m.AdaptationSetType) error {
+func adjustAdaptationSetForTimelineNr(se segEntries, as *m.AdaptationSetType, cfg *ResponseConfig) error {
 	if as.SegmentTemplate.SegmentTimeline == nil {
 		as.SegmentTemplate.SegmentTimeline = &m.SegmentTimelineType{}
 	}
 	as.SegmentTemplate.StartNumber = nil
 	as.SegmentTemplate.Duration = nil
 	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
+	if (cfg.LowDelayFlag){
+		as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Number$_$SubNumber$")
+	}
 	as.SegmentTemplate.Timescale = Ptr(se.mediaTimescale)
 	as.SegmentTemplate.SegmentTimeline.S = se.entries
 
