@@ -96,7 +96,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		mpd.Location = []m.AnyURI{m.AnyURI(strBuf.String())}
 	}
 
-	if cfg.LowDelayFlag {
+	if cfg.EnableLowLatencyMode {
 		mpd.Profiles = DASHProfileLinear
 	}
 
@@ -142,7 +142,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 			as.SegmentTemplate.EndNumber = nil // Never output endNumber
 		}
 
-		if cfg.LowDelayFlag {
+		if cfg.EnableLowLatencyMode {
 			// EssentialProperty schemeIdUri="urn:mpeg:dash:ssr:2023"
 			ep := m.NewDescriptor(SchemeIdUriSSR, "", "")
 			as.EssentialProperties = append(as.EssentialProperties, ep)
@@ -154,7 +154,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 			// AdaptationSet@startWithSAP = 1
 			as.StartWithSAP = 1
 		}
-		
+
 		switch as.ContentType {
 		case "video", "audio":
 			if cfg.PatchTTL > 0 && as.Id == nil {
@@ -622,7 +622,7 @@ func adjustAdaptationSetForTimelineNr(se segEntries, as *m.AdaptationSetType, cf
 	as.SegmentTemplate.StartNumber = nil
 	as.SegmentTemplate.Duration = nil
 	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
-	if (cfg.LowDelayFlag){
+	if cfg.EnableLowLatencyMode {
 		as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Number$_$SubNumber$")
 	}
 	as.SegmentTemplate.Timescale = Ptr(se.mediaTimescale)

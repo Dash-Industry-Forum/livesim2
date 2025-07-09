@@ -111,8 +111,7 @@ type ResponseConfig struct {
 	SegStatusCodes               []SegStatusCodes  `json:"SegStatus,omitempty"`
 	Traffic                      []LossItvls       `json:"Traffic,omitempty"`
 	Query                        *Query            `json:"Query,omitempty"`
-	LowDelayFlag				 bool			   `json:"LowDelayFlag,omitempty"`
-
+	EnableLowLatencyMode         bool              `json:"EnableLowLatencyMode,omitempty"`
 }
 
 // SegStatusCodes configures regular extraordinary segment response codes
@@ -307,7 +306,7 @@ cfgLoop:
 		key, val, ok := strings.Cut(part, "_")
 		if !ok {
 			if part == "lowdelay" {
-				cfg.LowDelayFlag = true
+				cfg.EnableLowLatencyMode = true
 				continue
 			}
 			contentStartIdx = i
