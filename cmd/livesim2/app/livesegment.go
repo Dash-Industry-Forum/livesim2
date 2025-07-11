@@ -726,6 +726,81 @@ func writeChunkedSegment(ctx context.Context, log *slog.Logger, w http.ResponseW
 	return nil
 }
 
+func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
+	vodFS fs.FS, a *asset, segmentPart string, subSegmentPart string, nowMS int, isLast bool) error {
+
+	log.Debug("writeSubSegment", "segmentPart", segmentPart, subSegmentPart, nil)
+
+	so, err := genLiveSegment(log, vodFS, a, cfg, segmentPart, nowMS, isLast)
+	if err != nil {
+		return fmt.Errorf("convertToLive: %w", err)
+	}
+	if so.seg == nil {
+		return fmt.Errorf("no segment data for chunked segment")
+	}
+
+	w.Header().Set("Content-Type", so.meta.rep.SegmentType())
+	if isImage(segmentPart) {
+		w.Header().Set("Content-Length", strconv.Itoa(len(so.data)))
+		_, err = w.Write(so.data)
+		return fmt.Errorf("could not write image segment: %w", err)
+	}
+	rep := so.meta.rep
+	seg := so.seg
+
+	// That fragment/chunk duration is segment_duration-availabilityTimeOffset.
+	chunkDur := (a.SegmentDurMS - int(cfg.AvailabilityTimeOffsetS*1000)) * int(rep.MediaTimescale) / 1000
+	chunks, err := chunkSegment(rep.initSeg, seg, so.meta, chunkDur)
+	if err != nil {
+		return fmt.Errorf("chunkSegment: %w", err)
+	}
+	if cfg.DRM != "" {
+		frags := make([]*mp4.Fragment, len(chunks))
+		for i, chk := range chunks {
+			frags[i] = chk.frag
+		}
+		err := encryptFrags(log, cfg, drmCfg, rep, frags)
+		if err != nil {
+			return fmt.Errorf("encryptFrags: %w", err)
+		}
+	}
+
+	startUnixMS := unixMS()
+	chunkAvailTime := int(so.meta.newTime) + cfg.StartTimeS*int(rep.MediaTimescale)
+	chunkIndex, err := strconv.Atoi(subSegmentPart)
+	if err != nil {
+		return fmt.Errorf("writeChunk: %w", err)
+	}
+	chk := chunks[chunkIndex-1]
+	chunkAvailTime += int(chk.dur)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	chunkAvailMS := chunkAvailTime * 1000 / int(rep.MediaTimescale)
+	if chunkAvailMS < nowMS {
+		err = writeChunk(w, chk)
+		if err != nil {
+			return fmt.Errorf("writeChunk: %w", err)
+		}
+		return nil
+	}
+	nowUpdateMS := unixMS() - startUnixMS + nowMS
+	if chunkAvailMS < nowUpdateMS {
+		err = writeChunk(w, chk)
+		if err != nil {
+			return fmt.Errorf("writeChunk: %w", err)
+		}
+		return nil
+	}
+	sleepMS := chunkAvailMS - nowUpdateMS
+	time.Sleep(time.Duration(sleepMS * 1_000_000))
+	err = writeChunk(w, chk)
+	if err != nil {
+		return fmt.Errorf("writeChunk: %w", err)
+	}
+	return nil
+}
+
 func unixMS() int {
 	return int(time.Now().UnixMilli())
 }

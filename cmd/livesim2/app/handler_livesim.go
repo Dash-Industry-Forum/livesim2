@@ -318,8 +318,25 @@ func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, 
 	if cfg.AvailabilityTimeCompleteFlag {
 		return 0, writeLiveSegment(log, w, cfg, drmCfg, vodFS, a, segmentPart, nowMS, tt, isLast)
 	}
+	if cfg.EnableLowDelayMode {
+		// Sub segement part low-delay mode should return each subSegment as a separeated request
+		newSegmentPart, subSegmentPart := calcSubSegementPart(segmentPart)
+		return 0, writeSubSegment(ctx, log, w, cfg, drmCfg, vodFS, a, newSegmentPart, subSegmentPart, nowMS, isLast)
+	}
 	// Chunked low-latency mode
 	return 0, writeChunkedSegment(ctx, log, w, cfg, drmCfg, vodFS, a, segmentPart, nowMS, isLast)
+}
+
+func calcSubSegementPart(segmentPart string) (string, string) {
+	segmentPartWithoutExtension := strings.Split(segmentPart, ".")
+
+	parts := strings.Split(segmentPartWithoutExtension[0], "_")
+
+	originalSegement := strings.Join([]string{parts[0], parts[1]}, "_")
+	newSegmentPart := strings.Join([]string{originalSegement, segmentPartWithoutExtension[1]}, ".")
+
+	subSegmentPart := parts[2]
+	return newSegmentPart, subSegmentPart
 }
 
 // calcStatusCode returns the configured status code for the segment or 0 if none.
