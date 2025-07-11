@@ -447,9 +447,24 @@ func (l lastSegInfo) availabilityTime(ato float64) float64 {
 	return math.Round(float64(l.startTime+l.dur)/float64(l.timescale)) - ato
 }
 
+func calculateK(segmentDuration uint64, mediaTimescale int, chunkDuration *float64) *uint64 {
+	if chunkDuration == nil || *chunkDuration <= 0 {
+		return nil
+	}
+	chunkDurInTimescale := *chunkDuration * float64(mediaTimescale)
+	if chunkDurInTimescale <= 0 {
+		return nil
+	}
+	kVal := uint64(math.Round(float64(segmentDuration) / chunkDurInTimescale))
+	if kVal > 1 {
+		return &kVal
+	}
+	return nil
+}
+
 // generateTimelineEntries generates timeline entries for the given representation.
 // If no segments are available, startNr and lsi.nr are set to -1.
-func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int) segEntries {
+func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int, chunkDuration *float64) segEntries {
 	rep := a.Reps[repID]
 	segs := rep.Segments
 	nrSegs := len(segs)
@@ -498,7 +513,10 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int) s
 	nowNr := wt.nowWraps*nrSegs + relNowIdx
 	t := uint64(rep.duration()*wt.startWraps) + segs[relStartIdx].StartTime
 	d := segs[relStartIdx].dur()
-	s := &m.S{T: Ptr(t), D: d}
+
+	k := calculateK(d, rep.MediaTimescale, chunkDuration)
+
+	s := &m.S{T: Ptr(t), D: d, K: k}
 	lsi := lastSegInfo{
 		timescale: uint64(rep.MediaTimescale),
 		startTime: t,
@@ -515,8 +533,12 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int) s
 			lsi.nr = nr
 			continue
 		}
+
 		d = seg.dur()
-		s = &m.S{D: d}
+
+		k = calculateK(d, rep.MediaTimescale, chunkDuration)
+
+		s = &m.S{D: d, K: k}
 		se.entries = append(se.entries, s)
 		lsi.dur = d
 		lsi.nr = nr

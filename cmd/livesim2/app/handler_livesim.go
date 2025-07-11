@@ -372,7 +372,7 @@ func calcStatusCode(cfg *ResponseConfig, a *asset, segmentPart string, nowMS int
 
 func findLastSegNr(cfg *ResponseConfig, a *asset, nowMS int, rep *RepData) int {
 	wTimes := calcWrapTimes(a, cfg, nowMS, mpd.Duration(60*time.Second))
-	timeLineEntries := a.generateTimelineEntries(rep.ID, wTimes, 0)
+	timeLineEntries := a.generateTimelineEntries(rep.ID, wTimes, 0, nil)
 	return timeLineEntries.lastNr()
 }
 

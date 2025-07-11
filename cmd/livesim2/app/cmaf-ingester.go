@@ -524,12 +524,12 @@ func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, nowMS i
 			var se segEntries
 			// The first representation is used as reference for generating timeline entries
 			if idx == 0 {
-				refSegEntries = c.asset.generateTimelineEntries(rd.repID, wTimes, atoMS)
+				refSegEntries = c.asset.generateTimelineEntries(rd.repID, wTimes, atoMS, nil)
 				se = refSegEntries
 			} else {
 				switch rd.contentType {
 				case "video", "text", "image":
-					se = c.asset.generateTimelineEntries(rd.repID, wTimes, atoMS)
+					se = c.asset.generateTimelineEntries(rd.repID, wTimes, atoMS, nil)
 				case "audio":
 					se = c.asset.generateTimelineEntriesFromRef(refSegEntries, rd.repID)
 				default:

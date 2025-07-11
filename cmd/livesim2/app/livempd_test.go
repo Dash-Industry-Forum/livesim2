@@ -359,7 +359,7 @@ func TestLastAvailableSegment(t *testing.T) {
 				} else {
 					require.NoError(t, err)
 					r := as.Representations[0] // Assume that any representation will be fine inside AS
-					se := asset.generateTimelineEntries(r.Id, wTimes, atoMS)
+					se := asset.generateTimelineEntries(r.Id, wTimes, atoMS, nil)
 					assert.Equal(t, tc.wantedSegNr, se.lsi.nr)
 				}
 			}
@@ -1038,5 +1038,69 @@ func TestEndNumberRemovedFromMPD(t *testing.T) {
 	for _, as := range aSets {
 		stl := as.SegmentTemplate
 		assert.Nil(t, stl.EndNumber)
+	}
+}
+
+func TestGenerateTimelineEntries(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+
+	am := newAssetMgr(vodFS, "", false)
+
+	logger := slog.Default()
+
+	err := am.discoverAssets(logger)
+	require.NoError(t, err)
+
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	cases := []struct {
+		desc                   string
+		reID                   string
+		wt                     wrapTimes
+		atoMS                  int
+		chunkDur               *float64
+		expectedStartNr        int
+		expectedLsiNr          int
+		expectedMediaTimescale uint32
+		expectedEntries        []*m.S
+	}{
+		{
+			desc:                   "With chunkDuration of 0.5s expecting S@k=4",
+			reID:                   "V300",
+			wt:                     wrapTimes{startRelMS: 0, nowRelMS: 7000, startWraps: 0, nowWraps: 0},
+			atoMS:                  0,
+			chunkDur:               Ptr(0.5),
+			expectedStartNr:        0,
+			expectedLsiNr:          2,
+			expectedMediaTimescale: 90000,
+			expectedEntries: []*m.S{
+				{T: Ptr(uint64(0)), D: 180000, R: 2, K: Ptr(uint64(4))},
+			},
+		},
+		{
+			desc:                   "With chunkDuration of 2.1s expecting S@k=1 (nil)",
+			reID:                   "V300",
+			wt:                     wrapTimes{startRelMS: 0, nowRelMS: 7000, startWraps: 0, nowWraps: 0},
+			atoMS:                  0,
+			chunkDur:               Ptr(2.1),
+			expectedStartNr:        0,
+			expectedLsiNr:          2,
+			expectedMediaTimescale: 90000,
+			expectedEntries: []*m.S{
+				{T: Ptr(uint64(0)), D: 180000, R: 2, K: nil},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			se := asset.generateTimelineEntries(tc.reID, tc.wt, tc.atoMS, tc.chunkDur)
+
+			assert.Equal(t, tc.expectedStartNr, se.startNr, "startNr mismatch")
+			assert.Equal(t, tc.expectedLsiNr, se.lsi.nr, "last segment info (nr) mismatch")
+			assert.Equal(t, tc.expectedMediaTimescale, se.mediaTimescale, "mediaTimescale mismatch")
+			require.Equal(t, tc.expectedEntries, se.entries, "timeline entries mismatch")
+		})
 	}
 }
