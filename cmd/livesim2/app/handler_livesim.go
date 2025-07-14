@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
@@ -319,24 +320,39 @@ func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, 
 		return 0, writeLiveSegment(log, w, cfg, drmCfg, vodFS, a, segmentPart, nowMS, tt, isLast)
 	}
 	if cfg.EnableLowDelayMode {
-		// Sub segement part low-delay mode should return each subSegment as a separeated request
-		newSegmentPart, subSegmentPart := calcSubSegementPart(segmentPart)
+		// Sub segment part low-delay mode should return each subSegment as a separated request
+		newSegmentPart, subSegmentPart, err := calcSubSegmentPart(segmentPart)
+		if err != nil {
+			return 0, err
+		}
+
 		return 0, writeSubSegment(ctx, log, w, cfg, drmCfg, vodFS, a, newSegmentPart, subSegmentPart, nowMS, isLast)
 	}
 	// Chunked low-latency mode
 	return 0, writeChunkedSegment(ctx, log, w, cfg, drmCfg, vodFS, a, segmentPart, nowMS, isLast)
 }
 
-func calcSubSegementPart(segmentPart string) (string, string) {
-	segmentPartWithoutExtension := strings.Split(segmentPart, ".")
+var subSegmentRegex = regexp.MustCompile(`^(.*_\d+)_(\d+)$`)
 
-	parts := strings.Split(segmentPartWithoutExtension[0], "_")
+func calcSubSegmentPart(segmentPart string) (string, string, error) {
+	ext := filepath.Ext(segmentPart)
 
-	originalSegement := strings.Join([]string{parts[0], parts[1]}, "_")
-	newSegmentPart := strings.Join([]string{originalSegement, segmentPartWithoutExtension[1]}, ".")
+	if ext == "" {
+		return "", "", fmt.Errorf("segment part has no extension: %s", segmentPart)
+	}
 
-	subSegmentPart := parts[2]
-	return newSegmentPart, subSegmentPart
+	segmentPartWithoutExtension := strings.TrimSuffix(segmentPart, ext)
+	matches := subSegmentRegex.FindStringSubmatch(segmentPartWithoutExtension)
+
+	if len(matches) != 3 {
+		return "", "", fmt.Errorf("invalid sub-segment part format: %s", segmentPart)
+	}
+
+	originalSegment := matches[1]
+	subSegmentPart := matches[2]
+	newSegmentPart := originalSegment + ext
+
+	return newSegmentPart, subSegmentPart, nil
 }
 
 // calcStatusCode returns the configured status code for the segment or 0 if none.
