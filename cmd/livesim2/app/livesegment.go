@@ -647,6 +647,56 @@ func findRefSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int
 	return refMeta, nil
 }
 
+// prepareChunks generates a live segment, chunks it, and encrypts it if needed.
+func prepareChunks(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
+	segmentPart string, nowMS int, isLast bool) (segOut, []chunk, error) {
+
+	so, err := genLiveSegment(log, vodFS, a, cfg, segmentPart, nowMS, isLast)
+	if err != nil {
+		return so, nil, fmt.Errorf("convertToLive: %w", err)
+	}
+	if isImage(segmentPart) {
+		return so, nil, nil
+	}
+	if so.seg == nil {
+		return so, nil, fmt.Errorf("no segment data for chunked segment")
+	}
+
+	rep := so.meta.rep
+	seg := so.seg
+
+	// That fragment/chunk duration is segment_duration-availabilityTimeOffset.
+	chunkDur := (a.SegmentDurMS - int(cfg.AvailabilityTimeOffsetS*1000)) * int(rep.MediaTimescale) / 1000
+	chunks, err := chunkSegment(rep.initSeg, seg, so.meta, chunkDur)
+	if err != nil {
+		return so, nil, fmt.Errorf("chunkSegment: %w", err)
+	}
+	if cfg.DRM != "" {
+		frags := make([]*mp4.Fragment, len(chunks))
+		for i, chk := range chunks {
+			frags[i] = chk.frag
+		}
+		err := encryptFrags(log, cfg, drmCfg, rep, frags)
+		if err != nil {
+			return so, nil, fmt.Errorf("encryptFrags: %w", err)
+		}
+	}
+	return so, chunks, nil
+}
+
+func setHeaders(w http.ResponseWriter, so segOut, segmentPart string) error {
+	w.Header().Set("Content-Type", so.meta.rep.SegmentType())
+	if isImage(segmentPart) {
+		w.Header().Set("Content-Length", strconv.Itoa(len(so.data)))
+		_, err := w.Write(so.data)
+		if err != nil {
+			return fmt.Errorf("could not write image segment: %w", err)
+		}
+		return nil
+	}
+	return nil
+}
+
 // writeChunkedSegment splits a segment into chunks and send them as they become available timewise.
 //
 // nowMS servers as reference for the current time and can be set to any value. Media time will
@@ -656,42 +706,19 @@ func writeChunkedSegment(ctx context.Context, log *slog.Logger, w http.ResponseW
 
 	log.Debug("writeChunkedSegment", "segmentPart", segmentPart)
 
-	so, err := genLiveSegment(log, vodFS, a, cfg, segmentPart, nowMS, isLast)
+	so, chunks, err := prepareChunks(log, vodFS, a, cfg, drmCfg, segmentPart, nowMS, isLast)
 	if err != nil {
-		return fmt.Errorf("convertToLive: %w", err)
-	}
-	if so.seg == nil {
-		return fmt.Errorf("no segment data for chunked segment")
+		return err
 	}
 
-	w.Header().Set("Content-Type", so.meta.rep.SegmentType())
+	err = setHeaders(w, so, segmentPart)
+	if err != nil {
+		return err
+	}
 	if isImage(segmentPart) {
-		w.Header().Set("Content-Length", strconv.Itoa(len(so.data)))
-		_, err = w.Write(so.data)
-		return fmt.Errorf("could not write image segment: %w", err)
+		return nil
 	}
 	rep := so.meta.rep
-	seg := so.seg
-
-	// Some part of the segment should be available, and is delivered directly.
-	// The rest are returned HTTP chunks as time passes.
-	// In general, we should extract all the samples and build a new one with the right fragment duration.
-	// That fragment/chunk duration is segment_duration-availabilityTimeOffset.
-	chunkDur := (a.SegmentDurMS - int(cfg.AvailabilityTimeOffsetS*1000)) * int(rep.MediaTimescale) / 1000
-	chunks, err := chunkSegment(rep.initSeg, seg, so.meta, chunkDur)
-	if err != nil {
-		return fmt.Errorf("chunkSegment: %w", err)
-	}
-	if cfg.DRM != "" {
-		frags := make([]*mp4.Fragment, len(chunks))
-		for i, chk := range chunks {
-			frags[i] = chk.frag
-		}
-		err := encryptFrags(log, cfg, drmCfg, rep, frags)
-		if err != nil {
-			return fmt.Errorf("encryptFrags: %w", err)
-		}
-	}
 
 	startUnixMS := unixMS()
 	chunkAvailTime := int(so.meta.newTime) + cfg.StartTimeS*int(rep.MediaTimescale)
@@ -731,39 +758,19 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 
 	log.Debug("writeSubSegment", "segmentPart", segmentPart, subSegmentPart, nil)
 
-	so, err := genLiveSegment(log, vodFS, a, cfg, segmentPart, nowMS, isLast)
+	so, chunks, err := prepareChunks(log, vodFS, a, cfg, drmCfg, segmentPart, nowMS, isLast)
 	if err != nil {
-		return fmt.Errorf("convertToLive: %w", err)
-	}
-	if so.seg == nil {
-		return fmt.Errorf("no segment data for chunked segment")
+		return err
 	}
 
-	w.Header().Set("Content-Type", so.meta.rep.SegmentType())
+	err = setHeaders(w, so, segmentPart)
+	if err != nil {
+		return err
+	}
 	if isImage(segmentPart) {
-		w.Header().Set("Content-Length", strconv.Itoa(len(so.data)))
-		_, err = w.Write(so.data)
-		return fmt.Errorf("could not write image segment: %w", err)
+		return nil
 	}
 	rep := so.meta.rep
-	seg := so.seg
-
-	// That fragment/chunk duration is segment_duration-availabilityTimeOffset.
-	chunkDur := (a.SegmentDurMS - int(cfg.AvailabilityTimeOffsetS*1000)) * int(rep.MediaTimescale) / 1000
-	chunks, err := chunkSegment(rep.initSeg, seg, so.meta, chunkDur)
-	if err != nil {
-		return fmt.Errorf("chunkSegment: %w", err)
-	}
-	if cfg.DRM != "" {
-		frags := make([]*mp4.Fragment, len(chunks))
-		for i, chk := range chunks {
-			frags[i] = chk.frag
-		}
-		err := encryptFrags(log, cfg, drmCfg, rep, frags)
-		if err != nil {
-			return fmt.Errorf("encryptFrags: %w", err)
-		}
-	}
 
 	startUnixMS := unixMS()
 	chunkAvailTime := int(so.meta.newTime) + cfg.StartTimeS*int(rep.MediaTimescale)
@@ -771,6 +778,7 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 	if err != nil {
 		return fmt.Errorf("writeChunk: %w", err)
 	}
+
 	chk := chunks[chunkIndex-1]
 	chunkAvailTime += int(chk.dur)
 	if ctx.Err() != nil {
@@ -785,13 +793,6 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 		return nil
 	}
 	nowUpdateMS := unixMS() - startUnixMS + nowMS
-	if chunkAvailMS < nowUpdateMS {
-		err = writeChunk(w, chk)
-		if err != nil {
-			return fmt.Errorf("writeChunk: %w", err)
-		}
-		return nil
-	}
 	sleepMS := chunkAvailMS - nowUpdateMS
 	time.Sleep(time.Duration(sleepMS * 1_000_000))
 	err = writeChunk(w, chk)
