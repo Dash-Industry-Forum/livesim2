@@ -728,3 +728,133 @@ func TestMehdBoxRemovedFromInitSegment(t *testing.T) {
 	require.NotNil(t, initSeg)
 	require.Nil(t, initSeg.Moov.Mvex.Mehd)
 }
+
+func TestWriteSubSegment(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false)
+	log := slog.Default()
+	err := am.discoverAssets(log)
+	require.NoError(t, err)
+
+	cfg := NewResponseConfig()
+	cfg.AvailabilityTimeCompleteFlag = false
+	cfg.EnableLowDelayMode = true
+	cfg.AvailabilityTimeOffsetS = 7.0
+	err = logging.InitSlog("debug", "discard")
+	require.NoError(t, err)
+
+	cases := []struct {
+		desc           string
+		asset          string
+		media          string
+		subSegmentPart string
+		mediaTimescale int
+		nowMS          int
+		expSeqNr       uint32
+		expErr         string
+		shouldPanic    bool
+		cancelContext  bool
+	}{
+		{
+			desc:           "first video sub-segment",
+			asset:          "testpic_8s",
+			media:          "V300/10.m4s",
+			subSegmentPart: "1",
+			mediaTimescale: 15360,
+			nowMS:          86_000,
+			expSeqNr:       10,
+		},
+		{
+			desc:           "last video sub-segment",
+			asset:          "testpic_8s",
+			media:          "V300/10.m4s",
+			subSegmentPart: "8",
+			mediaTimescale: 15360,
+			nowMS:          86_000,
+			expSeqNr:       10,
+		},
+		{
+			desc:           "audio sub-segment",
+			asset:          "testpic_2s",
+			media:          "A48/5.m4s",
+			subSegmentPart: "1",
+			mediaTimescale: 48000,
+			nowMS:          12000,
+			expSeqNr:       5,
+		},
+		{
+			desc:           "too early",
+			asset:          "testpic_8s",
+			media:          "V300/10.m4s",
+			subSegmentPart: "1",
+			mediaTimescale: 15360,
+			nowMS:          79_000,
+			expErr:         "convertToLive: createOutSeg: too early by",
+		},
+		{
+			desc:           "gone",
+			asset:          "testpic_8s",
+			media:          "V300/10.m4s",
+			subSegmentPart: "1",
+			mediaTimescale: 15360,
+			nowMS:          400_000,
+			expErr:         "convertToLive: createOutSeg: gone",
+		},
+		{
+			desc:           "invalid sub-segment part (not a number)",
+			asset:          "testpic_8s",
+			media:          "V300/10.m4s",
+			subSegmentPart: "abc",
+			mediaTimescale: 15360,
+			nowMS:          86_000,
+			expErr:         "writeChunk: strconv.Atoi: parsing \"abc\": invalid syntax",
+		},
+		{
+			desc:           "invalid sub-segment index (out of bounds)",
+			asset:          "testpic_8s",
+			media:          "V300/10.m4s",
+			subSegmentPart: "9",
+			mediaTimescale: 15360,
+			nowMS:          86_000,
+			shouldPanic:    true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			asset, ok := am.findAsset(tc.asset)
+			require.True(t, ok)
+
+			rr := httptest.NewRecorder()
+			ctx := context.Background()
+
+			if tc.shouldPanic {
+				require.Panics(t, func() {
+					// This call is expected to panic
+					_ = writeSubSegment(ctx, log, rr, cfg, nil, vodFS, asset, tc.media, tc.subSegmentPart, tc.nowMS, false /* isLast */)
+				})
+
+				return
+			}
+
+			err := writeSubSegment(ctx, log, rr, cfg, nil, vodFS, asset, tc.media, tc.subSegmentPart, tc.nowMS, false /* isLast */)
+
+			if tc.expErr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.expErr)
+				return
+			}
+			require.NoError(t, err)
+
+			seg := rr.Body.Bytes()
+
+			// A subsegment is a styp+moof+mdat which is a valid file
+			sr := bits.NewFixedSliceReader(seg)
+			mp4d, err := mp4.DecodeFileSR(sr)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(mp4d.Segments[0].Fragments))
+
+			moof := mp4d.Segments[0].Fragments[0].Moof
+			require.Equal(t, tc.expSeqNr, moof.Mfhd.SequenceNumber)
+		})
+	}
+}
