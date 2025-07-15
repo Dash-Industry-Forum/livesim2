@@ -748,19 +748,16 @@ func TestWriteSubSegment(t *testing.T) {
 		asset          string
 		media          string
 		subSegmentPart string
-		mediaTimescale int
 		nowMS          int
 		expSeqNr       uint32
 		expErr         string
 		shouldPanic    bool
-		cancelContext  bool
 	}{
 		{
 			desc:           "first video sub-segment",
 			asset:          "testpic_8s",
 			media:          "V300/10.m4s",
 			subSegmentPart: "1",
-			mediaTimescale: 15360,
 			nowMS:          86_000,
 			expSeqNr:       10,
 		},
@@ -769,7 +766,6 @@ func TestWriteSubSegment(t *testing.T) {
 			asset:          "testpic_8s",
 			media:          "V300/10.m4s",
 			subSegmentPart: "8",
-			mediaTimescale: 15360,
 			nowMS:          86_000,
 			expSeqNr:       10,
 		},
@@ -778,7 +774,6 @@ func TestWriteSubSegment(t *testing.T) {
 			asset:          "testpic_2s",
 			media:          "A48/5.m4s",
 			subSegmentPart: "1",
-			mediaTimescale: 48000,
 			nowMS:          12000,
 			expSeqNr:       5,
 		},
@@ -787,7 +782,6 @@ func TestWriteSubSegment(t *testing.T) {
 			asset:          "testpic_8s",
 			media:          "V300/10.m4s",
 			subSegmentPart: "1",
-			mediaTimescale: 15360,
 			nowMS:          79_000,
 			expErr:         "convertToLive: createOutSeg: too early by",
 		},
@@ -796,7 +790,6 @@ func TestWriteSubSegment(t *testing.T) {
 			asset:          "testpic_8s",
 			media:          "V300/10.m4s",
 			subSegmentPart: "1",
-			mediaTimescale: 15360,
 			nowMS:          400_000,
 			expErr:         "convertToLive: createOutSeg: gone",
 		},
@@ -805,7 +798,6 @@ func TestWriteSubSegment(t *testing.T) {
 			asset:          "testpic_8s",
 			media:          "V300/10.m4s",
 			subSegmentPart: "abc",
-			mediaTimescale: 15360,
 			nowMS:          86_000,
 			expErr:         "writeChunk: strconv.Atoi: parsing \"abc\": invalid syntax",
 		},
@@ -814,7 +806,6 @@ func TestWriteSubSegment(t *testing.T) {
 			asset:          "testpic_8s",
 			media:          "V300/10.m4s",
 			subSegmentPart: "9",
-			mediaTimescale: 15360,
 			nowMS:          86_000,
 			shouldPanic:    true,
 		},
