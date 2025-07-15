@@ -732,16 +732,16 @@ func TestMehdBoxRemovedFromInitSegment(t *testing.T) {
 func TestWriteSubSegment(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	am := newAssetMgr(vodFS, "", false)
+	err := logging.InitSlog("debug", "discard")
+	require.NoError(t, err)
 	log := slog.Default()
-	err := am.discoverAssets(log)
+	err = am.discoverAssets(log)
 	require.NoError(t, err)
 
 	cfg := NewResponseConfig()
 	cfg.AvailabilityTimeCompleteFlag = false
 	cfg.EnableLowDelayMode = true
 	cfg.AvailabilityTimeOffsetS = 7.0
-	err = logging.InitSlog("debug", "discard")
-	require.NoError(t, err)
 
 	cases := []struct {
 		desc           string
