@@ -738,82 +738,99 @@ func TestWriteSubSegment(t *testing.T) {
 	err = am.discoverAssets(log)
 	require.NoError(t, err)
 
-	cfg := NewResponseConfig()
-	cfg.AvailabilityTimeCompleteFlag = false
-	cfg.EnableLowDelayMode = true
-	cfg.AvailabilityTimeOffsetS = 7.0
-
 	cases := []struct {
-		desc           string
-		asset          string
-		media          string
-		subSegmentPart string
-		nowMS          int
-		expSeqNr       uint32
-		expErr         string
-		shouldPanic    bool
+		desc                    string
+		asset                   string
+		media                   string
+		subSegmentPart          string
+		nowMS                   int
+		expSeqNr                uint32
+		expErr                  string
+		shouldPanic             bool
+		availabilityTimeOffsetS float64
 	}{
 		{
-			desc:           "first video sub-segment",
-			asset:          "testpic_8s",
-			media:          "V300/10.m4s",
-			subSegmentPart: "1",
-			nowMS:          86_000,
-			expSeqNr:       10,
+			desc:                    "first video sub-segment (8s)",
+			asset:                   "testpic_8s",
+			media:                   "V300/10.m4s",
+			subSegmentPart:          "1",
+			nowMS:                   86_000,
+			expSeqNr:                10,
+			availabilityTimeOffsetS: 7.0,
 		},
 		{
-			desc:           "last video sub-segment",
-			asset:          "testpic_8s",
-			media:          "V300/10.m4s",
-			subSegmentPart: "8",
-			nowMS:          86_000,
-			expSeqNr:       10,
+			desc:                    "last video sub-segment (8s)",
+			asset:                   "testpic_8s",
+			media:                   "V300/10.m4s",
+			subSegmentPart:          "8",
+			nowMS:                   86_000,
+			expSeqNr:                10,
+			availabilityTimeOffsetS: 7.0,
 		},
 		{
-			desc:           "audio sub-segment",
-			asset:          "testpic_2s",
-			media:          "A48/5.m4s",
-			subSegmentPart: "1",
-			nowMS:          12000,
-			expSeqNr:       5,
+			desc:                    "valid sub-segment (2s segment)",
+			asset:                   "testpic_2s",
+			media:                   "V300/10.m4s",
+			subSegmentPart:          "1",
+			nowMS:                   22_000,
+			availabilityTimeOffsetS: 1.0,
+			expSeqNr:                10,
 		},
 		{
-			desc:           "too early",
-			asset:          "testpic_8s",
-			media:          "V300/10.m4s",
-			subSegmentPart: "1",
-			nowMS:          79_000,
-			expErr:         "convertToLive: createOutSeg: too early by",
+			desc:                    "audio sub-segment",
+			asset:                   "testpic_2s",
+			media:                   "A48/5.m4s",
+			subSegmentPart:          "1",
+			nowMS:                   22_000,
+			expSeqNr:                5,
+			availabilityTimeOffsetS: 1.0,
 		},
 		{
-			desc:           "gone",
-			asset:          "testpic_8s",
-			media:          "V300/10.m4s",
-			subSegmentPart: "1",
-			nowMS:          400_000,
-			expErr:         "convertToLive: createOutSeg: gone",
+			desc:                    "too early",
+			asset:                   "testpic_8s",
+			media:                   "V300/10.m4s",
+			subSegmentPart:          "1",
+			nowMS:                   79_000,
+			availabilityTimeOffsetS: 7.0,
+			expErr:                  "convertToLive: createOutSeg: too early by",
 		},
 		{
-			desc:           "invalid sub-segment part (not a number)",
-			asset:          "testpic_8s",
-			media:          "V300/10.m4s",
-			subSegmentPart: "abc",
-			nowMS:          86_000,
-			expErr:         "writeChunk: strconv.Atoi: parsing \"abc\": invalid syntax",
+			desc:                    "gone",
+			asset:                   "testpic_8s",
+			media:                   "V300/10.m4s",
+			subSegmentPart:          "1",
+			nowMS:                   400_000,
+			availabilityTimeOffsetS: 7.0,
+			expErr:                  "convertToLive: createOutSeg: gone",
 		},
 		{
-			desc:           "invalid sub-segment index (out of bounds)",
-			asset:          "testpic_8s",
-			media:          "V300/10.m4s",
-			subSegmentPart: "9",
-			nowMS:          86_000,
-			shouldPanic:    true,
+			desc:                    "invalid sub-segment part (not a number)",
+			asset:                   "testpic_8s",
+			media:                   "V300/10.m4s",
+			subSegmentPart:          "abc",
+			nowMS:                   86_000,
+			availabilityTimeOffsetS: 7.0,
+			expErr:                  "writeChunk: strconv.Atoi: parsing \"abc\": invalid syntax",
+		},
+		{
+			desc:                    "invalid sub-segment index (out of bounds)",
+			asset:                   "testpic_8s",
+			media:                   "V300/10.m4s",
+			subSegmentPart:          "9",
+			nowMS:                   86_000,
+			availabilityTimeOffsetS: 7.0,
+			shouldPanic:             true,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
 			asset, ok := am.findAsset(tc.asset)
 			require.True(t, ok)
+
+			cfg := NewResponseConfig()
+			cfg.AvailabilityTimeCompleteFlag = false
+			cfg.EnableLowDelayMode = true
+			cfg.AvailabilityTimeOffsetS = tc.availabilityTimeOffsetS
 
 			rr := httptest.NewRecorder()
 			ctx := context.Background()
