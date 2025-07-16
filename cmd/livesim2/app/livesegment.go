@@ -779,7 +779,12 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 		return fmt.Errorf("writeChunk: %w", err)
 	}
 
-	chk := chunks[chunkIndex-1]
+	if chunkIndex < 0 || len(chunks) < chunkIndex {
+		return fmt.Errorf("get chunk %d: %w", chunkIndex, err)
+	}
+
+	chk := chunks[chunkIndex]
+
 	chunkAvailTime += int(chk.dur)
 	if ctx.Err() != nil {
 		return ctx.Err()

@@ -332,7 +332,7 @@ func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, 
 	return 0, writeChunkedSegment(ctx, log, w, cfg, drmCfg, vodFS, a, segmentPart, nowMS, isLast)
 }
 
-var subSegmentRegex = regexp.MustCompile(`^(.*_\d+)_(\d+)$`)
+var subSegmentRegex = regexp.MustCompile(`^(.*)_(\d+)$`)
 
 func calcSubSegmentPart(segmentPart string) (string, string, error) {
 	ext := filepath.Ext(segmentPart)
