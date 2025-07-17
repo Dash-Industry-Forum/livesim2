@@ -149,9 +149,6 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 			ep := m.NewDescriptor(SchemeIdUriSSR, "", "")
 			as.EssentialProperties = append(as.EssentialProperties, ep)
 
-			// SegmentSequenceProperties type=1
-			as.SegmentSequenceProperties = m.NewSegmentSequenceProperties("1", "")
-
 			// Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"
 			role := m.NewDescriptor("urn:mpeg:dash:role:2011", "main", "")
 			as.Roles = append(as.Roles, role)
