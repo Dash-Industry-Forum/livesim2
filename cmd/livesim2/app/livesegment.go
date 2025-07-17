@@ -649,7 +649,7 @@ func findRefSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int
 
 // prepareChunks generates a live segment, chunks it, and encrypts it if needed.
 func prepareChunks(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
-	segmentPart string, nowMS int, isLast bool) (segOut, []chunk, error) {
+	segmentPart string, nowMS int, isLast bool, chunkIndex *int) (segOut, []chunk, error) {
 
 	so, err := genLiveSegment(log, vodFS, a, cfg, segmentPart, nowMS, isLast)
 	if err != nil {
@@ -667,7 +667,7 @@ func prepareChunks(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig,
 
 	// That fragment/chunk duration is segment_duration-availabilityTimeOffset.
 	chunkDur := (a.SegmentDurMS - int(cfg.AvailabilityTimeOffsetS*1000)) * int(rep.MediaTimescale) / 1000
-	chunks, err := chunkSegment(rep.initSeg, seg, so.meta, chunkDur)
+	chunks, err := chunkSegment(rep.initSeg, seg, so.meta, chunkDur, chunkIndex)
 	if err != nil {
 		return so, nil, fmt.Errorf("chunkSegment: %w", err)
 	}
@@ -706,7 +706,7 @@ func writeChunkedSegment(ctx context.Context, log *slog.Logger, w http.ResponseW
 
 	log.Debug("writeChunkedSegment", "segmentPart", segmentPart)
 
-	so, chunks, err := prepareChunks(log, vodFS, a, cfg, drmCfg, segmentPart, nowMS, isLast)
+	so, chunks, err := prepareChunks(log, vodFS, a, cfg, drmCfg, segmentPart, nowMS, isLast, nil)
 	if err != nil {
 		return err
 	}
@@ -758,7 +758,15 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 
 	log.Debug("writeSubSegment", "segmentPart", segmentPart, subSegmentPart, nil)
 
-	so, chunks, err := prepareChunks(log, vodFS, a, cfg, drmCfg, segmentPart, nowMS, isLast)
+	chunkIndex, err := strconv.Atoi(subSegmentPart)
+	if err != nil {
+		return fmt.Errorf("bad chunk index: %w", err)
+	}
+	if chunkIndex < 0 {
+		return fmt.Errorf("negative chunk index: %d", chunkIndex)
+	}
+
+	so, chunk, err := prepareChunks(log, vodFS, a, cfg, drmCfg, segmentPart, nowMS, isLast, &chunkIndex)
 	if err != nil {
 		return err
 	}
@@ -774,21 +782,18 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 
 	startUnixMS := unixMS()
 	chunkAvailTime := int(so.meta.newTime) + cfg.StartTimeS*int(rep.MediaTimescale)
-	chunkIndex, err := strconv.Atoi(subSegmentPart)
-	if err != nil {
-		return fmt.Errorf("writeChunk: %w", err)
+
+	if len(chunk) != 1 {
+		return fmt.Errorf("get chunk %d: expected 1 chunk, got %d", chunkIndex, len(chunk))
 	}
 
-	if chunkIndex < 0 || len(chunks) < chunkIndex {
-		return fmt.Errorf("get chunk %d: %w", chunkIndex, err)
-	}
-
-	chk := chunks[chunkIndex]
+	chk := chunk[0]
 
 	chunkAvailTime += int(chk.dur)
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
+
+	// if ctx.Err() != nil {
+	// 	return ctx.Err()
+	// }
 	chunkAvailMS := chunkAvailTime * 1000 / int(rep.MediaTimescale)
 	if chunkAvailMS < nowMS {
 		err = writeChunk(w, chk)
@@ -798,8 +803,10 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 		return nil
 	}
 	nowUpdateMS := unixMS() - startUnixMS + nowMS
-	sleepMS := chunkAvailMS - nowUpdateMS
-	time.Sleep(time.Duration(sleepMS * 1_000_000))
+	if chunkAvailMS > nowUpdateMS {
+		sleepMS := chunkAvailMS - nowUpdateMS
+		time.Sleep(time.Duration(sleepMS * 1_000_000))
+	}
 	err = writeChunk(w, chk)
 	if err != nil {
 		return fmt.Errorf("writeChunk: %w", err)
@@ -828,7 +835,7 @@ func createChunk(styp *mp4.StypBox, trackID, seqNr uint32) chunk {
 
 // chunkSegment splits a segment into chunks of specified duration.
 // The first chunk gets an styp box if one is available in the incoming segment.
-func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta, chunkDur int) ([]chunk, error) {
+func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta, chunkDur int, chunkIndex *int) ([]chunk, error) {
 	trex := init.Moov.Mvex.Trex
 	fs := make([]mp4.FullSample, 0, 32)
 	for _, f := range seg.Fragments {
@@ -842,7 +849,6 @@ func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta,
 	trackID := init.Moov.Trak.Tkhd.TrackID
 	ch := createChunk(seg.Styp, trackID, segMeta.newNr)
 	chunkNr := 1
-	var accChunkDur uint32 = 0
 	var totalDur = 0
 	sampleDecodeTime := segMeta.newTime
 	var thisChunkDur uint32 = 0
@@ -851,20 +857,32 @@ func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta,
 		ch.frag.AddFullSample(fs[i])
 		dur := fs[i].Dur
 		sampleDecodeTime += uint64(dur)
-		accChunkDur += dur
 		thisChunkDur += dur
 		totalDur += int(dur)
 		if totalDur >= chunkDur*chunkNr {
 			ch.dur = uint64(thisChunkDur)
-			chunks = append(chunks, ch)
+			if chunkIndex == nil {
+				chunks = append(chunks, ch)
+			} else if (chunkNr - 1) == *chunkIndex {
+				chunks = append(chunks, ch)
+				return chunks, nil
+			}
 			ch = createChunk(nil, trackID, segMeta.newNr)
 			thisChunkDur = 0
 			chunkNr++
 		}
 	}
 	if thisChunkDur > 0 {
-		ch.dur = uint64(chunkDur)
-		chunks = append(chunks, ch)
+		ch.dur = uint64(thisChunkDur)
+		if chunkIndex == nil {
+			chunks = append(chunks, ch)
+		} else if (chunkNr - 1) == *chunkIndex {
+			chunks = append(chunks, ch)
+		}
+	}
+
+	if chunkIndex != nil && len(chunks) == 0 {
+		return nil, fmt.Errorf("chunk %d not found", *chunkIndex)
 	}
 
 	return chunks, nil
