@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011" minBufferTime="PT2.000S" type="static" mediaPresentationDuration="PT0H1M0.000S" maxSegmentDuration="PT0H0M2.000S" profiles="urn:mpeg:dash:profile:full:2011,urn:mpeg:dash:profile:cmaf:2019">
  <ProgramInformation>
-  <Title>l3d 1920x1080@30 and 640x360@30 video, 2s segments</Title>
+    <Title>l3d 1920x1080, 1280x720, and 640x360 @30 video, 2s segments</Title>
  </ProgramInformation>
  <Period id="one" start="PT0S">
   <AdaptationSet id="1" segmentAlignment="true" maxWidth="1920" maxHeight="1080" maxFrameRate="30" par="16:9" mimeType="video/mp4" startWithSAP="1">
@@ -10,7 +10,7 @@
    </Representation>
    <Representation id="l3d_720p" codecs="avc1.64001F" width="1280" height="720" frameRate="30" sar="1:1" bandwidth="1064013">
    </Representation>
-   <Representation id="l3d_640p" codecs="avc1.64001E" width="640" height="360" frameRate="30" sar="1:1" bandwidth="321703">
+   <Representation id="l3d_360p" codecs="avc1.64001E" width="640" height="360" frameRate="30" sar="1:1" bandwidth="321703">
    </Representation>
   </AdaptationSet>
  </Period>
