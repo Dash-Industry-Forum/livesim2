@@ -780,7 +780,6 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 	}
 	rep := so.meta.rep
 
-	startUnixMS := unixMS()
 	chunkAvailTime := int(so.meta.newTime) + cfg.StartTimeS*int(rep.MediaTimescale)
 
 	if len(chunk) != 1 {
@@ -791,9 +790,10 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 
 	chunkAvailTime += int(chk.dur)
 
-	// if ctx.Err() != nil {
-	// 	return ctx.Err()
-	// }
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
 	chunkAvailMS := chunkAvailTime * 1000 / int(rep.MediaTimescale)
 	if chunkAvailMS < nowMS {
 		err = writeChunk(w, chk)
@@ -801,15 +801,6 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 			return fmt.Errorf("writeChunk: %w", err)
 		}
 		return nil
-	}
-	nowUpdateMS := unixMS() - startUnixMS + nowMS
-	if chunkAvailMS > nowUpdateMS {
-		sleepMS := chunkAvailMS - nowUpdateMS
-		time.Sleep(time.Duration(sleepMS * 1_000_000))
-	}
-	err = writeChunk(w, chk)
-	if err != nil {
-		return fmt.Errorf("writeChunk: %w", err)
 	}
 	return nil
 }
