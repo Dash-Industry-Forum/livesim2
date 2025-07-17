@@ -91,7 +91,6 @@ type ResponseConfig struct {
 	AvailabilityTimeOffsetS      float64           `json:"AvailabilityTimeOffsetS,omitempty"`
 	ChunkDurS                    *float64          `json:"ChunkDurS,omitempty"`
 	LatencyTargetMS              *int              `json:"LatencyTargetMS,omitempty"`
-	LowDelay                     bool              `json:"LowDelay,omitempty"`
 	AddLocationFlag              bool              `json:"AddLocationFlag,omitempty"`
 	Tfdt32Flag                   bool              `json:"Tfdt32Flag,omitempty"`
 	ContUpdateFlag               bool              `json:"ContUpdateFlag,omitempty"`
