@@ -756,14 +756,14 @@ func writeChunkedSegment(ctx context.Context, log *slog.Logger, w http.ResponseW
 func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
 	vodFS fs.FS, a *asset, segmentPart string, subSegmentPart string, nowMS int, isLast bool) error {
 
-	log.Debug("writeSubSegment", "segmentPart", segmentPart, subSegmentPart, nil)
+	log.Debug("writeSubSegment", "segmentPart", segmentPart, "subSegmentPart", subSegmentPart)
 
 	chunkIndex, err := strconv.Atoi(subSegmentPart)
 	if err != nil {
 		return fmt.Errorf("bad chunk index: %w", err)
 	}
 	if chunkIndex < 0 {
-		return fmt.Errorf("negative chunk index: %d", chunkIndex)
+		return fmt.Errorf("non-positive chunk index: %d", chunkIndex)
 	}
 
 	so, chunk, err := prepareChunks(log, vodFS, a, cfg, drmCfg, segmentPart, nowMS, isLast, &chunkIndex)
