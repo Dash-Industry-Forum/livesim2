@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
@@ -318,8 +319,44 @@ func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, 
 	if cfg.AvailabilityTimeCompleteFlag {
 		return 0, writeLiveSegment(log, w, cfg, drmCfg, vodFS, a, segmentPart, nowMS, tt, isLast)
 	}
+	if cfg.EnableLowDelayMode {
+		// Sub segment part low-delay mode should return each subSegment as a separated request
+		newSegmentPart, subSegmentPart, err := calcSubSegmentPart(segmentPart)
+		// Check if there is a sub-segment part
+		if newSegmentPart == "" && subSegmentPart == "" {
+			return 0, writeLiveSegment(log, w, cfg, drmCfg, vodFS, a, segmentPart, nowMS, tt, isLast)
+		}
+		if err != nil {
+			return 0, err
+		}
+
+		return 0, writeSubSegment(ctx, log, w, cfg, drmCfg, vodFS, a, newSegmentPart, subSegmentPart, nowMS, isLast)
+	}
 	// Chunked low-latency mode
 	return 0, writeChunkedSegment(ctx, log, w, cfg, drmCfg, vodFS, a, segmentPart, nowMS, isLast)
+}
+
+var subSegmentRegex = regexp.MustCompile(`^(.*)_(\d+)$`)
+
+func calcSubSegmentPart(segmentPart string) (string, string, error) {
+	ext := filepath.Ext(segmentPart)
+
+	if ext == "" {
+		return "", "", fmt.Errorf("segment part has no extension: %s", segmentPart)
+	}
+
+	segmentPartWithoutExtension := strings.TrimSuffix(segmentPart, ext)
+	matches := subSegmentRegex.FindStringSubmatch(segmentPartWithoutExtension)
+
+	if len(matches) != 3 {
+		return "", "", nil
+	}
+
+	originalSegment := matches[1]
+	subSegmentPart := matches[2]
+	newSegmentPart := originalSegment + ext
+
+	return newSegmentPart, subSegmentPart, nil
 }
 
 // calcStatusCode returns the configured status code for the segment or 0 if none.
