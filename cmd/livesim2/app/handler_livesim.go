@@ -322,6 +322,10 @@ func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, 
 	if cfg.EnableLowDelayMode {
 		// Sub segment part low-delay mode should return each subSegment as a separated request
 		newSegmentPart, subSegmentPart, err := calcSubSegmentPart(segmentPart)
+		// Check if there is a sub-segment part
+		if newSegmentPart == "" && subSegmentPart == "" {
+			return 0, writeLiveSegment(log, w, cfg, drmCfg, vodFS, a, segmentPart, nowMS, tt, isLast)
+		}
 		if err != nil {
 			return 0, err
 		}
@@ -345,7 +349,7 @@ func calcSubSegmentPart(segmentPart string) (string, string, error) {
 	matches := subSegmentRegex.FindStringSubmatch(segmentPartWithoutExtension)
 
 	if len(matches) != 3 {
-		return "", "", fmt.Errorf("invalid sub-segment part format: %s", segmentPart)
+		return "", "", nil
 	}
 
 	originalSegment := matches[1]
