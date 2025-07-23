@@ -625,7 +625,7 @@ func adjustAdaptationSetForTimelineNr(se segEntries, as *m.AdaptationSetType, cf
 	as.SegmentTemplate.StartNumber = nil
 	as.SegmentTemplate.Duration = nil
 	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
-	if cfg.EnableLowDelayMode {
+	if cfg.EnableLowDelayMode && as.ContentType == "video" {
 		as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Number$_$SubNumber$")
 	}
 	as.SegmentTemplate.Timescale = Ptr(se.mediaTimescale)

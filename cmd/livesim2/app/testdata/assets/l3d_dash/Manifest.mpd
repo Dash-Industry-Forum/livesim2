@@ -13,5 +13,11 @@
    <Representation id="l3d_360p" codecs="avc1.64001E" width="640" height="360" frameRate="30" sar="1:1" bandwidth="321703">
    </Representation>
   </AdaptationSet>
+  <AdaptationSet id="2" segmentAlignment="true" lang="und" startWithSAP="1">
+   <SegmentTemplate media="$RepresentationID$/$Number$.m4s" initialization="$RepresentationID$/init.mp4" timescale="1000" startNumber="1" duration="2000"/>
+   <Representation id="audio_channel" mimeType="audio/mp4" codecs="mp4a.40.2" audioSamplingRate="48000" bandwidth="19882">
+    <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+   </Representation>
+  </AdaptationSet>
  </Period>
 </MPD>
