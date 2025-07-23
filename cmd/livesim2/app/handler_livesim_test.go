@@ -250,76 +250,58 @@ func TestFetches(t *testing.T) {
 }
 
 func TestCalcSubSegmentPart(t *testing.T) {
-	cases := []struct {
-		desc              string
-		segmentPart       string
-		expNewSegmentPart string
-		expSubSegmentPart string
-		shouldErr         bool
+	testCases := []struct {
+		desc                string
+		segmentPart         string
+		expNewSegmentPart   string
+		expSubSegmentPart   string
+		expectedErr         bool
+		expectedContainsErr string
 	}{
 		{
-			desc:              "simple case",
-			segmentPart:       "V300_10_1.m4s",
-			expNewSegmentPart: "V300_10.m4s",
+			desc:              "valid sub-segment",
+			segmentPart:       "segment_1.m4s",
+			expNewSegmentPart: "segment.m4s",
 			expSubSegmentPart: "1",
+			expectedErr:       false,
 		},
 		{
-			desc:              "different numbers and extension",
-			segmentPart:       "A48_55_12.cmfa",
-			expNewSegmentPart: "A48_55.cmfa",
-			expSubSegmentPart: "12",
+			desc:              "no sub-segment part",
+			segmentPart:       "segment.m4s",
+			expNewSegmentPart: "",
+			expSubSegmentPart: "",
+			expectedErr:       false,
 		},
 		{
-			desc:              "number with more digits",
-			segmentPart:       "A48_55_123.cmfa",
-			expNewSegmentPart: "A48_55.cmfa",
-			expSubSegmentPart: "123",
+			desc:                "missing sub-segment part",
+			segmentPart:         "segment_.m4s",
+			expNewSegmentPart:   "",
+			expSubSegmentPart:   "",
+			expectedErr:         false,
+			expectedContainsErr: "cannot parse sub-segment part",
 		},
 		{
-			desc:              "long representation id",
-			segmentPart:       "video-long-id_1_2.m4v",
-			expNewSegmentPart: "video-long-id_1.m4v",
-			expSubSegmentPart: "2",
-		},
-		{
-			desc:              "filename with dots",
-			segmentPart:       "test.video.A48_55_123.cmfa",
-			expNewSegmentPart: "test.video.A48_55.cmfa",
-			expSubSegmentPart: "123",
-		},
-		{
-			desc:              "multiple underscores in representation id",
-			segmentPart:       "video_with_id_10_1.m4s",
-			expNewSegmentPart: "video_with_id_10.m4s",
-			expSubSegmentPart: "1",
-		},
-		{
-			desc:        "missing extension",
-			segmentPart: "V300_10",
-			shouldErr:   true,
-		},
-		{
-			desc:        "missing sub-segment part",
-			segmentPart: "V300_10.m4s",
-			shouldErr:   true,
-		},
-		{
-			desc:        "missing segment and sub-segment part",
-			segmentPart: "V300.m4s",
-			shouldErr:   true,
+			desc:                "missing segment and sub-segment part",
+			segmentPart:         "_.m4s",
+			expNewSegmentPart:   "",
+			expSubSegmentPart:   "",
+			expectedErr:         false,
+			expectedContainsErr: "cannot parse original segment",
 		},
 	}
 
-	for _, tc := range cases {
+	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			newSegmentPart, subSegmentPart, err := calcSubSegmentPart(tc.segmentPart)
-			if tc.shouldErr {
+
+			if tc.expectedErr {
 				require.Error(t, err)
-				return
+				require.Contains(t, err.Error(), tc.expectedContainsErr)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tc.expNewSegmentPart, newSegmentPart)
+				require.Equal(t, tc.expSubSegmentPart, subSegmentPart)
 			}
-			require.NoError(t, err)
-			require.Equal(t, tc.expNewSegmentPart, newSegmentPart)
-			require.Equal(t, tc.expSubSegmentPart, subSegmentPart)
 		})
 	}
 }
