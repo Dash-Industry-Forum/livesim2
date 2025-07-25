@@ -290,7 +290,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		}
 		switch templateType {
 		case timeLineTime:
-			err := adjustAdaptationSetForTimelineTime(se, as)
+			err := adjustAdaptationSetForTimelineTime(se, as, cfg)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForTimelineTime: %w", err)
 			}
@@ -606,13 +606,16 @@ func setOffsetInAdaptationSet(cfg *ResponseConfig, as *m.AdaptationSetType) (ato
 	return atoMS, nil
 }
 
-func adjustAdaptationSetForTimelineTime(se segEntries, as *m.AdaptationSetType) error {
+func adjustAdaptationSetForTimelineTime(se segEntries, as *m.AdaptationSetType, cfg *ResponseConfig) error {
 	if as.SegmentTemplate.SegmentTimeline == nil {
 		as.SegmentTemplate.SegmentTimeline = &m.SegmentTimelineType{}
 	}
 	as.SegmentTemplate.StartNumber = nil
 	as.SegmentTemplate.Duration = nil
 	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Time$")
+	if cfg.EnableLowDelayMode && as.ContentType == "video" {
+		as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Time$_$SubNumber$")
+	}
 	as.SegmentTemplate.Timescale = Ptr(se.mediaTimescale)
 	as.SegmentTemplate.SegmentTimeline.S = se.entries
 	return nil
