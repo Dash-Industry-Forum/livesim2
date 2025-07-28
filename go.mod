@@ -6,7 +6,7 @@ toolchain go1.23.5
 
 require (
 	github.com/Comcast/gots/v2 v2.2.1
-	github.com/Eyevinn/dash-mpd v0.12.0
+	github.com/Eyevinn/dash-mpd v0.13.0
 	github.com/Eyevinn/mp4ff v0.49.1-0.20250706201610-95eca492b5b2
 	github.com/beevik/etree v1.5.0
 	github.com/caddyserver/certmagic v0.22.0

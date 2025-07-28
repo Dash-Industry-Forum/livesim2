@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Minimal Go version is now 1.23
+- Updated dash-mpd to v0.13.0 (Full DASH Ed. 6 support)
 
 ### Fixed
 
