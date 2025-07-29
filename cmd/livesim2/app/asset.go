@@ -516,7 +516,7 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int, c
 
 	k := calculateK(d, rep.MediaTimescale, chunkDuration)
 
-	s := &m.S{T: Ptr(t), D: d, K: k}
+	s := &m.S{T: Ptr(t), D: d, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: k}}
 	lsi := lastSegInfo{
 		timescale: uint64(rep.MediaTimescale),
 		startTime: t,
@@ -538,7 +538,7 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int, c
 
 		k = calculateK(d, rep.MediaTimescale, chunkDuration)
 
-		s = &m.S{D: d, K: k}
+		s = &m.S{D: d, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: k}}
 		se.entries = append(se.entries, s)
 		lsi.dur = d
 		lsi.nr = nr
