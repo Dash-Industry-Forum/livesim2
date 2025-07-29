@@ -1075,7 +1075,7 @@ func TestGenerateTimelineEntries(t *testing.T) {
 			expectedLsiNr:          2,
 			expectedMediaTimescale: 90000,
 			expectedEntries: []*m.S{
-				{T: Ptr(uint64(0)), D: 180000, R: 2, K: Ptr(uint64(4))},
+				{T: Ptr(uint64(0)), D: 180000, R: 2, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: Ptr(uint64(4))}},
 			},
 		},
 		{
@@ -1088,7 +1088,7 @@ func TestGenerateTimelineEntries(t *testing.T) {
 			expectedLsiNr:          2,
 			expectedMediaTimescale: 90000,
 			expectedEntries: []*m.S{
-				{T: Ptr(uint64(0)), D: 180000, R: 2, K: nil},
+				{T: Ptr(uint64(0)), D: 180000, R: 2, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: nil}},
 			},
 		},
 	}
