@@ -93,7 +93,11 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 				strBuf.WriteString(cfg.URLParts[i])
 			}
 		}
-		mpd.Location = []m.AnyURI{m.AnyURI(strBuf.String())}
+		mpd.Location = []*m.LocationType{
+			&m.LocationType{
+				Value: strBuf.String(),
+			},
+		}
 	}
 
 	if cfg.EnableLowDelayMode {
@@ -836,7 +840,6 @@ func changeTimelineTimescale(inSTL *m.SegmentTimelineType, oldTimescale, newTime
 			N: nil,
 			D: round(s.D),
 			R: s.R,
-			K: nil,
 		}
 		o.S = append(o.S, &outS)
 	}

@@ -934,7 +934,7 @@ func TestRelStartStopTimeIntoLocation(t *testing.T) {
 		_, mpdName := path.Split(contentPart)
 		liveMPD, err := LiveMPD(asset, mpdName, cfg, nil, c.nowMS)
 		require.NoError(t, err)
-		require.Equal(t, c.wantedLocation, string(liveMPD.Location[0]), "the right location element is not inserted")
+		require.Equal(t, c.wantedLocation, string(liveMPD.Location[0].Value), "the right location element is not inserted")
 	}
 }
 
