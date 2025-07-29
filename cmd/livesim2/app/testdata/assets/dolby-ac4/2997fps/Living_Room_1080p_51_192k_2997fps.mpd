@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MPD
+  mediaPresentationDuration="PT2.0028S"
+  minBufferTime="PT2.00S"
+  profiles="urn:mpeg:dash:profile:isoff-live:2011"
+  type="static"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:dolby="http://www.dolby.com/ns/online/DASH"
+  xmlns="urn:mpeg:dash:schema:mpd:2011"
+  xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd">
+  <ProgramInformation moreInformationURL="https://testassets.dashif.org/#testvector/details/5e8e3c6ea5eeda55aa663dbe">
+    <Title>First H.264 + AC-4 segment, 29.97fps (30000/1001)</Title>
+    <Source>https://dash.akamaized.net/dash264/TestCasesDolby/8/Living_Room_1080p_20_96k_2997fps.mpd</Source>
+  </ProgramInformation>
+  <Period id="1" start="PT0S">
+    <!-- Video -->
+    <AdaptationSet id="10" maxHeight="1080" maxWidth="1920" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate duration="2002" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/seg-$Number$.m4s" startNumber="1" timescale="1000"/>
+      <Representation bandwidth="5983882" codecs="avc1.4D4028" frameRate="30000/1001" height="1080" id="video/avc1" scanType="progressive" width="1920"/>
+    </AdaptationSet>
+    <!-- Audio -->
+    <AdaptationSet id="11" lang="en" mimeType="audio/mp4" segmentAlignment="true" startWithSAP="1">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate duration="2002" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/seg-$Number$.m4s" startNumber="1" timescale="1000"/>
+      <Representation audioSamplingRate="48000" bandwidth="163711" codecs="ac-4.02.01.01" id="audio/en/ac-4/1">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:mpegB:cicp:ChannelConfiguration" value="6"/>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

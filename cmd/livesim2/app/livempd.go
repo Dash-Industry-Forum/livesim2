@@ -885,7 +885,7 @@ func fillContentTypes(assetPath string, period *m.Period) {
 }
 
 var videoCodecPrefixes = []string{"avc", "hev", "hvc"}
-var audioCodecPrefixes = []string{"mp4a", "ac-3", "ec-3"}
+var audioCodecPrefixes = []string{"mp4a", "ac-3", "ec-3", "ac-4"}
 var textCodecPrefixes = []string{"stpp", "wvtt"}
 
 func matchesPrefix(s string, prefixes []string) bool {

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- HEVC encryption support
+- AC-4 audio support including encryption
+- AC-3 and EC-3 encryption support
+
 ### Changed
 
 - Minimal Go version is now 1.23
