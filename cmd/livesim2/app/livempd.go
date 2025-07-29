@@ -148,20 +148,6 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 
 		var chunkDurationInSeconds = (*float64)(nil)
 
-		if cfg.EnableLowDelayMode {
-			// EssentialProperty schemeIdUri="urn:mpeg:dash:ssr:2023"
-			ep := m.NewDescriptor(SchemeIdUriSSR, "", "")
-			as.EssentialProperties = append(as.EssentialProperties, ep)
-
-			// Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"
-			role := m.NewDescriptor("urn:mpeg:dash:role:2011", "main", "")
-			as.Roles = append(as.Roles, role)
-
-			// AdaptationSet@startWithSAP = 1
-			as.StartWithSAP = 1
-			chunkDurationInSeconds = cfg.ChunkDurS
-		}
-
 		switch as.ContentType {
 		case "video", "audio":
 			if cfg.PatchTTL > 0 && as.Id == nil {
@@ -268,6 +254,27 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 					Value:       "",
 				})
 		}
+
+		if as.ContentType == "video" && cfg.EnableLowDelayMode {
+			// EssentialProperty schemeIdUri="urn:mpeg:dash:ssr:2023"
+			ep := m.NewDescriptor(SchemeIdUriSSR, "", "")
+			as.EssentialProperties = append(as.EssentialProperties, ep)
+
+			// Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"
+			role := m.NewDescriptor("urn:mpeg:dash:role:2011", "main", "")
+			as.Roles = append(as.Roles, role)
+
+			// Add SegmentSequenceProperties to signal Low-Delay
+			as.SegmentSequenceProperties = &m.SegmentSequencePropertiesType{
+				SapType: 1,
+				Cadence: 1,
+			}
+
+			// AdaptationSet@startWithSAP = 1
+			as.StartWithSAP = 1
+			chunkDurationInSeconds = cfg.ChunkDurS
+		}
+
 		atoMS, err := setOffsetInAdaptationSet(cfg, as)
 		if err != nil {
 			return nil, err
