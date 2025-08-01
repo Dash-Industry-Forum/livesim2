@@ -665,8 +665,15 @@ func prepareChunks(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig,
 	rep := so.meta.rep
 	seg := so.seg
 
-	// That fragment/chunk duration is segment_duration-availabilityTimeOffset.
-	chunkDur := (a.SegmentDurMS - int(cfg.AvailabilityTimeOffsetS*1000)) * int(rep.MediaTimescale) / 1000
+	// Calculate chunk duration in media timescale units
+	var chunkDur int
+	if cfg.ChunkDurS != nil && *cfg.ChunkDurS > 0 {
+		// Use explicit chunk duration from URL parameter
+		chunkDur = int(*cfg.ChunkDurS * float64(rep.MediaTimescale))
+	} else {
+		// Fallback: fragment/chunk duration is segment_duration-availabilityTimeOffset
+		chunkDur = (a.SegmentDurMS - int(cfg.AvailabilityTimeOffsetS*1000)) * int(rep.MediaTimescale) / 1000
+	}
 	chunks, err := chunkSegment(rep.initSeg, seg, so.meta, chunkDur, chunkIndex)
 	if err != nil {
 		return so, nil, fmt.Errorf("chunkSegment: %w", err)
