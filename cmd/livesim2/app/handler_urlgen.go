@@ -245,7 +245,7 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 		data.LowDelay = true
 		sb.WriteString("lowdelay/")
 	}
-		stl := segmentTimelineType(q.Get("stl"))
+	stl := segmentTimelineType(q.Get("stl"))
 	switch stl {
 	case Number:
 		data.Stl = Number

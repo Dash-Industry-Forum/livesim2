@@ -674,7 +674,8 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
 	if cfg.EnableLowDelayMode && as.ContentType == "video" {
 		as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Number$_$SubNumber$")
-		as.SegmentTemplate.CommonSegmentSequenceAttributes.K = calculateK(uint64(*as.SegmentTemplate.Duration), int(*as.SegmentTemplate.Timescale), cfg.ChunkDurS)
+		as.SegmentTemplate.CommonSegmentSequenceAttributes.K = calculateK(
+			uint64(*as.SegmentTemplate.Duration), int(*as.SegmentTemplate.Timescale), cfg.ChunkDurS)
 	}
 	return nil
 }
