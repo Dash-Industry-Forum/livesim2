@@ -533,11 +533,8 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int, c
 			lsi.nr = nr
 			continue
 		}
-
 		d = seg.dur()
-
 		k = calculateK(d, rep.MediaTimescale, chunkDuration)
-
 		s = &m.S{D: d, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: k}}
 		se.entries = append(se.entries, s)
 		lsi.dur = d
