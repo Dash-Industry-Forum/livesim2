@@ -18,6 +18,10 @@ import (
 	m "github.com/Eyevinn/dash-mpd/mpd"
 )
 
+const (
+	DASHProfileLinear = "urn:mpeg:dash:profile:advanced-linear:2025"
+)
+
 type wrapTimes struct {
 	startWraps  int
 	startWrapMS int
@@ -96,6 +100,10 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		}
 	}
 
+	if cfg.EnableLowDelayMode {
+		mpd.Profiles = DASHProfileLinear
+	}
+
 	if cfg.getAvailabilityTimeOffsetS() > 0 {
 		if !cfg.AvailabilityTimeCompleteFlag {
 			if cfg.LatencyTargetMS == nil {
@@ -137,6 +145,9 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		if as.SegmentTemplate != nil {
 			as.SegmentTemplate.EndNumber = nil // Never output endNumber
 		}
+
+		var chunkDurationInSeconds = (*float64)(nil)
+
 		switch as.ContentType {
 		case "video", "audio":
 			if cfg.PatchTTL > 0 && as.Id == nil {
@@ -243,6 +254,27 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 					Value:       "",
 				})
 		}
+
+		if as.ContentType == "video" && cfg.EnableLowDelayMode {
+			// EssentialProperty schemeIdUri="urn:mpeg:dash:ssr:2023"
+			ep := m.NewDescriptor(SchemeIdUriSSR, "", "")
+			as.EssentialProperties = append(as.EssentialProperties, ep)
+
+			// Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"
+			role := m.NewDescriptor("urn:mpeg:dash:role:2011", "main", "")
+			as.Roles = append(as.Roles, role)
+
+			// Add SegmentSequenceProperties to signal Low-Delay
+			as.SegmentSequenceProperties = &m.SegmentSequencePropertiesType{
+				SapType: 1,
+				Cadence: 1,
+			}
+
+			// AdaptationSet@startWithSAP = 1
+			as.StartWithSAP = 1
+			chunkDurationInSeconds = cfg.ChunkDurS
+		}
+
 		atoMS, err := setOffsetInAdaptationSet(cfg, as)
 		if err != nil {
 			return nil, err
@@ -250,12 +282,12 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		var se segEntries
 		if asIdx == 0 {
 			// Assume that first representation is as good as any, so can be reference
-			refSegEntries = a.generateTimelineEntries(as.Representations[0].Id, wTimes, atoMS)
+			refSegEntries = a.generateTimelineEntries(as.Representations[0].Id, wTimes, atoMS, chunkDurationInSeconds)
 			se = refSegEntries
 		} else {
 			switch as.ContentType {
 			case "video", "text", "image":
-				se = a.generateTimelineEntries(as.Representations[0].Id, wTimes, atoMS)
+				se = a.generateTimelineEntries(as.Representations[0].Id, wTimes, atoMS, chunkDurationInSeconds)
 			case "audio":
 				se = a.generateTimelineEntriesFromRef(refSegEntries, as.Representations[0].Id)
 			default:
@@ -269,7 +301,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		}
 		switch templateType {
 		case timeLineTime:
-			err := adjustAdaptationSetForTimelineTime(se, as)
+			err := adjustAdaptationSetForTimelineTime(se, as, cfg)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForTimelineTime: %w", err)
 			}
@@ -277,7 +309,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 				mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, se.lsi))
 			}
 		case timeLineNumber:
-			err := adjustAdaptationSetForTimelineNr(se, as)
+			err := adjustAdaptationSetForTimelineNr(se, as, cfg)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForTimelineNr: %w", err)
 			}
@@ -585,25 +617,31 @@ func setOffsetInAdaptationSet(cfg *ResponseConfig, as *m.AdaptationSetType) (ato
 	return atoMS, nil
 }
 
-func adjustAdaptationSetForTimelineTime(se segEntries, as *m.AdaptationSetType) error {
+func adjustAdaptationSetForTimelineTime(se segEntries, as *m.AdaptationSetType, cfg *ResponseConfig) error {
 	if as.SegmentTemplate.SegmentTimeline == nil {
 		as.SegmentTemplate.SegmentTimeline = &m.SegmentTimelineType{}
 	}
 	as.SegmentTemplate.StartNumber = nil
 	as.SegmentTemplate.Duration = nil
 	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Time$")
+	if cfg.EnableLowDelayMode && as.ContentType == "video" {
+		as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Time$_$SubNumber$")
+	}
 	as.SegmentTemplate.Timescale = Ptr(se.mediaTimescale)
 	as.SegmentTemplate.SegmentTimeline.S = se.entries
 	return nil
 }
 
-func adjustAdaptationSetForTimelineNr(se segEntries, as *m.AdaptationSetType) error {
+func adjustAdaptationSetForTimelineNr(se segEntries, as *m.AdaptationSetType, cfg *ResponseConfig) error {
 	if as.SegmentTemplate.SegmentTimeline == nil {
 		as.SegmentTemplate.SegmentTimeline = &m.SegmentTimelineType{}
 	}
 	as.SegmentTemplate.StartNumber = nil
 	as.SegmentTemplate.Duration = nil
 	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
+	if cfg.EnableLowDelayMode && as.ContentType == "video" {
+		as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Number$_$SubNumber$")
+	}
 	as.SegmentTemplate.Timescale = Ptr(se.mediaTimescale)
 	as.SegmentTemplate.SegmentTimeline.S = se.entries
 
@@ -634,6 +672,11 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 		as.SegmentTemplate.StartNumber = startNr
 	}
 	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
+	if cfg.EnableLowDelayMode && as.ContentType == "video" {
+		as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Number$_$SubNumber$")
+		as.SegmentTemplate.K = calculateK(
+			uint64(*as.SegmentTemplate.Duration), int(*as.SegmentTemplate.Timescale), cfg.ChunkDurS)
+	}
 	return nil
 }
 

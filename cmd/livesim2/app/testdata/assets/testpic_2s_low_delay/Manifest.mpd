@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" minBufferTime="PT2S" type="static" mediaPresentationDuration="PT0H0M8S" maxSegmentDuration="PT0H0M2S" profiles="urn:mpeg:dash:profile:isoff-live:2011">
+    <ProgramInformation>
+        <Title>1920x1080,1280x720,640x360@30 video, 48kHz audio, 2s segments, 6-frame GOP size</Title>
+    </ProgramInformation>
+
+    <Period duration="PT1H0M0.000S">
+        <AdaptationSet id="1" segmentAlignment="true" maxWidth="1920" maxHeight="1080" maxFrameRate="30" par="16:9" mimeType="video/mp4" startWithSAP="1">
+            <SegmentTemplate media="$RepresentationID$/$Number$.m4s" initialization="$RepresentationID$/init.mp4" timescale="1000" startNumber="1" duration="2000"/>
+            <Representation id="LD_1080" codecs="avc1.640028" width="1920" height="1080" frameRate="30" sar="1:1" bandwidth="2024826">
+            </Representation>
+            <Representation id="LD_720" codecs="avc1.64001F" width="1280" height="720" frameRate="30" sar="1:1" bandwidth="1012632">
+            </Representation>
+            <Representation id="LD_360" codecs="avc1.64001E" width="640" height="360" frameRate="30" sar="1:1" bandwidth="303557">
+            </Representation>
+        </AdaptationSet>
+        <AdaptationSet id="2" segmentAlignment="true" mimeType="audio/mp4" startWithSAP="1">
+            <SegmentTemplate media="$RepresentationID$/$Number$.m4s" initialization="$RepresentationID$/init.mp4" timescale="1000" startNumber="1" duration="2000"/>
+            <Representation id="A48" codecs="mp4a.40.2" audioSamplingRate="48000" bandwidth="48000">
+                <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+            </Representation>
+        </AdaptationSet>
+    </Period>
+</MPD>
