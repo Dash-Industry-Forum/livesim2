@@ -164,7 +164,6 @@ Then run
 ```sh
 > go mod tidy
 ```
-(or `go mod vendor`)
 
 to fetch and install all dependencies.
 
