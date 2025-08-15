@@ -833,6 +833,9 @@ func createChunk(styp *mp4.StypBox, trackID, seqNr uint32) chunk {
 
 // chunkSegment splits a segment into chunks of specified duration.
 // The first chunk gets an styp box if one is available in the incoming segment.
+// If chunkIndex is non-nil, returns only the chunk at that specific index (0-based).
+// Note: This processes all chunks up to the requested index, which is inefficient
+// for large segments when only the last chunk is needed.
 func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta, chunkDur int, chunkIndex *int) ([]chunk, error) {
 	trex := init.Moov.Mvex.Trex
 	fs := make([]mp4.FullSample, 0, 32)
