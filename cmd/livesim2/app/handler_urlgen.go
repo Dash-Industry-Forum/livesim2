@@ -142,6 +142,7 @@ type urlGenData struct {
 	Ato                         string // availabilityTimeOffset, floating point seconds or "inf"
 	ChunkDur                    string // chunk duration (float in seconds)
 	LlTarget                    int    // low-latency target (in milliseconds)
+	LowDelay                    bool   // L3D (low-delay) mode enabled
 	TimeSubsStpp                string // languages for generated subtitles in stpp-format (comma-separated)
 	TimeSubsWvtt                string // languages for generated subtitles in wvtt-format (comma-separated)
 	TimeSubsDur                 string // cue duration of generated subtitles (in milliseconds)
@@ -209,6 +210,7 @@ func (s *Server) createInitData(aInfo assetsInfo) (data urlGenData, err error) {
 	}
 	data.Host = aInfo.Host
 	data.DRMs = drmsFromAssetInfo(nil, s.Cfg.DrmCfg, "")
+	data.LowDelay = false
 	return data, nil
 }
 
@@ -239,6 +241,10 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 	}
 	sb.WriteString(aInfo.Host)
 	sb.WriteString("/livesim2/")
+	if q.Get("lowdelay") != "" { // This is from the checkbox
+		data.LowDelay = true
+		sb.WriteString("lowdelay/")
+	}
 	stl := segmentTimelineType(q.Get("stl"))
 	switch stl {
 	case Number:
@@ -400,13 +406,19 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 		data.Traffic = traffic
 		sb.WriteString(fmt.Sprintf("traffic_%s/", traffic))
 	}
+
 	sb.WriteString(fmt.Sprintf("%s/%s", asset, mpd))
+
 	if annexI != "" {
 		query, err := queryFromAnnexI(annexI)
 		if err != nil {
 			data.Errors = append(data.Errors, fmt.Sprintf("bad annexI: %s", err.Error()))
 		}
-		sb.WriteString(query)
+		if strings.Contains(sb.String(), "?") {
+			sb.WriteString(strings.Replace(query, "?", "&", 1))
+		} else {
+			sb.WriteString(query)
+		}
 	}
 	if len(data.Errors) > 0 {
 		data.URL = ""

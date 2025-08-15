@@ -66,6 +66,7 @@ const (
 
 const (
 	UrlParamSchemeIdUri = "urn:mpeg:dash:urlparam:2014"
+	SsrSchemeIdUri      = "urn:mpeg:dash:ssr:2023"
 )
 
 type ResponseConfig struct {
@@ -110,6 +111,7 @@ type ResponseConfig struct {
 	SegStatusCodes               []SegStatusCodes  `json:"SegStatus,omitempty"`
 	Traffic                      []LossItvls       `json:"Traffic,omitempty"`
 	Query                        *Query            `json:"Query,omitempty"`
+	EnableLowDelayMode           bool              `json:"EnableLowDelayMode,omitempty"`
 }
 
 // SegStatusCodes configures regular extraordinary segment response codes
@@ -303,6 +305,10 @@ cfgLoop:
 		}
 		key, val, ok := strings.Cut(part, "_")
 		if !ok {
+			if part == "lowdelay" {
+				cfg.EnableLowDelayMode = true
+				continue
+			}
 			contentStartIdx = i
 			break cfgLoop
 		}

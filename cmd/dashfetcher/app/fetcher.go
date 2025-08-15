@@ -325,7 +325,7 @@ func AutoDir(rawMPDurl, outDir string) (string, error) {
 		if outRange > len(uBaseParts) {
 			break
 		}
-		for i := 0; i < outRange; i++ {
+		for i := range outRange {
 			if outParts[outStart+i] != uBaseParts[i] {
 				match = false
 				break
