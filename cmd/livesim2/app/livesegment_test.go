@@ -846,7 +846,7 @@ func TestWriteSubSegment(t *testing.T) {
 
 			seg := rr.Body.Bytes()
 
-			// A subsegment is a styp+moof+mdat which is a valid file
+			// A subsegment is a (styp+)moof+mdat which is a valid file
 			sr := bits.NewFixedSliceReader(seg)
 			mp4d, err := mp4.DecodeFileSR(sr)
 			require.NoError(t, err)
@@ -935,7 +935,7 @@ func TestWriteSubSegmentWithChunkDuration(t *testing.T) {
 
 			seg := rr.Body.Bytes()
 
-			// A subsegment is a styp+moof+mdat which is a valid file
+			// A subsegment is a (styp+)moof+mdat which is a valid file
 			sr := bits.NewFixedSliceReader(seg)
 			mp4d, err := mp4.DecodeFileSR(sr)
 			require.NoError(t, err)
