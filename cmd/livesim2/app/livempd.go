@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	DASHProfileLinear = "urn:mpeg:dash:profile:advanced-linear:2025"
+	ProfileAdvancedLinear = "urn:mpeg:dash:profile:advanced-linear:2025"
 )
 
 type wrapTimes struct {
@@ -101,7 +101,11 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 	}
 
 	if cfg.EnableLowDelayMode {
-		mpd.Profiles = DASHProfileLinear
+		if mpd.Profiles != "" {
+			mpd.Profiles = mpd.Profiles + "," + ProfileAdvancedLinear
+		} else {
+			mpd.Profiles = ProfileAdvancedLinear
+		}
 	}
 
 	if cfg.getAvailabilityTimeOffsetS() > 0 {
