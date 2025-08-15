@@ -142,7 +142,7 @@ type urlGenData struct {
 	Ato                         string // availabilityTimeOffset, floating point seconds or "inf"
 	ChunkDur                    string // chunk duration (float in seconds)
 	LlTarget                    int    // low-latency target (in milliseconds)
-	LowDelay                    bool   // low-latency mode enabled
+	LowDelay                    bool   // L3D (low-delay) mode enabled
 	TimeSubsStpp                string // languages for generated subtitles in stpp-format (comma-separated)
 	TimeSubsWvtt                string // languages for generated subtitles in wvtt-format (comma-separated)
 	TimeSubsDur                 string // cue duration of generated subtitles (in milliseconds)
