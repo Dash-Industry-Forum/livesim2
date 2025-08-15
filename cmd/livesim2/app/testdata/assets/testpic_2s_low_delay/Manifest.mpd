@@ -6,6 +6,7 @@
 
     <Period>
         <AdaptationSet id="1" segmentAlignment="true" maxWidth="1920" maxHeight="1080" maxFrameRate="30" par="16:9" mimeType="video/mp4" startWithSAP="1">
+            <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"></Role>
             <SegmentTemplate media="$RepresentationID$/$Number$.m4s" initialization="$RepresentationID$/init.mp4" timescale="1000" startNumber="1" duration="2000"/>
             <Representation id="LD_1080" codecs="avc1.640028" width="1920" height="1080" frameRate="30" sar="1:1" bandwidth="2024826">
             </Representation>

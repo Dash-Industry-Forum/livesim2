@@ -264,10 +264,6 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 			ep := m.NewDescriptor(SsrSchemeIdUri, "", "")
 			as.EssentialProperties = append(as.EssentialProperties, ep)
 
-			// Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"
-			role := m.NewDescriptor("urn:mpeg:dash:role:2011", "main", "")
-			as.Roles = append(as.Roles, role)
-
 			// Add SegmentSequenceProperties to signal Low-Delay
 			as.SegmentSequenceProperties = &m.SegmentSequencePropertiesType{
 				SapType: 1,
