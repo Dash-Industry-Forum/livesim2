@@ -261,7 +261,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 
 		if as.ContentType == "video" && cfg.EnableLowDelayMode {
 			// EssentialProperty schemeIdUri="urn:mpeg:dash:ssr:2023"
-			ep := m.NewDescriptor(SchemeIdUriSSR, "", "")
+			ep := m.NewDescriptor(SsrSchemeIdUri, "", "")
 			as.EssentialProperties = append(as.EssentialProperties, ep)
 
 			// Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"
