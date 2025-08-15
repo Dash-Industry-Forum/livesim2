@@ -146,7 +146,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 			as.SegmentTemplate.EndNumber = nil // Never output endNumber
 		}
 
-		var chunkDurationInSeconds = (*float64)(nil)
+		var explicitChunkDurS = (*float64)(nil)
 
 		switch as.ContentType {
 		case "video", "audio":
@@ -272,7 +272,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 
 			// AdaptationSet@startWithSAP = 1
 			as.StartWithSAP = 1
-			chunkDurationInSeconds = cfg.ChunkDurS
+			explicitChunkDurS = cfg.ChunkDurS
 		}
 
 		atoMS, err := setOffsetInAdaptationSet(cfg, as)
@@ -282,12 +282,12 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		var se segEntries
 		if asIdx == 0 {
 			// Assume that first representation is as good as any, so can be reference
-			refSegEntries = a.generateTimelineEntries(as.Representations[0].Id, wTimes, atoMS, chunkDurationInSeconds)
+			refSegEntries = a.generateTimelineEntries(as.Representations[0].Id, wTimes, atoMS, explicitChunkDurS)
 			se = refSegEntries
 		} else {
 			switch as.ContentType {
 			case "video", "text", "image":
-				se = a.generateTimelineEntries(as.Representations[0].Id, wTimes, atoMS, chunkDurationInSeconds)
+				se = a.generateTimelineEntries(as.Representations[0].Id, wTimes, atoMS, explicitChunkDurS)
 			case "audio":
 				se = a.generateTimelineEntriesFromRef(refSegEntries, as.Representations[0].Id)
 			default:
