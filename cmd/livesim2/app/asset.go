@@ -447,11 +447,11 @@ func (l lastSegInfo) availabilityTime(ato float64) float64 {
 	return math.Round(float64(l.startTime+l.dur)/float64(l.timescale)) - ato
 }
 
-func calculateK(segmentDuration uint64, mediaTimescale int, chunkDuration *float64) *uint64 {
-	if chunkDuration == nil || *chunkDuration <= 0 {
+func calculateK(segmentDuration uint64, mediaTimescale int, chunkDurS *float64) *uint64 {
+	if chunkDurS == nil || *chunkDurS <= 0 {
 		return nil
 	}
-	chunkDurInTimescale := *chunkDuration * float64(mediaTimescale)
+	chunkDurInTimescale := *chunkDurS * float64(mediaTimescale)
 	if chunkDurInTimescale <= 0 {
 		return nil
 	}
@@ -464,7 +464,7 @@ func calculateK(segmentDuration uint64, mediaTimescale int, chunkDuration *float
 
 // generateTimelineEntries generates timeline entries for the given representation.
 // If no segments are available, startNr and lsi.nr are set to -1.
-func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int, chunkDuration *float64) segEntries {
+func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int, explicitChunkDurS *float64) segEntries {
 	rep := a.Reps[repID]
 	segs := rep.Segments
 	nrSegs := len(segs)
@@ -514,7 +514,7 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int, c
 	t := uint64(rep.duration()*wt.startWraps) + segs[relStartIdx].StartTime
 	d := segs[relStartIdx].dur()
 
-	k := calculateK(d, rep.MediaTimescale, chunkDuration)
+	k := calculateK(d, rep.MediaTimescale, explicitChunkDurS)
 
 	s := &m.S{T: Ptr(t), D: d, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: k}}
 	lsi := lastSegInfo{
@@ -534,7 +534,7 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int, c
 			continue
 		}
 		d = seg.dur()
-		k = calculateK(d, rep.MediaTimescale, chunkDuration)
+		k = calculateK(d, rep.MediaTimescale, explicitChunkDurS)
 		s = &m.S{D: d, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: k}}
 		se.entries = append(se.entries, s)
 		lsi.dur = d
