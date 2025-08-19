@@ -142,7 +142,7 @@ type urlGenData struct {
 	Ato                         string // availabilityTimeOffset, floating point seconds or "inf"
 	ChunkDur                    string // chunk duration (float in seconds)
 	LlTarget                    int    // low-latency target (in milliseconds)
-	LowDelay                    bool   // L3D (low-delay) mode enabled
+	SSR                         bool   // SSR for L3d mode enabled
 	TimeSubsStpp                string // languages for generated subtitles in stpp-format (comma-separated)
 	TimeSubsWvtt                string // languages for generated subtitles in wvtt-format (comma-separated)
 	TimeSubsDur                 string // cue duration of generated subtitles (in milliseconds)
@@ -210,7 +210,7 @@ func (s *Server) createInitData(aInfo assetsInfo) (data urlGenData, err error) {
 	}
 	data.Host = aInfo.Host
 	data.DRMs = drmsFromAssetInfo(nil, s.Cfg.DrmCfg, "")
-	data.LowDelay = false
+	data.SSR = false
 	return data, nil
 }
 
@@ -241,9 +241,10 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 	}
 	sb.WriteString(aInfo.Host)
 	sb.WriteString("/livesim2/")
-	if q.Get("lowdelay") != "" { // This is from the checkbox
-		data.LowDelay = true
-		sb.WriteString("lowdelay/")
+	ssr := q.Get("ssr")
+	if ssr != "" { // This is from the checkbox
+		data.SSR = true
+		sb.WriteString("ssr_1/")
 	}
 	stl := segmentTimelineType(q.Get("stl"))
 	switch stl {

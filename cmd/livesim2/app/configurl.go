@@ -111,7 +111,7 @@ type ResponseConfig struct {
 	SegStatusCodes               []SegStatusCodes  `json:"SegStatus,omitempty"`
 	Traffic                      []LossItvls       `json:"Traffic,omitempty"`
 	Query                        *Query            `json:"Query,omitempty"`
-	EnableLowDelayMode           bool              `json:"EnableLowDelayMode,omitempty"`
+	EnableSSR                    bool              `json:"EnableSSR,omitempty"`
 }
 
 // SegStatusCodes configures regular extraordinary segment response codes
@@ -305,10 +305,6 @@ cfgLoop:
 		}
 		key, val, ok := strings.Cut(part, "_")
 		if !ok {
-			if part == "lowdelay" {
-				cfg.EnableLowDelayMode = true
-				continue
-			}
 			contentStartIdx = i
 			break cfgLoop
 		}
@@ -356,6 +352,8 @@ cfgLoop:
 			cfg.SegTimelineFlag = true
 		case "segtimelinenr":
 			cfg.SegTimelineNrFlag = true
+		case "ssr": // SSR for L3D (Low latency low delay)
+			cfg.EnableSSR = true
 		case "peroff": // Set the period offset
 			cfg.PeriodOffset = sc.AtoiPtr(key, val)
 		case "scte35": // Signal this many SCTE-35 ad periods inband (emsg messages) every minute

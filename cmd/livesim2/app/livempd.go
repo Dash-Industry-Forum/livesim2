@@ -100,7 +100,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		}
 	}
 
-	if cfg.EnableLowDelayMode {
+	if cfg.EnableSSR {
 		if mpd.Profiles != "" {
 			mpd.Profiles = mpd.Profiles + "," + ProfileAdvancedLinear
 		} else {
@@ -259,7 +259,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 				})
 		}
 
-		if as.ContentType == "video" && cfg.EnableLowDelayMode {
+		if as.ContentType == "video" && cfg.EnableSSR {
 			// EssentialProperty schemeIdUri="urn:mpeg:dash:ssr:2023"
 			ep := m.NewDescriptor(SsrSchemeIdUri, "", "")
 			as.EssentialProperties = append(as.EssentialProperties, ep)
@@ -624,7 +624,7 @@ func adjustAdaptationSetForTimelineTime(se segEntries, as *m.AdaptationSetType, 
 	as.SegmentTemplate.StartNumber = nil
 	as.SegmentTemplate.Duration = nil
 	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Time$")
-	if cfg.EnableLowDelayMode && as.ContentType == "video" {
+	if cfg.EnableSSR && as.ContentType == "video" {
 		as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Time$_$SubNumber$")
 	}
 	as.SegmentTemplate.Timescale = Ptr(se.mediaTimescale)
@@ -639,7 +639,7 @@ func adjustAdaptationSetForTimelineNr(se segEntries, as *m.AdaptationSetType, cf
 	as.SegmentTemplate.StartNumber = nil
 	as.SegmentTemplate.Duration = nil
 	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
-	if cfg.EnableLowDelayMode && as.ContentType == "video" {
+	if cfg.EnableSSR && as.ContentType == "video" {
 		as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Number$_$SubNumber$")
 	}
 	as.SegmentTemplate.Timescale = Ptr(se.mediaTimescale)
@@ -672,7 +672,7 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 		as.SegmentTemplate.StartNumber = startNr
 	}
 	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
-	if cfg.EnableLowDelayMode && as.ContentType == "video" {
+	if cfg.EnableSSR && as.ContentType == "video" {
 		as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Number$_$SubNumber$")
 		as.SegmentTemplate.K = calculateK(
 			uint64(*as.SegmentTemplate.Duration), int(*as.SegmentTemplate.Timescale), cfg.ChunkDurS)

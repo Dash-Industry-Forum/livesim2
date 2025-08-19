@@ -820,7 +820,7 @@ func TestWriteSubSegment(t *testing.T) {
 
 			cfg := NewResponseConfig()
 			cfg.AvailabilityTimeCompleteFlag = false
-			cfg.EnableLowDelayMode = true
+			cfg.EnableSSR = true
 			cfg.AvailabilityTimeOffsetS = tc.availabilityTimeOffsetS
 
 			rr := httptest.NewRecorder()
@@ -917,7 +917,7 @@ func TestWriteSubSegmentWithChunkDuration(t *testing.T) {
 
 			cfg := NewResponseConfig()
 			cfg.AvailabilityTimeCompleteFlag = false
-			cfg.EnableLowDelayMode = true
+			cfg.EnableSSR = true
 			cfg.AvailabilityTimeOffsetS = tc.availabilityTimeOffsetS
 			cfg.ChunkDurS = tc.chunkDurS
 

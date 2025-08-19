@@ -110,7 +110,7 @@
 		</details>
 
 		<details>
-			<summary>Low latency & Low delay...</summary>
+			<summary>Low latency...</summary>
 
 			<label for="ato">
 			availabilityTimeOffset (float in seconds or inf)
@@ -127,9 +127,9 @@
 				<input type="text" id="ltgt" name="ltgt" value="{{.LlTarget}}" />
 			</label>
 
-			<label for="lowdelay">
-			Enable L3D-DASH Mode (Low Latency & Low Delay)
-				<input type="checkbox" id="lowdelay" name="lowdelay" {{if .LowDelay}}checked{{end}} />
+			<label for="ssr">
+			Enable SSR (L3D)
+				<input type="checkbox" id="ssr" name="ssr" {{if .SSR}}checked{{end}} />
 			</label>
 		</details>
 

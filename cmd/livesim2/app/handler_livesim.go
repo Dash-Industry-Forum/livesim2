@@ -319,7 +319,7 @@ func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, 
 	if cfg.AvailabilityTimeCompleteFlag {
 		return 0, writeLiveSegment(log, w, cfg, drmCfg, vodFS, a, segmentPart, nowMS, tt, isLast)
 	}
-	if cfg.EnableLowDelayMode {
+	if cfg.EnableSSR {
 		// Sub segment part (SSR/L3D) low-delay mode should return each subSegment as a separated response
 		newSegmentPart, subSegmentPart, err := calcSubSegmentPart(segmentPart)
 		// Check if there is a sub-segment part
