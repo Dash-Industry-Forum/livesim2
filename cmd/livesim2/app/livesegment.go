@@ -33,6 +33,7 @@ func genLiveSegment(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig
 
 	outSeg, err := createOutSeg(vodFS, a, cfg, segmentPart, nowMS)
 	if err != nil {
+		log.Error("createOutSeg error", "error", err, "asset", a.AssetPath, "segment", segmentPart)
 		return so, fmt.Errorf("createOutSeg: %w", err)
 	}
 	if isImage(segmentPart) {
@@ -637,7 +638,20 @@ func findRefSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int
 		}
 	case timeLineTime:
 		time := int(segID)
-		refMeta, err = findRefSegMetaFromTime(a, rep, uint64(time), cfg, nowMS)
+
+		// Apply editListOffset mapping for audio segments
+		// The MPD shows adjusted timeline where segment 0 has shortened duration
+		// We need to map the adjusted time back to the original timeline
+		requestTime := uint64(time)
+		if rep.EditListOffset > 0 && rep.ContentType == "audio" {
+			// For times after segment 0, we need to add back the editListOffset
+			// because segment 0's duration was shortened by editListOffset
+			if requestTime > 0 {
+				requestTime = requestTime + uint64(rep.EditListOffset)
+			}
+		}
+
+		refMeta, err = findRefSegMetaFromTime(a, rep, requestTime, cfg, nowMS)
 		if err != nil {
 			return refMeta, fmt.Errorf("findSegMetaFromNr from reference: %w", err)
 		}

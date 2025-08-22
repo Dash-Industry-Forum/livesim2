@@ -557,6 +557,26 @@ func TestLLSegmentAvailability(t *testing.T) {
 			expectedDecodeTime: 50 * 90000,
 			expectedErr:        "",
 		},
+		{
+			asset:              "WAVE/av",
+			media:              "aac/$NrOrTime$.m4s",
+			nowMS:              10_000, // Early time where segment 0 time=0, duration shortened
+			mpdType:            "TimelineTime",
+			requestMedia:       0,  // Client requests time=0 - this is NOT shifted for segment 0
+			expectedNr:         0,  // Should return segment 0 (0-based sequence number)
+			expectedDecodeTime: 0,  // Expected decode time
+			expectedErr:        "", // Should work - no mapping needed for segment 0
+		},
+		{
+			asset:              "WAVE/av",
+			media:              "aac/$NrOrTime$.m4s",
+			nowMS:              70_000, // Later time where segment time is shifted
+			mpdType:            "TimelineTime",
+			requestMedia:       3069952, // Client requests adjusted time 64*48000-2048
+			expectedNr:         32,      // Should map to correct segment number
+			expectedDecodeTime: 3072000, // Original unadjusted decode time
+			expectedErr:        "",      // Should work when implemented
+		},
 	}
 	for _, tc := range cases {
 		asset, ok := am.findAsset(tc.asset)
