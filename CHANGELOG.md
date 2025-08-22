@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HEVC encryption support
 - AC-4 audio support including encryption
 - AC-3 and EC-3 encryption support
+- Support for CMAF-compliant audio edit list
+- Documented the CMAF edit list support for both audio and video
 
 ### Changed
 

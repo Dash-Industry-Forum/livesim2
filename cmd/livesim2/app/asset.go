@@ -59,13 +59,9 @@ func (am *assetMgr) addAsset(assetPath string) *asset {
 	if ast, ok := am.assets[assetPath]; ok {
 		return ast
 	}
-	ast := asset{
-		AssetPath: assetPath,
-		MPDs:      make(map[string]internal.MPDData),
-		Reps:      make(map[string]*RepData),
-	}
-	am.assets[assetPath] = &ast
-	return &ast
+	ast := newAsset(assetPath)
+	am.assets[assetPath] = ast
+	return ast
 }
 
 // discoverAssets walks the file tree and finds all directories containing MPD files.
@@ -427,6 +423,14 @@ type asset struct {
 	refRep       *RepData                    `json:"-"` // First video or audio representation
 }
 
+func newAsset(assetPath string) *asset {
+	return &asset{
+		AssetPath: assetPath,
+		MPDs:      make(map[string]internal.MPDData),
+		Reps:      make(map[string]*RepData),
+	}
+}
+
 func (a *asset) getVodMPD(mpdName string) (*m.MPD, error) {
 	md, ok := a.MPDs[mpdName]
 	if !ok {
@@ -551,22 +555,64 @@ func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string) s
 	refT := *refSE.entries[0].T
 	nextRefT := refT
 	t := calcAudioTimeFromRef(refT, refTimescale, sampleDur, timeScale)
+
+	// Apply editListOffset adjustment to presentation time
+	editListOffset := uint64(rep.EditListOffset)
+	expectedTime := t // Track what the time should be without explicit T
 	var s *m.S
+
 	for _, rs := range refSE.entries {
 		refD := rs.D
 		for j := 0; j <= rs.R; j++ {
 			nextRefT += refD
 			nextT := calcAudioTimeFromRef(nextRefT, refTimescale, sampleDur, timeScale)
 			d := nextT - t
+
 			if s == nil {
-				s = &m.S{T: m.Ptr(t), D: d}
+				// First segment: apply editListOffset adjustment
+				adjustedT := t
+				adjustedD := d
+
+				if editListOffset > 0 {
+					if t >= editListOffset {
+						// Normal case: shift time down by editListOffset
+						adjustedT = t - editListOffset
+					} else {
+						// Special case: time would be negative, so clamp to 0 and shorten duration
+						adjustedT = 0
+						if d > editListOffset-t {
+							adjustedD = d - (editListOffset - t)
+						} else {
+							adjustedD = 0
+						}
+					}
+				}
+
+				s = &m.S{T: m.Ptr(adjustedT), D: adjustedD}
 				se.entries = append(se.entries, s)
+				expectedTime = adjustedT + adjustedD // Update expected time after first segment
 			} else {
+				// Subsequent segments
 				if s.D != d {
-					s = &m.S{D: d}
+					// New segment with different duration
+					adjustedT := t
+					if editListOffset > 0 && t >= editListOffset {
+						adjustedT = t - editListOffset
+					}
+
+					// Only add explicit T if the time is not continuous
+					if adjustedT == expectedTime {
+						// Time is continuous, no need for explicit T
+						s = &m.S{D: d}
+					} else {
+						// Time is discontinuous, need explicit T
+						s = &m.S{T: m.Ptr(adjustedT), D: d}
+					}
 					se.entries = append(se.entries, s)
+					expectedTime = adjustedT + d
 				} else {
 					s.R++
+					expectedTime += d
 				}
 			}
 			t = nextT
@@ -624,6 +670,105 @@ func (a *asset) consolidateAsset(logger *slog.Logger) error {
 	if badPreEncrypted {
 		return fmt.Errorf("pre-encrypted representations do not all have same duration")
 	}
+
+	// Validate editListOffset consistency for audio representations
+	err = a.validateEditListOffsetConsistency(logger)
+	if err != nil {
+		return fmt.Errorf("editListOffset validation failed: %w", err)
+	}
+
+	return nil
+}
+
+// validateEditListOffsetConsistency validates that for audio segments with editListOffset,
+// the base media decode time - editListOffset maps to the MPD timestamps.
+// This test fails when editListOffset is not taken into account properly.
+func (a *asset) validateEditListOffsetConsistency(logger *slog.Logger) error {
+	// Check audio representations with editListOffset
+	for _, rep := range a.Reps {
+		if rep.ContentType != "audio" || rep.EditListOffset <= 0 {
+			continue
+		}
+
+		logger.Debug("Validating editListOffset consistency", "rep", rep.ID, "editListOffset", rep.EditListOffset)
+
+		// Find the corresponding SegmentTemplate in the original MPDs
+		// Check all MPDs as a representation may exist in multiple MPDs
+		var segmentTemplates []*m.SegmentTemplateType
+		for mpdName := range a.MPDs {
+			mpd, err := a.getVodMPD(mpdName)
+			if err != nil {
+				continue
+			}
+			for _, as := range mpd.Periods[0].AdaptationSets {
+				for _, r := range as.Representations {
+					if r.Id == rep.ID && as.SegmentTemplate != nil && as.SegmentTemplate.SegmentTimeline != nil {
+						segmentTemplates = append(segmentTemplates, as.SegmentTemplate)
+					}
+				}
+			}
+		}
+
+		if len(segmentTemplates) == 0 {
+			logger.Debug("No SegmentTimeline found for representation", "rep", rep.ID)
+			continue
+		}
+
+		// Extract times from the original MPD SegmentTimeline (use first template found)
+		segmentTemplate := segmentTemplates[0]
+		var mpdTimes []uint64
+		var t uint64
+		for _, s := range segmentTemplate.SegmentTimeline.S {
+			if s.T != nil {
+				t = *s.T
+			}
+			mpdTimes = append(mpdTimes, t)
+			t += s.D
+			for i := 0; i < s.R; i++ {
+				mpdTimes = append(mpdTimes, t)
+				t += s.D
+			}
+		}
+
+		editListOffset := uint64(rep.EditListOffset)
+
+		// Compare BMDT values with MPD times, accounting for editListOffset
+		for i := 0; i < len(rep.Segments) && i < len(mpdTimes) && i < 3; i++ {
+			seg := rep.Segments[i]
+			actualBMDT := seg.StartTime
+			originalMPDTime := mpdTimes[i]
+
+			// Calculate what the live MPD presentation time should be with editListOffset applied
+			var expectedLiveMPDTime uint64
+			if i == 0 && originalMPDTime < editListOffset {
+				// First segment: time would be negative, so clamp to 0
+				expectedLiveMPDTime = 0
+			} else {
+				// Normal case: shift time down by editListOffset
+				expectedLiveMPDTime = originalMPDTime - editListOffset
+			}
+
+			// Key validation: Check the relationship between BMDT and MPD times
+			// For segment 0, BMDT should equal original MPD time (usually 0)
+			// For other segments, BMDT should equal original MPD time + editListOffset
+			var expectedBMDT uint64
+			if i == 0 {
+				expectedBMDT = originalMPDTime // Segment 0 doesn't include editListOffset in BMDT
+			} else {
+				expectedBMDT = originalMPDTime + editListOffset // Other segments include editListOffset
+			}
+
+			if actualBMDT != expectedBMDT {
+				return fmt.Errorf("segment %d BMDT %d does not match expected %d (original MPD time %d, editListOffset %d)",
+					i, actualBMDT, expectedBMDT, originalMPDTime, editListOffset)
+			}
+
+			logger.Debug("EditListOffset validation passed", "segment", i, "BMDT", actualBMDT,
+				"originalMPDTime", originalMPDTime, "editListOffset", editListOffset,
+				"liveMPDTime", expectedLiveMPDTime)
+		}
+	}
+
 	return nil
 }
 
@@ -673,6 +818,7 @@ type RepData struct {
 	Segments               []Segment        `json:"segments"`
 	DefaultSampleDuration  uint32           `json:"defaultSampleDuration"`            // Read from trex or tfhd
 	ConstantSampleDuration *uint32          `json:"constantSampleDuration,omitempty"` // Non-zero if all samples have the same duration
+	EditListOffset         int64            `json:"editListOffset,omitempty"`
 	PreEncrypted           bool             `json:"preEncrypted"`
 	mediaRegexp            *regexp.Regexp   `json:"-"`
 	initSeg                *mp4.InitSegment `json:"-"`
@@ -773,6 +919,11 @@ func (r *RepData) readInit(logger *slog.Logger, vodFS fs.FS, assetPath string) e
 	if err != nil {
 		return fmt.Errorf("decode init: %w", err)
 	}
+	editListOffset, err := getCmafElstOffset(r.initSeg)
+	if err != nil {
+		return fmt.Errorf("getElstOffset: %w", err)
+	}
+	r.EditListOffset = editListOffset
 	r.initBytes, err = getInitBytes(r.initSeg)
 	if err != nil {
 		return fmt.Errorf("getInitBytes: %w", err)
@@ -985,4 +1136,33 @@ type Segment struct {
 
 func (s Segment) dur() uint64 {
 	return s.EndTime - s.StartTime
+}
+
+// getCmafElstOffset returns the offset of the elst box in the init segment.
+// The offset is the mediaTime in an elst box compliant with CMAF to
+// have 1 entry, segment_duration = 0, and media_rate = 1.
+// Currently, edit lists only support for audio tracks.
+func getCmafElstOffset(initSeg *mp4.InitSegment) (int64, error) {
+	if initSeg == nil || initSeg.Moov == nil || len(initSeg.Moov.Traks) != 1 {
+		return 0, fmt.Errorf("invalid init segment")
+	}
+	if initSeg.Moov.Traks[0].Edts == nil {
+		return 0, nil
+	}
+	trak := initSeg.Moov.Traks[0]
+	edts := trak.Edts
+	if hdlrType := trak.Mdia.Hdlr.HandlerType; hdlrType != "soun" && hdlrType != "vide" {
+		return 0, fmt.Errorf("found handler type %q. elst offset only supported for audio and video tracks", hdlrType)
+	}
+	if len(edts.Elst) != 1 {
+		return 0, fmt.Errorf("expected exactly one elst entry, got %d", len(edts.Elst))
+	}
+	if len(edts.Elst[0].Entries) != 1 {
+		return 0, fmt.Errorf("expected exactly one entry in elst, got %d", len(edts.Elst[0].Entries))
+	}
+	e := edts.Elst[0].Entries[0]
+	if e.SegmentDuration != 0 || e.MediaRateInteger != 1 || e.MediaRateFraction != 0 {
+		return 0, fmt.Errorf("invalid CMAF elst entry")
+	}
+	return e.MediaTime, nil
 }

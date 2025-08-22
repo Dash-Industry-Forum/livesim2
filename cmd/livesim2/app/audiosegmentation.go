@@ -21,6 +21,7 @@ type audioRecipe struct {
 }
 
 // calcAudioSegRecipe returns audioRecipe for a segment given a reference segment and representation data.
+// If rd.editListOffset > 0, does not influence the segment itself, only the MPD presentation time
 func calcAudioSegRecipe(refNr uint32, refStart, refEnd, refTotalDur, refTimescale uint64, rd *RepData) audioRecipe {
 	sampleDur := uint64(*rd.ConstantSampleDuration)
 	audioStart := calcAudioTimeFromRef(refStart, refTimescale, sampleDur, uint64(rd.MediaTimescale))
@@ -140,7 +141,21 @@ func createAudioSeg(vodFS fs.FS, a *asset, rec audioRecipe) (*mp4.MediaSegment, 
 
 	for _, itvl := range sampleItvls {
 		s := rep.Segments[itvl.segIdx]
-		segPath := path.Join(a.AssetPath, replaceTimeAndNr(rep.MediaURI, s.StartTime, s.Nr))
+
+		// For audio segments with editListOffset, we need to map back to the original
+		// segment file names. The calculated StartTime doesn't match the actual file names.
+		segmentTime := s.StartTime
+		if rep.EditListOffset > 0 && rep.ContentType == "audio" {
+			// For audio segments, map back to original timeline for file naming
+			// The segment files are named with original audio timeline values
+			if itvl.segIdx > 0 {
+				// For segments after segment 0, subtract editListOffset to get original filename
+				segmentTime = s.StartTime - uint64(rep.EditListOffset)
+			}
+			// Segment 0 keeps its original time (0)
+		}
+
+		segPath := path.Join(a.AssetPath, replaceTimeAndNr(rep.MediaURI, segmentTime, s.Nr))
 		data, err := fs.ReadFile(vodFS, segPath)
 		if err != nil {
 			return nil, fmt.Errorf("read segment: %w", err)

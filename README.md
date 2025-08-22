@@ -265,6 +265,22 @@ Adding longer assets somewhere under the `vodroot` results in longer loops.
 All sources are NTP synchronized (using the host machine clock) with a initial start
 time given by availabilityStartTime and wrap every sequence duration after that.
 
+#### Edit lists
+
+CMAF allows two types of edit lists.
+
+1. Time-shift for audio priming in audio streams
+2. Time-shift for video to initial zero-valued presentation time
+
+There are two test assets included for these cases
+
+1. `WAVE/av/combined.mpod` has shifted audio where the first two frames are used for priming. This is seen
+    in the MPD which has a shorter initial segment. This is reflected in the livesim2 MPD where all
+    segments are shifted by this amount
+2. `bbb_hevc_ac3_8s/manifest.mpd` has an edit list for video which shifts all composition time offsets
+    so that the first presentation time is zero. This shift is kept in the MPD and in the `sidx` boxes
+    of the output from livesim2
+
 ### livesim-content at Github
 
 In the repo [livesim-content][livesim-content], the content that was used for the
