@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:mpeg:dash:schema:mpd:2011"
+  xsi:schemaLocation="urn:mpeg:DASH:schema:MPD:2011 DASH-MPD.xsd"
+  profiles="urn:mpeg:dash:profile:isoff-live:2011"
+  minBufferTime="PT3.2S" type="static" mediaPresentationDuration="PT8S">
+  <Period start="PT0S" id="0">
+    <AdaptationSet id="0" codecs="mhm1.0x0B" contentType="audio" mimeType="audio/mp4" segmentAlignment="true" bitstreamSwitching="true" audioSamplingRate="48000">
+      <SegmentTemplate initialization="$RepresentationID$_init.mp4" media="$RepresentationID$_$Number$.m4s" timescale="48000" duration="76800" startNumber="0"/>
+      <AudioChannelConfiguration schemeIdUri="urn:mpeg:mpegB:cicp:ChannelConfiguration" value="2"/>
+      <Representation id="mhm1_64kbps_per_signal" bandwidth="130319"/>
+    </AdaptationSet>
+    <AdaptationSet codecs="hvc1.1.6.L123.90" contentType="video" width="1920" height="1080" mimeType="video/mp4" segmentAlignment="true" bitstreamSwitching="true">
+      <SegmentTemplate initialization="$RepresentationID$_init.mp4" media="$RepresentationID$_$Number$.m4s" timescale="50" duration="80" startNumber="0"/>
+      <Representation id="hvc1_10000kbps" bandwidth="1159185" sar="1:1"/>
+    </AdaptationSet>
+  </Period>
+</MPD>

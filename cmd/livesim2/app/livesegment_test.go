@@ -18,6 +18,7 @@ import (
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/drm"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
+	m "github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/Eyevinn/mp4ff/bits"
 	"github.com/Eyevinn/mp4ff/mp4"
 	"github.com/stretchr/testify/assert"
@@ -724,6 +725,174 @@ func TestSegmentStatusCodeResponse(t *testing.T) {
 				vodFS, asset, media, tc.nowMS, nil, false /* isLast */)
 			require.NoError(t, err)
 			require.Equal(t, tc.expCode, code)
+		})
+	}
+}
+
+// TestMpeghAssets tests MPEG-H assets with 1.6s segment duration
+func TestMpeghAssets(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false)
+	logger := slog.Default()
+	err := am.discoverAssets(logger)
+	require.NoError(t, err)
+
+	testCases := []struct {
+		asset                  string
+		mpdName                string
+		audioRepId             string
+		videoRepId             string
+		expectedAudioTimescale int
+		expectedVideoTimescale int
+		expectedSegmentDurMs   int
+		expectedAudioCodec     string
+		expectedVideoCodec     string
+	}{
+		{
+			asset:                  "mpegh_BL_1_6",
+			mpdName:                "BL_1_6.mpd",
+			audioRepId:             "mhm1_64kbps_per_signal",
+			videoRepId:             "hvc1_10000kbps",
+			expectedAudioTimescale: 48000,
+			expectedVideoTimescale: 50,
+			expectedSegmentDurMs:   1600, // 1.6 seconds
+			expectedAudioCodec:     "mhm1.0x10",
+			expectedVideoCodec:     "hvc1.1.6.L123.90",
+		},
+		{
+			asset:                  "mpegh_LC_1_6",
+			mpdName:                "LC_1_6.mpd",
+			audioRepId:             "mhm1_64kbps_per_signal",
+			videoRepId:             "hvc1_10000kbps",
+			expectedAudioTimescale: 48000,
+			expectedVideoTimescale: 50,
+			expectedSegmentDurMs:   1600, // 1.6 seconds
+			expectedAudioCodec:     "mhm1.0x0B",
+			expectedVideoCodec:     "hvc1.1.6.L123.90",
+		},
+	}
+
+	var drmCfg *drm.DrmConfig = nil
+	for _, tc := range testCases {
+		t.Run(tc.asset, func(t *testing.T) {
+			asset, ok := am.findAsset(tc.asset)
+			require.True(t, ok, "Asset %s not found", tc.asset)
+
+			cfg := NewResponseConfig()
+			nowMS := 10_000 // 10 seconds into stream
+
+			// Test MPD generation
+			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nil, nowMS)
+			require.NoError(t, err, "Failed to generate live MPD")
+			require.NotNil(t, liveMPD, "Live MPD is nil")
+			require.Len(t, liveMPD.Periods, 1, "Expected exactly one period")
+			require.Len(t, liveMPD.Periods[0].AdaptationSets, 2, "Expected exactly two adaptation sets")
+
+			// Test audio and video adaptation sets
+			var audioAS, videoAS *m.AdaptationSetType
+			for _, as := range liveMPD.Periods[0].AdaptationSets {
+				switch as.ContentType {
+				case "audio":
+					audioAS = as
+				case "video":
+					videoAS = as
+				}
+			}
+			require.NotNil(t, audioAS, "Audio adaptation set not found")
+			require.NotNil(t, videoAS, "Video adaptation set not found")
+
+			// Verify audio adaptation set
+			require.Equal(t, tc.expectedAudioCodec, audioAS.Codecs, "Audio codec mismatch")
+			require.Equal(t, "audio/mp4", audioAS.MimeType, "Audio mime type mismatch")
+			require.Equal(t, tc.expectedAudioTimescale, int(*audioAS.SegmentTemplate.Timescale), "Audio timescale mismatch")
+			expectedAudioDuration := tc.expectedSegmentDurMs * tc.expectedAudioTimescale / 1000
+			require.Equal(t, expectedAudioDuration, int(*audioAS.SegmentTemplate.Duration), "Audio duration mismatch")
+
+			// Verify video adaptation set
+			require.Equal(t, tc.expectedVideoCodec, videoAS.Codecs, "Video codec mismatch")
+			require.Equal(t, "video/mp4", videoAS.MimeType, "Video mime type mismatch")
+			require.Equal(t, tc.expectedVideoTimescale, int(*videoAS.SegmentTemplate.Timescale), "Video timescale mismatch")
+			expectedVideoDuration := tc.expectedSegmentDurMs * tc.expectedVideoTimescale / 1000
+			require.Equal(t, expectedVideoDuration, int(*videoAS.SegmentTemplate.Duration), "Video duration mismatch")
+
+			// Test audio init segment
+			audioInitPath := fmt.Sprintf("%s_init.mp4", tc.audioRepId)
+			rr := httptest.NewRecorder()
+			wroteInit, err := writeInitSegment(logger, rr, cfg, drmCfg, asset, audioInitPath)
+			require.True(t, wroteInit, "Failed to write audio init segment")
+			require.NoError(t, err, "Error writing audio init segment")
+			require.Equal(t, http.StatusOK, rr.Code, "Audio init segment returned wrong status code")
+
+			// Verify audio init segment content
+			initSeg := rr.Body.Bytes()
+			require.Greater(t, len(initSeg), 0, "Audio init segment is empty")
+			sr := bits.NewFixedSliceReader(initSeg)
+			mp4File, err := mp4.DecodeFileSR(sr)
+			require.NoError(t, err, "Failed to parse audio init segment")
+			require.NotNil(t, mp4File.Init, "Init segment has no init part")
+			audioTimescale := int(mp4File.Moov.Trak.Mdia.Mdhd.Timescale)
+			require.Equal(t, tc.expectedAudioTimescale, audioTimescale, "Audio init segment timescale mismatch")
+
+			// Test audio media segment (segment 0)
+			audioMediaPath := fmt.Sprintf("%s_0.m4s", tc.audioRepId)
+			so, err := genLiveSegment(logger, vodFS, asset, cfg, audioMediaPath, nowMS, false)
+			require.NoError(t, err, "Failed to generate audio segment")
+			require.NotNil(t, so, "Audio segment output is nil")
+			require.Equal(t, "audio/mp4", so.meta.rep.SegmentType(), "Audio segment wrong type")
+
+			// Verify audio segment timing (1.6s duration = 76800 at 48kHz)
+			seg := so.seg
+			require.Len(t, seg.Fragments, 1, "Expected exactly one fragment in audio segment")
+			baseDecodeTime := seg.Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
+			require.Equal(t, 0, int(baseDecodeTime), "First audio segment should start at time 0")
+
+			// Test video init segment
+			videoInitPath := fmt.Sprintf("%s_init.mp4", tc.videoRepId)
+			rr = httptest.NewRecorder()
+			wroteInit, err = writeInitSegment(logger, rr, cfg, drmCfg, asset, videoInitPath)
+			require.True(t, wroteInit, "Failed to write video init segment")
+			require.NoError(t, err, "Error writing video init segment")
+			require.Equal(t, http.StatusOK, rr.Code, "Video init segment returned wrong status code")
+
+			// Verify video init segment content
+			initSeg = rr.Body.Bytes()
+			require.Greater(t, len(initSeg), 0, "Video init segment is empty")
+			sr = bits.NewFixedSliceReader(initSeg)
+			mp4File, err = mp4.DecodeFileSR(sr)
+			require.NoError(t, err, "Failed to parse video init segment")
+			require.NotNil(t, mp4File.Init, "Init segment has no init part")
+			videoTimescale := int(mp4File.Moov.Trak.Mdia.Mdhd.Timescale)
+			require.Equal(t, tc.expectedVideoTimescale, videoTimescale, "Video init segment timescale mismatch")
+
+			// Test video media segment (segment 0)
+			videoMediaPath := fmt.Sprintf("%s_0.m4s", tc.videoRepId)
+			so, err = genLiveSegment(logger, vodFS, asset, cfg, videoMediaPath, nowMS, false)
+			require.NoError(t, err, "Failed to generate video segment")
+			require.NotNil(t, so, "Video segment output is nil")
+			require.Equal(t, "video/mp4", so.meta.rep.SegmentType(), "Video segment wrong type")
+
+			// Verify video segment timing (1.6s duration = 80 at 50Hz)
+			seg = so.seg
+			require.Len(t, seg.Fragments, 1, "Expected exactly one fragment in video segment")
+			baseDecodeTime = seg.Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
+			require.Equal(t, 0, int(baseDecodeTime), "First video segment should start at time 0")
+
+			// Test segment 1 to verify timing progression
+			audioMediaPath = fmt.Sprintf("%s_1.m4s", tc.audioRepId)
+			so, err = genLiveSegment(logger, vodFS, asset, cfg, audioMediaPath, nowMS, false)
+			require.NoError(t, err, "Failed to generate audio segment 1")
+			baseDecodeTime = so.seg.Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
+			expectedAudioTime := 76800 // 1.6s * 48000
+			require.Equal(t, expectedAudioTime, int(baseDecodeTime), "Second audio segment timing incorrect")
+
+			videoMediaPath = fmt.Sprintf("%s_1.m4s", tc.videoRepId)
+			so, err = genLiveSegment(logger, vodFS, asset, cfg, videoMediaPath, nowMS, false)
+			require.NoError(t, err, "Failed to generate video segment 1")
+			baseDecodeTime = so.seg.Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
+			expectedVideoTime := 80 // 1.6s * 50
+			require.Equal(t, expectedVideoTime, int(baseDecodeTime), "Second video segment timing incorrect")
+
+			t.Logf("Successfully tested MPEG-H asset %s with 1.6s segments", tc.asset)
 		})
 	}
 }
