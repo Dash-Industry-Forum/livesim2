@@ -10,15 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - HEVC encryption support
-- AC-4 audio support including encryption
-- AC-3 and EC-3 encryption support
+- AC-4 audio support (including full encryption)
+- MPEG-H audio support (including full encryption)
+- AC-3 and EC-3 full encryption support
 - Support for CMAF-compliant audio edit list
 - Documented the CMAF edit list support for both audio and video
 
 ### Changed
 
-- Minimal Go version is now 1.23
+- Minimal Go version increased to 1.23
 - Updated dash-mpd to v0.13.0 (Full DASH Ed. 6 support)
+- Updated mp4ff to v0.50.0 (more codecs support)
 
 ### Fixed
 
