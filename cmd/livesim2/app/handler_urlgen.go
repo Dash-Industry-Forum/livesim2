@@ -193,9 +193,11 @@ type nameWithSelect struct {
 type segmentTimelineType string
 
 const (
-	Number         segmentTimelineType = "nr"
-	TimelineTime   segmentTimelineType = "tlt"
-	TimelineNumber segmentTimelineType = "tlnr"
+	Number                segmentTimelineType = "nr"
+	TimelineTime          segmentTimelineType = "tlt"
+	TimelineNumber        segmentTimelineType = "tlnr"
+	TimelineTimePattern   segmentTimelineType = "tltp"
+	TimelineNumberPattern segmentTimelineType = "tlnrp"
 )
 
 func (s *Server) createInitData(aInfo assetsInfo) (data urlGenData, err error) {
@@ -251,6 +253,12 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 	case TimelineNumber:
 		data.Stl = TimelineNumber
 		sb.WriteString("segtimelinenr_1/")
+	case TimelineTimePattern:
+		data.Stl = TimelineTimePattern
+		sb.WriteString("segtimeline_pattern/")
+	case TimelineNumberPattern:
+		data.Stl = TimelineNumberPattern
+		sb.WriteString("segtimelinenr_pattern/")
 	default:
 		fmt.Printf("Bad stl: %s\n", stl)
 	}
