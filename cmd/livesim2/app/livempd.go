@@ -280,7 +280,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 				mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, se.lsi))
 			}
 		case timeLineNumber:
-			err := adjustAdaptationSetForTimelineNr(se, as)
+			err := adjustAdaptationSetForTimelineNr(cfg, se, as)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForTimelineNr: %w", err)
 			}
@@ -615,7 +615,7 @@ func adjustAdaptationSetForTimelineTime(cfg *ResponseConfig, se segEntries, as *
 	return nil
 }
 
-func adjustAdaptationSetForTimelineNr(se segEntries, as *m.AdaptationSetType) error {
+func adjustAdaptationSetForTimelineNr(cfg *ResponseConfig, se segEntries, as *m.AdaptationSetType) error {
 	if as.SegmentTemplate.SegmentTimeline == nil {
 		as.SegmentTemplate.SegmentTimeline = &m.SegmentTimelineType{}
 	}
@@ -623,6 +623,24 @@ func adjustAdaptationSetForTimelineNr(se segEntries, as *m.AdaptationSetType) er
 	as.SegmentTemplate.Duration = nil
 	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
 	as.SegmentTemplate.Timescale = Ptr(se.mediaTimescale)
+
+	// Check if pattern mode is enabled and this is audio
+	if cfg.SegTimelineMode == SegTimelineModeNrPattern && as.ContentType == "audio" {
+		// Try to detect and apply pattern based on cyclic alignment
+		if patternSTL := detectAndApplyPattern(se); patternSTL != nil {
+			as.SegmentTemplate.SegmentTimeline = patternSTL
+			// Add EssentialProperty for pattern support
+			as.EssentialProperties = append(as.EssentialProperties, &m.DescriptorType{
+				SchemeIdUri: "urn:mpeg:dash:pattern:2024",
+			})
+			if se.startNr >= 0 {
+				as.SegmentTemplate.StartNumber = Ptr(uint32(se.startNr))
+			}
+			return nil
+		}
+	}
+
+	// Default: use regular segment entries
 	as.SegmentTemplate.SegmentTimeline.S = se.entries
 
 	if se.startNr >= 0 {

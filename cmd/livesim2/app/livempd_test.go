@@ -1262,7 +1262,7 @@ func TestPatternGeneration(t *testing.T) {
 	}
 }
 
-// TestPatternConsistency tests that the same pattern is generated regardless of sliding window position
+// TestPatternConsistency tests that the same pattern is generated for both $Time$ and $Number$ addressing modes
 func TestPatternConsistency(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	tmpDir := t.TempDir()
@@ -1275,19 +1275,246 @@ func TestPatternConsistency(t *testing.T) {
 	require.True(t, ok)
 
 	// Test with different nowMS values to get different sliding windows
-	// For a mulitple of 8 seconds, the pE should be 0, and then increase for each 2s step.
-	// For nowMS = 800000, the first segemnt start with tsbd=30s is 768s, which is a multiple of 8s.
+	// For a multiple of 8 seconds, the pE should be 0, and then increase for each 2s step.
+	// For nowMS = 8000000, the first segment start with tsbd=30s is 768s, which is a multiple of 8s.
 	testTimes := []int{8000000, 802000, 804000, 806000}
-	var previousPattern *m.PatternType
 
-	for _, nowMS := range testTimes {
-		t.Run(fmt.Sprintf("nowMS_%d", nowMS), func(t *testing.T) {
-			cfg := NewResponseConfig()
-			cfg.SegTimelineMode = SegTimelineModePattern
-			cfg.TimeShiftBufferDepthS = Ptr(30)
+	// Test both $Time$ and $Number$ modes
+	modes := []struct {
+		name              string
+		mode              SegTimelineMode
+		expectedMedia     string
+		shouldHaveStartNr bool
+	}{
+		{
+			name:              "$Time$",
+			mode:              SegTimelineModePattern,
+			expectedMedia:     "$RepresentationID$/$Time$.m4s",
+			shouldHaveStartNr: false,
+		},
+		{
+			name:              "$Number$",
+			mode:              SegTimelineModeNrPattern,
+			expectedMedia:     "$RepresentationID$/$Number$.m4s",
+			shouldHaveStartNr: true,
+		},
+	}
 
-			liveMPD, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, nowMS)
+	// Store patterns from $Time$ mode to compare with $Number$ mode
+	var timePatterns []*m.PatternType
+	var timePEs []uint32
+	var timeSegmentTimelines []*m.SegmentTimelineType
+
+	for modeIdx, modeTest := range modes {
+		t.Run(modeTest.name, func(t *testing.T) {
+			for timeIdx, nowMS := range testTimes {
+				t.Run(fmt.Sprintf("nowMS_%d", nowMS), func(t *testing.T) {
+					cfg := NewResponseConfig()
+					cfg.SegTimelineMode = modeTest.mode
+					cfg.TimeShiftBufferDepthS = Ptr(30)
+
+					liveMPD, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, nowMS)
+					require.NoError(t, err)
+
+					// Find audio adaptation set
+					var audioAS *m.AdaptationSetType
+					for _, as := range liveMPD.Periods[0].AdaptationSets {
+						if as.ContentType == "audio" {
+							audioAS = as
+							break
+						}
+					}
+					require.NotNil(t, audioAS, "Should have audio adaptation set")
+
+					// Verify media template
+					assert.Equal(t, modeTest.expectedMedia, audioAS.SegmentTemplate.Media,
+						"Media template should match expected for %s mode", modeTest.name)
+
+					// Verify startNumber
+					if modeTest.shouldHaveStartNr {
+						require.NotNil(t, audioAS.SegmentTemplate.StartNumber,
+							"StartNumber should be set for $Number$ mode")
+					}
+
+					stl := audioAS.SegmentTemplate.SegmentTimeline
+					require.NotNil(t, stl, "Should have SegmentTimeline")
+					require.NotNil(t, stl.Pattern, "Should have Pattern")
+					require.Len(t, stl.Pattern, 1, "Should have exactly one Pattern")
+
+					pattern := stl.Pattern[0]
+
+					// Verify the pattern starts with the longest duration
+					if len(pattern.P) > 0 {
+						maxDur := pattern.P[0].D
+						for _, p := range pattern.P {
+							assert.LessOrEqual(t, p.D, maxDur, "First duration should be the maximum")
+						}
+					}
+
+					// Check that S element has proper PE value
+					require.NotNil(t, stl.S, "Should have S elements")
+					require.Greater(t, len(stl.S), 0, "Should have at least one S element")
+					s := stl.S[0]
+					require.NotNil(t, s.PE, "Should have PE value")
+					require.NotNil(t, s.T, "S element should have T attribute (same for both modes)")
+
+					// Calculate expected PE value based on nowMS
+					var expectedPE int
+					switch nowMS {
+					case 8000000:
+						expectedPE = 0
+					case 802000:
+						expectedPE = 1
+					case 804000:
+						expectedPE = 2
+					case 806000:
+						expectedPE = 3
+					}
+
+					assert.Equal(t, expectedPE, int(*s.PE),
+						fmt.Sprintf("PE value should match expected based on first segment position (nowMS=%d, actual PE=%d)",
+							nowMS, int(*s.PE)))
+
+					// PE should be between 0 and pattern length - 1
+					patternLen := 0
+					for _, p := range pattern.P {
+						patternLen += int(p.R) + 1
+					}
+					assert.GreaterOrEqual(t, int(*s.PE), 0, "PE should be >= 0")
+					assert.Less(t, int(*s.PE), patternLen, "PE should be < pattern length")
+
+					// Verify EssentialProperty is present
+					hasPatternProperty := false
+					for _, prop := range audioAS.EssentialProperties {
+						if prop.SchemeIdUri == "urn:mpeg:dash:pattern:2024" {
+							hasPatternProperty = true
+							break
+						}
+					}
+					assert.True(t, hasPatternProperty, "Should have EssentialProperty for pattern support")
+
+					// Store patterns from $Time$ mode for comparison
+					if modeIdx == 0 {
+						timePatterns = append(timePatterns, pattern)
+						timePEs = append(timePEs, *s.PE)
+						timeSegmentTimelines = append(timeSegmentTimelines, stl)
+					} else {
+						// Compare $Number$ mode with $Time$ mode
+						timePattern := timePatterns[timeIdx]
+						assert.Equal(t, len(timePattern.P), len(pattern.P),
+							"Pattern length should be identical for both modes")
+						for i := range pattern.P {
+							assert.Equal(t, timePattern.P[i].D, pattern.P[i].D,
+								"Pattern durations should be identical for both modes")
+							assert.Equal(t, timePattern.P[i].R, pattern.P[i].R,
+								"Pattern repetitions should be identical for both modes")
+						}
+
+						// PE values should be identical
+						assert.Equal(t, timePEs[timeIdx], *s.PE,
+							"PE values should be identical for both modes")
+
+						// SegmentTimeline S elements should be identical (same T, D, R, p, pE)
+						timeSTL := timeSegmentTimelines[timeIdx]
+						require.Equal(t, len(timeSTL.S), len(stl.S),
+							"Number of S elements should be identical")
+						for i := range stl.S {
+							assert.Equal(t, timeSTL.S[i].T, stl.S[i].T,
+								"S element T should be identical for both modes")
+							assert.Equal(t, timeSTL.S[i].D, stl.S[i].D,
+								"S element D should be identical for both modes")
+							assert.Equal(t, timeSTL.S[i].R, stl.S[i].R,
+								"S element R should be identical for both modes")
+							assert.Equal(t, timeSTL.S[i].P, stl.S[i].P,
+								"S element p should be identical for both modes")
+							assert.Equal(t, timeSTL.S[i].PE, stl.S[i].PE,
+								"S element pE should be identical for both modes")
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestURLParsingForNrPattern tests that segtimelinenr_pattern/ URL parameter is correctly parsed
+func TestURLParsingForNrPattern(t *testing.T) {
+	testCases := []struct {
+		url          string
+		expectedMode SegTimelineMode
+	}{
+		{
+			url:          "/livesim2/segtimelinenr_pattern/testpic_2s/Manifest.mpd",
+			expectedMode: SegTimelineModeNrPattern,
+		},
+		{
+			url:          "/livesim2/segtimeline_pattern/testpic_2s/Manifest.mpd",
+			expectedMode: SegTimelineModePattern,
+		},
+		{
+			url:          "/livesim2/segtimeline_time/testpic_2s/Manifest.mpd",
+			expectedMode: SegTimelineModeTime,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.url, func(t *testing.T) {
+			cfg, err := processURLCfg(tc.url, 1000000)
 			require.NoError(t, err)
+			assert.Equal(t, tc.expectedMode, cfg.SegTimelineMode, "SegTimelineMode should match")
+		})
+	}
+}
+
+// TestURLToMPDWithPattern tests end-to-end URL to MPD generation with Pattern
+func TestURLToMPDWithPattern(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	tmpDir := t.TempDir()
+	am := newAssetMgr(vodFS, tmpDir, false)
+	logger := slog.Default()
+	err := am.discoverAssets(logger)
+	require.NoError(t, err)
+
+	testCases := []struct {
+		url               string
+		nowMS             int
+		expectedMedia     string
+		shouldHavePattern bool
+		description       string
+	}{
+		{
+			url:               "/livesim2/segtimelinenr_pattern/testpic_2s/Manifest.mpd",
+			nowMS:             8000000,
+			expectedMedia:     "$RepresentationID$/$Number$.m4s",
+			shouldHavePattern: true,
+			description:       "segtimelinenr_pattern should use $Number$ and Pattern",
+		},
+		{
+			url:               "/livesim2/segtimeline_pattern/testpic_2s/Manifest.mpd",
+			nowMS:             8000000,
+			expectedMedia:     "$RepresentationID$/$Time$.m4s",
+			shouldHavePattern: true,
+			description:       "segtimeline_pattern should use $Time$ and Pattern",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			// Parse URL configuration
+			cfg, err := processURLCfg(tc.url, tc.nowMS)
+			require.NoError(t, err)
+
+			// Find asset
+			contentPart := cfg.URLContentPart()
+			asset, ok := am.findAsset(contentPart)
+			require.True(t, ok, "Should find asset")
+
+			// Extract MPD name
+			_, mpdName := path.Split(contentPart)
+
+			// Generate live MPD
+			liveMPD, err := LiveMPD(asset, mpdName, cfg, nil, tc.nowMS)
+			require.NoError(t, err, "LiveMPD should succeed")
 
 			// Find audio adaptation set
 			var audioAS *m.AdaptationSetType
@@ -1299,64 +1526,36 @@ func TestPatternConsistency(t *testing.T) {
 			}
 			require.NotNil(t, audioAS, "Should have audio adaptation set")
 
-			stl := audioAS.SegmentTemplate.SegmentTimeline
-			require.NotNil(t, stl, "Should have SegmentTimeline")
-			require.NotNil(t, stl.Pattern, "Should have Pattern")
-			require.Len(t, stl.Pattern, 1, "Should have exactly one Pattern")
+			// Verify media template
+			assert.Equal(t, tc.expectedMedia, audioAS.SegmentTemplate.Media,
+				"Media template should match expected")
 
-			pattern := stl.Pattern[0]
+			// Verify Pattern
+			if tc.shouldHavePattern {
+				stl := audioAS.SegmentTemplate.SegmentTimeline
+				require.NotNil(t, stl, "Should have SegmentTimeline")
+				require.NotNil(t, stl.Pattern, "Should have Pattern")
+				require.Len(t, stl.Pattern, 1, "Should have exactly one Pattern")
+				require.NotNil(t, stl.S, "Should have S elements")
+				require.Greater(t, len(stl.S), 0, "Should have at least one S element")
+				require.NotNil(t, stl.S[0].PE, "Should have PE value")
 
-			// The pattern should always be the same canonical pattern
-			if previousPattern != nil {
-				assert.Equal(t, len(previousPattern.P), len(pattern.P), "Pattern length should be consistent")
-				for i := range pattern.P {
-					assert.Equal(t, previousPattern.P[i].D, pattern.P[i].D, "Pattern durations should match")
-					assert.Equal(t, previousPattern.P[i].R, pattern.P[i].R, "Pattern repetitions should match")
+				// Verify EssentialProperty for pattern support
+				hasPatternProperty := false
+				for _, prop := range audioAS.EssentialProperties {
+					if prop.SchemeIdUri == "urn:mpeg:dash:pattern:2024" {
+						hasPatternProperty = true
+						break
+					}
 				}
+				assert.True(t, hasPatternProperty, "Should have EssentialProperty for pattern support")
 			}
 
-			// Verify the pattern starts with the longest duration
-			if len(pattern.P) > 0 {
-				maxDur := pattern.P[0].D
-				for _, p := range pattern.P {
-					assert.LessOrEqual(t, p.D, maxDur, "First duration should be the maximum")
-				}
+			// For $Number$ mode, verify startNumber is set
+			if strings.Contains(tc.expectedMedia, "$Number$") {
+				require.NotNil(t, audioAS.SegmentTemplate.StartNumber,
+					"StartNumber should be set for $Number$ mode")
 			}
-
-			previousPattern = pattern
-
-			// Check that S element has proper PE value
-			require.NotNil(t, stl.S, "Should have S elements")
-			require.Greater(t, len(stl.S), 0, "Should have at least one S element")
-			s := stl.S[0]
-			require.NotNil(t, s.PE, "Should have PE value")
-
-			// Calculate expected PE value based on nowMS
-			// For testpic_2s: tsbd=30s, audio segments are ~2s long following video segments
-			// PE should be based on segment number modulo 4 (pattern length)
-			var expectedPE int
-			switch nowMS {
-			case 8000000: // 800000 -> first segment at 768s -> segment 384 -> 384%4 = 0 -> PE = 0
-				expectedPE = 0
-			case 802000: // 802000 -> first segment at 770s -> segment 385 -> 385%4 = 1 -> PE = 1
-				expectedPE = 1
-			case 804000: // 804000 -> first segment at 772s -> segment 386 -> 386%4 = 2 -> PE = 2
-				expectedPE = 2
-			case 806000: // 806000 -> first segment at 774s -> segment 387 -> 387%4 = 3 -> PE = 3
-				expectedPE = 3
-			}
-
-			assert.Equal(t, expectedPE, int(*s.PE),
-				fmt.Sprintf("PE value should match expected based on first segment position (nowMS=%d, actual PE=%d)",
-					nowMS, int(*s.PE)))
-
-			// PE should be between 0 and pattern length - 1
-			patternLen := 0
-			for _, p := range pattern.P {
-				patternLen += int(p.R) + 1
-			}
-			assert.GreaterOrEqual(t, int(*s.PE), 0, "PE should be >= 0")
-			assert.Less(t, int(*s.PE), patternLen, "PE should be < pattern length")
 		})
 	}
 }

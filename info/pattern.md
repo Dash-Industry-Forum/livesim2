@@ -10,7 +10,7 @@ Patterns are detected and applied when:
 - At least 4 segments are available in the sliding window
 - A repeating pattern of 2-12 segments is found
 - At least 1.25 cycles of the pattern are present (allows detection with partial repetition)
-- The `SegTimelineMode` is set to `SegTimelineModePattern`
+- The `SegTimelineMode` is set to `SegTimelineModePattern` (for $Time$ addressing) or `SegTimelineModeNrPattern` (for $Number$ addressing)
 
 ## Pattern Detection Algorithm
 
@@ -80,21 +80,44 @@ Each sliding window position has exactly one correct PE value where the duration
 
 When patterns are detected, the SegmentTimeline uses this structure:
 
+### With $Time$ Addressing (SegTimelineModePattern)
+
 ```xml
-<SegmentTimeline>
-  <Pattern id="1">
-    <P d="96256" r="2"/>
-    <P d="95232" r="0"/>
-  </Pattern>
-  <S t="36864000" d="384000" r="14" p="1" pE="2"/>
-</SegmentTimeline>
+<SegmentTemplate media="$RepresentationID$/$Time$.m4s" ...>
+  <SegmentTimeline>
+    <Pattern id="1">
+      <P d="96256" r="2"/>
+      <P d="95232" r="0"/>
+    </Pattern>
+    <S t="36864000" d="384000" r="14" p="1" pE="2"/>
+  </SegmentTimeline>
+</SegmentTemplate>
 ```
+
+### With $Number$ Addressing (SegTimelineModeNrPattern)
+
+```xml
+<SegmentTemplate media="$RepresentationID$/$Number$.m4s" startNumber="384" ...>
+  <SegmentTimeline>
+    <Pattern id="1">
+      <P d="96256" r="2"/>
+      <P d="95232" r="0"/>
+    </Pattern>
+    <S t="36864000" d="384000" r="14" p="1" pE="2"/>
+  </SegmentTimeline>
+</SegmentTemplate>
+```
+
+**Important**: The SegmentTimeline is identical for both addressing modes. The distinction is in:
+- **Media template**: `$Time$` vs `$Number$`
+- **startNumber attribute**: Required for `$Number$` addressing
 
 Where:
 - `d="384000"`: Total duration of the pattern (8 seconds at 48kHz)
 - `r="14"`: Number of pattern repetitions (15 total patterns)
 - `p="1"`: Reference to Pattern id="1"
 - `pE="2"`: Pattern Entry offset (starts at position 2 in the canonical pattern)
+- `t="36864000"`: Start time (present in SegmentTimeline for both modes, describes timing)
 
 ## Audio Frame Alignment
 
@@ -132,6 +155,20 @@ When video uses alternating segment durations (e.g., 4s + 2s), the Least Common 
 - **Threshold**: 8 × 1.25 = 10 segments needed ✓
 - **Practical benefit**: Enables pattern detection without requiring 48s+ content
 
+## URL Options for Pattern Support
+
+### SegmentTimeline with $Time$ and Pattern
+- URL parameter: `segtimeline_pattern/`
+- Use case: Time-based segment addressing with pattern compression for audio
+- Example: `/livesim2/segtimeline_pattern/testpic_2s/Manifest.mpd`
+
+### SegmentTimeline with $Number$ and Pattern
+- URL parameter: `segtimelinenr_pattern/`
+- Use case: Number-based segment addressing with pattern compression for audio
+- Example: `/livesim2/segtimelinenr_pattern/testpic_2s/Manifest.mpd`
+
+Both options apply pattern detection only to audio tracks, allowing for efficient representation of audio segment duration variations while maintaining compatibility with different addressing modes.
+
 ## Benefits
 
 1. **Compact Representation**: Reduces MPD size for long sliding windows
@@ -140,6 +177,7 @@ When video uses alternating segment durations (e.g., 4s + 2s), the Least Common 
 4. **Automatic Detection**: No manual configuration required
 5. **Practical Detection Threshold**: 1.25 cycle requirement enables pattern detection with minimal content duration
 6. **Complex Cycle Support**: Handles video-audio LCM patterns up to 24s cycles with 30s content
+7. **Addressing Mode Flexibility**: Support for both $Time$ and $Number$ addressing with pattern compression
 
 ## Implementation Files
 

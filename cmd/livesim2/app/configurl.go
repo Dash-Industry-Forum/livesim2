@@ -31,9 +31,10 @@ const (
 type SegTimelineMode string
 
 const (
-	SegTimelineModeNone    SegTimelineMode = ""
-	SegTimelineModeTime    SegTimelineMode = "time"
-	SegTimelineModePattern SegTimelineMode = "pattern"
+	SegTimelineModeNone      SegTimelineMode = ""
+	SegTimelineModeTime      SegTimelineMode = "time"
+	SegTimelineModePattern   SegTimelineMode = "pattern"
+	SegTimelineModeNrPattern SegTimelineMode = "nrpattern"
 )
 
 type UTCTimingMethod string
@@ -260,7 +261,7 @@ func (rc *ResponseConfig) liveMPDType() liveMPDType {
 	switch {
 	case rc.SegTimelineMode == SegTimelineModeTime || rc.SegTimelineMode == SegTimelineModePattern:
 		return timeLineTime
-	case rc.SegTimelineNrFlag:
+	case rc.SegTimelineNrFlag || rc.SegTimelineMode == SegTimelineModeNrPattern:
 		return timeLineNumber
 	default:
 		return segmentNumber
@@ -365,10 +366,12 @@ cfgLoop:
 			} else {
 				cfg.SegTimelineMode = SegTimelineModeTime
 			}
-		case "segtimeline_pattern":
-			cfg.SegTimelineMode = SegTimelineModePattern
 		case "segtimelinenr":
-			cfg.SegTimelineNrFlag = true
+			if val == "pattern" {
+				cfg.SegTimelineMode = SegTimelineModeNrPattern
+			} else {
+				cfg.SegTimelineNrFlag = true
+			}
 		case "peroff": // Set the period offset
 			cfg.PeriodOffset = sc.AtoiPtr(key, val)
 		case "scte35": // Signal this many SCTE-35 ad periods inband (emsg messages) every minute

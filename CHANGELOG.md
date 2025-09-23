@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - VVC test content (testpic_2s_vvc)
 - Pattern support for audio SegmentTimeline with \$Time\$ following DASH Ed. 6
+- New URL option `segtimeline_pattern/` for SegmentTimeline with \$Time\$ and Pattern for audio
+- Pattern support for audio SegmentTimeline with \$Number\$ following DASH Ed. 6
+- New URL option `segtimelinenr_pattern/` for SegmentTimeline with \$Number\$ and Pattern for audio
+- URL generator page options for both pattern cases
 
 ## [1.8.0] - 2025-09-11
 
