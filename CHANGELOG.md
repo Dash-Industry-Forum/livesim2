@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - VVC test content (testpic_2s_vvc)
+- Pattern support for audio SegmentTimeline with \$Time\$ following DASH Ed. 6
 
 ## [1.8.0] - 2025-09-11
 

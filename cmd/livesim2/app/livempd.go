@@ -47,6 +47,9 @@ func calcWrapTimes(a *asset, cfg *ResponseConfig, nowMS int, tsbd m.Duration) wr
 	return wt
 }
 
+// maxPatternLength is the maximum number of segments allowed in a pattern
+const maxPatternLength = 12
+
 func genLaURL(cfg *ResponseConfig) string {
 	laURL := cfg.Host + strings.Join(cfg.URLParts[:cfg.URLContentIdx+1], "/") + laURLSuffix
 	return laURL
@@ -269,7 +272,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		}
 		switch templateType {
 		case timeLineTime:
-			err := adjustAdaptationSetForTimelineTime(se, as)
+			err := adjustAdaptationSetForTimelineTime(cfg, se, as)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForTimelineTime: %w", err)
 			}
@@ -585,7 +588,7 @@ func setOffsetInAdaptationSet(cfg *ResponseConfig, as *m.AdaptationSetType) (ato
 	return atoMS, nil
 }
 
-func adjustAdaptationSetForTimelineTime(se segEntries, as *m.AdaptationSetType) error {
+func adjustAdaptationSetForTimelineTime(cfg *ResponseConfig, se segEntries, as *m.AdaptationSetType) error {
 	if as.SegmentTemplate.SegmentTimeline == nil {
 		as.SegmentTemplate.SegmentTimeline = &m.SegmentTimelineType{}
 	}
@@ -593,6 +596,21 @@ func adjustAdaptationSetForTimelineTime(se segEntries, as *m.AdaptationSetType) 
 	as.SegmentTemplate.Duration = nil
 	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Time$")
 	as.SegmentTemplate.Timescale = Ptr(se.mediaTimescale)
+
+	// Check if pattern mode is enabled and this is audio
+	if cfg.SegTimelineMode == SegTimelineModePattern && as.ContentType == "audio" {
+		// Try to detect and apply pattern based on cyclic alignment
+		if patternSTL := detectAndApplyPattern(se); patternSTL != nil {
+			as.SegmentTemplate.SegmentTimeline = patternSTL
+			// Add EssentialProperty for pattern support
+			as.EssentialProperties = append(as.EssentialProperties, &m.DescriptorType{
+				SchemeIdUri: "urn:mpeg:dash:pattern:2024",
+			})
+			return nil
+		}
+	}
+
+	// Default: use regular segment entries
 	as.SegmentTemplate.SegmentTimeline.S = se.entries
 	return nil
 }
@@ -657,7 +675,7 @@ func addTimeSubs(cfg *ResponseConfig, a *asset, period *m.Period, languages []st
 		rep.StartWithSAP = 1
 		st := m.NewSegmentTemplate()
 		st.Initialization = "$RepresentationID$/init.mp4"
-		if cfg.SegTimelineFlag {
+		if cfg.HasSegmentTimelineTime() {
 			st.Media = "$RepresentationID$/$Time$.m4s"
 		} else {
 			st.Media = "$RepresentationID$/$Number$.m4s"
@@ -835,6 +853,190 @@ func orderAdaptationSetsByContentType(aSets []*m.AdaptationSetType) []*m.Adaptat
 	}
 
 	return outASets
+}
+
+// detectAndApplyPattern detects cyclic patterns in audio segments
+// that align with video segments at regular intervals.
+// Returns a SegmentTimelineType with Pattern elements if pattern is found, nil otherwise.
+func detectAndApplyPattern(se segEntries) *m.SegmentTimelineType {
+	if len(se.entries) < 2 {
+		return nil
+	}
+
+	// Collect segment durations from the entries
+	var durations []uint64
+	for _, entry := range se.entries {
+		// Expand the entry based on repeat count
+		for i := 0; i <= int(entry.R); i++ {
+			durations = append(durations, entry.D)
+		}
+	}
+
+	if len(durations) < 4 { // Need at least 4 segments to detect a pattern
+		return nil
+	}
+
+	// Try to find the shortest repeating pattern
+	// Require at least 1.25 cycles: patternLen * 5/4 <= len(durations)
+	// This allows detecting 24s cycles with 30s content (8 segments * 1.25 = 10 segments)
+	for patternLen := 2; patternLen <= maxPatternLength && patternLen*5 <= len(durations)*4; patternLen++ {
+		// Check if pattern of this length repeats
+		isRepeating := true
+		for i := 0; i < len(durations); i++ {
+			if durations[i] != durations[i%patternLen] {
+				isRepeating = false
+				break
+			}
+		}
+
+		if isRepeating {
+			// Extract the pattern of this length
+			pattern := durations[:patternLen]
+
+			// Rotate pattern to start with the longest duration
+			canonicalPattern, _ := findCanonicalPattern(pattern)
+
+			// Create Pattern element
+			stl := &m.SegmentTimelineType{}
+			patternElement := &m.PatternType{
+				Id: 1,
+				P:  make([]*m.RunLengthType, 0, len(canonicalPattern)),
+			}
+
+			// Build the pattern with run-length encoding
+			i := 0
+			for i < len(canonicalPattern) {
+				dur := canonicalPattern[i]
+				r := uint64(0)
+				// Count consecutive occurrences
+				for j := i + 1; j < len(canonicalPattern) && canonicalPattern[j] == dur; j++ {
+					r++
+				}
+				p := &m.RunLengthType{
+					D: dur,
+					R: r,
+				}
+				patternElement.P = append(patternElement.P, p)
+				i += int(r) + 1
+			}
+
+			stl.Pattern = []*m.PatternType{patternElement}
+
+			// Calculate how many complete patterns we have in the sliding window
+			numPatterns := len(durations) / patternLen
+			if numPatterns > 0 {
+				// Start with the first timestamp from original entries
+				startTime := uint64(0)
+				if len(se.entries) > 0 && se.entries[0].T != nil {
+					startTime = *se.entries[0].T
+				}
+
+				// Calculate PE by searching for the best match between sliding window durations
+				// and the canonical pattern. This is more robust than simple modulo calculation.
+				patternEntryOffset, err := findPatternEntryOffset(durations, canonicalPattern)
+				if err != nil {
+					// This should not happen, but if it does, we can't use patterns
+					return nil
+				}
+
+				// Calculate the total duration of the pattern
+				var patternDuration uint64
+				for _, dur := range canonicalPattern {
+					patternDuration += dur
+				}
+
+				s := &m.S{
+					T: &startTime,
+					D: patternDuration, // Total duration of the pattern
+					R: numPatterns - 1,
+					CommonDurationPatternAttributes: m.CommonDurationPatternAttributes{
+						P:  Ptr(uint32(1)),                  // Reference pattern id="1"
+						PE: Ptr(uint32(patternEntryOffset)), // Start at the correct offset in the canonical pattern
+					},
+				}
+				stl.S = []*m.S{s}
+			}
+
+			return stl
+		}
+	}
+
+	return nil
+}
+
+// findCanonicalPattern rotates the pattern to start with the longest consecutive run of max values
+// Returns the rotated pattern and the rotation offset
+func findCanonicalPattern(pattern []uint64) ([]uint64, int) {
+	if len(pattern) == 0 {
+		return pattern, 0
+	}
+
+	// Find the maximum duration
+	maxDur := pattern[0]
+	for _, d := range pattern[1:] {
+		if d > maxDur {
+			maxDur = d
+		}
+	}
+
+	// Find the position with the longest consecutive run of max values
+	bestStart := 0
+	bestRunLen := 0
+
+	for start := 0; start < len(pattern); start++ {
+		if pattern[start] == maxDur {
+			// Count consecutive max values from this position
+			runLen := 0
+			for i := 0; i < len(pattern); i++ {
+				if pattern[(start+i)%len(pattern)] == maxDur {
+					runLen++
+				} else {
+					break
+				}
+			}
+			if runLen > bestRunLen {
+				bestRunLen = runLen
+				bestStart = start
+			}
+		}
+	}
+
+	// Rotate pattern to start at bestStart
+	canonical := make([]uint64, len(pattern))
+	for i := 0; i < len(pattern); i++ {
+		canonical[i] = pattern[(bestStart+i)%len(pattern)]
+	}
+
+	return canonical, bestStart
+}
+
+// findPatternEntryOffset finds where the sliding window starts in the canonical pattern
+func findPatternEntryOffset(slidingWindowDurations, canonicalPattern []uint64) (int, error) {
+	if len(canonicalPattern) == 0 || len(slidingWindowDurations) == 0 {
+		return 0, nil
+	}
+
+	// Try each offset until we find a match
+	patternLen := len(canonicalPattern)
+	for offset := 0; offset < patternLen; offset++ {
+		// Check if pattern matches at this offset
+		match := true
+		for i := 0; i < len(slidingWindowDurations) && i < patternLen; i++ {
+			if slidingWindowDurations[i] != canonicalPattern[(offset+i)%patternLen] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return offset, nil
+		}
+	}
+
+	// This should never happen if pattern detection is working correctly
+	slog.Error("No pattern entry offset found - pattern detection may be broken",
+		"canonicalPattern", canonicalPattern,
+		"slidingWindowDurations", slidingWindowDurations[:min(len(slidingWindowDurations), patternLen)])
+	return 0, fmt.Errorf("internal error: no matching pattern entry offset found")
 }
 
 // fillContentTypes fills contentType if not set based on mimeType

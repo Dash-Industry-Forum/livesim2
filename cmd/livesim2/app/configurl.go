@@ -28,6 +28,14 @@ const (
 	baseURLPrefix = "bu"
 )
 
+type SegTimelineMode string
+
+const (
+	SegTimelineModeNone    SegTimelineMode = ""
+	SegTimelineModeTime    SegTimelineMode = "time"
+	SegTimelineModePattern SegTimelineMode = "pattern"
+)
+
 type UTCTimingMethod string
 
 const (
@@ -95,7 +103,7 @@ type ResponseConfig struct {
 	ContUpdateFlag               bool              `json:"ContUpdateFlag,omitempty"`
 	InsertAdFlag                 bool              `json:"InsertAdFlag,omitempty"`
 	ContMultiPeriodFlag          bool              `json:"ContMultiPeriodFlag,omitempty"`
-	SegTimelineFlag              bool              `json:"SegTimelineFlag,omitempty"`
+	SegTimelineMode              SegTimelineMode   `json:"SegTimelineMode,omitempty"`
 	SegTimelineNrFlag            bool              `json:"SegTimelineNrFlag,omitempty"`
 	SidxFlag                     bool              `json:"SidxFlag,omitempty"`
 	SegTimelineLossFlag          bool              `json:"SegTimelineLossFlag,omitempty"`
@@ -250,7 +258,7 @@ func NewResponseConfig() *ResponseConfig {
 
 func (rc *ResponseConfig) liveMPDType() liveMPDType {
 	switch {
-	case rc.SegTimelineFlag:
+	case rc.SegTimelineMode == SegTimelineModeTime || rc.SegTimelineMode == SegTimelineModePattern:
 		return timeLineTime
 	case rc.SegTimelineNrFlag:
 		return timeLineNumber
@@ -266,6 +274,11 @@ func (rc *ResponseConfig) getRepType(segName string) liveMPDType {
 		return segmentNumber
 	}
 	return rc.liveMPDType()
+}
+
+// HasSegmentTimelineTime returns true if any SegmentTimeline mode with time is active.
+func (rc *ResponseConfig) HasSegmentTimelineTime() bool {
+	return rc.SegTimelineMode != SegTimelineModeNone
 }
 
 // getAvailabilityTimeOffset returns the availabilityTimeOffsetS. Note that it can be infinite.
@@ -347,7 +360,13 @@ cfgLoop:
 		case "continuous": // Only valid when periods_per_hour is set
 			cfg.ContMultiPeriodFlag = true
 		case "segtimeline":
-			cfg.SegTimelineFlag = true
+			if val == "pattern" {
+				cfg.SegTimelineMode = SegTimelineModePattern
+			} else {
+				cfg.SegTimelineMode = SegTimelineModeTime
+			}
+		case "segtimeline_pattern":
+			cfg.SegTimelineMode = SegTimelineModePattern
 		case "segtimelinenr":
 			cfg.SegTimelineNrFlag = true
 		case "peroff": // Set the period offset
@@ -418,7 +437,7 @@ func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 	if nowMS < 0 {
 		return fmt.Errorf("nowMS must be >= 0")
 	}
-	if cfg.SegTimelineNrFlag && cfg.SegTimelineFlag {
+	if cfg.SegTimelineNrFlag && cfg.SegTimelineMode != SegTimelineModeNone {
 		return fmt.Errorf("SegmentTimelineTime and SegmentTimelineNr cannot be used at same time")
 	}
 	if cfg.TimeSubsRegion < 0 || cfg.TimeSubsRegion > 1 {

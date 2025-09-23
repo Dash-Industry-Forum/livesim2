@@ -73,7 +73,7 @@ func TestLiveSegment(t *testing.T) {
 				switch mpdType {
 				case "Number":
 				case "TimelineTime":
-					cfg.SegTimelineFlag = true
+					cfg.SegTimelineMode = SegTimelineModeTime
 				case "TimelineNumber":
 					cfg.SegTimelineNrFlag = true
 				}
@@ -169,7 +169,7 @@ func TestCheckAudioSegmentTimeAddressing(t *testing.T) {
 			switch mpdType {
 			case "Number":
 			case "TimelineTime":
-				cfg.SegTimelineFlag = true
+				cfg.SegTimelineMode = SegTimelineModeTime
 			case "TimelineNumber":
 				cfg.SegTimelineNrFlag = true
 			}
@@ -227,7 +227,7 @@ func TestLiveThumbSegment(t *testing.T) {
 			switch mpdType {
 			case "Number":
 			case "TimelineTime":
-				cfg.SegTimelineFlag = true
+				cfg.SegTimelineMode = SegTimelineModeTime
 			case "TimelineNumber":
 				cfg.SegTimelineNrFlag = true
 			}
@@ -588,7 +588,7 @@ func TestLLSegmentAvailability(t *testing.T) {
 		cfg.AvailabilityTimeOffsetS = 1.5
 		switch tc.mpdType {
 		case "TimelineTime":
-			cfg.SegTimelineFlag = true
+			cfg.SegTimelineMode = SegTimelineModeTime
 		case "TimelineNumber":
 			cfg.SegTimelineNrFlag = true
 		case "Number":
@@ -714,7 +714,7 @@ func TestSegmentStatusCodeResponse(t *testing.T) {
 			switch tc.mpdType {
 			case "Number":
 			case "TimelineTime":
-				cfg.SegTimelineFlag = true
+				cfg.SegTimelineMode = SegTimelineModeTime
 			case "TimelineNumber":
 				cfg.SegTimelineNrFlag = true
 			}
