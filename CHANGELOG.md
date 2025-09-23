@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `--writemissingrepdata` CLI option to generate RepData files only for representations that lack them (Issue #271)
 - Version field in RepData structure to support future format evolution
 - Support for DASH-IF Certurl ContentProtection element
+- Pattern support for audio SegmentTimeline following DASH Ed. 6
+- New URL options `segtimeline_pattern/` and `segtimelinenr_pattern/`
+- URL generator page options for both pattern cases
 
 ### Fixed
 

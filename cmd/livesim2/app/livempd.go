@@ -28,7 +28,7 @@ func hasExtraSpaces(config string) bool {
 		return true
 	}
 	return strings.Contains(config, " ;") || strings.Contains(config, "; ") ||
-		   strings.Contains(config, " ,") || strings.Contains(config, ", ")
+		strings.Contains(config, " ,") || strings.Contains(config, ", ")
 }
 
 // addAdvancedLinearProfileIfMissing adds the AdvancedLinear profile to the profiles string if it's not already present
@@ -66,6 +66,40 @@ func calcWrapTimes(a *asset, cfg *ResponseConfig, nowMS int, tsbd m.Duration) wr
 	wt.nowRelMS = nowMS - wt.nowWrapMS
 
 	return wt
+}
+
+// maxPatternLengthBruteForce is the maximum pattern length tried during brute-force search
+// when the expected pattern length cannot be computed mathematically.
+const maxPatternLengthBruteForce = 12
+
+// gcd returns the greatest common divisor of a and b.
+func gcd(a, b uint64) uint64 {
+	for b != 0 {
+		a, b = b, a%b
+	}
+	return a
+}
+
+// computeExpectedPatternLen calculates the expected audio pattern length
+// from the video reference entries and audio parameters.
+// Returns 0 if video durations are not constant (fall back to brute force),
+// 1 if no pattern is needed (audio aligns perfectly),
+// or the exact pattern length otherwise.
+func computeExpectedPatternLen(refSE segEntries, audioTimescale uint32, audioSampleDur uint32) int {
+	if len(refSE.entries) == 0 || audioSampleDur == 0 {
+		return 0
+	}
+
+	// Check if all video segment durations are the same
+	firstDur := refSE.entries[0].D
+	for _, e := range refSE.entries {
+		if e.D != firstDur {
+			return 0 // not constant → fall back to brute force
+		}
+	}
+
+	audioSamplesPerSeg := firstDur * uint64(audioTimescale) / uint64(refSE.mediaTimescale)
+	return int(uint64(audioSampleDur) / gcd(audioSamplesPerSeg, uint64(audioSampleDur)))
 }
 
 func genLaURL(cfg *ResponseConfig) string {
@@ -368,18 +402,10 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 			templateType = segmentNumber
 		}
 		switch templateType {
-		case timeLineTime:
-			err := adjustAdaptationSetForTimelineTime(se, as)
+		case timeLineTime, timeLineNumber:
+			err := adjustAdaptationSetForTimeline(cfg, se, as, refSegEntries, a)
 			if err != nil {
-				return nil, fmt.Errorf("adjustASForTimelineTime: %w", err)
-			}
-			if asIdx == 0 {
-				mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, se.lsi))
-			}
-		case timeLineNumber:
-			err := adjustAdaptationSetForTimelineNr(se, as)
-			if err != nil {
-				return nil, fmt.Errorf("adjustASForTimelineNr: %w", err)
+				return nil, fmt.Errorf("adjustASFor %s: %w", templateType, err)
 			}
 			if asIdx == 0 {
 				mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, se.lsi))
@@ -728,31 +754,52 @@ func setOffsetInAdaptationSet(cfg *ResponseConfig, as *m.AdaptationSetType) (ato
 	return atoMS, nil
 }
 
-func adjustAdaptationSetForTimelineTime(se segEntries, as *m.AdaptationSetType) error {
+func adjustAdaptationSetForTimeline(cfg *ResponseConfig, se segEntries, as *m.AdaptationSetType,
+	refSE segEntries, a *asset) error {
 	if as.SegmentTemplate.SegmentTimeline == nil {
 		as.SegmentTemplate.SegmentTimeline = &m.SegmentTimelineType{}
 	}
-	as.SegmentTemplate.StartNumber = nil
-	as.SegmentTemplate.Duration = nil
-	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Time$")
-	as.SegmentTemplate.Timescale = Ptr(se.mediaTimescale)
-	as.SegmentTemplate.SegmentTimeline.S = se.entries
-	return nil
-}
 
-func adjustAdaptationSetForTimelineNr(se segEntries, as *m.AdaptationSetType) error {
-	if as.SegmentTemplate.SegmentTimeline == nil {
-		as.SegmentTemplate.SegmentTimeline = &m.SegmentTimelineType{}
-	}
-	as.SegmentTemplate.StartNumber = nil
 	as.SegmentTemplate.Duration = nil
-	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
 	as.SegmentTemplate.Timescale = Ptr(se.mediaTimescale)
-	as.SegmentTemplate.SegmentTimeline.S = se.entries
 
-	if se.startNr >= 0 {
-		as.SegmentTemplate.StartNumber = Ptr(uint32(se.startNr))
+	isNumberBased := cfg.SegTimelineMode == SegTimelineModeNr || cfg.SegTimelineMode == SegTimelineModeNrPattern
+	isPatternBased := cfg.SegTimelineMode == SegTimelineModePattern || cfg.SegTimelineMode == SegTimelineModeNrPattern
+
+	if isNumberBased {
+		as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
+		if se.startNr >= 0 {
+			as.SegmentTemplate.StartNumber = Ptr(uint32(se.startNr))
+		}
+	} else {
+		as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Time$")
+		as.SegmentTemplate.StartNumber = nil
 	}
+
+	if as.ContentType == "audio" && isPatternBased {
+		// Compute expected pattern length from video/audio parameters
+		expectedPatternLen := 0
+		if a != nil && len(as.Representations) > 0 {
+			if repData, ok := a.Reps[as.Representations[0].Id]; ok {
+				audioSampleDur := repData.sampleDur()
+				if audioSampleDur > 0 {
+					expectedPatternLen = computeExpectedPatternLen(refSE, se.mediaTimescale, audioSampleDur)
+				}
+			}
+		}
+		// Try to detect and apply pattern based on cyclic alignment
+		if patternSTL := detectAndApplyPattern(se, expectedPatternLen); patternSTL != nil {
+			as.SegmentTemplate.SegmentTimeline = patternSTL
+			// Add EssentialProperty for pattern support
+			as.EssentialProperties = append(as.EssentialProperties, &m.DescriptorType{
+				SchemeIdUri: "urn:mpeg:dash:pattern:2024",
+			})
+			return nil
+		}
+	}
+
+	// Default: use regular segment entries
+	as.SegmentTemplate.SegmentTimeline.S = se.entries
 	return nil
 }
 
@@ -779,7 +826,7 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
 
 	if cfg.SSRFlag && explicitChunkDurS != nil {
-k, err := calculateK(uint64(*as.SegmentTemplate.Duration), int(as.SegmentTemplate.GetTimescale()), explicitChunkDurS)
+		k, err := calculateK(uint64(*as.SegmentTemplate.Duration), int(as.SegmentTemplate.GetTimescale()), explicitChunkDurS)
 		if err != nil {
 			return err
 		}
@@ -809,7 +856,7 @@ func addTimeSubs(cfg *ResponseConfig, a *asset, period *m.Period, languages []st
 		rep.StartWithSAP = 1
 		st := m.NewSegmentTemplate()
 		st.Initialization = "$RepresentationID$/init.mp4"
-		if cfg.SegTimelineFlag {
+		if cfg.HasSegmentTimelineTime() {
 			st.Media = "$RepresentationID$/$Time$.m4s"
 		} else {
 			st.Media = "$RepresentationID$/$Number$.m4s"
@@ -987,6 +1034,209 @@ func orderAdaptationSetsByContentType(aSets []*m.AdaptationSetType) []*m.Adaptat
 	}
 
 	return outASets
+}
+
+// detectAndApplyPattern detects cyclic patterns in audio segments
+// that align with video segments at regular intervals.
+// expectedPatternLen is a hint from computeExpectedPatternLen:
+//   - 1 means no pattern needed (audio aligns perfectly) → returns nil immediately
+//   - >1 means try only that specific length (skip brute force)
+//   - 0 means fall back to brute force with maxPatternLengthBruteForce
+//
+// Returns a SegmentTimelineType with Pattern elements if pattern is found, nil otherwise.
+func detectAndApplyPattern(se segEntries, expectedPatternLen int) *m.SegmentTimelineType {
+	if expectedPatternLen == 1 {
+		return nil // audio aligns perfectly, no pattern needed
+	}
+
+	if len(se.entries) < 2 {
+		return nil
+	}
+
+	// Collect segment durations from the entries
+	var durations []uint64
+	for _, entry := range se.entries {
+		// Expand the entry based on repeat count
+		for i := 0; i <= int(entry.R); i++ {
+			durations = append(durations, entry.D)
+		}
+	}
+
+	if len(durations) < 4 { // Need at least 4 segments to detect a pattern
+		return nil
+	}
+
+	// Determine which pattern lengths to try.
+	// Require at least one segment beyond one full cycle to confirm the pattern repeats.
+	var minLen, maxLen int
+	if expectedPatternLen > 1 {
+		// Try only the mathematically expected length
+		minLen = expectedPatternLen
+		maxLen = expectedPatternLen
+	} else {
+		// Brute force: try all lengths from 2 to maxPatternLengthBruteForce
+		minLen = 2
+		maxLen = maxPatternLengthBruteForce
+	}
+
+	for patternLen := minLen; patternLen <= maxLen && patternLen < len(durations); patternLen++ {
+		// Check if pattern of this length repeats
+		isRepeating := true
+		for i := 0; i < len(durations); i++ {
+			if durations[i] != durations[i%patternLen] {
+				isRepeating = false
+				break
+			}
+		}
+
+		if isRepeating {
+			// Extract the pattern of this length
+			pattern := durations[:patternLen]
+
+			// Rotate pattern to start with the longest duration
+			canonicalPattern, _ := findCanonicalPattern(pattern)
+
+			// Create Pattern element
+			stl := &m.SegmentTimelineType{}
+			patternElement := &m.PatternType{
+				Id: 1,
+				P:  make([]*m.RunLengthType, 0, len(canonicalPattern)),
+			}
+
+			// Build the pattern with run-length encoding
+			i := 0
+			for i < len(canonicalPattern) {
+				dur := canonicalPattern[i]
+				r := uint64(0)
+				// Count consecutive occurrences
+				for j := i + 1; j < len(canonicalPattern) && canonicalPattern[j] == dur; j++ {
+					r++
+				}
+				p := &m.RunLengthType{
+					D: dur,
+					R: r,
+				}
+				patternElement.P = append(patternElement.P, p)
+				i += int(r) + 1
+			}
+
+			stl.Pattern = []*m.PatternType{patternElement}
+
+			// Calculate how many complete patterns we have in the sliding window
+			numPatterns := len(durations) / patternLen
+			if numPatterns > 0 {
+				// Start with the first timestamp from original entries
+				startTime := uint64(0)
+				if len(se.entries) > 0 && se.entries[0].T != nil {
+					startTime = *se.entries[0].T
+				}
+
+				// Calculate PE by searching for the best match between sliding window durations
+				// and the canonical pattern. This is more robust than simple modulo calculation.
+				patternEntryOffset, err := findPatternEntryOffset(durations, canonicalPattern)
+				if err != nil {
+					// This should not happen, but if it does, we can't use patterns
+					return nil
+				}
+
+				// Calculate the total duration of the pattern
+				var patternDuration uint64
+				for _, dur := range canonicalPattern {
+					patternDuration += dur
+				}
+
+				s := &m.S{
+					T: &startTime,
+					D: patternDuration, // Total duration of the pattern
+					R: numPatterns - 1,
+					CommonDurationPatternAttributes: m.CommonDurationPatternAttributes{
+						P:  Ptr(uint32(1)),                  // Reference pattern id="1"
+						PE: Ptr(uint32(patternEntryOffset)), // Start at the correct offset in the canonical pattern
+					},
+				}
+				stl.S = []*m.S{s}
+			}
+
+			return stl
+		}
+	}
+
+	return nil
+}
+
+// findCanonicalPattern rotates the pattern to start with the longest consecutive run of max values
+// Returns the rotated pattern and the rotation offset
+func findCanonicalPattern(pattern []uint64) ([]uint64, int) {
+	if len(pattern) == 0 {
+		return pattern, 0
+	}
+
+	// Find the maximum duration
+	maxDur := pattern[0]
+	for _, d := range pattern[1:] {
+		if d > maxDur {
+			maxDur = d
+		}
+	}
+
+	// Find the position with the longest consecutive run of max values
+	bestStart := 0
+	bestRunLen := 0
+
+	for start := 0; start < len(pattern); start++ {
+		if pattern[start] == maxDur {
+			// Count consecutive max values from this position
+			runLen := 0
+			for i := 0; i < len(pattern); i++ {
+				if pattern[(start+i)%len(pattern)] == maxDur {
+					runLen++
+				} else {
+					break
+				}
+			}
+			if runLen > bestRunLen {
+				bestRunLen = runLen
+				bestStart = start
+			}
+		}
+	}
+
+	// Rotate pattern to start at bestStart
+	canonical := make([]uint64, len(pattern))
+	for i := 0; i < len(pattern); i++ {
+		canonical[i] = pattern[(bestStart+i)%len(pattern)]
+	}
+
+	return canonical, bestStart
+}
+
+// findPatternEntryOffset finds where the sliding window starts in the canonical pattern
+func findPatternEntryOffset(slidingWindowDurations, canonicalPattern []uint64) (int, error) {
+	if len(canonicalPattern) == 0 || len(slidingWindowDurations) == 0 {
+		return 0, nil
+	}
+
+	// Try each offset until we find a match
+	patternLen := len(canonicalPattern)
+	for offset := 0; offset < patternLen; offset++ {
+		// Check if pattern matches at this offset
+		match := true
+		for i := 0; i < len(slidingWindowDurations) && i < patternLen; i++ {
+			if slidingWindowDurations[i] != canonicalPattern[(offset+i)%patternLen] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return offset, nil
+		}
+	}
+
+	// This should never happen if pattern detection is working correctly
+	slog.Error("No pattern entry offset found - pattern detection may be broken",
+		"canonicalPattern", canonicalPattern,
+		"slidingWindowDurations", slidingWindowDurations[:min(len(slidingWindowDurations), patternLen)])
+	return 0, fmt.Errorf("internal error: no matching pattern entry offset found")
 }
 
 // fillContentTypes fills contentType if not set based on mimeType

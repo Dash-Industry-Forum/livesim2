@@ -168,7 +168,7 @@ func TestProcessURLCfg(t *testing.T) {
 			nowMS:       0,
 			contentPart: "",
 			wantedCfg:   nil,
-			err:         "url config: SegmentTimelineTime and SegmentTimelineNr cannot be used at same time",
+			err:         "SegmentTimeline mode already set to \"time\"",
 		},
 		{
 			url:         "/livesim2/periods_60/asset.mpd",
