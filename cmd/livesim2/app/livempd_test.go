@@ -359,7 +359,8 @@ func TestLastAvailableSegment(t *testing.T) {
 				} else {
 					require.NoError(t, err)
 					r := as.Representations[0] // Assume that any representation will be fine inside AS
-					se := asset.generateTimelineEntries(r.Id, wTimes, atoMS)
+					se, err := asset.generateTimelineEntries(r.Id, wTimes, atoMS, nil)
+					require.NoError(t, err)
 					assert.Equal(t, tc.wantedSegNr, se.lsi.nr)
 				}
 			}
@@ -1041,6 +1042,507 @@ func TestEndNumberRemovedFromMPD(t *testing.T) {
 	}
 }
 
+func TestGenerateTimelineEntries(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+
+	am := newAssetMgr(vodFS, "", false)
+
+	logger := slog.Default()
+
+	err := am.discoverAssets(logger)
+	require.NoError(t, err)
+
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	cases := []struct {
+		desc                   string
+		reID                   string
+		wt                     wrapTimes
+		atoMS                  int
+		chunkDur               *float64
+		expectedStartNr        int
+		expectedLsiNr          int
+		expectedMediaTimescale uint32
+		expectedEntries        []*m.S
+		expectedError          string
+	}{
+		{
+			desc:                   "With chunkDuration of 0.5s expecting S@k=4",
+			reID:                   "V300",
+			wt:                     wrapTimes{startRelMS: 0, nowRelMS: 7000, startWraps: 0, nowWraps: 0},
+			atoMS:                  0,
+			chunkDur:               Ptr(0.5),
+			expectedStartNr:        0,
+			expectedLsiNr:          2,
+			expectedMediaTimescale: 90000,
+			expectedEntries: []*m.S{
+				{T: Ptr(uint64(0)), D: 180000, R: 2, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: Ptr(uint64(4))}},
+			},
+		},
+		{
+			desc:          "With chunkDuration of 2.1s expecting error (chunk duration >= segment duration)",
+			reID:          "V300",
+			wt:            wrapTimes{startRelMS: 0, nowRelMS: 7000, startWraps: 0, nowWraps: 0},
+			atoMS:         0,
+			chunkDur:      Ptr(2.1),
+			expectedError: "chunk duration 2.10s must be less than or equal to segment duration 2.00s",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			se, err := asset.generateTimelineEntries(tc.reID, tc.wt, tc.atoMS, tc.chunkDur)
+
+			if tc.expectedError != "" {
+				require.Error(t, err)
+				require.Equal(t, tc.expectedError, err.Error())
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedStartNr, se.startNr, "startNr mismatch")
+			assert.Equal(t, tc.expectedLsiNr, se.lsi.nr, "last segment info (nr) mismatch")
+			assert.Equal(t, tc.expectedMediaTimescale, se.mediaTimescale, "mediaTimescale mismatch")
+			require.Equal(t, tc.expectedEntries, se.entries, "timeline entries mismatch")
+		})
+	}
+}
+
+func TestParseSSRAS(t *testing.T) {
+	successCases := []struct {
+		desc         string
+		config       string
+		expectedNext map[uint32]uint32
+		expectedPrev map[uint32]uint32
+	}{
+		{
+			desc:         "empty config",
+			config:       "",
+			expectedNext: nil,
+			expectedPrev: nil,
+		},
+		{
+			desc:         "single pair",
+			config:       "1,2",
+			expectedNext: map[uint32]uint32{1: 2},
+			expectedPrev: map[uint32]uint32{2: 1},
+		},
+		{
+			desc:         "multiple pairs",
+			config:       "1,2;3,4;5,6",
+			expectedNext: map[uint32]uint32{1: 2, 3: 4, 5: 6},
+			expectedPrev: map[uint32]uint32{2: 1, 4: 3, 6: 5},
+		},
+	}
+
+	for _, tc := range successCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			nextMap, prevMap, err := parseSSRAS(tc.config)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedNext, nextMap, "nextMap mismatch")
+			assert.Equal(t, tc.expectedPrev, prevMap, "prevMap mismatch")
+		})
+	}
+
+	errorCases := []struct {
+		desc   string
+		config string
+	}{
+		{
+			desc:   "extra spaces around semicolon",
+			config: "1,2 ; 3,4",
+		},
+		{
+			desc:   "extra spaces around comma",
+			config: "1 , 2;3,4",
+		},
+		{
+			desc:   "leading spaces",
+			config: " 1,2;3,4",
+		},
+		{
+			desc:   "trailing spaces",
+			config: "1,2;3,4 ",
+		},
+		{
+			desc:   "invalid format - single value",
+			config: "1",
+		},
+		{
+			desc:   "invalid format - three values",
+			config: "1,2,3",
+		},
+		{
+			desc:   "invalid format - empty pair",
+			config: "1,2;;3,4",
+		},
+		{
+			desc:   "invalid adaptation set ID",
+			config: "abc,2",
+		},
+		{
+			desc:   "invalid SSR value",
+			config: "1,def",
+		},
+		{
+			desc:   "both values invalid",
+			config: "abc,def",
+		},
+		{
+			desc:   "mixed valid and invalid pairs",
+			config: "1,2;invalid,pair;3,4",
+		},
+	}
+
+	for _, tc := range errorCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			nextMap, prevMap, err := parseSSRAS(tc.config)
+			assert.Error(t, err)
+			assert.Nil(t, nextMap)
+			assert.Nil(t, prevMap)
+		})
+	}
+}
+
+func TestParseChunkDurSSR(t *testing.T) {
+	successCases := []struct {
+		desc     string
+		config   string
+		expected map[uint32]float64
+	}{
+		{
+			desc:     "empty config",
+			config:   "",
+			expected: nil,
+		},
+		{
+			desc:     "single pair with integer duration",
+			config:   "1,2",
+			expected: map[uint32]float64{1: 2.0},
+		},
+		{
+			desc:     "single pair with float duration",
+			config:   "1,0.5",
+			expected: map[uint32]float64{1: 0.5},
+		},
+		{
+			desc:     "multiple pairs with mixed durations",
+			config:   "1,1.0;2,0.1;3,2.5",
+			expected: map[uint32]float64{1: 1.0, 2: 0.1, 3: 2.5},
+		},
+	}
+
+	for _, tc := range successCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			result, err := parseChunkDurSSR(tc.config)
+			assert.NoError(t, err)
+
+			// Handle nil maps more robustly
+			if tc.expected == nil {
+				assert.Nil(t, result, "result should be nil for empty config")
+			} else {
+				assert.Equal(t, tc.expected, result, "chunk duration map mismatch")
+			}
+		})
+	}
+
+	errorCases := []struct {
+		desc   string
+		config string
+	}{
+		{
+			desc:   "extra spaces around semicolon",
+			config: "1,1.0 ; 2,2.0",
+		},
+		{
+			desc:   "extra spaces around comma",
+			config: "1 , 1.0;2,2.0",
+		},
+		{
+			desc:   "leading spaces",
+			config: " 1,1.0;2,2.0",
+		},
+		{
+			desc:   "trailing spaces",
+			config: "1,1.0;2,2.0 ",
+		},
+		{
+			desc:   "invalid format - single value",
+			config: "1",
+		},
+		{
+			desc:   "invalid format - three values",
+			config: "1,2.0,3",
+		},
+		{
+			desc:   "invalid format - empty pair",
+			config: "1,1.0;;2,2.0",
+		},
+		{
+			desc:   "invalid adaptation set ID",
+			config: "abc,1.5",
+		},
+		{
+			desc:   "invalid chunk duration",
+			config: "1,abc",
+		},
+		{
+			desc:   "both values invalid",
+			config: "abc,def",
+		},
+		{
+			desc:   "mixed valid and invalid pairs",
+			config: "1,1.0;invalid,pair;3,0.5",
+		},
+	}
+
+	for _, tc := range errorCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			result, err := parseChunkDurSSR(tc.config)
+			assert.Error(t, err)
+			assert.Nil(t, result)
+		})
+	}
+}
+
+func TestParseSSRAS_ErrorCases(t *testing.T) {
+	cases := []struct {
+		desc     string
+		config   string
+		wantErr  string
+	}{
+		{
+			desc:    "invalid pair format - only one number",
+			config:  "1",
+			wantErr: "invalid format in pair '1': expected 'adaptationSetId,ssrValue'",
+		},
+		{
+			desc:    "invalid pair format - too many numbers",
+			config:  "1,2,3",
+			wantErr: "invalid format in pair '1,2,3': expected 'adaptationSetId,ssrValue'",
+		},
+		{
+			desc:    "configuration with extra spaces",
+			config:  " 10 , 20 ; 30 , 40 ",
+			wantErr: "configuration contains extra spaces: use exact format 'adaptationSetId,ssrValue;...' without spaces",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			_, _, err := parseSSRAS(tc.config)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
+}
+
+func TestParseChunkDurSSR_ErrorCases(t *testing.T) {
+	cases := []struct {
+		desc     string
+		config   string
+		wantErr  string
+	}{
+		{
+			desc:    "invalid pair format - only one number",
+			config:  "1",
+			wantErr: "invalid format in pair '1': expected 'adaptationSetId,chunkDuration'",
+		},
+		{
+			desc:    "invalid pair format - too many numbers",
+			config:  "1,2,3",
+			wantErr: "invalid format in pair '1,2,3': expected 'adaptationSetId,chunkDuration'",
+		},
+		{
+			desc:    "configuration with extra spaces",
+			config:  " 10 , 1.5 ; 20 , 0.25 ",
+			wantErr: "configuration contains extra spaces: use exact format 'adaptationSetId,chunkDuration;...' without spaces",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			_, err := parseChunkDurSSR(tc.config)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
+}
+
+func TestUpdateSSRAdaptationSet(t *testing.T) {
+	cases := []struct {
+		desc                       string
+		as                         *m.AdaptationSetType
+		nextMap                    map[uint32]uint32
+		prevMap                    map[uint32]uint32
+		expectEssentialProperty    bool
+		expectedSSRValue           string
+		expectSupplementalProperty bool
+		expectedSwitchingValue     string
+		expectSegmentSequenceProps bool
+		expectStartWithSAP         bool
+	}{
+		{
+			desc: "video adaptation set with SSR configuration",
+			as: &m.AdaptationSetType{
+				Id:          Ptr(uint32(2)),
+				ContentType: "video",
+			},
+			nextMap:                    map[uint32]uint32{1: 2, 2: 3},
+			prevMap:                    map[uint32]uint32{2: 1, 3: 2},
+			expectEssentialProperty:    true,
+			expectedSSRValue:           "3",
+			expectSupplementalProperty: true,
+			expectedSwitchingValue:     "3,1",
+			expectSegmentSequenceProps: true,
+			expectStartWithSAP:         true,
+		},
+		{
+			desc: "video adaptation set not in nextMap",
+			as: &m.AdaptationSetType{
+				Id:          Ptr(uint32(3)),
+				ContentType: "video",
+			},
+			nextMap:                    map[uint32]uint32{1: 2},
+			prevMap:                    map[uint32]uint32{2: 1},
+			expectEssentialProperty:    false,
+			expectSupplementalProperty: false,
+			expectSegmentSequenceProps: false,
+			expectStartWithSAP:         false,
+		},
+		{
+			desc: "audio adaptation set (should not be processed)",
+			as: &m.AdaptationSetType{
+				Id:          Ptr(uint32(1)),
+				ContentType: "audio",
+			},
+			nextMap:                    map[uint32]uint32{1: 2},
+			prevMap:                    map[uint32]uint32{2: 1},
+			expectEssentialProperty:    false,
+			expectSupplementalProperty: false,
+			expectSegmentSequenceProps: false,
+			expectStartWithSAP:         false,
+		},
+		{
+			desc: "adaptation set with nil ID",
+			as: &m.AdaptationSetType{
+				ContentType: "video",
+			},
+			nextMap:                    map[uint32]uint32{1: 2},
+			prevMap:                    map[uint32]uint32{2: 1},
+			expectEssentialProperty:    false,
+			expectSupplementalProperty: false,
+			expectSegmentSequenceProps: false,
+			expectStartWithSAP:         false,
+		},
+		{
+			desc: "video adaptation set with switching value but no prev",
+			as: &m.AdaptationSetType{
+				Id:          Ptr(uint32(1)),
+				ContentType: "video",
+			},
+			nextMap:                    map[uint32]uint32{1: 2},
+			prevMap:                    map[uint32]uint32{3: 4},
+			expectEssentialProperty:    true,
+			expectedSSRValue:           "2",
+			expectSupplementalProperty: true,
+			expectedSwitchingValue:     "2",
+			expectSegmentSequenceProps: true,
+			expectStartWithSAP:         true,
+		},
+		{
+			desc: "video adaptation set with existing properties",
+			as: func() *m.AdaptationSetType {
+				as := &m.AdaptationSetType{
+					Id:          Ptr(uint32(2)),
+					ContentType: "video",
+				}
+				as.EssentialProperties = append(as.EssentialProperties, &m.DescriptorType{
+					SchemeIdUri: "existing-scheme",
+					Value:       "existing-value",
+				})
+				as.SupplementalProperties = append(as.SupplementalProperties, &m.DescriptorType{
+					SchemeIdUri: "existing-supplemental",
+					Value:       "existing-value",
+				})
+				return as
+			}(),
+			nextMap:                    map[uint32]uint32{1: 2, 2: 3},
+			prevMap:                    map[uint32]uint32{2: 1, 3: 2},
+			expectEssentialProperty:    true,
+			expectedSSRValue:           "3",
+			expectSupplementalProperty: true,
+			expectedSwitchingValue:     "3,1",
+			expectSegmentSequenceProps: true,
+			expectStartWithSAP:         true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			originalEPCount := len(tc.as.EssentialProperties)
+			originalSPCount := len(tc.as.SupplementalProperties)
+
+			var explicitChunkDurS *float64
+			chunkDurSSRMap := make(map[uint32]float64)
+
+			if tc.as.Id != nil && tc.as.ContentType == "video" {
+				nextID, nextExists := tc.nextMap[*tc.as.Id]
+				if nextExists {
+					var prevIDPtr *uint32
+					if prevID, prevExists := tc.prevMap[*tc.as.Id]; prevExists {
+						prevIDPtr = &prevID
+					}
+					updateSSRAdaptationSet(tc.as, nextID, prevIDPtr, chunkDurSSRMap, &explicitChunkDurS)
+				}
+			}
+
+			if tc.expectEssentialProperty {
+				assert.Greater(t, len(tc.as.EssentialProperties), originalEPCount, "EssentialProperty should be added")
+				found := false
+				for _, ep := range tc.as.EssentialProperties {
+					if ep.SchemeIdUri == SsrSchemeIdUri && ep.Value == tc.expectedSSRValue {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "SSR EssentialProperty with correct value should be present")
+			} else {
+				assert.Equal(t, originalEPCount, len(tc.as.EssentialProperties), "No EssentialProperty should be added")
+			}
+
+			if tc.expectSupplementalProperty {
+				assert.Greater(t, len(tc.as.SupplementalProperties), originalSPCount, "SupplementalProperty should be added")
+				found := false
+				for _, sp := range tc.as.SupplementalProperties {
+					if sp.SchemeIdUri == AdaptationSetSwitchingSchemeIdUri && sp.Value == tc.expectedSwitchingValue {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "AdaptationSetSwitching SupplementalProperty with correct value should be present")
+			} else {
+				assert.Equal(t, originalSPCount, len(tc.as.SupplementalProperties), "No SupplementalProperty should be added")
+			}
+
+			if tc.expectSegmentSequenceProps {
+				assert.NotNil(t, tc.as.SegmentSequenceProperties, "SegmentSequenceProperties should be set")
+				assert.Equal(t, uint32(1), tc.as.SegmentSequenceProperties.SapType)
+				assert.Equal(t, uint32(1), tc.as.SegmentSequenceProperties.Cadence)
+			} else {
+				assert.Nil(t, tc.as.SegmentSequenceProperties, "SegmentSequenceProperties should not be set")
+			}
+
+			if tc.expectStartWithSAP {
+				assert.Equal(t, uint32(1), tc.as.StartWithSAP)
+			} else {
+				assert.Equal(t, uint32(0), tc.as.StartWithSAP)
+			}
+		})
+	}
+}
+
 // TestEditListOffsetMPD tests that editListOffset affects MPD SegmentTimeline $Time$ values
 func TestEditListOffsetMPD(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
@@ -1086,10 +1588,12 @@ func TestEditListOffsetMPD(t *testing.T) {
 
 		// Generate timeline entries for reference (video)
 		videoAS := mpd.Periods[0].AdaptationSets[0] // First should be video
-		refSE := asset.generateTimelineEntries(videoAS.Representations[0].Id, wTimes, atoMS)
+		refSE, err := asset.generateTimelineEntries(videoAS.Representations[0].Id, wTimes, atoMS, nil)
+		require.NoError(t, err)
 
 		// Generate timeline entries for audio using reference
-		audioSE := asset.generateTimelineEntriesFromRef(refSE, "aac")
+		audioSE, err := asset.generateTimelineEntriesFromRef(refSE, "aac", nil)
+		require.NoError(t, err)
 		require.Greater(t, len(audioSE.entries), 0, "Should have audio segments")
 
 		firstSegTime := *audioSE.entries[0].T
@@ -1120,10 +1624,12 @@ func TestEditListOffsetMPD(t *testing.T) {
 
 		// Generate timeline entries for reference (video)
 		videoAS := mpd.Periods[0].AdaptationSets[0] // First should be video
-		refSE := asset.generateTimelineEntries(videoAS.Representations[0].Id, wTimes, atoMS)
+		refSE, err := asset.generateTimelineEntries(videoAS.Representations[0].Id, wTimes, atoMS, nil)
+		require.NoError(t, err)
 
 		// Generate timeline entries for audio using reference
-		audioSE := asset.generateTimelineEntriesFromRef(refSE, "aac")
+		audioSE, err := asset.generateTimelineEntriesFromRef(refSE, "aac", nil)
+		require.NoError(t, err)
 		require.Greater(t, len(audioSE.entries), 0, "Should have audio segments")
 
 		firstSegTime := *audioSE.entries[0].T
