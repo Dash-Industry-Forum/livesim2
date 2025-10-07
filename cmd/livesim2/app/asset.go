@@ -352,9 +352,11 @@ func (rp *RepData) addRegExpAndInit(logger *slog.Logger, vodFS fs.FS, assetPath 
 	switch {
 	case strings.Contains(rp.MediaURI, "$Number$"):
 		rexStr := strings.ReplaceAll(rp.MediaURI, "$Number$", `(\d+)`)
+		rexStr = "^" + rexStr + "$" // Anchor to match entire string
 		rp.mediaRegexp = regexp.MustCompile(rexStr)
 	case strings.Contains(rp.MediaURI, "$Time$"):
 		rexStr := strings.ReplaceAll(rp.MediaURI, "$Time$", `(\d+)`)
+		rexStr = "^" + rexStr + "$" // Anchor to match entire string
 		rp.mediaRegexp = regexp.MustCompile(rexStr)
 	default:
 		return fmt.Errorf("neither $Number$, nor $Time$ found in media")
