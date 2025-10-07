@@ -75,7 +75,7 @@ func TestLiveSegment(t *testing.T) {
 				case "TimelineTime":
 					cfg.SegTimelineMode = SegTimelineModeTime
 				case "TimelineNumber":
-					cfg.SegTimelineNrFlag = true
+					cfg.SegTimelineMode = SegTimelineModeNr
 				}
 				nowMS := 100_000
 				rr := httptest.NewRecorder()
@@ -171,7 +171,7 @@ func TestCheckAudioSegmentTimeAddressing(t *testing.T) {
 			case "TimelineTime":
 				cfg.SegTimelineMode = SegTimelineModeTime
 			case "TimelineNumber":
-				cfg.SegTimelineNrFlag = true
+				cfg.SegTimelineMode = SegTimelineModeNr
 			}
 			for nr := c.segNrStart; nr <= c.segNrEnd; nr++ {
 				mediaTime := calcAudioTimeFromRef(uint64(nr)*c.refSegDur, c.refTimescale, 1024, 48000)
@@ -229,7 +229,7 @@ func TestLiveThumbSegment(t *testing.T) {
 			case "TimelineTime":
 				cfg.SegTimelineMode = SegTimelineModeTime
 			case "TimelineNumber":
-				cfg.SegTimelineNrFlag = true
+				cfg.SegTimelineMode = SegTimelineModeNr
 			}
 			nowMS := 100_000
 			media := tc.media
@@ -590,7 +590,7 @@ func TestLLSegmentAvailability(t *testing.T) {
 		case "TimelineTime":
 			cfg.SegTimelineMode = SegTimelineModeTime
 		case "TimelineNumber":
-			cfg.SegTimelineNrFlag = true
+			cfg.SegTimelineMode = SegTimelineModeNr
 		case "Number":
 			// Nothing
 		default:
@@ -716,7 +716,7 @@ func TestSegmentStatusCodeResponse(t *testing.T) {
 			case "TimelineTime":
 				cfg.SegTimelineMode = SegTimelineModeTime
 			case "TimelineNumber":
-				cfg.SegTimelineNrFlag = true
+				cfg.SegTimelineMode = SegTimelineModeNr
 			}
 			cfg.SegStatusCodes = tc.ss
 			media := strings.ReplaceAll(tc.media, "$NrOrTime$", fmt.Sprintf("%d", tc.nrOrTime))

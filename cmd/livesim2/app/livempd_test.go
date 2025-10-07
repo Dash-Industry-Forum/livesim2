@@ -227,7 +227,7 @@ func TestSegmentTimes(t *testing.T) {
 		if tc.useTime {
 			cfg.SegTimelineMode = SegTimelineModeTime
 		} else {
-			cfg.SegTimelineNrFlag = true
+			cfg.SegTimelineMode = SegTimelineModeNr
 		}
 		for nowS := tc.startTimeS; nowS < tc.endTimeS; nowS++ {
 			nowMS := nowS * 1000
@@ -342,7 +342,7 @@ func TestLastAvailableSegment(t *testing.T) {
 			if tc.segTimelineTime {
 				cfg.SegTimelineMode = SegTimelineModeTime
 			} else {
-				cfg.SegTimelineNrFlag = true
+				cfg.SegTimelineMode = SegTimelineModeNr
 			}
 			cfg.AvailabilityTimeOffsetS = tc.availabilityTimeOffset
 			if tc.availabilityTimeOffset > 0 && !tc.availabilityTimeComplete {
@@ -759,7 +759,7 @@ func TestAudioSegmentTimeFollowsVideo(t *testing.T) {
 			case "timelineTime":
 				cfg.SegTimelineMode = SegTimelineModeTime
 			case "timelineNumber":
-				cfg.SegTimelineNrFlag = true
+				cfg.SegTimelineMode = SegTimelineModeNr
 			default: // $Number$
 				// no flag
 			}
@@ -879,7 +879,7 @@ func TestMultiPeriod(t *testing.T) {
 			case "timelineTime":
 				cfg.SegTimelineMode = SegTimelineModeTime
 			case "timelineNumber":
-				cfg.SegTimelineNrFlag = true
+				cfg.SegTimelineMode = SegTimelineModeNr
 			default: // $Number$
 				// no flag
 			}
