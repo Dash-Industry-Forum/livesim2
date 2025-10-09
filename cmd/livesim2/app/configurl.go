@@ -28,6 +28,16 @@ const (
 	baseURLPrefix = "bu"
 )
 
+type SegTimelineMode string
+
+const (
+	SegTimelineModeNone      SegTimelineMode = ""
+	SegTimelineModeTime      SegTimelineMode = "time"
+	SegTimelineModePattern   SegTimelineMode = "pattern"
+	SegTimelineModeNr        SegTimelineMode = "nr"
+	SegTimelineModeNrPattern SegTimelineMode = "nrpattern"
+)
+
 type UTCTimingMethod string
 
 const (
@@ -95,8 +105,7 @@ type ResponseConfig struct {
 	ContUpdateFlag               bool              `json:"ContUpdateFlag,omitempty"`
 	InsertAdFlag                 bool              `json:"InsertAdFlag,omitempty"`
 	ContMultiPeriodFlag          bool              `json:"ContMultiPeriodFlag,omitempty"`
-	SegTimelineFlag              bool              `json:"SegTimelineFlag,omitempty"`
-	SegTimelineNrFlag            bool              `json:"SegTimelineNrFlag,omitempty"`
+	SegTimelineMode              SegTimelineMode   `json:"SegTimelineMode,omitempty"`
 	SidxFlag                     bool              `json:"SidxFlag,omitempty"`
 	SegTimelineLossFlag          bool              `json:"SegTimelineLossFlag,omitempty"`
 	AvailabilityTimeCompleteFlag bool              `json:"AvailabilityTimeCompleteFlag,omitempty"`
@@ -249,10 +258,10 @@ func NewResponseConfig() *ResponseConfig {
 }
 
 func (rc *ResponseConfig) liveMPDType() liveMPDType {
-	switch {
-	case rc.SegTimelineFlag:
+	switch rc.SegTimelineMode {
+	case SegTimelineModeTime, SegTimelineModePattern:
 		return timeLineTime
-	case rc.SegTimelineNrFlag:
+	case SegTimelineModeNr, SegTimelineModeNrPattern:
 		return timeLineNumber
 	default:
 		return segmentNumber
@@ -266,6 +275,11 @@ func (rc *ResponseConfig) getRepType(segName string) liveMPDType {
 		return segmentNumber
 	}
 	return rc.liveMPDType()
+}
+
+// HasSegmentTimelineTime returns true if any SegmentTimeline mode with time is active.
+func (rc *ResponseConfig) HasSegmentTimelineTime() bool {
+	return rc.SegTimelineMode != SegTimelineModeNone
 }
 
 // getAvailabilityTimeOffset returns the availabilityTimeOffsetS. Note that it can be infinite.
@@ -347,9 +361,23 @@ cfgLoop:
 		case "continuous": // Only valid when periods_per_hour is set
 			cfg.ContMultiPeriodFlag = true
 		case "segtimeline":
-			cfg.SegTimelineFlag = true
+			if cfg.SegTimelineMode != SegTimelineModeNone {
+				return nil, fmt.Errorf("SegmentTimeline mode already set to %q", cfg.SegTimelineMode)
+			}
+			if val == "pattern" {
+				cfg.SegTimelineMode = SegTimelineModePattern
+			} else {
+				cfg.SegTimelineMode = SegTimelineModeTime
+			}
 		case "segtimelinenr":
-			cfg.SegTimelineNrFlag = true
+			if cfg.SegTimelineMode != SegTimelineModeNone {
+				return nil, fmt.Errorf("SegmentTimeline mode already set to %q", cfg.SegTimelineMode)
+			}
+			if val == "pattern" {
+				cfg.SegTimelineMode = SegTimelineModeNrPattern
+			} else {
+				cfg.SegTimelineMode = SegTimelineModeNr
+			}
 		case "peroff": // Set the period offset
 			cfg.PeriodOffset = sc.AtoiPtr(key, val)
 		case "scte35": // Signal this many SCTE-35 ad periods inband (emsg messages) every minute
@@ -417,9 +445,6 @@ cfgLoop:
 func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 	if nowMS < 0 {
 		return fmt.Errorf("nowMS must be >= 0")
-	}
-	if cfg.SegTimelineNrFlag && cfg.SegTimelineFlag {
-		return fmt.Errorf("SegmentTimelineTime and SegmentTimelineNr cannot be used at same time")
 	}
 	if cfg.TimeSubsRegion < 0 || cfg.TimeSubsRegion > 1 {
 		return fmt.Errorf("timesubsreg number must be 0 or 1")
