@@ -315,7 +315,7 @@ func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, 
 			return code, nil
 		}
 	}
-	if cfg.AvailabilityTimeCompleteFlag {
+	if cfg.AvailabilityTimeCompleteFlag || isImage(segmentPart) {
 		return 0, writeLiveSegment(log, w, cfg, drmCfg, vodFS, a, segmentPart, nowMS, tt, isLast)
 	}
 	// Chunked low-latency mode

@@ -164,6 +164,13 @@ func TestFetches(t *testing.T) {
 			wantedContentType: `image/jpeg`,
 		},
 		{
+			desc:              "thumbnail in low-latency mode",
+			url:               "testpic_2s/thumbs/1.jpg?nowMS=12000",
+			params:            "ato_1/chunkdur_1/",
+			wantedStatusCode:  http.StatusOK,
+			wantedContentType: `image/jpeg`,
+		},
+		{
 			desc:              "imsc1 image subtitle",
 			url:               "testpic_2s/imsc1_img_en/300.m4s?nowMS=610000",
 			params:            "",
