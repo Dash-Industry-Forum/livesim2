@@ -380,7 +380,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 				mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, se.lsi))
 			}
 		case segmentNumber:
-			err := adjustAdaptationSetForSegmentNumber(cfg, a, as)
+			err := adjustAdaptationSetForSegmentNumber(cfg, a, as, explicitChunkDurS)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForSegmentNumber: %w", err)
 			}
@@ -751,7 +751,7 @@ func adjustAdaptationSetForTimelineNr(se segEntries, as *m.AdaptationSetType) er
 	return nil
 }
 
-func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType) error {
+func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType, explicitChunkDurS *float64) error {
 	if as.SegmentTemplate.Duration == nil {
 		r0 := as.Representations[0]
 		rep0 := a.Reps[r0.Id]
@@ -772,6 +772,15 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 		as.SegmentTemplate.StartNumber = startNr
 	}
 	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
+
+	if cfg.SSRFlag && explicitChunkDurS != nil {
+k, err := calculateK(uint64(*as.SegmentTemplate.Duration), int(as.SegmentTemplate.GetTimescale()), explicitChunkDurS)
+		if err != nil {
+			return err
+		}
+		as.SegmentTemplate.K = k
+	}
+
 	return nil
 }
 
