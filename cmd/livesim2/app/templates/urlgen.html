@@ -69,6 +69,14 @@
 			<input type="radio" id="tlnr" name="stl" value="tlnr" {{if eq .Stl "tlnr"}}checked{{end}}>
 			SegmentTimeline with $Number$
 		</label>
+		<label for="tltp">
+			<input type="radio" id="tltp" name="stl" value="tltp" {{if eq .Stl "tltp"}}checked{{end}}>
+			SegmentTimeline with $Time$ using Pattern for audio
+		</label>
+		<label for="tlnrp">
+			<input type="radio" id="tlnrp" name="stl" value="tlnrp" {{if eq .Stl "tlnrp"}}checked{{end}}>
+			SegmentTimeline with $Number$ using Pattern for audio
+		</label>
 		</fieldset>
 
 		<details>

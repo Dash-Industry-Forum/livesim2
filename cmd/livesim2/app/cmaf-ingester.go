@@ -516,7 +516,7 @@ func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, nowMS i
 	c.log.Debug("Start media segment", "nr", nextSegNr, "nowMS", nowMS, "useChunked", c.useChunked)
 	wTimes := calcWrapTimes(c.asset, c.cfg, nowMS+50, m.Duration(100*time.Millisecond))
 	wg := sync.WaitGroup{}
-	if c.cfg.SegTimelineFlag {
+	if c.cfg.HasSegmentTimelineTime() {
 		var segPart string
 		var refSegEntries segEntries
 		atoMS := int(c.cfg.getAvailabilityTimeOffsetS() * 1000)
