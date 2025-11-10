@@ -27,21 +27,23 @@ import (
 	"github.com/Eyevinn/mp4ff/mp4"
 )
 
-func newAssetMgr(vodFS fs.FS, repDataDir string, writeRepData bool) *assetMgr {
+func newAssetMgr(vodFS fs.FS, repDataDir string, writeRepData bool, writeMissingRepData bool) *assetMgr {
 	am := assetMgr{
-		vodFS:        vodFS,
-		assets:       make(map[string]*asset),
-		repDataDir:   repDataDir,
-		writeRepData: writeRepData,
+		vodFS:               vodFS,
+		assets:              make(map[string]*asset),
+		repDataDir:          repDataDir,
+		writeRepData:        writeRepData,
+		writeMissingRepData: writeMissingRepData,
 	}
 	return &am
 }
 
 type assetMgr struct {
-	vodFS        fs.FS
-	assets       map[string]*asset // the key is the asset path
-	repDataDir   string
-	writeRepData bool
+	vodFS               fs.FS
+	assets              map[string]*asset // the key is the asset path
+	repDataDir          string
+	writeRepData        bool
+	writeMissingRepData bool
 }
 
 // findAsset finds the asset by matching the uri with all assets paths.
@@ -171,12 +173,17 @@ func (am *assetMgr) loadAsset(logger *slog.Logger, mpdPath string) error {
 
 func (am *assetMgr) loadRep(logger *slog.Logger, assetPath string, as *m.AdaptationSetType, rep *m.RepresentationType) (*RepData, error) {
 	logger = logger.With("rep", rep.Id)
-	rp := RepData{ID: rep.Id,
+	rp := RepData{
+		Version:      0, // Default version for RepData format
+		ID:           rep.Id,
 		ContentType:  string(as.ContentType),
 		Codecs:       as.Codecs,
 		MpdTimescale: 1,
 	}
-	if !am.writeRepData {
+	// Try to load from JSON unless writeRepData is true (which forces regeneration)
+	shouldTryLoadJSON := !am.writeRepData
+	jsonLoaded := false
+	if shouldTryLoadJSON {
 		ok, err := rp.loadFromJSON(logger, am.vodFS, am.repDataDir, assetPath)
 		if ok {
 			logger.Debug("Loaded representation data from JSON")
@@ -292,7 +299,11 @@ segLoop:
 	if commonSampleDur >= 0 {
 		rp.ConstantSampleDuration = Ptr(uint32(commonSampleDur))
 	}
-	if !am.writeRepData {
+	// Write to JSON if:
+	// - writeRepData is true (always write/overwrite), OR
+	// - writeMissingRepData is true AND JSON wasn't loaded (write only if missing)
+	shouldWriteJSON := am.writeRepData || (am.writeMissingRepData && !jsonLoaded)
+	if !shouldWriteJSON {
 		return &rp, nil
 	}
 	err = rp.writeToJSON(logger, am.repDataDir, assetPath)
@@ -810,6 +821,7 @@ const (
 
 // RepData provides information about a representation
 type RepData struct {
+	Version                int              `json:"version"` // Version of RepData format (default: 0)
 	ID                     string           `json:"id"`
 	ContentType            string           `json:"contentType"`
 	Codecs                 string           `json:"codecs"`

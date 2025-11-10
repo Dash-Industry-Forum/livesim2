@@ -27,7 +27,7 @@ import (
 
 func TestLiveSegment(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	logger := slog.Default()
 	err := am.discoverAssets(logger)
 	require.NoError(t, err)
@@ -116,7 +116,7 @@ func TestLiveSegment(t *testing.T) {
 // TestAc3Timing checks that the generated segments end within one frame from nominal segment duration.
 func TestAc3Timing(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	log := slog.Default()
 	err := am.discoverAssets(log)
 	require.NoError(t, err)
@@ -139,7 +139,7 @@ func TestAc3Timing(t *testing.T) {
 
 func TestCheckAudioSegmentTimeAddressing(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	log := slog.Default()
 	err := am.discoverAssets(log)
 	require.NoError(t, err)
@@ -195,7 +195,7 @@ func TestCheckAudioSegmentTimeAddressing(t *testing.T) {
 
 func TestLiveThumbSegment(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	log := slog.Default()
 	err := am.discoverAssets(log)
 	require.NoError(t, err)
@@ -248,7 +248,7 @@ func TestLiveThumbSegment(t *testing.T) {
 
 func TestWriteChunkedSegment(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	log := slog.Default()
 	err := am.discoverAssets(log)
 	require.NoError(t, err)
@@ -392,7 +392,7 @@ func TestTTMLTimeShifts(t *testing.T) {
 
 func TestStartNumber(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	log := slog.Default()
 	err := am.discoverAssets(log)
 	require.NoError(t, err)
@@ -460,7 +460,7 @@ func TestStartNumber(t *testing.T) {
 
 func TestLLSegmentAvailability(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	log := slog.Default()
 	err := am.discoverAssets(log)
 	require.NoError(t, err)
@@ -617,7 +617,7 @@ func TestLLSegmentAvailability(t *testing.T) {
 
 func TestSegmentStatusCodeResponse(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	logger := slog.Default()
 	err := am.discoverAssets(logger)
 	require.NoError(t, err)
@@ -732,7 +732,7 @@ func TestSegmentStatusCodeResponse(t *testing.T) {
 // TestMpeghAssets tests MPEG-H assets with 1.6s segment duration
 func TestMpeghAssets(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	logger := slog.Default()
 	err := am.discoverAssets(logger)
 	require.NoError(t, err)
@@ -900,7 +900,7 @@ func TestMpeghAssets(t *testing.T) {
 func TestMehdBoxRemovedFromInitSegment(t *testing.T) {
 	var drmCfg *drm.DrmConfig = nil
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	logger := slog.Default()
 	err := am.discoverAssets(logger)
 	require.NoError(t, err)

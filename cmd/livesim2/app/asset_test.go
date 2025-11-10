@@ -136,7 +136,7 @@ func TestLoadAsset(t *testing.T) {
 			vodFS := os.DirFS(vodRoot)
 			for _, writeRepData := range []bool{true, false} {
 				// Write repData files the first time, and read them the second
-				am := newAssetMgr(vodFS, tmpDir, writeRepData)
+				am := newAssetMgr(vodFS, tmpDir, writeRepData, false)
 				err := am.discoverAssets(logger)
 				require.NoError(t, err)
 				asset, ok := am.findAsset(tc.assetPath)
@@ -158,6 +158,69 @@ func TestLoadAsset(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWriteMissingRepData(t *testing.T) {
+	logger := slog.Default()
+	vodRoot := "testdata"
+	assetPath := "assets/testpic_2s"
+	tmpDir := t.TempDir()
+	vodFS := os.DirFS(vodRoot)
+
+	// Step 1: Load assets with writeMissingRepData=true (no files exist yet)
+	// This should write RepData files
+	am1 := newAssetMgr(vodFS, tmpDir, false, true)
+	err := am1.discoverAssets(logger)
+	require.NoError(t, err)
+
+	// Verify files were created
+	v300Path := path.Join(tmpDir, assetPath, "V300_data.json.gz")
+	a48Path := path.Join(tmpDir, assetPath, "A48_data.json.gz")
+	_, err = os.Stat(v300Path)
+	require.NoError(t, err, "V300_data.json.gz should have been created")
+	_, err = os.Stat(a48Path)
+	require.NoError(t, err, "A48_data.json.gz should have been created")
+
+	// Step 2: Get modification time of V300 file (to verify it's not touched later)
+	v300Info1, err := os.Stat(v300Path)
+	require.NoError(t, err)
+
+	// Step 3: Delete one of the RepData files
+	err = os.Remove(a48Path)
+	require.NoError(t, err)
+
+	// Step 4: Load assets again with writeMissingRepData=true
+	// This should only regenerate the missing A48 file, not V300
+	am2 := newAssetMgr(vodFS, tmpDir, false, true)
+	err = am2.discoverAssets(logger)
+	require.NoError(t, err)
+
+	// Step 5: Verify A48 file was recreated
+	_, err = os.Stat(a48Path)
+	require.NoError(t, err, "A48_data.json.gz should have been recreated")
+
+	// Step 6: Verify V300 file was NOT regenerated (modification time should be the same)
+	v300Info2, err := os.Stat(v300Path)
+	require.NoError(t, err)
+	require.Equal(t, v300Info1.ModTime(), v300Info2.ModTime(),
+		"V300_data.json.gz should not have been regenerated (mod time should be unchanged)")
+
+	// Step 7: Verify data is correct by loading the asset
+	asset, ok := am2.findAsset(assetPath)
+	require.True(t, ok)
+	require.NotNil(t, asset)
+	require.Equal(t, 5, len(asset.Reps), "should have 5 reps")
+
+	// Verify both reps are present and have correct data
+	v300, ok := asset.Reps["V300"]
+	require.True(t, ok)
+	require.Equal(t, 4, len(v300.Segments))
+	require.Equal(t, 0, v300.Version, "RepData version should be 0")
+
+	a48, ok := asset.Reps["A48"]
+	require.True(t, ok)
+	require.Equal(t, 4, len(a48.Segments))
+	require.Equal(t, 0, a48.Version, "RepData version should be 0")
 }
 
 func TestAssetLookupForNameOverlap(t *testing.T) {

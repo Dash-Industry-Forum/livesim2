@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - VVC test content (testpic_2s_vvc)
+- New `--writemissingrepdata` CLI option to generate RepData files only for representations that lack them (Issue #271)
+- Version field in RepData structure to support future format evolution
 
 ### Fixed
 

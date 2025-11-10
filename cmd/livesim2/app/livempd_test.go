@@ -23,7 +23,7 @@ import (
 func TestLiveMPDStart(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	tmpDir := t.TempDir()
-	am := newAssetMgr(vodFS, tmpDir, false)
+	am := newAssetMgr(vodFS, tmpDir, false, false)
 	logger := slog.Default()
 	err := am.discoverAssets(logger)
 	require.NoError(t, err)
@@ -124,7 +124,7 @@ func TestLiveMPDStart(t *testing.T) {
 
 func TestLiveMPDWithTimeSubs(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	logger := slog.Default()
 	err := am.discoverAssets(logger)
 	require.NoError(t, err)
@@ -183,7 +183,7 @@ var liveSubEn = "" +
 // TestSegmentTimes checks that the right number of entries are in the SegmentTimeline
 func TestSegmentTimes(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	logger := slog.Default()
 	err := am.discoverAssets(logger)
 	require.NoError(t, err)
@@ -252,7 +252,7 @@ func TestSegmentTimes(t *testing.T) {
 func TestLastAvailableSegment(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	tmpDir := t.TempDir()
-	am := newAssetMgr(vodFS, tmpDir, true)
+	am := newAssetMgr(vodFS, tmpDir, true, false)
 	logger := slog.Default()
 	err := am.discoverAssets(logger)
 	require.NoError(t, err)
@@ -370,7 +370,7 @@ func TestLastAvailableSegment(t *testing.T) {
 func TestPublishTime(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	tmpDir := t.TempDir()
-	am := newAssetMgr(vodFS, tmpDir, false)
+	am := newAssetMgr(vodFS, tmpDir, false, false)
 	logger := slog.Default()
 	err := am.discoverAssets(logger)
 	require.NoError(t, err)
@@ -550,7 +550,7 @@ func TestPublishTime(t *testing.T) {
 
 func TestNormalAvailabilityTimeOffset(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	logger := slog.Default()
 	err := am.discoverAssets(logger)
 	require.NoError(t, err)
@@ -630,7 +630,7 @@ func TestNormalAvailabilityTimeOffset(t *testing.T) {
 
 func TestUTCTiming(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	logger := slog.Default()
 	err := am.discoverAssets(logger)
 	require.NoError(t, err)
@@ -711,7 +711,7 @@ func segTimingsFromS(ss []*m.S) []segTiming {
 
 func TestAudioSegmentTimeFollowsVideo(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	logger := slog.Default()
 	err := am.discoverAssets(logger)
 	require.NoError(t, err)
@@ -791,7 +791,7 @@ func TestAudioSegmentTimeFollowsVideo(t *testing.T) {
 // TestMultiPeriod tests that period splitting works as expected
 func TestMultiPeriod(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	logger := slog.Default()
 	err := am.discoverAssets(logger)
 	require.NoError(t, err)
@@ -904,7 +904,7 @@ func TestMultiPeriod(t *testing.T) {
 
 func TestRelStartStopTimeIntoLocation(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	logger := slog.Default()
 	err := am.discoverAssets(logger)
 	require.NoError(t, err)
@@ -941,7 +941,7 @@ func TestRelStartStopTimeIntoLocation(t *testing.T) {
 func TestFractionalFramerateMPDs(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	tmpDir := t.TempDir()
-	am := newAssetMgr(vodFS, tmpDir, false)
+	am := newAssetMgr(vodFS, tmpDir, false, false)
 	logger := slog.Default()
 	err := am.discoverAssets(logger)
 	require.NoError(t, err)
@@ -1020,7 +1020,7 @@ func TestFillContentTypes(t *testing.T) {
 func TestEndNumberRemovedFromMPD(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	tmpDir := t.TempDir()
-	am := newAssetMgr(vodFS, tmpDir, false)
+	am := newAssetMgr(vodFS, tmpDir, false, false)
 	logger := slog.Default()
 	err := am.discoverAssets(logger)
 	require.NoError(t, err)
@@ -1045,7 +1045,7 @@ func TestEndNumberRemovedFromMPD(t *testing.T) {
 func TestEditListOffsetMPD(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	tmpDir := t.TempDir()
-	am := newAssetMgr(vodFS, tmpDir, false)
+	am := newAssetMgr(vodFS, tmpDir, false, false)
 	logger := slog.Default()
 	err := am.discoverAssets(logger)
 	require.NoError(t, err)
@@ -1154,7 +1154,7 @@ func TestEditListOffsetMPD(t *testing.T) {
 func TestEditListOffsetAvailabilityTime(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	tmpDir := t.TempDir()
-	am := newAssetMgr(vodFS, tmpDir, false)
+	am := newAssetMgr(vodFS, tmpDir, false, false)
 	logger := slog.Default()
 	err := am.discoverAssets(logger)
 	require.NoError(t, err)
