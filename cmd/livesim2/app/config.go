@@ -52,6 +52,8 @@ type ServerConfig struct {
 	RepDataRoot string `json:"repdataroot"`
 	// WriteRepData is true if representation metadata should be written (will override existing metadata)
 	WriteRepData bool `json:"writerepdata"`
+	// WriteMissingRepData is true if representation metadata should be written only when missing
+	WriteMissingRepData bool `json:"writemissingrepdata"`
 	// Domains is a comma-separated list of domains for Let's Encrypt
 	Domains string `json:"domains"`
 	// CertPath is a path to a valid TLS certificate
@@ -77,10 +79,11 @@ var DefaultConfig = ServerConfig{
 	ReqLimitInt: defaultReqIntervalS,
 	VodRoot:     "./vod",
 	// MetaRoot + means follow VodRoot, _ means no metadata
-	RepDataRoot:     "+",
-	WriteRepData:    false,
-	PlayURL:         defaultPlayURL,
-	WhiteListBlocks: "",
+	RepDataRoot:         "+",
+	WriteRepData:        false,
+	WriteMissingRepData: false,
+	PlayURL:             defaultPlayURL,
+	WhiteListBlocks:     "",
 }
 
 type Config struct {
@@ -119,6 +122,7 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 	f.String("vodroot", k.String("vodroot"), "VoD root directory")
 	f.String("repdataroot", k.String("repdataroot"), `Representation metadata root directory. "+" copies vodroot value. "-" disables usage.`)
 	f.Bool("writerepdata", k.Bool("writerepdata"), "Write representation metadata if not present")
+	f.Bool("writemissingrepdata", k.Bool("writemissingrepdata"), "Write representation metadata only if missing (does not override existing)")
 	f.String("whitelistblocks", k.String("whitelistblocks"), "comma-separated list of CIDR blocks that are not rate limited")
 	f.Int("timeoutS", k.Int("timeouts"), "timeout for all requests (seconds)")
 	f.Int("maxrequests", k.Int("maxrequests"), "max nr of request per IP address per 24 hours")
