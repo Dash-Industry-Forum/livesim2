@@ -11,7 +11,8 @@
                     "laURL": "https://widevine-dash.ezdrm.com/proxy?pX=FFFFFF"
                 },
                 "playready": {
-                    "laURL": "https://playready.ezdrm.com/cency/preauth.asp?pX=FFFFFF"
+                    "laURL": "https://playready.ezdrm.com/cency/preauth.asp?pX=FFFFFF",
+                    "certURL": "https://na-wv.ezdrm.com/demo/video/eleisure.cer"
                 },
                 "fairplay": {
                     "laURL": "https://us-dev.ezdrm.com/fps",

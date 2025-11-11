@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Dash-Industry-Forum/livesim2/pkg/drm"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
 	"github.com/stretchr/testify/require"
 )
@@ -24,6 +25,12 @@ func TestParamToMPD(t *testing.T) {
 	}
 	err := logging.InitSlog(cfg.LogLevel, cfg.LogFormat)
 	require.NoError(t, err)
+
+	// Load DRM configuration for tests
+	drmCfg, err := drm.ReadDrmConfig("testdata/drm.json")
+	require.NoError(t, err)
+	cfg.DrmCfg = drmCfg
+
 	server, err := SetupServer(context.Background(), &cfg)
 	require.NoError(t, err)
 	ts := httptest.NewServer(server.Router)
@@ -73,6 +80,26 @@ func TestParamToMPD(t *testing.T) {
 				`<ContentProtection xmlns:cenc="urn:mpeg:cenc:2013" cenc:default_KID="2880fe36-e44b-f9bf-79d2-752e234818a5" schemeIdUri="urn:mpeg:dash:mp4protection:2011" value="cbcs"></ContentProtection>`,
 				`<ContentProtection schemeIdUri="urn:uuid:e2719d58-a985-b3c9-781a-b030af78d30e" value="ClearKey1.0">`,
 				`<dashif:Laurl xmlns:dashif="https://dashif.org/CPS" licenseType="EME-1.0">`,
+			},
+		},
+		{
+			desc:             "CPIX-based DRM with Widevine, PlayReady, and FairPlay",
+			mpd:              "testpic_2s/Manifest.mpd",
+			params:           "drm_EZDRM-1-key-cbcs-test/",
+			wantedStatusCode: http.StatusOK,
+			//nolint:lll
+			wantedInMPD: []string{
+				// Widevine
+				`<ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed"`,
+				`<dashif:Laurl xmlns:dashif="https://dashif.org/CPS" licenseType="EME-1.0">https://widevine-dash.ezdrm.com/proxy?pX=FFFFFF</dashif:Laurl>`,
+				// PlayReady with both LaURL and CertificateURL
+				`<ContentProtection schemeIdUri="urn:uuid:9a04f079-9840-4286-ab92-e65be0885f95"`,
+				`<dashif:Laurl xmlns:dashif="https://dashif.org/CPS" licenseType="EME-1.0">https://playready.ezdrm.com/cency/preauth.asp?pX=FFFFFF</dashif:Laurl>`,
+				`<dashif:Certurl xmlns:dashif="https://dashif.org/CPS">https://na-wv.ezdrm.com/demo/video/eleisure.cer</dashif:Certurl>`,
+				// FairPlay with both LaURL and CertificateURL
+				`<ContentProtection schemeIdUri="urn:uuid:94ce86fb-07ff-4f43-adb8-93d2fa968ca2"`,
+				`<dashif:Laurl xmlns:dashif="https://dashif.org/CPS" licenseType="EME-1.0">https://us-dev.ezdrm.com/fps</dashif:Laurl>`,
+				`<dashif:Certurl xmlns:dashif="https://dashif.org/CPS">https://na-fps.ezdrm.com/demo/video/eleisure.cer</dashif:Certurl>`,
 			},
 		},
 		{

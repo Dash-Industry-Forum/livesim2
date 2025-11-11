@@ -6,7 +6,7 @@ toolchain go1.23.5
 
 require (
 	github.com/Comcast/gots/v2 v2.2.1
-	github.com/Eyevinn/dash-mpd v0.13.0
+	github.com/Eyevinn/dash-mpd v0.14.0
 	github.com/Eyevinn/mp4ff v0.50.0
 	github.com/beevik/etree v1.5.0
 	github.com/caddyserver/certmagic v0.22.0
@@ -18,7 +18,6 @@ require (
 	github.com/prometheus/client_golang v1.21.1
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
-
 )
 
 require (
