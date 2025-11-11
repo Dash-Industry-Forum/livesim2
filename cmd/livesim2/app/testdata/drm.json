@@ -1,0 +1,24 @@
+{
+    "version": "0.5",
+    "packages":
+    [
+        {
+            "name": "EZDRM-1-key-cbcs-test",
+            "desc": "EZDRM-provided DRM setup with one-key CBCS encryption with Widevine, PlayReady, and FairPlay",
+            "cpixFile": "cpix_1key_cbcs_test.xml",
+            "licenseURLs": {
+                "widevine": {
+                    "laURL": "https://widevine-dash.ezdrm.com/proxy?pX=FFFFFF"
+                },
+                "playready": {
+                    "laURL": "https://playready.ezdrm.com/cency/preauth.asp?pX=FFFFFF",
+                    "certURL": "https://na-wv.ezdrm.com/demo/video/eleisure.cer"
+                },
+                "fairplay": {
+                    "laURL": "https://us-dev.ezdrm.com/fps",
+                    "certURL": "https://na-fps.ezdrm.com/demo/video/eleisure.cer"
+                }
+            }
+        }
+    ]
+}

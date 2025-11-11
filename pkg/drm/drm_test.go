@@ -16,9 +16,30 @@ func TestReadFullConfig(t *testing.T) {
 	require.True(t, ok)
 	require.NotNil(t, cfg)
 	require.Equal(t, 1, len(cfg.CPIXData.ContentKeys))
-	require.Equal(t, 2, len(cfg.CPIXData.DRMSystems))
+	require.Equal(t, 3, len(cfg.CPIXData.DRMSystems))
 	require.Equal(t, 1, len(cfg.CPIXData.UsageRules))
 	require.Equal(t, "livesim2-0001", cfg.CPIXData.ContentID)
+
+	// Check that CertificateURL is properly read for FairPlay
+	fairplayURL, ok := cfg.URLs["fairplay"]
+	require.True(t, ok)
+	require.NotNil(t, fairplayURL)
+	require.Equal(t, "https://us-dev.ezdrm.com/fps", fairplayURL.LaURL)
+	require.Equal(t, "https://na-fps.ezdrm.com/demo/video/eleisure.cer", fairplayURL.CertificateURL)
+
+	// Check PlayReady has both LaURL and CertificateURL
+	playreadyURL, ok := cfg.URLs["playready"]
+	require.True(t, ok)
+	require.NotNil(t, playreadyURL)
+	require.Equal(t, "https://playready.ezdrm.com/cency/preauth.asp?pX=FFFFFF", playreadyURL.LaURL)
+	require.Equal(t, "https://na-wv.ezdrm.com/demo/video/eleisure.cer", playreadyURL.CertificateURL)
+
+	// Check Widevine has LaURL but empty CertificateURL
+	widevineURL, ok := cfg.URLs["widevine"]
+	require.True(t, ok)
+	require.NotNil(t, widevineURL)
+	require.Equal(t, "https://widevine-dash.ezdrm.com/proxy?pX=FFFFFF", widevineURL.LaURL)
+	require.Equal(t, "", widevineURL.CertificateURL)
 }
 
 func TestToUUIDStr(t *testing.T) {

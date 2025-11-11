@@ -221,6 +221,11 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 								Value: drmSys.SmoothStreamingProtectionHeaderData,
 							}
 						}
+						certURL := d.URLs[drmSystem].CertificateURL
+						if certURL != "" {
+							cu := m.CerturlType{Value: m.AnyURI(certURL)}
+							cp.Certurls = []m.CerturlType{cu}
+						}
 						as.ContentProtections = append(as.ContentProtections, cp)
 					}
 				}

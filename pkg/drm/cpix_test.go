@@ -22,7 +22,7 @@ func TestCPIXParser(t *testing.T) {
 			file:            "testdata/cpix_1key_cbcs_test.xml",
 			wantedContentID: "livesim2-0001",
 			wantedNrKeys:    1,
-			wantedNrDRMs:    2,
+			wantedNrDRMs:    3,
 		},
 		{
 			desc:            "2 keys, CBCS, with usage rules for video and audio",
