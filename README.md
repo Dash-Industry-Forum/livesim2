@@ -164,6 +164,7 @@ Then run
 ```sh
 > go mod tidy
 ```
+
 to fetch and install all dependencies.
 
 To build `dashfetcher` and `livesim2` you can use the `Makefile` like

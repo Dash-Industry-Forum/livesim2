@@ -65,7 +65,9 @@ const (
 )
 
 const (
-	UrlParamSchemeIdUri = "urn:mpeg:dash:urlparam:2014"
+	UrlParamSchemeIdUri               = "urn:mpeg:dash:urlparam:2014"
+	SsrSchemeIdUri                    = "urn:mpeg:dash:ssr:2023"
+	AdaptationSetSwitchingSchemeIdUri = "urn:mpeg:dash:adaptation-set-switching:2016"
 )
 
 type ResponseConfig struct {
@@ -110,6 +112,9 @@ type ResponseConfig struct {
 	SegStatusCodes               []SegStatusCodes  `json:"SegStatus,omitempty"`
 	Traffic                      []LossItvls       `json:"Traffic,omitempty"`
 	Query                        *Query            `json:"Query,omitempty"`
+	SSRFlag                      bool              `json:"SSRFlag,omitempty"`
+	SSRAS                        string            `json:"SSRAS,omitempty"`
+	ChunkDurSSR                  string            `json:"ChunkDurSSR,omitempty"`
 }
 
 // SegStatusCodes configures regular extraordinary segment response codes
@@ -241,6 +246,7 @@ func NewResponseConfig() *ResponseConfig {
 	c := ResponseConfig{
 		StartTimeS:                   defaultAvailabilityStartTimeS,
 		AvailabilityTimeCompleteFlag: defaultAvailabilityTimeComplete,
+		SSRFlag:                      defaultSSRFlag,
 		TimeShiftBufferDepthS:        Ptr(defaultTimeShiftBufferDepthS),
 		StartNr:                      Ptr(defaultStartNr),
 		TimeSubsDurMS:                defaultTimeSubsDurMS,
@@ -394,6 +400,11 @@ cfgLoop:
 			}
 		case "annexI":
 			cfg.Query = sc.ParseQuery(key, val)
+		case "ssras":
+			cfg.SSRAS = val
+			cfg.SSRFlag = true
+		case "chunkdurssr":
+			cfg.ChunkDurSSR = val
 		default:
 			contentStartIdx = i
 			break cfgLoop
@@ -447,6 +458,10 @@ func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 	}
 	// We do not check here that the drm is one that has been configured,
 	// since pre-encrypted content will influence what is valid.
+	
+	if cfg.ChunkDurSSR != "" && cfg.SSRAS == "" {
+		return fmt.Errorf("chunkDurSSR requires ssrAS to be configured")
+	}
 	return nil
 }
 

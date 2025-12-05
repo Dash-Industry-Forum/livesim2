@@ -234,6 +234,103 @@ func TestAssetLookupForNameOverlap(t *testing.T) {
 	require.Equal(t, "assets/testpic_2s_1", a.AssetPath)
 }
 
+func TestCalculateK(t *testing.T) {
+	testCases := []struct {
+		description     string
+		segmentDuration uint64
+		mediaTimescale  int
+		chunkDuration   *float64
+		expectedK       *uint64
+		expectedError   string
+	}{
+		{
+			description:     "nil chunk duration",
+			segmentDuration: 192000,
+			mediaTimescale:  96000,
+			chunkDuration:   nil,
+			expectedK:       nil,
+		},
+		{
+			description:     "zero chunk duration",
+			segmentDuration: 192000,
+			mediaTimescale:  96000,
+			chunkDuration:   Ptr(0.0),
+			expectedK:       nil,
+		},
+		{
+			description:     "negative chunk duration",
+			segmentDuration: 192000,
+			mediaTimescale:  96000,
+			chunkDuration:   Ptr(-1.0),
+			expectedK:       nil,
+		},
+		{
+			description:     "zero media timescale",
+			segmentDuration: 192000,
+			mediaTimescale:  0,
+			chunkDuration:   Ptr(1.0),
+			expectedK:       nil,
+		},
+		{
+			description:     "k=4",
+			segmentDuration: 192000,
+			mediaTimescale:  96000,
+			chunkDuration:   Ptr(0.5),
+			expectedK:       Ptr(uint64(4)),
+		},
+		{
+			description:     "k=1, returns nil",
+			segmentDuration: 192000,
+			mediaTimescale:  96000,
+			chunkDuration:   Ptr(2.0),
+			expectedK:       nil,
+		},
+		{
+			description:     "rounding up",
+			segmentDuration: 192000,
+			mediaTimescale:  96000,
+			chunkDuration:   Ptr(0.57), // 3.5087... -> 4
+			expectedK:       Ptr(uint64(4)),
+		},
+		{
+			description:     "rounding down",
+			segmentDuration: 192000,
+			mediaTimescale:  96000,
+			chunkDuration:   Ptr(0.58), // 3.448... -> 3
+			expectedK:       Ptr(uint64(3)),
+		},
+		{
+			description:     "chunk duration greater than segment duration",
+			segmentDuration: 192000,
+			mediaTimescale:  96000,
+			chunkDuration:   Ptr(2.5), // 2.5s > 2.0s segment duration
+			expectedK:       nil,
+			expectedError:   "chunk duration 2.50s must be less than or equal to segment duration 2.00s",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			gotK, err := calculateK(tc.segmentDuration, tc.mediaTimescale, tc.chunkDuration)
+
+			if tc.expectedError != "" {
+				require.Error(t, err)
+				require.Equal(t, tc.expectedError, err.Error())
+				require.Nil(t, gotK)
+				return
+			}
+
+			require.NoError(t, err)
+			if tc.expectedK == nil {
+				require.Nil(t, gotK)
+			} else {
+				require.NotNil(t, gotK)
+				require.Equal(t, *tc.expectedK, *gotK)
+			}
+		})
+	}
+}
+
 func copyDir(srcDir, dstDir string) error {
 	if err := os.MkdirAll(dstDir, 0755); err != nil {
 		return err
