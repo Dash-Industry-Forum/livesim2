@@ -1045,7 +1045,7 @@ func TestEndNumberRemovedFromMPD(t *testing.T) {
 func TestGenerateTimelineEntries(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 
 	logger := slog.Default()
 

@@ -922,7 +922,7 @@ func TestMehdBoxRemovedFromInitSegment(t *testing.T) {
 
 func TestWriteSubSegment(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	err := logging.InitSlog("debug", "discard")
 	require.NoError(t, err)
 	log := slog.Default()
@@ -1043,7 +1043,7 @@ func TestWriteSubSegment(t *testing.T) {
 
 func TestWriteSubSegmentWithChunkDuration(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false)
+	am := newAssetMgr(vodFS, "", false, false)
 	err := logging.InitSlog("debug", "discard")
 	require.NoError(t, err)
 	log := slog.Default()
