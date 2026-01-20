@@ -464,9 +464,31 @@ func (l lastSegInfo) availabilityTime(ato float64) float64 {
 	return math.Round(float64(l.startTime+l.dur)/float64(l.timescale)) - ato
 }
 
+func calculateK(segmentDuration uint64, mediaTimescale int, chunkDurS *float64) (*uint64, error) {
+	if chunkDurS == nil || *chunkDurS <= 0 {
+		return nil, nil
+	}
+	chunkDurInTimescale := *chunkDurS * float64(mediaTimescale)
+	if chunkDurInTimescale <= 0 {
+		return nil, nil
+	}
+
+	// Validate that chunk duration is not greater than segment duration
+	segmentDurS := float64(segmentDuration) / float64(mediaTimescale)
+	if *chunkDurS > segmentDurS {
+		return nil, fmt.Errorf("chunk duration %.2fs must be less than or equal to segment duration %.2fs", *chunkDurS, segmentDurS)
+	}
+
+	kVal := uint64(math.Round(float64(segmentDuration) / chunkDurInTimescale))
+	if kVal > 1 {
+		return &kVal, nil
+	}
+	return nil, nil
+}
+
 // generateTimelineEntries generates timeline entries for the given representation.
 // If no segments are available, startNr and lsi.nr are set to -1.
-func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int) segEntries {
+func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int, explicitChunkDurS *float64) (segEntries, error) {
 	rep := a.Reps[repID]
 	segs := rep.Segments
 	nrSegs := len(segs)
@@ -508,14 +530,20 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int) s
 	if wt.nowWraps < 0 { // no segment finished yet. Return an empty list and set startNr and lsi.nr = -1
 		se.startNr = -1
 		se.lsi.nr = -1
-		return se
+		return se, nil
 	}
 
 	se.startNr = wt.startWraps*nrSegs + relStartIdx
 	nowNr := wt.nowWraps*nrSegs + relNowIdx
 	t := uint64(rep.duration()*wt.startWraps) + segs[relStartIdx].StartTime
 	d := segs[relStartIdx].dur()
-	s := &m.S{T: Ptr(t), D: d}
+
+	k, err := calculateK(d, rep.MediaTimescale, explicitChunkDurS)
+	if err != nil {
+		return se, err
+	}
+
+	s := &m.S{T: Ptr(t), D: d, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: k}}
 	lsi := lastSegInfo{
 		timescale: uint64(rep.MediaTimescale),
 		startTime: t,
@@ -533,18 +561,18 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int) s
 			continue
 		}
 		d = seg.dur()
-		s = &m.S{D: d}
+		s = &m.S{D: d, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: k}}
 		se.entries = append(se.entries, s)
 		lsi.dur = d
 		lsi.nr = nr
 	}
 	se.lsi = lsi
-	return se
+	return se, nil
 }
 
 // generateTimelineEntriesFromRef generates timeline entries for the given representation given reference.
 // This is based on sample duration and the type of media.
-func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string) segEntries {
+func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string, explicitChunkDurS *float64) (segEntries, error) {
 	rep := a.Reps[repID]
 	nrSegs := 0
 	for _, rs := range refSE.entries {
@@ -558,7 +586,7 @@ func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string) s
 	}
 
 	if refSE.startNr < 0 {
-		return se
+		return se, nil
 	}
 
 	sampleDur := uint64(rep.sampleDur())
@@ -573,7 +601,7 @@ func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string) s
 	editListOffset := uint64(rep.EditListOffset)
 	expectedTime := t // Track what the time should be without explicit T
 	var s *m.S
-
+	var k *uint64
 	for _, rs := range refSE.entries {
 		refD := rs.D
 		for j := 0; j <= rs.R; j++ {
@@ -582,6 +610,12 @@ func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string) s
 			d := nextT - t
 
 			if s == nil {
+				var err error
+				k, err = calculateK(d, rep.MediaTimescale, explicitChunkDurS)
+				if err != nil {
+					return se, err
+				}
+
 				// First segment: apply editListOffset adjustment
 				adjustedT := t
 				adjustedD := d
@@ -601,12 +635,18 @@ func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string) s
 					}
 				}
 
-				s = &m.S{T: m.Ptr(adjustedT), D: adjustedD}
+				s = &m.S{T: m.Ptr(adjustedT), D: adjustedD, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: k}}
 				se.entries = append(se.entries, s)
 				expectedTime = adjustedT + adjustedD // Update expected time after first segment
 			} else {
 				// Subsequent segments
 				if s.D != d {
+					var err error
+					k, err = calculateK(d, rep.MediaTimescale, explicitChunkDurS)
+					if err != nil {
+						return se, err
+					}
+
 					// New segment with different duration
 					adjustedT := t
 					if editListOffset > 0 && t >= editListOffset {
@@ -616,10 +656,10 @@ func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string) s
 					// Only add explicit T if the time is not continuous
 					if adjustedT == expectedTime {
 						// Time is continuous, no need for explicit T
-						s = &m.S{D: d}
+						s = &m.S{D: d, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: k}}
 					} else {
 						// Time is discontinuous, need explicit T
-						s = &m.S{T: m.Ptr(adjustedT), D: d}
+						s = &m.S{T: m.Ptr(adjustedT), D: d, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: k}}
 					}
 					se.entries = append(se.entries, s)
 					expectedTime = adjustedT + d
@@ -631,7 +671,7 @@ func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string) s
 			t = nextT
 		}
 	}
-	return se
+	return se, nil
 }
 
 func (a *asset) setReferenceRep() error {
@@ -834,6 +874,7 @@ type RepData struct {
 	ConstantSampleDuration *uint32          `json:"constantSampleDuration,omitempty"` // Non-zero if all samples have the same duration
 	EditListOffset         int64            `json:"editListOffset,omitempty"`
 	PreEncrypted           bool             `json:"preEncrypted"`
+	ChunkDurSSRS           *float64         `json:"chunkDurSSRS,omitempty"` // Low delay chunk duration in seconds
 	mediaRegexp            *regexp.Regexp   `json:"-"`
 	initSeg                *mp4.InitSegment `json:"-"`
 	initBytes              []byte           `json:"-"`

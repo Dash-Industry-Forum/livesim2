@@ -237,6 +237,31 @@ func TestProcessURLCfg(t *testing.T) {
 			},
 			err: "",
 		},
+		{
+			url:         "/livesim2/chunkdurssr_1,0.2/asset.mpd",
+			nowMS:       0,
+			contentPart: "",
+			wantedCfg:   nil,
+			err:         "url config: chunkDurSSR requires ssrAS to be configured",
+		},
+		{
+			url:         "/livesim2/ssras_1,2/chunkdurssr_1,0.2/asset.mpd",
+			nowMS:       0,
+			contentPart: "asset.mpd",
+			wantedCfg: &ResponseConfig{
+				URLParts:                     []string{"", "livesim2", "ssras_1,2", "chunkdurssr_1,0.2", "asset.mpd"},
+				URLContentIdx:                4,
+				StartTimeS:                   0,
+				TimeShiftBufferDepthS:        Ptr(60),
+				StartNr:                      Ptr(0),
+				AvailabilityTimeCompleteFlag: true,
+				TimeSubsDurMS:                defaultTimeSubsDurMS,
+				SSRFlag:                      true,
+				SSRAS:                        "1,2",
+				ChunkDurSSR:                  "1,0.2",
+			},
+			err: "",
+		},
 	}
 
 	for _, c := range cases {

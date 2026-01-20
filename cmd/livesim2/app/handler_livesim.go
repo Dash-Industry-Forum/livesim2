@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
@@ -315,11 +316,51 @@ func writeSegment(ctx context.Context, w http.ResponseWriter, log *slog.Logger, 
 			return code, nil
 		}
 	}
+	if cfg.SSRFlag {
+		// Sub segment part (SSR/L3D) low-delay mode should return each subSegment as a separated response
+		newSegmentPart, subSegmentPart, err := calcSubSegmentPart(segmentPart)
+		// Check if there is a sub-segment part
+		if newSegmentPart == "" && subSegmentPart == "" {
+			return 0, writeLiveSegment(log, w, cfg, drmCfg, vodFS, a, segmentPart, nowMS, tt, isLast)
+		}
+		if err != nil {
+			return 0, err
+		}
+
+		return 0, writeSubSegment(ctx, log, w, cfg, drmCfg, vodFS, a, newSegmentPart, subSegmentPart, nowMS, isLast)
+	}
 	if cfg.AvailabilityTimeCompleteFlag || isImage(segmentPart) {
 		return 0, writeLiveSegment(log, w, cfg, drmCfg, vodFS, a, segmentPart, nowMS, tt, isLast)
 	}
-	// Chunked low-latency mode
-	return 0, writeChunkedSegment(ctx, log, w, cfg, drmCfg, vodFS, a, segmentPart, nowMS, isLast)
+	// Only use chunked mode if chunk duration is explicitly configured
+	if cfg.ChunkDurS != nil {
+		return 0, writeChunkedSegment(ctx, log, w, cfg, drmCfg, vodFS, a, segmentPart, nowMS, isLast)
+	}
+	// Default to non-chunked
+	return 0, writeLiveSegment(log, w, cfg, drmCfg, vodFS, a, segmentPart, nowMS, tt, isLast)
+}
+
+var subSegmentRegex = regexp.MustCompile(`^(.*)_(\d+)$`)
+
+func calcSubSegmentPart(segmentPart string) (string, string, error) {
+	ext := filepath.Ext(segmentPart)
+
+	if ext == "" {
+		return "", "", fmt.Errorf("segment part has no extension: %s", segmentPart)
+	}
+
+	segmentPartWithoutExtension := strings.TrimSuffix(segmentPart, ext)
+	matches := subSegmentRegex.FindStringSubmatch(segmentPartWithoutExtension)
+
+	if len(matches) != 3 {
+		return "", "", nil
+	}
+
+	originalSegment := matches[1]
+	subSegmentPart := matches[2]
+	newSegmentPart := originalSegment + ext
+
+	return newSegmentPart, subSegmentPart, nil
 }
 
 // calcStatusCode returns the configured status code for the segment or 0 if none.
@@ -372,7 +413,11 @@ func calcStatusCode(cfg *ResponseConfig, a *asset, segmentPart string, nowMS int
 
 func findLastSegNr(cfg *ResponseConfig, a *asset, nowMS int, rep *RepData) int {
 	wTimes := calcWrapTimes(a, cfg, nowMS, mpd.Duration(60*time.Second))
-	timeLineEntries := a.generateTimelineEntries(rep.ID, wTimes, 0)
+	timeLineEntries, err := a.generateTimelineEntries(rep.ID, wTimes, 0, nil)
+	if err != nil {
+		// This should not happen with nil chunk duration, but handle gracefully
+		return -1
+	}
 	return timeLineEntries.lastNr()
 }
 

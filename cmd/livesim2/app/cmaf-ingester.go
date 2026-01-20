@@ -522,16 +522,26 @@ func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, nowMS i
 		atoMS := int(c.cfg.getAvailabilityTimeOffsetS() * 1000)
 		for idx, rd := range c.repsData {
 			var se segEntries
+			var err error
 			// The first representation is used as reference for generating timeline entries
 			if idx == 0 {
-				refSegEntries = c.asset.generateTimelineEntries(rd.repID, wTimes, atoMS)
+				refSegEntries, err = c.asset.generateTimelineEntries(rd.repID, wTimes, atoMS, nil)
+				if err != nil {
+					return err
+				}
 				se = refSegEntries
 			} else {
 				switch rd.contentType {
 				case "video", "text", "image":
-					se = c.asset.generateTimelineEntries(rd.repID, wTimes, atoMS)
+					se, err = c.asset.generateTimelineEntries(rd.repID, wTimes, atoMS, nil)
+					if err != nil {
+						return err
+					}
 				case "audio":
-					se = c.asset.generateTimelineEntriesFromRef(refSegEntries, rd.repID)
+					se, err = c.asset.generateTimelineEntriesFromRef(refSegEntries, rd.repID, nil)
+					if err != nil {
+						return err
+					}
 				default:
 					return fmt.Errorf("unknown content type %s", rd.contentType)
 				}

@@ -142,6 +142,8 @@ type urlGenData struct {
 	Ato                         string // availabilityTimeOffset, floating point seconds or "inf"
 	ChunkDur                    string // chunk duration (float in seconds)
 	LlTarget                    int    // low-latency target (in milliseconds)
+	SSRASConfig                 string // low delay Adaptation Set configuration (adaptationSetId,ssrValue;...)
+	ChunkDurSSR                 string // low delay chunk duration (float in seconds)
 	TimeSubsStpp                string // languages for generated subtitles in stpp-format (comma-separated)
 	TimeSubsWvtt                string // languages for generated subtitles in wvtt-format (comma-separated)
 	TimeSubsDur                 string // cue duration of generated subtitles (in milliseconds)
@@ -400,13 +402,37 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 		data.Traffic = traffic
 		sb.WriteString(fmt.Sprintf("traffic_%s/", traffic))
 	}
+	ssrAS := q.Get("ssrAS")
+	if ssrAS != "" {
+		if err := validateSSRAS(ssrAS); err != nil {
+			data.Errors = append(data.Errors, fmt.Sprintf("invalid ssrAS: %s", err.Error()))
+		} else {
+			data.SSRASConfig = ssrAS
+			sb.WriteString(fmt.Sprintf("ssras_%s/", ssrAS))
+		}
+	}
+	chunkDurSSR := q.Get("chunkDurSSR")
+	if chunkDurSSR != "" {
+		if err := validateChunkDurSSR(chunkDurSSR); err != nil {
+			data.Errors = append(data.Errors, fmt.Sprintf("invalid chunkDurSSR: %s", err.Error()))
+		} else {
+			data.ChunkDurSSR = chunkDurSSR
+			sb.WriteString(fmt.Sprintf("chunkdurssr_%s/", chunkDurSSR))
+		}
+	}
+
 	sb.WriteString(fmt.Sprintf("%s/%s", asset, mpd))
+
 	if annexI != "" {
 		query, err := queryFromAnnexI(annexI)
 		if err != nil {
 			data.Errors = append(data.Errors, fmt.Sprintf("bad annexI: %s", err.Error()))
 		}
-		sb.WriteString(query)
+		if strings.Contains(sb.String(), "?") {
+			sb.WriteString(strings.Replace(query, "?", "&", 1))
+		} else {
+			sb.WriteString(query)
+		}
 	}
 	if len(data.Errors) > 0 {
 		data.URL = ""
@@ -417,6 +443,57 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 	}
 	data.Host = aInfo.Host
 	return data
+}
+
+// validateSSRAS validates the format adaptationSetId,ssrValue;adaptationSetId,ssrValue;...
+// where both adaptationSetId and ssrValue must be integers
+func validateSSRAS(config string) error {
+	if config == "" {
+		return nil
+	}
+
+	pairs := strings.Split(config, ";")
+	for _, pair := range pairs {
+		parts := strings.Split(pair, ",")
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid format in pair '%s': expected 'adaptationSetId,ssrValue'", pair)
+		}
+
+		adaptationSetId := strings.TrimSpace(parts[0])
+		if id, err := strconv.Atoi(adaptationSetId); err != nil || id < 0 {
+			return fmt.Errorf("adaptationSetId '%s' must be a non-negative integer", adaptationSetId)
+		}
+
+		ssrValue := strings.TrimSpace(parts[1])
+		if _, err := strconv.Atoi(ssrValue); err != nil {
+			return fmt.Errorf("ssrValue '%s' must be an integer", ssrValue)
+		}
+	}
+	return nil
+}
+
+// validateChunkDurSSR validates the format adaptationSetId,chunkDuration;adaptationSetId,chunkDuration;...
+// where adaptationSetId must be an integer and chunkDuration must be a decimal number in seconds (e.g., 1, 0.1)
+func validateChunkDurSSR(config string) error {
+	if config == "" {
+		return nil
+	}
+	pairs := strings.Split(config, ";")
+	for _, pair := range pairs {
+		parts := strings.Split(pair, ",")
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid format in pair '%s': expected 'adaptationSetId,chunkDuration'", pair)
+		}
+		adaptationSetId := strings.TrimSpace(parts[0])
+		if id, err := strconv.Atoi(adaptationSetId); err != nil || id < 0 {
+			return fmt.Errorf("adaptationSetId '%s' must be a non-negative integer", adaptationSetId)
+		}
+		chunkDuration := strings.TrimSpace(parts[1])
+		if _, err := strconv.ParseFloat(chunkDuration, 64); err != nil {
+			return fmt.Errorf("chunkDuration '%s' must be a decimal number in seconds", chunkDuration)
+		}
+	}
+	return nil
 }
 
 func queryFromAnnexI(annexI string) (string, error) {
