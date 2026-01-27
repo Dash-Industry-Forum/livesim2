@@ -255,6 +255,8 @@ func TestWriteChunkedSegment(t *testing.T) {
 	cfg := NewResponseConfig()
 	cfg.AvailabilityTimeCompleteFlag = false
 	cfg.AvailabilityTimeOffsetS = 7.0
+	chunkDur := 1.0
+	cfg.ChunkDurS = &chunkDur
 	err = logging.InitSlog("debug", "discard")
 	require.NoError(t, err)
 
@@ -916,4 +918,214 @@ func TestMehdBoxRemovedFromInitSegment(t *testing.T) {
 	initSeg := mp4File.Init
 	require.NotNil(t, initSeg)
 	require.Nil(t, initSeg.Moov.Mvex.Mehd)
+}
+
+func TestWriteSubSegment(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	err := logging.InitSlog("debug", "discard")
+	require.NoError(t, err)
+	log := slog.Default()
+	err = am.discoverAssets(log)
+	require.NoError(t, err)
+
+	cases := []struct {
+		desc                    string
+		asset                   string
+		media                   string
+		subSegmentPart          string
+		nowMS                   int
+		expSeqNr                uint32
+		expErr                  string
+		shouldPanic             bool
+	}{
+		{
+			desc:                    "first video sub-segment (8s)",
+			asset:                   "testpic_8s",
+			media:                   "V300/10.m4s",
+			subSegmentPart:          "0",
+			nowMS:                   88_000,
+			expSeqNr:                10,
+		},
+		{
+			desc:                    "last video sub-segment (8s)",
+			asset:                   "testpic_8s",
+			media:                   "V300/10.m4s",
+			subSegmentPart:          "7",
+			nowMS:                   88_000,
+			expSeqNr:                10,
+		},
+		{
+			desc:                    "valid sub-segment (8s segment)",
+			asset:                   "testpic_8s",
+			media:                   "V300/10.m4s",
+			subSegmentPart:          "1",
+			nowMS:                   88_000,
+			expSeqNr:                10,
+		},
+		{
+			desc:                    "too early",
+			asset:                   "testpic_8s",
+			media:                   "V300/10.m4s",
+			subSegmentPart:          "1",
+			nowMS:                   79_000,
+			expErr:                  "createOutSeg: too early by",
+		},
+		{
+			desc:                    "gone",
+			asset:                   "testpic_8s",
+			media:                   "V300/10.m4s",
+			subSegmentPart:          "1",
+			nowMS:                   400_000,
+			expErr:                  "createOutSeg: gone",
+		},
+		{
+			desc:                    "invalid sub-segment part (not a number)",
+			asset:                   "testpic_8s",
+			media:                   "V300/10.m4s",
+			subSegmentPart:          "abc",
+			nowMS:                   86_000,
+			expErr:                  "bad chunk index: strconv.Atoi: parsing \"abc\": invalid syntax",
+		},
+		{
+			desc:                    "invalid sub-segment index (out of bounds)",
+			asset:                   "testpic_8s",
+			media:                   "V300/10.m4s",
+			subSegmentPart:          "9",
+			nowMS:                   88_000,
+			expErr:                  "chunk 9 not found",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			asset, ok := am.findAsset(tc.asset)
+			require.True(t, ok)
+
+			cfg := NewResponseConfig()
+			cfg.SSRAS = "1,2"
+			cfg.ChunkDurSSR = "1,1.0"
+			cfg.ChunkDurS = Ptr(1.0)
+
+			rr := httptest.NewRecorder()
+			ctx := context.Background()
+
+			if tc.shouldPanic {
+				require.Panics(t, func() {
+					// This call is expected to panic
+					_ = writeSubSegment(ctx, log, rr, cfg, nil, vodFS, asset, tc.media, tc.subSegmentPart, tc.nowMS, false /* isLast */)
+				})
+
+				return
+			}
+
+			err := writeSubSegment(ctx, log, rr, cfg, nil, vodFS, asset, tc.media, tc.subSegmentPart, tc.nowMS, false /* isLast */)
+
+			if tc.expErr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.expErr)
+				return
+			}
+			require.NoError(t, err)
+
+			seg := rr.Body.Bytes()
+
+			// A subsegment is a (styp+)moof+mdat which is a valid file
+			sr := bits.NewFixedSliceReader(seg)
+			mp4d, err := mp4.DecodeFileSR(sr)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(mp4d.Segments[0].Fragments))
+
+			moof := mp4d.Segments[0].Fragments[0].Moof
+			require.Equal(t, tc.expSeqNr, moof.Mfhd.SequenceNumber)
+		})
+	}
+}
+
+func TestWriteSubSegmentWithChunkDuration(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	err := logging.InitSlog("debug", "discard")
+	require.NoError(t, err)
+	log := slog.Default()
+	err = am.discoverAssets(log)
+	require.NoError(t, err)
+
+	cases := []struct {
+		desc                    string
+		asset                   string
+		media                   string
+		subSegmentPart          string
+		nowMS                   int
+		chunkDurS               *float64
+		availabilityTimeOffsetS float64
+		expSeqNr                uint32
+		expErr                  string
+	}{
+		{
+			desc:                    "chunk 5 with explicit chunkDurS=0.2s and minimal availabilityTimeOffset",
+			asset:                   "testpic_8s",
+			media:                   "V300/10.m4s",
+			subSegmentPart:          "5",
+			nowMS:                   88_000,
+			chunkDurS:               Ptr(0.2),
+			availabilityTimeOffsetS: 0.1,
+			expSeqNr:                10,
+		},
+		{
+			desc:                    "chunk 10 with explicit chunkDurS=0.2s and minimal availabilityTimeOffset",
+			asset:                   "testpic_8s",
+			media:                   "V300/10.m4s",
+			subSegmentPart:          "10",
+			nowMS:                   88_000,
+			chunkDurS:               Ptr(0.2),
+			availabilityTimeOffsetS: 0.1,
+			expSeqNr:                10,
+		},
+		{
+			desc:                    "chunk 5 with explicit chunkDurS=0.2s and availabilityTimeOffset=1.8s",
+			asset:                   "testpic_8s",
+			media:                   "V300/10.m4s",
+			subSegmentPart:          "5",
+			nowMS:                   88_000,
+			chunkDurS:               Ptr(0.2),
+			availabilityTimeOffsetS: 1.8,
+			expSeqNr:                10,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			asset, ok := am.findAsset(tc.asset)
+			require.True(t, ok)
+
+			cfg := NewResponseConfig()
+			cfg.AvailabilityTimeCompleteFlag = false
+			cfg.SSRAS = "1,2"
+			cfg.AvailabilityTimeOffsetS = tc.availabilityTimeOffsetS
+			cfg.ChunkDurS = tc.chunkDurS
+
+			rr := httptest.NewRecorder()
+			ctx := context.Background()
+
+			err := writeSubSegment(ctx, slog.Default(), rr, cfg, nil, vodFS, asset, tc.media, tc.subSegmentPart, tc.nowMS, false)
+
+			if tc.expErr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.expErr)
+				return
+			}
+			require.NoError(t, err)
+
+			seg := rr.Body.Bytes()
+
+			// A subsegment is a (styp+)moof+mdat which is a valid file
+			sr := bits.NewFixedSliceReader(seg)
+			mp4d, err := mp4.DecodeFileSR(sr)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(mp4d.Segments[0].Fragments))
+
+			moof := mp4d.Segments[0].Fragments[0].Moof
+			require.Equal(t, tc.expSeqNr, moof.Mfhd.SequenceNumber)
+		})
+	}
 }

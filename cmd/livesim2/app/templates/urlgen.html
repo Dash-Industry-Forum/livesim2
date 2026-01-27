@@ -127,6 +127,19 @@
 				<input type="text" id="ltgt" name="ltgt" value="{{.LlTarget}}" />
 			</label>
 		</details>
+		
+		<details>
+			<summary>SSR</summary>
+			<label for="ssrAS">
+			SSR Configuration (adaptationSetId,ssrValue;adaptationSetId,ssrValue;...)
+				<textarea id="ssrAS" name="ssrAS" rows="3">{{.SSRASConfig}}</textarea>
+			</label>
+
+			<label for="chunkDurSSR">
+			chunk duration for ssr (decimal) (adaptationSetId,chunkDuration;adaptationSetId,chunkDuration;...)
+				<textarea id="chunkDurSSR" name="chunkDurSSR" rows="3">{{.ChunkDurSSR}}</textarea>
+			</label>
+		</details>
 
 		<details>
 			<summary>MPD Patch...</summary>

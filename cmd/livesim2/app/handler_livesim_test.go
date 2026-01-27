@@ -282,3 +282,60 @@ func TestFetches(t *testing.T) {
 		})
 	}
 }
+
+func TestCalcSubSegmentPart(t *testing.T) {
+	testCases := []struct {
+		desc                string
+		segmentPart         string
+		expNewSegmentPart   string
+		expSubSegmentPart   string
+		expectedErr         bool
+		expectedContainsErr string
+	}{
+		{
+			desc:              "valid sub-segment",
+			segmentPart:       "segment_1.m4s",
+			expNewSegmentPart: "segment.m4s",
+			expSubSegmentPart: "1",
+			expectedErr:       false,
+		},
+		{
+			desc:              "no sub-segment part",
+			segmentPart:       "segment.m4s",
+			expNewSegmentPart: "",
+			expSubSegmentPart: "",
+			expectedErr:       false,
+		},
+		{
+			desc:                "missing sub-segment part",
+			segmentPart:         "segment_.m4s",
+			expNewSegmentPart:   "",
+			expSubSegmentPart:   "",
+			expectedErr:         false,
+			expectedContainsErr: "cannot parse sub-segment part",
+		},
+		{
+			desc:                "missing segment and sub-segment part",
+			segmentPart:         "_.m4s",
+			expNewSegmentPart:   "",
+			expSubSegmentPart:   "",
+			expectedErr:         false,
+			expectedContainsErr: "cannot parse original segment",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			newSegmentPart, subSegmentPart, err := calcSubSegmentPart(tc.segmentPart)
+
+			if tc.expectedErr {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.expectedContainsErr)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tc.expNewSegmentPart, newSegmentPart)
+				require.Equal(t, tc.expSubSegmentPart, subSegmentPart)
+			}
+		})
+	}
+}
