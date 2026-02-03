@@ -106,15 +106,16 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 	}()
 	log.Debug("Headers", "path", path, "headers", req.Header)
 
-	var contentLength int
+	var contentLength uint32
 	var err error
 	if req.Header.Get("Content-Length") != "" {
-		contentLength, err = strconv.Atoi(req.Header.Get("Content-Length"))
+		cL, err := strconv.ParseUint(req.Header.Get("Content-Length"), 10, 32)
 		if err != nil {
 			log.Error("Failed to parse Content-Length", "err", err)
 			http.Error(w, "Failed to parse Content-Length", http.StatusBadRequest)
 			return
 		}
+		contentLength = uint32(cL)
 	}
 
 	var ofh *os.File

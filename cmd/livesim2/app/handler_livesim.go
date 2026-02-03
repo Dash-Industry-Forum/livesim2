@@ -424,7 +424,7 @@ func findLastSegNr(cfg *ResponseConfig, a *asset, nowMS int, rep *RepData) int {
 func findSegStartTime(a *asset, cfg *ResponseConfig, nr int, rep *RepData) int {
 	wrapLen := len(rep.Segments)
 	startNr := cfg.getStartNr()
-	nrAfterStart := int(nr) - startNr
+	nrAfterStart := int(nr) - int(startNr)
 	nrWraps := nrAfterStart / wrapLen
 	relNr := nrAfterStart - nrWraps*wrapLen
 	wrapDur := a.LoopDurMS * rep.MediaTimescale / 1000

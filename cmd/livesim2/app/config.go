@@ -29,10 +29,10 @@ const (
 	defaultAvailabilityTimeComplete = true
 	defaultSSRFlag                  = false
 	defaultTimeShiftBufferDepthS    = 60
-	defaultStartNr                  = 0
+	defaultStartNr                  = uint32(0)
 	timeShiftBufferDepthMarginS     = 10
 	defaultTimeSubsDurMS            = 900
-	defaultLatencyTargetMS          = 3500
+	defaultLatencyTargetMS          = uint32(3500)
 	//nolint:lll
 	defaultPlayURL = "https://reference.dashif.org/dash.js/latest/samples/dash-if-reference-player/index.html?mpd=%s&autoLoad=true&muted=true"
 )

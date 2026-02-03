@@ -145,7 +145,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 			}
 		}
 		mpd.Location = []*m.LocationType{
-			&m.LocationType{
+			{
 				Value: strBuf.String(),
 			},
 		}
@@ -1339,21 +1339,18 @@ func parseSSRAS(config string) (nextMap, prevMap map[uint32]uint32, err error) {
 		adaptationSetIDStr := strings.TrimSpace(parts[0])
 		ssrValueStr := strings.TrimSpace(parts[1])
 
-		adaptationSetID, err := strconv.ParseUint(adaptationSetIDStr, 10, 32)
+		adaptationSetID, err := parseUint32(adaptationSetIDStr)
 		if err != nil {
 			return nil, nil, fmt.Errorf("invalid adaptationSetId '%s' in pair '%s': must be a valid unsigned integer", adaptationSetIDStr, pair)
 		}
 
-		ssrValue, err := strconv.ParseUint(ssrValueStr, 10, 32)
+		ssrValue, err := parseUint32(ssrValueStr)
 		if err != nil {
 			return nil, nil, fmt.Errorf("invalid ssrValue '%s' in pair '%s': must be a valid unsigned integer", ssrValueStr, pair)
 		}
 
-		adaptationSetID32 := uint32(adaptationSetID)
-		ssrValue32 := uint32(ssrValue)
-
-		nextMap[adaptationSetID32] = ssrValue32
-		prevMap[ssrValue32] = adaptationSetID32
+		nextMap[adaptationSetID] = ssrValue
+		prevMap[ssrValue] = adaptationSetID
 	}
 
 	return
@@ -1380,7 +1377,7 @@ func parseChunkDurSSR(config string) (map[uint32]float64, error) {
 		adaptationSetIDStr := strings.TrimSpace(parts[0])
 		chunkDurationStr := strings.TrimSpace(parts[1])
 
-		adaptationSetID, err := strconv.ParseUint(adaptationSetIDStr, 10, 32)
+		adaptationSetID, err := parseUint32(adaptationSetIDStr)
 		if err != nil {
 			return nil, fmt.Errorf("invalid adaptationSetId '%s' in pair '%s': must be a valid unsigned integer", adaptationSetIDStr, pair)
 		}
@@ -1390,7 +1387,7 @@ func parseChunkDurSSR(config string) (map[uint32]float64, error) {
 			return nil, fmt.Errorf("invalid chunkDuration '%s' in pair '%s': must be a valid number", chunkDurationStr, pair)
 		}
 
-		chunkDurMap[uint32(adaptationSetID)] = chunkDuration
+		chunkDurMap[adaptationSetID] = chunkDuration
 	}
 
 	return chunkDurMap, nil

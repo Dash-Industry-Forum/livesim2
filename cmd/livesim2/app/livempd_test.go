@@ -35,7 +35,7 @@ func TestLiveMPDStart(t *testing.T) {
 		nrMedia   string
 		timeMedia string
 		timescale int
-		startNr   int
+		startNr   uint32
 	}{
 		{
 			asset:     "testpic_2s",
@@ -114,7 +114,7 @@ func TestLiveMPDStart(t *testing.T) {
 			case "image":
 				tcMedia := strings.Replace(tc.nrMedia, ".m4s", ".jpg", 1)
 				assert.Equal(t, tcMedia, stl.Media)
-				assert.Equal(t, tc.startNr, int(*stl.StartNumber))
+				assert.Equal(t, tc.startNr, *stl.StartNumber)
 			default:
 				t.Errorf("unknown content type %s", as.ContentType)
 			}
