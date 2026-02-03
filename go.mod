@@ -10,7 +10,7 @@ require (
 	github.com/caddyserver/certmagic v0.22.0
 	github.com/danielgtaylor/huma/v2 v2.31.0
 	github.com/dusted-go/logging v1.3.0
-	github.com/go-chi/chi/v5 v5.2.1
+	github.com/go-chi/chi/v5 v5.2.2
 	github.com/google/go-cmp v0.7.0
 	github.com/knadh/koanf v1.5.0
 	github.com/prometheus/client_golang v1.21.1
