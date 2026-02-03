@@ -829,6 +829,9 @@ func (a *asset) validateEditListOffsetConsistency(logger *slog.Logger) error {
 func (a *asset) getRefSegMeta(nrOrTime int, cfg *ResponseConfig, nowMS int) (ref segMeta, err error) {
 	switch cfg.liveMPDType() {
 	case segmentNumber, timeLineNumber:
+		if nrOrTime < 0 || nrOrTime > math.MaxUint32 {
+			return ref, fmt.Errorf("segment number %d out of range", nrOrTime)
+		}
 		nr := uint32(nrOrTime)
 		ref, err = findSegMetaFromNr(a, a.refRep, nr, cfg, nowMS)
 	case timeLineTime:

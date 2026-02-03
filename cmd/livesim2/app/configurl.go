@@ -110,11 +110,11 @@ type ResponseConfig struct {
 	EtpDuration                  *int              `json:"EtpDuration,omitempty"`
 	PeriodOffset                 *int              `json:"PeriodOffset,omitempty"`
 	SCTE35PerMinute              *int              `json:"SCTE35PerMinute,omitempty"`
-	StartNr                      *int              `json:"StartNr,omitempty"`
+	StartNr                      *uint32           `json:"StartNr,omitempty"`
 	SuggestedPresentationDelayS  *int              `json:"SuggestedPresentationDelayS,omitempty"`
 	AvailabilityTimeOffsetS      float64           `json:"AvailabilityTimeOffsetS,omitempty"`
 	ChunkDurS                    *float64          `json:"ChunkDurS,omitempty"`
-	LatencyTargetMS              *int              `json:"LatencyTargetMS,omitempty"`
+	LatencyTargetMS              *uint32           `json:"LatencyTargetMS,omitempty"`
 	AddLocationFlag              bool              `json:"AddLocationFlag,omitempty"`
 	Tfdt32Flag                   bool              `json:"Tfdt32Flag,omitempty"`
 	ContUpdateFlag               bool              `json:"ContUpdateFlag,omitempty"`
@@ -307,7 +307,7 @@ func (rc *ResponseConfig) getAvailabilityTimeOffsetS() float64 {
 }
 
 // getStartNr for MPD. Default value if not set is 1.
-func (rc *ResponseConfig) getStartNr() int {
+func (rc *ResponseConfig) getStartNr() uint32 {
 	// Default startNr is 1 according to spec, but can be overridden by actual value set in cfg.
 	if rc.StartNr != nil {
 		return *rc.StartNr
@@ -404,11 +404,11 @@ cfgLoop:
 		case "utc": // Get hyphen-separated list of utc-timing methods and make into list
 			cfg.UTCTimingMethods = sc.SplitUTCTimings(key, val)
 		case "snr": // Segment startNumber. -1 means default implicit number which ==  1
-			cfg.StartNr = sc.AtoiPtr(key, val)
+			cfg.StartNr = sc.AtoiUint32Ptr(key, val)
 		case "ato": // availabilityTimeOffset
 			cfg.AvailabilityTimeOffsetS = sc.AtofInf(key, val)
 		case "ltgt": // latencyTargetMS
-			cfg.LatencyTargetMS = sc.AtoiPtr(key, val)
+			cfg.LatencyTargetMS = sc.AtoiUint32Ptr(key, val)
 		case "spd": // suggestedPresentationDelay
 			cfg.SuggestedPresentationDelayS = sc.AtoiPtr(key, val)
 		case "sidx": // Insert sidx in each segment

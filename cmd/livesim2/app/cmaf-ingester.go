@@ -473,7 +473,7 @@ func (c *cmafIngester) sendInitSegment(ctx context.Context, rd cmafRepData, rawI
 	return nil
 }
 
-func (c *cmafIngester) sendRequest(ctx context.Context, req *http.Request, url string) error {
+func (c *cmafIngester) sendRequest(_ context.Context, req *http.Request, url string) error {
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("Error sending request: %w", err)

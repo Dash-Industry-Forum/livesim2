@@ -202,7 +202,7 @@ func findSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseConfi
 		origTime:  seg.StartTime,
 		newTime:   time,
 		origNr:    seg.Nr,
-		newNr:     uint32(cfg.getStartNr() + idx + nrWraps*len(rep.Segments)),
+		newNr:     cfg.getStartNr() + uint32(idx) + uint32(nrWraps)*uint32(len(rep.Segments)),
 		origDur:   uint32(seg.EndTime - seg.StartTime),
 		newDur:    uint32(seg.EndTime - seg.StartTime),
 		timescale: uint32(rep.MediaTimescale),
@@ -276,7 +276,7 @@ func findRefSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseCo
 func calcSegmentAvailabilityTime(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig) (int64, error) {
 	wrapLen := len(rep.Segments)
 	startNr := cfg.getStartNr()
-	nrAfterStart := int(nr) - startNr
+	nrAfterStart := int(nr) - int(startNr)
 	nrWraps := nrAfterStart / wrapLen
 	relNr := nrAfterStart - nrWraps*wrapLen
 	wrapDur := a.LoopDurMS * rep.MediaTimescale / 1000
@@ -299,7 +299,7 @@ func calcSegmentAvailabilityTime(a *asset, rep *RepData, nr uint32, cfg *Respons
 func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, nowMS int) (segMeta, error) {
 	wrapLen := len(rep.Segments)
 	startNr := cfg.getStartNr()
-	nrAfterStart := int(nr) - startNr
+	nrAfterStart := int(nr) - int(startNr)
 	nrWraps := nrAfterStart / wrapLen
 	relNr := nrAfterStart - nrWraps*wrapLen
 	wrapDur := a.LoopDurMS * rep.MediaTimescale / 1000
@@ -502,22 +502,22 @@ type segOut struct {
 }
 
 // findRepAndSegmentID finds the rep and segment ID (nr or time) for a given cfg and live segment request.
-func findRepAndSegmentID(a *asset, segmentPart string) (r *RepData, segID int, err error) {
+func findRepAndSegmentID(a *asset, segmentPart string) (r *RepData, segID uint32, err error) {
 	for _, rep := range a.Reps {
 		mParts := rep.mediaRegexp.FindStringSubmatch(segmentPart)
 		if mParts == nil {
 			continue
 		}
 		if len(mParts) != 2 {
-			return nil, -1, fmt.Errorf("bad segment match")
+			return nil, 0, fmt.Errorf("bad segment match")
 		}
-		segID, err = strconv.Atoi(mParts[1])
+		segID, err = parseUint32(mParts[1])
 		if err != nil {
-			return nil, -1, err
+			return nil, 0, err
 		}
 		return rep, segID, nil
 	}
-	return nil, -1, errNotFound
+	return nil, 0, errNotFound
 }
 
 // createOutSeg from the corresponding VoD segments. Checks time as well.
@@ -595,7 +595,7 @@ func findSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int) (
 }
 
 func createAudioSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int,
-	rep *RepData, segID int) (segOut, error) {
+	rep *RepData, segID uint32) (segOut, error) {
 	refRep := a.refRep
 	refTimescale := uint64(refRep.MediaTimescale)
 
@@ -626,12 +626,12 @@ func createAudioSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart 
 }
 
 // findRefSegMeta finds the reference track meta data given other following track like audio
-func findRefSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int, rep *RepData, segID int) (segMeta, error) {
+func findRefSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int, rep *RepData, segID uint32) (segMeta, error) {
 	var refMeta segMeta
 	var err error
 	switch cfg.getRepType(segmentPart) {
 	case segmentNumber, timeLineNumber:
-		outSegNr := uint32(segID)
+		outSegNr := segID
 		refMeta, err = findSegMetaFromNr(a, a.refRep, outSegNr, cfg, nowMS)
 		if err != nil {
 			return refMeta, fmt.Errorf("findSegMetaFromNr from reference: %w", err)

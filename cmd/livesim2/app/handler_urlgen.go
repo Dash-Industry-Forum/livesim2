@@ -141,7 +141,7 @@ type urlGenData struct {
 	SuggestedPresentationDelayS string
 	Ato                         string // availabilityTimeOffset, floating point seconds or "inf"
 	ChunkDur                    string // chunk duration (float in seconds)
-	LlTarget                    int    // low-latency target (in milliseconds)
+	LlTarget                    uint32 // low-latency target (in milliseconds)
 	SSRASConfig                 string // low delay Adaptation Set configuration (adaptationSetId,ssrValue;...)
 	ChunkDurSSR                 string // low delay chunk duration (float in seconds)
 	TimeSubsStpp                string // languages for generated subtitles in stpp-format (comma-separated)
@@ -314,7 +314,7 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 		sb.WriteString(fmt.Sprintf("chunkdur_%s/", chunkDur))
 	}
 	if llTarget := q.Get("ltgt"); llTarget != "" {
-		lt, err := strconv.Atoi(llTarget)
+		lt, err := parseUint32(llTarget)
 		if err != nil {
 			panic("bad ltgt")
 		}

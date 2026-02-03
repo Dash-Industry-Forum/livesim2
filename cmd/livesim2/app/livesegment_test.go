@@ -405,7 +405,7 @@ func TestStartNumber(t *testing.T) {
 		asset              string
 		media              string
 		nowMS              int
-		startNr            int
+		startNr            uint32
 		requestNr          int
 		expectedDecodeTime int
 		expectedErr        string
@@ -473,7 +473,7 @@ func TestLLSegmentAvailability(t *testing.T) {
 		asset              string
 		media              string
 		nowMS              int
-		startNr            int
+		startNr            uint32
 		mpdType            string
 		requestMedia       int
 		expectedNr         int
@@ -930,70 +930,70 @@ func TestWriteSubSegment(t *testing.T) {
 	require.NoError(t, err)
 
 	cases := []struct {
-		desc                    string
-		asset                   string
-		media                   string
-		subSegmentPart          string
-		nowMS                   int
-		expSeqNr                uint32
-		expErr                  string
-		shouldPanic             bool
+		desc           string
+		asset          string
+		media          string
+		subSegmentPart string
+		nowMS          int
+		expSeqNr       uint32
+		expErr         string
+		shouldPanic    bool
 	}{
 		{
-			desc:                    "first video sub-segment (8s)",
-			asset:                   "testpic_8s",
-			media:                   "V300/10.m4s",
-			subSegmentPart:          "0",
-			nowMS:                   88_000,
-			expSeqNr:                10,
+			desc:           "first video sub-segment (8s)",
+			asset:          "testpic_8s",
+			media:          "V300/10.m4s",
+			subSegmentPart: "0",
+			nowMS:          88_000,
+			expSeqNr:       10,
 		},
 		{
-			desc:                    "last video sub-segment (8s)",
-			asset:                   "testpic_8s",
-			media:                   "V300/10.m4s",
-			subSegmentPart:          "7",
-			nowMS:                   88_000,
-			expSeqNr:                10,
+			desc:           "last video sub-segment (8s)",
+			asset:          "testpic_8s",
+			media:          "V300/10.m4s",
+			subSegmentPart: "7",
+			nowMS:          88_000,
+			expSeqNr:       10,
 		},
 		{
-			desc:                    "valid sub-segment (8s segment)",
-			asset:                   "testpic_8s",
-			media:                   "V300/10.m4s",
-			subSegmentPart:          "1",
-			nowMS:                   88_000,
-			expSeqNr:                10,
+			desc:           "valid sub-segment (8s segment)",
+			asset:          "testpic_8s",
+			media:          "V300/10.m4s",
+			subSegmentPart: "1",
+			nowMS:          88_000,
+			expSeqNr:       10,
 		},
 		{
-			desc:                    "too early",
-			asset:                   "testpic_8s",
-			media:                   "V300/10.m4s",
-			subSegmentPart:          "1",
-			nowMS:                   79_000,
-			expErr:                  "createOutSeg: too early by",
+			desc:           "too early",
+			asset:          "testpic_8s",
+			media:          "V300/10.m4s",
+			subSegmentPart: "1",
+			nowMS:          79_000,
+			expErr:         "createOutSeg: too early by",
 		},
 		{
-			desc:                    "gone",
-			asset:                   "testpic_8s",
-			media:                   "V300/10.m4s",
-			subSegmentPart:          "1",
-			nowMS:                   400_000,
-			expErr:                  "createOutSeg: gone",
+			desc:           "gone",
+			asset:          "testpic_8s",
+			media:          "V300/10.m4s",
+			subSegmentPart: "1",
+			nowMS:          400_000,
+			expErr:         "createOutSeg: gone",
 		},
 		{
-			desc:                    "invalid sub-segment part (not a number)",
-			asset:                   "testpic_8s",
-			media:                   "V300/10.m4s",
-			subSegmentPart:          "abc",
-			nowMS:                   86_000,
-			expErr:                  "bad chunk index: strconv.Atoi: parsing \"abc\": invalid syntax",
+			desc:           "invalid sub-segment part (not a number)",
+			asset:          "testpic_8s",
+			media:          "V300/10.m4s",
+			subSegmentPart: "abc",
+			nowMS:          86_000,
+			expErr:         "bad chunk index: strconv.Atoi: parsing \"abc\": invalid syntax",
 		},
 		{
-			desc:                    "invalid sub-segment index (out of bounds)",
-			asset:                   "testpic_8s",
-			media:                   "V300/10.m4s",
-			subSegmentPart:          "9",
-			nowMS:                   88_000,
-			expErr:                  "chunk 9 not found",
+			desc:           "invalid sub-segment index (out of bounds)",
+			asset:          "testpic_8s",
+			media:          "V300/10.m4s",
+			subSegmentPart: "9",
+			nowMS:          88_000,
+			expErr:         "chunk 9 not found",
 		},
 	}
 	for _, tc := range cases {

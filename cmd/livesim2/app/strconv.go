@@ -44,6 +44,26 @@ func (s *strConvAccErr) AtoiPtr(key, val string) *int {
 	return &valInt
 }
 
+func parseUint32(s string) (uint32, error) {
+	v, err := strconv.ParseUint(s, 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return uint32(v), nil
+}
+
+func (s *strConvAccErr) AtoiUint32Ptr(key, val string) *uint32 {
+	if s.err != nil {
+		return nil
+	}
+	v, err := parseUint32(val)
+	if err != nil {
+		s.err = fmt.Errorf("key=%s, err=%w", key, err)
+		return nil
+	}
+	return &v
+}
+
 // Atof parses a non-infinite floating point number
 func (s *strConvAccErr) Atof(key, val string) *float64 {
 	if s.err != nil {
