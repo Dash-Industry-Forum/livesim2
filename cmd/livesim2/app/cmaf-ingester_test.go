@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -75,13 +76,17 @@ func TestCmafIngesterMgr(t *testing.T) {
 		}
 		time.Sleep(500 * time.Millisecond)
 		// Now we need to check that the segments are received
-		require.Equal(t, c.expectedNrSegments, len(rc.receivedSegments), "Number of segments received")
+		rc.mu.Lock()
+		nrReceived := len(rc.receivedSegments)
+		rc.mu.Unlock()
+		require.Equal(t, c.expectedNrSegments, nrReceived, "Number of segments received")
 		cancel()
 		recServer.Close()
 	}
 }
 
 type cmafReceiverTestServer struct {
+	mu                      sync.Mutex
 	receivedSegments        map[string][]byte
 	receivedPartialSegments map[string][]byte
 }
@@ -126,7 +131,9 @@ func (s *cmafReceiverTestServer) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		if n != contentLen {
 			w.WriteHeader(http.StatusBadRequest)
 		}
+		s.mu.Lock()
 		s.receivedSegments[segmentName] = buf
+		s.mu.Unlock()
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -141,9 +148,11 @@ func (s *cmafReceiverTestServer) ServeHTTP(w http.ResponseWriter, r *http.Reques
 
 	err := cp.Parse()
 	if err == nil {
+		s.mu.Lock()
 		for _, c := range ci {
 			s.receivedSegments[segmentName] = append(s.receivedSegments[segmentName], c.Data...)
 		}
+		s.mu.Unlock()
 		w.WriteHeader(http.StatusOK)
 		return
 	}
