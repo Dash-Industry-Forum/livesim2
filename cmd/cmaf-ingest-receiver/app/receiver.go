@@ -48,7 +48,12 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 		handleMPD(w, req, r.storage, chName)
 		return
 	}
-	stream, ok := findStreamMatch(r.storage, path)
+	stream, ok, err := findStreamMatch(r.storage, path)
+	if err != nil {
+		slog.Error("Insecure stream path", "path", path, "err", err)
+		http.Error(w, "Insecure stream path", http.StatusBadRequest)
+		return
+	}
 	if !ok {
 		slog.Error("Failed to find valid stream", "path", path)
 		http.Error(w, "Failed to find valid stream", http.StatusBadRequest)
@@ -107,7 +112,6 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 	log.Debug("Headers", "path", path, "headers", req.Header)
 
 	var contentLength uint32
-	var err error
 	if req.Header.Get("Content-Length") != "" {
 		cL, err := strconv.ParseUint(req.Header.Get("Content-Length"), 10, 32)
 		if err != nil {
@@ -139,8 +143,12 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 		// Set ofh to the write file output and then write data
 		data := cd.Data // Used so that you can overwrite cd.Data when needed
 		if cd.IsInitSegment {
-			filePath = filepath.Join(stream.trDir, fmt.Sprintf("%s%s", "init", stream.ext))
-			err := os.MkdirAll(stream.trDir, 0755)
+			var err error
+			filePath, err = joinAbsPathSecurely(stream.trDir, fmt.Sprintf("%s%s", "init", stream.ext))
+			if err != nil {
+				return fmt.Errorf("insecure init segment path: %w", err)
+			}
+			err = os.MkdirAll(stream.trDir, 0755)
 			if err != nil {
 				return fmt.Errorf("failed to create directory: %w", err)
 			}
@@ -215,7 +223,10 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 					log.Debug("Time change", "inTime", inTime, "outTime", rsd.dts, "seqNr", rsd.seqNr)
 					moof.Traf.Tfdt.SetBaseMediaDecodeTime(rsd.dts)
 				}
-				filePath = filepath.Join(stream.trDir, fmt.Sprintf("%d%s", rsd.seqNr, stream.ext))
+				filePath, err = joinAbsPathSecurely(stream.trDir, fmt.Sprintf("%d%s", rsd.seqNr, stream.ext))
+				if err != nil {
+					return fmt.Errorf("insecure media segment path: %w", err)
+				}
 				ofh, err = os.Create(filePath)
 				if err != nil {
 					return fmt.Errorf("failed to create file: %w", err)
@@ -234,7 +245,10 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 					}
 				}
 				if ch.maxNrBufSegs > 0 {
-					deleteSegPath := filepath.Join(stream.trDir, fmt.Sprintf("%d%s", rsd.seqNr-ch.maxNrBufSegs, stream.ext))
+					deleteSegPath, err := joinAbsPathSecurely(stream.trDir, fmt.Sprintf("%d%s", rsd.seqNr-ch.maxNrBufSegs, stream.ext))
+					if err != nil {
+						return fmt.Errorf("insecure delete segment path: %w", err)
+					}
 					if fileExists(deleteSegPath) {
 						log.Debug("Deleting old segment", "path", deleteSegPath)
 						err = os.Remove(deleteSegPath)
@@ -336,12 +350,17 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 	if contentLength != 0 && contentLength < 4096 {
 		fileName = fmt.Sprintf("%s_init_%d%s", stream.trName, trD.nrSegsReceived, stream.ext)
 	}
-	filePath = filepath.Join(stream.trDir, fileName)
+	filePath, err = joinAbsPathSecurely(stream.trDir, fileName)
+	if err != nil {
+		log.Error("Insecure raw segment path", "err", err)
+		http.Error(w, "Insecure raw segment path", http.StatusBadRequest)
+		return
+	}
 	log.Info("Receiving raw segment", "url", path, "filePath", filePath, "size", contentLength)
 	ofh, err = os.Create(filePath)
 	if err != nil {
 		log.Error("Failed to create file", "err", err)
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		http.Error(w, "Failed to create file", http.StatusBadRequest)
 		return
 	}
 	defer finalClose(ofh)
@@ -402,7 +421,10 @@ func fileExists(filePath string) bool {
 }
 
 func findAndProcessOrigInitSegment(log *slog.Logger, ch *channel, stream stream) error {
-	path := filepath.Join(stream.trDir, fmt.Sprintf("%s%s", "init_org", stream.ext))
+	path, err := joinAbsPathSecurely(stream.trDir, fmt.Sprintf("%s%s", "init_org", stream.ext))
+	if err != nil {
+		return fmt.Errorf("insecure init_org path: %w", err)
+	}
 	if !fileExists(path) {
 		return nil
 	}
@@ -415,7 +437,10 @@ func findAndProcessOrigInitSegment(log *slog.Logger, ch *channel, stream stream)
 	if err != nil {
 		return fmt.Errorf("failed to process init segment: %w", err)
 	}
-	initPath := filepath.Join(stream.trDir, fmt.Sprintf("%s%s", "init", stream.ext))
+	initPath, err := joinAbsPathSecurely(stream.trDir, fmt.Sprintf("%s%s", "init", stream.ext))
+	if err != nil {
+		return fmt.Errorf("insecure init path: %w", err)
+	}
 	err = os.WriteFile(initPath, data, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write init segment: %w", err)
@@ -427,11 +452,14 @@ func processInitSegment(log *slog.Logger, ch *channel, s stream, data []byte, is
 	sr := bits.NewFixedSliceReader(data)
 	// Write original init segment to init_org.ext
 	if !isOrg {
-		origFilePath := filepath.Join(s.trDir, fmt.Sprintf("%s%s", "init_org", s.ext))
+		origFilePath, err := joinAbsPathSecurely(s.trDir, fmt.Sprintf("%s%s", "init_org", s.ext))
+		if err != nil {
+			return nil, fmt.Errorf("insecure init_org path: %w", err)
+		}
 		if fileExists(origFilePath) {
 			log.Debug("Original init segment already exists", "path", origFilePath)
 		}
-		err := os.WriteFile(origFilePath, data, 0644)
+		err = os.WriteFile(origFilePath, data, 0644)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write original init segment: %w", err)
 		}
@@ -454,14 +482,20 @@ func processInitSegment(log *slog.Logger, ch *channel, s stream, data []byte, is
 }
 
 func handleMPD(w http.ResponseWriter, req *http.Request, storage, chName string) {
-	err := os.MkdirAll(chName, 0755)
+	absChPath, err := joinAbsPathSecurely(storage, chName)
+	if err != nil {
+		slog.Error("Failed to construct channel path", "err", err)
+		http.Error(w, "Failed to construct channel path", http.StatusInternalServerError)
+		return
+	}
+	err = os.MkdirAll(absChPath, 0755)
 	if err != nil {
 		slog.Error("Failed to create directory", "err", err)
 		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
 		return
 	}
-	absMpdPath, err := filepath.Abs(filepath.Join(storage, chName, "received.mpd"))
-	if err != nil || !strings.HasPrefix(absMpdPath, filepath.Clean(storage)) {
+	absMpdPath, err := joinAbsPathSecurely(absChPath, "received.mpd")
+	if err != nil {
 		slog.Error("Failed to construct MPD path", "err", err)
 		http.Error(w, "Failed to construct MPD path", http.StatusInternalServerError)
 		return
@@ -483,4 +517,17 @@ func handleMPD(w http.ResponseWriter, req *http.Request, storage, chName string)
 	finalClose(req.Body)
 	slog.Info("MPD received", "path", req.URL.Path, "storedPath", absMpdPath)
 	w.WriteHeader(http.StatusOK)
+}
+
+// joinAbsPathSecurely joins path1 and path2 and returns the absolute path.
+// It ensures that the resulting path is within path1 to avoid directory traversal attacks.
+func joinAbsPathSecurely(path1, path2 string) (string, error) {
+	absPath, err := filepath.Abs(filepath.Join(path1, path2))
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path: %w", err)
+	}
+	if !strings.HasPrefix(absPath, filepath.Clean(path1)) {
+		return "", fmt.Errorf("unsecure path: %s", absPath)
+	}
+	return absPath, nil
 }

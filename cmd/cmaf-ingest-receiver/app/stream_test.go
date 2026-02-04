@@ -26,37 +26,44 @@ func TestMatchMPD(t *testing.T) {
 }
 
 func TestMatchStream(t *testing.T) {
+	// Use a temp dir as storage to get predictable absolute paths
+	storageDir := t.TempDir()
+
 	cases := []struct {
 		path           string
 		storage        string
 		expectedMatch  bool
 		expectedStream stream
 	}{
-		{path: "/asset/Streams(video.cmfv)", expectedMatch: true,
+		{path: "/asset/Streams(video.cmfv)", storage: storageDir, expectedMatch: true,
 			expectedStream: stream{
 				chName:    "asset",
 				trName:    "video",
 				ext:       ".cmfv",
 				mediaType: "video",
-				chDir:     "asset",
-				trDir:     filepath.Join("asset", "video")},
+				chDir:     filepath.Join(storageDir, "asset"),
+				trDir:     filepath.Join(storageDir, "asset", "video")},
 		},
-		{path: "/asset/Streams(video.cmf)", expectedMatch: false},
+		{path: "/asset/Streams(video.cmf)", storage: storageDir, expectedMatch: false},
 		{path: "/lab/ex/ex1.isml/Streams(video-2000Kbps.cmfv)",
+			storage:       storageDir,
 			expectedMatch: true,
 			expectedStream: stream{
 				chName:    "lab/ex/ex1.isml",
 				trName:    "video-2000Kbps",
 				ext:       ".cmfv",
 				mediaType: "video",
-				chDir:     filepath.Join("lab", "ex", "ex1.isml"),
-				trDir:     filepath.Join("lab", "ex", "ex1.isml", "video-2000Kbps")},
+				chDir:     filepath.Join(storageDir, "lab", "ex", "ex1.isml"),
+				trDir:     filepath.Join(storageDir, "lab", "ex", "ex1.isml", "video-2000Kbps")},
 		},
 	}
 
 	for _, c := range cases {
-		gotStream, match := findStreamMatch(c.storage, c.path)
+		gotStream, match, err := findStreamMatch(c.storage, c.path)
+		assert.NoError(t, err)
 		assert.Equal(t, c.expectedMatch, match)
-		assert.Equal(t, c.expectedStream, gotStream)
+		if c.expectedMatch {
+			assert.Equal(t, c.expectedStream, gotStream)
+		}
 	}
 }
