@@ -50,7 +50,7 @@ func matchMPD(path string) (chName string, ok bool) {
 	return filepath.Join(chName), true
 }
 
-func findStreamMatch(storagePath, path string) (stream, bool) {
+func findStreamMatch(storagePath, path string) (stream, bool, error) {
 	str := stream{}
 	var err error
 	matches := streamsRegexp.FindStringSubmatch(path)
@@ -67,14 +67,20 @@ func findStreamMatch(storagePath, path string) (stream, bool) {
 		}
 	}
 	if len(matches) == 0 {
-		return str, false
+		return str, false, nil
 	}
 	str.mediaType, err = cmaf.ContentTypeFromCMAFExtension(str.ext)
 	if err != nil {
-		return str, false
+		return str, false, nil
 	}
-	str.chDir = filepath.Join(storagePath, str.chName)
-	str.trDir = filepath.Join(str.chDir, str.trName)
+	str.chDir, err = joinAbsPathSecurely(storagePath, str.chName)
+	if err != nil {
+		return str, false, fmt.Errorf("insecure channel path: %w", err)
+	}
+	str.trDir, err = joinAbsPathSecurely(str.chDir, str.trName)
+	if err != nil {
+		return str, false, fmt.Errorf("insecure track path: %w", err)
+	}
 	slog.Debug("Found stream", "stream", str.id())
-	return str, true
+	return str, true, nil
 }
