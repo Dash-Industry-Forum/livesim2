@@ -177,9 +177,13 @@ type segMeta struct {
 func findSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseConfig, nowMS int) (segMeta, error) {
 	mediaRef := cfg.StartTimeS * rep.MediaTimescale // TODO. Add period + PTO
 	wrapDur := a.LoopDurMS * rep.MediaTimescale / 1000
-	nrWraps := int(time) / wrapDur
+	timeInt, err := uint64ToInt(time)
+	if err != nil {
+		return segMeta{}, fmt.Errorf("time value out of range: %w", err)
+	}
+	nrWraps := timeInt / wrapDur
 	wrapTime := nrWraps * wrapDur
-	timeAfterWrap := int(time) - wrapTime
+	timeAfterWrap := timeInt - wrapTime
 	idx := rep.findSegmentIndexFromTime(uint64(timeAfterWrap))
 	if idx == len(rep.Segments) {
 		return segMeta{}, fmt.Errorf("no matching segment")
@@ -192,7 +196,7 @@ func findSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseConfi
 	// Check interval validity
 	segAvailTimeS := float64(int(seg.EndTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
 	nowS := float64(nowMS) * 0.001
-	err := CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
+	err = CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
 	if err != nil {
 		return segMeta{}, err
 	}
@@ -303,7 +307,15 @@ func calcSegmentAvailabilityTime(a *asset, rep *RepData, nr uint32, cfg *Respons
 func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, nowMS int) (segMeta, error) {
 	wrapLen := len(rep.Segments)
 	startNr := cfg.getStartNr()
-	nrAfterStart := int(nr) - int(startNr)
+	nrInt, err := uint32ToInt(nr)
+	if err != nil {
+		return segMeta{}, fmt.Errorf("segment nr out of range: %w", err)
+	}
+	startNrInt, err := uint32ToInt(startNr)
+	if err != nil {
+		return segMeta{}, fmt.Errorf("startNr out of range: %w", err)
+	}
+	nrAfterStart := nrInt - startNrInt
 	nrWraps := nrAfterStart / wrapLen
 	relNr := nrAfterStart - nrWraps*wrapLen
 	wrapDur := a.LoopDurMS * rep.MediaTimescale / 1000
@@ -315,7 +327,7 @@ func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, n
 	// Check interval validity
 	segAvailTimeS := float64(int(seg.EndTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
 	nowS := float64(nowMS) * 0.001
-	err := CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
+	err = CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
 	if err != nil {
 		return segMeta{}, err
 	}
@@ -506,7 +518,8 @@ type segOut struct {
 }
 
 // findRepAndSegmentID finds the rep and segment ID (nr or time) for a given cfg and live segment request.
-func findRepAndSegmentID(a *asset, segmentPart string) (r *RepData, segID uint32, err error) {
+// segID must be uint64 since it can be a timestamp.
+func findRepAndSegmentID(a *asset, segmentPart string) (r *RepData, segID uint64, err error) {
 	for _, rep := range a.Reps {
 		mParts := rep.mediaRegexp.FindStringSubmatch(segmentPart)
 		if mParts == nil {
@@ -515,7 +528,7 @@ func findRepAndSegmentID(a *asset, segmentPart string) (r *RepData, segID uint32
 		if len(mParts) != 2 {
 			return nil, 0, fmt.Errorf("bad segment match")
 		}
-		segID, err = parseUint32(mParts[1])
+		segID, err = strconv.ParseUint(mParts[1], 10, 64)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -542,6 +555,9 @@ func createOutSeg(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string
 
 	switch cfg.getRepType(segmentPart) {
 	case segmentNumber, timeLineNumber:
+		if segID > math.MaxUint32 {
+			return so, fmt.Errorf("segment number %d exceeds uint32 range", segID)
+		}
 		nr := uint32(segID)
 		if nr < uint32(cfg.getStartNr()) {
 			return so, errNotFound
@@ -580,6 +596,9 @@ func findSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int) (
 	} else {
 		switch cfg.getRepType(segmentPart) {
 		case segmentNumber, timeLineNumber:
+			if segID > math.MaxUint32 {
+				return sm, fmt.Errorf("segment number %d exceeds uint32 range", segID)
+			}
 			nr := uint32(segID)
 			if nr < uint32(cfg.getStartNr()) {
 				return sm, errNotFound
@@ -599,7 +618,7 @@ func findSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int) (
 }
 
 func createAudioSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string, nowMS int,
-	rep *RepData, segID uint32) (segOut, error) {
+	rep *RepData, segID uint64) (segOut, error) {
 	refRep := a.refRep
 	refTimescale := uint64(refRep.MediaTimescale)
 
@@ -630,23 +649,24 @@ func createAudioSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart 
 }
 
 // findRefSegMeta finds the reference track meta data given other following track like audio
-func findRefSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int, rep *RepData, segID uint32) (segMeta, error) {
+func findRefSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int, rep *RepData, segID uint64) (segMeta, error) {
 	var refMeta segMeta
 	var err error
 	switch cfg.getRepType(segmentPart) {
 	case segmentNumber, timeLineNumber:
-		outSegNr := segID
+		if segID > math.MaxUint32 {
+			return refMeta, fmt.Errorf("segment number %d exceeds uint32 range", segID)
+		}
+		outSegNr := uint32(segID)
 		refMeta, err = findSegMetaFromNr(a, a.refRep, outSegNr, cfg, nowMS)
 		if err != nil {
 			return refMeta, fmt.Errorf("findSegMetaFromNr from reference: %w", err)
 		}
 	case timeLineTime:
-		time := int(segID)
-
 		// Apply editListOffset mapping for audio segments
 		// The MPD shows adjusted timeline where segment 0 has shortened duration
 		// We need to map the adjusted time back to the original timeline
-		requestTime := uint64(time)
+		requestTime := uint64(segID)
 		if rep.EditListOffset > 0 && rep.ContentType == "audio" {
 			// For times after segment 0, we need to add back the editListOffset
 			// because segment 0's duration was shortened by editListOffset
@@ -749,7 +769,11 @@ func writeChunkedSegment(ctx context.Context, log *slog.Logger, w http.ResponseW
 	rep := so.meta.rep
 
 	startUnixMS := unixMS()
-	chunkAvailTime := int(so.meta.newTime) + cfg.StartTimeS*int(rep.MediaTimescale)
+	newTimeInt, err := uint64ToInt(so.meta.newTime)
+	if err != nil {
+		return fmt.Errorf("newTime out of range: %w", err)
+	}
+	chunkAvailTime := newTimeInt + cfg.StartTimeS*int(rep.MediaTimescale)
 	for _, chk := range chunks {
 		chunkAvailTime += int(chk.dur)
 		if ctx.Err() != nil {
@@ -808,7 +832,11 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 	}
 	rep := so.meta.rep
 
-	chunkAvailTime := int(so.meta.newTime) + cfg.StartTimeS*int(rep.MediaTimescale)
+	newTimeInt, err := uint64ToInt(so.meta.newTime)
+	if err != nil {
+		return fmt.Errorf("newTime out of range: %w", err)
+	}
+	chunkAvailTime := newTimeInt + cfg.StartTimeS*int(rep.MediaTimescale)
 
 	if len(chunk) != 1 {
 		return fmt.Errorf("get chunk %d: expected 1 chunk, got %d", chunkIndex, len(chunk))

@@ -375,8 +375,14 @@ func calcStatusCode(cfg *ResponseConfig, a *asset, segmentPart string, nowMS int
 	if err != nil {
 		return 0, fmt.Errorf("findSegMeta: %w", err)
 	}
-	startTime := int(segMeta.newTime)
-	repTimescale := int(segMeta.timescale)
+	startTime, err := uint64ToInt(segMeta.newTime)
+	if err != nil {
+		return 0, fmt.Errorf("newTime out of range: %w", err)
+	}
+	repTimescale, err := uint32ToInt(segMeta.timescale)
+	if err != nil {
+		return 0, fmt.Errorf("timescale out of range: %w", err)
+	}
 	for _, ss := range cfg.SegStatusCodes {
 		if !repInReps(rep.ID, ss.Reps) {
 			continue
@@ -396,11 +402,18 @@ func calcStatusCode(cfg *ResponseConfig, a *asset, segmentPart string, nowMS int
 			lastNr := findLastSegNr(cfg, a, wrapStartS*1000, segMeta.rep)
 			firstNr = lastNr + 1
 		}
-		segTime := findSegStartTime(a, cfg, firstNr, segMeta.rep)
+		segTime, err := findSegStartTime(a, cfg, firstNr, segMeta.rep)
+		if err != nil {
+			return 0, fmt.Errorf("findSegStartTime: %w", err)
+		}
 		if segTime < wrapStartS*repTimescale {
 			firstNr += 1
 		}
-		idx := int(segMeta.newNr) - firstNr
+		newNrInt, err := uint32ToInt(segMeta.newNr)
+		if err != nil {
+			return 0, fmt.Errorf("newNr out of range: %w", err)
+		}
+		idx := newNrInt - firstNr
 		if idx < 0 {
 			return 0, fmt.Errorf("segment %d is before first segment %d", segMeta.newNr, firstNr)
 		}
@@ -421,16 +434,20 @@ func findLastSegNr(cfg *ResponseConfig, a *asset, nowMS int, rep *RepData) int {
 	return timeLineEntries.lastNr()
 }
 
-func findSegStartTime(a *asset, cfg *ResponseConfig, nr int, rep *RepData) int {
+func findSegStartTime(a *asset, cfg *ResponseConfig, nr int, rep *RepData) (int, error) {
 	wrapLen := len(rep.Segments)
 	startNr := cfg.getStartNr()
-	nrAfterStart := int(nr) - int(startNr)
+	startNrInt, err := uint32ToInt(startNr)
+	if err != nil {
+		return 0, fmt.Errorf("startNr out of range: %w", err)
+	}
+	nrAfterStart := nr - startNrInt
 	nrWraps := nrAfterStart / wrapLen
 	relNr := nrAfterStart - nrWraps*wrapLen
 	wrapDur := a.LoopDurMS * rep.MediaTimescale / 1000
 	wrapTime := nrWraps * wrapDur
 	seg := rep.Segments[relNr]
-	return wrapTime + int(seg.StartTime)
+	return wrapTime + int(seg.StartTime), nil
 }
 
 func repInReps(segmentPart string, reps []string) bool {
