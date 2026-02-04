@@ -296,7 +296,13 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 	}
 
 	log.Debug("Receiving file", "url", path, "contentLength", contentLength, "totSize", rsd.totSize)
+	const maxBufSize = 200 * 1024 * 1024 // 200MB
 	var buf []byte
+	if contentLength > maxBufSize {
+		log.Error("Content-Length exceeds maximum buffer size", "contentLength", contentLength, "maxBufSize", maxBufSize)
+		http.Error(w, "Content-Length too large", http.StatusRequestEntityTooLarge)
+		return
+	}
 	if contentLength > 0 {
 		buf = make([]byte, contentLength)
 	} else {
