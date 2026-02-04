@@ -460,9 +460,14 @@ func handleMPD(w http.ResponseWriter, req *http.Request, storage, chName string)
 		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
 		return
 	}
-	receivedMpdPath := filepath.Join(storage, chName, "received.mpd")
-	slog.Debug("Matched MPD", "chName", chName, "path", req.URL.Path, "outFile", receivedMpdPath)
-	ofh, err := os.Create(receivedMpdPath)
+	absMpdPath, err := filepath.Abs(filepath.Join(storage, chName, "received.mpd"))
+	if err != nil || !strings.HasPrefix(absMpdPath, filepath.Clean(storage)) {
+		slog.Error("Failed to construct MPD path", "err", err)
+		http.Error(w, "Failed to construct MPD path", http.StatusInternalServerError)
+		return
+	}
+	slog.Debug("Matched MPD", "chName", chName, "path", req.URL.Path, "outFile", absMpdPath)
+	ofh, err := os.Create(absMpdPath)
 	if err != nil {
 		slog.Error("Failed to create file", "err", err)
 		http.Error(w, "Failed to create file", http.StatusInternalServerError)
@@ -476,6 +481,6 @@ func handleMPD(w http.ResponseWriter, req *http.Request, storage, chName string)
 		return
 	}
 	finalClose(req.Body)
-	slog.Info("MPD received", "path", req.URL.Path, "storedPath", receivedMpdPath)
+	slog.Info("MPD received", "path", req.URL.Path, "storedPath", absMpdPath)
 	w.WriteHeader(http.StatusOK)
 }
