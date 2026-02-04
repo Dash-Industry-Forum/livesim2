@@ -41,7 +41,25 @@ func (s *strConvAccErr) AtoiPtr(key, val string) *int {
 		s.err = fmt.Errorf("key=%s, err=%w", key, err)
 		return nil
 	}
+
 	return &valInt
+}
+
+// uint32ToInt converts a uint32 to int safely.
+// On 32-bit platforms, int is 32-bit signed so values above MaxInt32 would overflow.
+func uint32ToInt(v uint32) (int, error) {
+	if int64(v) > int64(math.MaxInt) {
+		return 0, fmt.Errorf("uint32 value %d exceeds max int", v)
+	}
+	return int(v), nil
+}
+
+// uint64ToInt converts a uint64 to int safely.
+func uint64ToInt(v uint64) (int, error) {
+	if v > uint64(math.MaxInt) {
+		return 0, fmt.Errorf("uint64 value %d exceeds max int", v)
+	}
+	return int(v), nil
 }
 
 func parseUint32(s string) (uint32, error) {
