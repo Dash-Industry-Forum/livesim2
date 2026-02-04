@@ -4,7 +4,9 @@ on:
   push:
     tags:
       - 'v*' # Push events to matching v*, i.e. v1.1.2
-
+permissions:
+  contents: read
+  packages: write
 jobs:
   build:
     runs-on: ubuntu-latest
