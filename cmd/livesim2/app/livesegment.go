@@ -240,7 +240,11 @@ func findRefSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseCo
 	for {
 		seg := refRep.Segments[relNr]
 		if seg.EndTime > refTimeAfterWrap {
-			refOutNr = uint32(uint64(relNr)+wrapNr) + uint32(cfg.getStartNr())
+			absNr := relNr + wrapNr
+			if absNr > math.MaxUint32 {
+				return sm, fmt.Errorf("segment number %d exceeds uint32 range", absNr)
+			}
+			refOutNr = uint32(absNr) + cfg.getStartNr()
 			refStartTime = wrapTime + seg.StartTime
 			refEndTime = wrapTime + seg.EndTime
 			break
