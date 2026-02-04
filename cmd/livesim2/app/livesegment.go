@@ -305,29 +305,24 @@ func calcSegmentAvailabilityTime(a *asset, rep *RepData, nr uint32, cfg *Respons
 
 // findSegMetaFromNr returns segMeta if segment is available.
 func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, nowMS int) (segMeta, error) {
-	wrapLen := len(rep.Segments)
+	wrapLen := uint32(len(rep.Segments))
 	startNr := cfg.getStartNr()
-	nrInt, err := uint32ToInt(nr)
-	if err != nil {
-		return segMeta{}, fmt.Errorf("segment nr out of range: %w", err)
+	if nr < startNr {
+		return segMeta{}, fmt.Errorf("segment number %d before startNr %d", nr, startNr)
 	}
-	startNrInt, err := uint32ToInt(startNr)
-	if err != nil {
-		return segMeta{}, fmt.Errorf("startNr out of range: %w", err)
-	}
-	nrAfterStart := nrInt - startNrInt
-	nrWraps := nrAfterStart / wrapLen
-	relNr := nrAfterStart - nrWraps*wrapLen
-	wrapDur := a.LoopDurMS * rep.MediaTimescale / 1000
-	wrapTime := nrWraps * wrapDur
+	nrDiffSinceStart := nr - startNr
+	nrWraps := nrDiffSinceStart / wrapLen
+	relNr := nrDiffSinceStart - nrWraps*wrapLen
+	wrapDur := uint64(a.LoopDurMS) * uint64(rep.MediaTimescale) / 1000
+	wrapTime := uint64(nrWraps) * wrapDur
 	seg := rep.Segments[relNr]
-	segTime := wrapTime + int(seg.StartTime)
-	mediaRef := cfg.StartTimeS * rep.MediaTimescale // TODO. Add period offset
+	segTime := wrapTime + seg.StartTime
+	mediaRef := uint64(cfg.StartTimeS) * uint64(rep.MediaTimescale) // TODO. Add period offset
 
 	// Check interval validity
-	segAvailTimeS := float64(int(seg.EndTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
+	segAvailTimeS := float64(seg.EndTime+wrapTime+mediaRef) / float64(rep.MediaTimescale)
 	nowS := float64(nowMS) * 0.001
-	err = CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
+	err := CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
 	if err != nil {
 		return segMeta{}, err
 	}
@@ -335,7 +330,7 @@ func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, n
 	return segMeta{
 		rep:       rep,
 		origTime:  seg.StartTime,
-		newTime:   uint64(segTime),
+		newTime:   segTime,
 		origNr:    seg.Nr,
 		newNr:     nr,
 		origDur:   uint32(seg.EndTime - seg.StartTime),
