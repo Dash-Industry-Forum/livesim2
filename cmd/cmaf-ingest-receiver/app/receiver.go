@@ -38,6 +38,12 @@ func NewReceiver(ctx context.Context, opts *Options, cfg *Config) (*Receiver, er
 	return r, nil
 }
 
+// WaitAll waits for all channel goroutines to finish.
+// Should be called after context cancellation to ensure clean shutdown.
+func (r *Receiver) WaitAll() {
+	r.channelMgr.WaitAll()
+}
+
 // SegmentHandlerFunc is a handler for receiving segments, but will also accept MPDs (extension .mpd).
 func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) {
 	// Extract the path and filename from URL
@@ -244,8 +250,11 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 						}
 					}
 				}
-				if ch.maxNrBufSegs > 0 {
-					deleteSegPath, err := joinAbsPathSecurely(stream.trDir, fmt.Sprintf("%d%s", rsd.seqNr-ch.maxNrBufSegs, stream.ext))
+				ch.mu.RLock()
+				maxNrBufSegs := ch.maxNrBufSegs
+				ch.mu.RUnlock()
+				if maxNrBufSegs > 0 {
+					deleteSegPath, err := joinAbsPathSecurely(stream.trDir, fmt.Sprintf("%d%s", rsd.seqNr-maxNrBufSegs, stream.ext))
 					if err != nil {
 						return fmt.Errorf("insecure delete segment path: %w", err)
 					}

@@ -42,6 +42,7 @@ type channel struct {
 	recSegCh              chan recSegData
 	repsCfg               map[string]RepresentationConfig
 	ignore                bool // Ignore (drop) channel. Don't process any content, just return 200 OK
+	done                  chan struct{}
 }
 
 type trData struct {
@@ -95,6 +96,7 @@ func newChannel(ctx context.Context, chCfg ChannelConfig, chDir string) *channel
 		receiveNrRaws:         chCfg.ReceiveNrRawSegments,
 		repsCfg:               make(map[string]RepresentationConfig),
 		ignore:                chCfg.Ignore,
+		done:                  make(chan struct{}),
 	}
 	for _, repCfg := range chCfg.Reps {
 		ch.repsCfg[repCfg.Name] = repCfg
@@ -104,6 +106,7 @@ func newChannel(ctx context.Context, chCfg ChannelConfig, chDir string) *channel
 }
 
 func (ch *channel) run(ctx context.Context) {
+	defer close(ch.done)
 	for {
 		select {
 		case <-ctx.Done():
@@ -113,6 +116,11 @@ func (ch *channel) run(ctx context.Context) {
 			ch.receivedSegData(rsd)
 		}
 	}
+}
+
+// Wait blocks until the channel's goroutine has finished.
+func (ch *channel) Wait() {
+	<-ch.done
 }
 
 // addInitDataAndUpdateTimescale adds track data from the init segment of a stream to a channel and its MPD.
@@ -290,7 +298,10 @@ func (ch *channel) addChunkData(rsd recSegData) {
 
 func (ch *channel) receivedSegData(rsd recSegData) {
 	log := slog.Default().With("chName", ch.name, "trName", rsd.name, "seqNr", rsd.seqNr)
-	if _, ok := ch.trDatas[rsd.name]; !ok {
+	ch.mu.RLock()
+	_, ok := ch.trDatas[rsd.name]
+	ch.mu.RUnlock()
+	if !ok {
 		log.Error("received segData for unknown track")
 		return
 	}
@@ -318,14 +329,17 @@ func (ch *channel) receivedSegData(rsd recSegData) {
 			}
 		}
 
-		if ch.masterSegDuration == 0 && name == ch.masterTrName {
+		ch.mu.RLock()
+		masterTrName := ch.masterTrName
+		ch.mu.RUnlock()
+		if ch.masterSegDuration == 0 && name == masterTrName {
 			// Evaluate at least two durations to see if the are the same
 			sdb := ch.segTimesGen.segDataBuffers[name]
 			if sdb.nrItems() < 2 {
 				return
 			}
 			for i := uint32(0); i < sdb.nrItems(); i++ {
-				if name == ch.masterTrName && ch.masterSegDuration == 0 {
+				if name == masterTrName && ch.masterSegDuration == 0 {
 					// Evaluate the first two durations to see if they are consecutive with same duration. If not, drop the oldest one.
 					if sdb.items[1].seqNr != sdb.items[0].seqNr+1 || sdb.items[1].dur != sdb.items[0].dur {
 						ch.segTimesGen.dropSeqNr(sdb.items[0].seqNr)
@@ -358,8 +372,10 @@ func (ch *channel) receivedSegData(rsd recSegData) {
 					if err != nil {
 						log.Error("failed to write MPD", "err", err)
 					}
+					ch.mu.Lock()
 					ch.maxNrBufSegs = ch.timeShiftBufferDepthS*ch.masterTimescale/ch.masterSegDuration + 2
 					windowSize := ch.maxNrBufSegs - 1
+					ch.mu.Unlock()
 					log.Info("Starting channel", "windowSize", windowSize, "seqNrShift", ch.masterSeqNrShift,
 						"timeShift", ch.masterTimeShift)
 					ch.segTimesGen.start(windowSize, ch.isShifted())
@@ -482,6 +498,8 @@ func (ch *channel) updateAndWriteMPD(log *slog.Logger) error {
 // deriveAndSetBitrates estimates bitrates for variants without bitrate information.
 // Only count unshifted or shifted segments, not both.
 func (ch *channel) deriveAndSetBitrates() {
+	ch.mu.RLock()
+	defer ch.mu.RUnlock()
 	for name, trd := range ch.trDatas {
 		if trd.init.Moov.Trak.Mdia.Minf.Stbl.Stsd.GetBtrt() == nil {
 			// Estimate bitrate from the segments available
@@ -517,6 +535,8 @@ func (ch *channel) deriveAndSetBitrates() {
 }
 
 func (ch *channel) deriveAndSetFrameRates(log *slog.Logger) {
+	ch.mu.RLock()
+	defer ch.mu.RUnlock()
 	for name, trd := range ch.trDatas {
 		sdb := ch.segTimesGen.segDataBuffers[name]
 		if trd.contentType != "video" {

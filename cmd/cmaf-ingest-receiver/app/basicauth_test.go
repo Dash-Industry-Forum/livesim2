@@ -7,15 +7,33 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"runtime"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// finalRemove removes a directory with retry logic for Windows.
+// On Windows, file handles may be held briefly after close, causing removal to fail.
 func finalRemove(dir string) {
-	if err := os.RemoveAll(dir); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to remove temp dir: %s\n", err)
+	maxRetries := 1
+	if runtime.GOOS == "windows" {
+		maxRetries = 5
+	}
+	var err error
+	for i := 0; i < maxRetries; i++ {
+		err = os.RemoveAll(dir)
+		if err == nil {
+			return
+		}
+		if i < maxRetries-1 {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to remove temp dir after %d attempts: %s\n", maxRetries, err)
 	}
 }
 
@@ -45,8 +63,6 @@ func TestBasicAuth(t *testing.T) {
 	}
 
 	tmpDir, err := os.MkdirTemp("", "ew-cmaf-ingest-test")
-
-	defer finalRemove(tmpDir)
 	assert.NoError(t, err)
 	opts := Options{
 		prefix:                "/upload",
@@ -58,9 +74,14 @@ func TestBasicAuth(t *testing.T) {
 	assert.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	receiver, err := NewReceiver(ctx, &opts, &config)
 	require.NoError(t, err)
+	// Cleanup: cancel context, wait for goroutines, then remove temp dir
+	defer func() {
+		cancel()
+		receiver.WaitAll()
+		finalRemove(tmpDir)
+	}()
 	router := setupRouter(receiver, opts.storage, "")
 	server := httptest.NewServer(router)
 	defer server.Close()

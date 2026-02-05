@@ -44,7 +44,6 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			tmpDir, err := os.MkdirTemp("", "ew-cmaf-ingest-test")
-			defer finalRemove(tmpDir)
 			assert.NoError(t, err)
 			chName := "awsMediaLiveScte35"
 			srcDir := filepath.Join("testdata")
@@ -55,7 +54,6 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 			cfg := &Config{
 				Channels: []ChannelConfig{
 					{Name: chName, StartNr: c.startNr},
@@ -63,6 +61,12 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 			}
 			receiver, err := NewReceiver(ctx, &opts, cfg)
 			require.NoError(t, err)
+			// Cleanup: cancel context, wait for goroutines, then remove temp dir
+			defer func() {
+				cancel()
+				receiver.WaitAll()
+				finalRemove(tmpDir)
+			}()
 			router := setupRouter(receiver, opts.storage, "files")
 			server := httptest.NewServer(router)
 			defer server.Close()
@@ -151,8 +155,6 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 			assert.True(t, testFileExists(filepath.Join(dstDir, "manifest.mpd")), "manifest.mpd should exist")
 			require.False(t, testFileExists(filepath.Join(dstDir, timelineNrMPD)), "manifest_time_nrß.mpd should not exist")
 
-			sdb, ok := ch.segTimesGen.segDataBuffers["video"]
-			assert.True(t, ok, "segment data buffer should exist")
 			var videoTrackData trTestData
 			for _, trd := range testTrackData {
 				if trd.trName == "video" {
@@ -160,10 +162,13 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 				}
 			}
 			if !ch.isShifted() {
-				assert.Equal(t, sdb.items[0].seqNr, uint32(videoTrackData.minNr+1-c.startNr),
+				firstSeqNr, ok := ch.segTimesGen.getBufferFirstSeqNr("video")
+				assert.True(t, ok, "segment data buffer should have items")
+				assert.Equal(t, firstSeqNr, uint32(videoTrackData.minNr+1-c.startNr),
 					"first sequence number in segment data buffer should be the second segment")
 			} else {
-				assert.Equal(t, 0, int(sdb.nrItems()), "shifted segment data buffer should be empty")
+				nrItems := ch.segTimesGen.getBufferNrItems("video")
+				assert.Equal(t, 0, int(nrItems), "shifted segment data buffer should be empty")
 			}
 
 			// Send the fourth media segments.
@@ -257,7 +262,6 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 func TestReceivingNonIdealInput(t *testing.T) {
 	streamsURLFormat := true
 	tmpDir, err := os.MkdirTemp("", "ew-cmaf-ingest-test-nonideal")
-	defer finalRemove(tmpDir)
 	assert.NoError(t, err)
 	chName := "zero_3.84s"
 	srcDir := filepath.Join("testdata")
@@ -271,7 +275,6 @@ func TestReceivingNonIdealInput(t *testing.T) {
 	assert.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	cfg := &Config{
 		Channels: []ChannelConfig{
 			{
@@ -285,6 +288,12 @@ func TestReceivingNonIdealInput(t *testing.T) {
 	}
 	receiver, err := NewReceiver(ctx, &opts, cfg)
 	require.NoError(t, err)
+	// Cleanup: cancel context, wait for goroutines, then remove temp dir
+	defer func() {
+		cancel()
+		receiver.WaitAll()
+		finalRemove(tmpDir)
+	}()
 	router := setupRouter(receiver, opts.storage, "")
 	server := httptest.NewServer(router)
 	defer server.Close()

@@ -60,3 +60,18 @@ func (cm *ChannelMgr) GetChannel(chName string) (*channel, bool) {
 	cm.mu.RUnlock()
 	return fs, ok
 }
+
+// WaitAll waits for all channel goroutines to finish.
+// Should be called after context cancellation to ensure clean shutdown.
+func (cm *ChannelMgr) WaitAll() {
+	cm.mu.RLock()
+	channels := make([]*channel, 0, len(cm.channels))
+	for _, ch := range cm.channels {
+		channels = append(channels, ch)
+	}
+	cm.mu.RUnlock()
+
+	for _, ch := range channels {
+		ch.Wait()
+	}
+}
