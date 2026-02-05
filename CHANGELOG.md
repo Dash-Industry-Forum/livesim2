@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pattern support for audio SegmentTimeline following DASH Ed. 6
 - New URL options `segtimeline_pattern/` and `segtimelinenr_pattern/`
 - URL generator page options for both pattern cases
+- Documentation for CMAF Ingest
 
 ### Fixed
 

@@ -343,6 +343,143 @@ The `dashfetcher` binary can be found as `out/dashfetcher` after `make build`.
 
 will provide a long help text that explains how to use it and will also provide an example URL to CTA-WAVE content.
 
+### CMAF Ingest Support
+
+livesim2 includes CMAF Ingest support (version 1.1), allowing it to act as a CMAF ingest source
+that pushes live segments to a configurable destination. This is useful for testing CMAF ingest
+receivers and validating ingest workflows.
+
+The CMAF ingest functionality converts livesim2's VoD-based live streams into CMAF segments
+and sends them via HTTP PUT requests to a destination URL in real-time.
+
+#### CMAF Ingest REST API
+
+The REST API is available at `/api/cmaf-ingests` and supports the following operations:
+
+**POST /api/cmaf-ingests** - Create and start a CMAF ingest session
+
+Request body:
+
+```json
+{
+  "destRoot": "http://receiver-server.com/upload",
+  "destName": "channel_name",
+  "livesimURL": "/livesim2/testpic_2s/Manifest.mpd",
+  "user": "optional_username",
+  "password": "optional_password",
+  "duration": 60,
+  "testNowMS": null,
+  "streamsURLs": false
+}
+```
+
+Fields:
+
+- `destRoot` (required): Destination URL root where segments will be sent
+- `destName` (required): Destination channel/asset name
+- `livesimURL` (required): Full livesim2 URL path to an MPD (without scheme/host)
+- `user` (optional): Username for basic authentication
+- `password` (optional): Password for basic authentication
+- `duration` (optional): Duration in seconds to send segments (0 = infinite)
+- `testNowMS` (optional): Test mode start time (ms since epoch) for step-wise testing
+- `streamsURLs` (optional): Use `Streams(track.cmfv)` format instead of numbered segments
+
+**GET /api/cmaf-ingests/{id}** - Get status and report of an active ingest session
+
+**GET /api/cmaf-ingests/{id}/step** - Step to next segment (only in test mode with `testNowMS`)
+
+**DELETE /api/cmaf-ingests/{id}** - Stop an ingest session
+
+#### cmaf-ingest-receiver Tool
+
+A standalone receiver tool is included at `cmd/cmaf-ingest-receiver/` for testing CMAF ingest.
+It receives CMAF segments sent by livesim2 (or other CMAF sources) and stores them locally,
+generating MPD manifests automatically.
+
+Build with:
+
+```sh
+make build
+```
+
+The binary will be at `out/cmaf-ingest-receiver`.
+
+Run with:
+
+```sh
+out/cmaf-ingest-receiver -port 8080 -storage ./segments -prefix /upload
+```
+
+Key options:
+
+```sh
+-port 8080           # HTTP receiver port
+-storage "./storage" # Storage root directory
+-prefix "/upload"    # URL prefix for ingest endpoints
+-tsbd 90             # TimeShiftBufferDepth in seconds
+-loglevel "info"     # Log level (debug, info, warn)
+-config ""           # Path to JSON config file
+```
+
+The receiver creates a directory structure like:
+
+```
+storage/
+└── channel/
+    ├── manifest.mpd             # Auto-generated MPD with $Number$
+    ├── manifest_timeline_nr.mpd # Auto-generated MPD with SegmentTimeline
+    └── track/
+        ├── init.cmfv     # Init segment
+        ├── nr.cmfv       # Media segment nr
+        └── ...
+```
+
+#### CMAF Ingest Example
+
+Start the cmaf-ingest-receiver:
+
+```sh
+out/cmaf-ingest-receiver -port 8080 -storage ./segments -prefix /upload
+```
+
+Start livesim2:
+
+```sh
+out/livesim2 --vodroot=cmd/livesim2/app/testdata/assets
+```
+
+Create a CMAF ingest session:
+
+```sh
+curl -X POST http://localhost:8888/api/cmaf-ingests \
+  -H "Content-Type: application/json" \
+  -d '{
+    "destRoot": "http://localhost:8080/upload",
+    "destName": "test_channel",
+    "livesimURL": "/livesim2/testpic_2s/Manifest.mpd",
+    "duration": 60
+  }'
+```
+
+whith should return a response like
+
+```json
+{
+  "$schema":"http://localhost:8888/api/schemas/CmafIngestDeleteResponseBody.json",
+  "destRoot":"http://localhost:8080/upload",
+  "destName":"test_channel",
+  "livesim-url":"/livesim2/testpic_2s/Manifest.mpd",
+  "id":"1"}
+```
+
+You can check the status by using the ingester `id`:
+
+```sh
+curl http://localhost:8888/api/cmaf-ingests/1
+```
+
+The receiver will store segments in `./segments/test_channel/` and generate playable MPD files.
+
 ## Running tests
 
 The unit tests can be run from the top directory with the usual recursive Go test command
