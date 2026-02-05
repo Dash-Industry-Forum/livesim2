@@ -67,3 +67,18 @@ func TestMatchStream(t *testing.T) {
 		}
 	}
 }
+
+func TestMatchStreamRelativePath(t *testing.T) {
+	// Test that relative storage paths work correctly (regression test)
+	relativeStorage := "./segments"
+	absStorage, err := filepath.Abs(relativeStorage)
+	assert.NoError(t, err)
+
+	gotStream, match, err := findStreamMatch(relativeStorage, "/test_channel/Streams(video.cmfv)")
+	assert.NoError(t, err)
+	assert.True(t, match, "should match with relative storage path")
+	assert.Equal(t, "test_channel", gotStream.chName)
+	assert.Equal(t, "video", gotStream.trName)
+	assert.Equal(t, filepath.Join(absStorage, "test_channel"), gotStream.chDir)
+	assert.Equal(t, filepath.Join(absStorage, "test_channel", "video"), gotStream.trDir)
+}

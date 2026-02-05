@@ -528,11 +528,15 @@ func handleMPD(w http.ResponseWriter, req *http.Request, storage, chName string)
 // joinAbsPathSecurely joins path1 and path2 and returns the absolute path.
 // It ensures that the resulting path is within path1 to avoid directory traversal attacks.
 func joinAbsPathSecurely(path1, path2 string) (string, error) {
+	absPath1, err := filepath.Abs(path1)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path for base: %w", err)
+	}
 	absPath, err := filepath.Abs(filepath.Join(path1, path2))
 	if err != nil {
 		return "", fmt.Errorf("failed to get absolute path: %w", err)
 	}
-	if !strings.HasPrefix(absPath, filepath.Clean(path1)) {
+	if !strings.HasPrefix(absPath, absPath1) {
 		return "", fmt.Errorf("unsecure path: %s", absPath)
 	}
 	return absPath, nil
