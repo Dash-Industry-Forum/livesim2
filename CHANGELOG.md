@@ -360,7 +360,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - features and URLs listed at livesim2 root page
 - configurable generated stpp subtitles with timing info
 
-[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.5.2...v1.6.0
