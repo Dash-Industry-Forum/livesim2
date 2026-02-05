@@ -142,7 +142,7 @@ func (sg *segmentTimelineGenerator) generateSegmentTimelineNrMPD(log *slog.Logge
 	}
 	manifest := mpd.Clone(ch.mpd)
 	for _, as := range manifest.Periods[0].AdaptationSets {
-		err := sg.modifySegmentTemplate(as, ch, firstNr, lastNr)
+		err := sg.modifySegmentTemplate(as, firstNr, lastNr)
 		if err != nil {
 			return err
 		}
@@ -174,7 +174,7 @@ func (sg *segmentTimelineGenerator) generateSegmentTimelineNrMPD(log *slog.Logge
 }
 
 // modifySegmentTemplate modifies the segment template to use the segment times for an adaptation set.
-func (sg *segmentTimelineGenerator) modifySegmentTemplate(as *mpd.AdaptationSetType, ch *channel, firstNr, lastNr uint32) error {
+func (sg *segmentTimelineGenerator) modifySegmentTemplate(as *mpd.AdaptationSetType, firstNr, lastNr uint32) error {
 	if as == nil || as.SegmentTemplate == nil || len(as.Representations) == 0 {
 		return fmt.Errorf("adaptationSet or segmentTemplate is nil or no representations")
 	}
