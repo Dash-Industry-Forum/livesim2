@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Nothing yet
+
+## [1.9.0] - 2026-02-06
+
 ### Added
 
 - VVC test content (testpic_2s_vvc)
@@ -21,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Anchored regex for matching representation
+- Security alerts from CodeQL
+- Race conditions in CMAF Ingest tests
 
 ## [1.8.0] - 2025-09-11
 
