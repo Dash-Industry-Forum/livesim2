@@ -6,6 +6,7 @@ package app
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"math"
 	"os"
@@ -1943,6 +1944,154 @@ func TestPatternConsistency(t *testing.T) {
 	}
 }
 
+// TestVideoAudioSegmentCountMatch verifies that video and audio get the same number of segments
+// when using pattern-based SegmentTimeline.
+func TestVideoAudioSegmentCountMatch(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	tmpDir := t.TempDir()
+	am := newAssetMgr(vodFS, tmpDir, false, false)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	err := am.discoverAssets(logger)
+	require.NoError(t, err)
+
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	// Test at multiple time points
+	testTimes := []int{8000000, 16000000, 100000000}
+
+	for _, nowMS := range testTimes {
+		t.Run(fmt.Sprintf("nowMS_%d", nowMS), func(t *testing.T) {
+			cfg := NewResponseConfig()
+			cfg.SegTimelineMode = SegTimelineModePattern
+			cfg.TimeShiftBufferDepthS = Ptr(30)
+
+			liveMPD, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, nowMS)
+			require.NoError(t, err)
+
+			// Find video and audio adaptation sets
+			var videoAS, audioAS *m.AdaptationSetType
+			for _, as := range liveMPD.Periods[0].AdaptationSets {
+				switch as.ContentType {
+				case "video":
+					videoAS = as
+				case "audio":
+					audioAS = as
+				}
+			}
+			require.NotNil(t, videoAS, "Should have video adaptation set")
+			require.NotNil(t, audioAS, "Should have audio adaptation set")
+
+			// Get segment counts from both
+			videoSTL := videoAS.SegmentTemplate.SegmentTimeline
+			audioSTL := audioAS.SegmentTemplate.SegmentTimeline
+			require.NotNil(t, videoSTL, "Video should have SegmentTimeline")
+			require.NotNil(t, audioSTL, "Audio should have SegmentTimeline")
+			require.NotEmpty(t, videoSTL.S, "Video should have S elements")
+			require.NotEmpty(t, audioSTL.S, "Audio should have S elements")
+
+			// Video uses simple S elements with R for repetition count
+			videoSegmentCount := videoSTL.S[0].R + 1 // R is additional repetitions
+
+			// Audio uses Pattern, R represents segment count the same way
+			audioSegmentCount := audioSTL.S[0].R + 1
+
+			assert.Equal(t, videoSegmentCount, audioSegmentCount,
+				"Video and audio should have the same number of segments (video R=%d, audio R=%d)",
+				videoSTL.S[0].R, audioSTL.S[0].R)
+		})
+	}
+}
+
+// TestPatternStabilityWithTimeShift verifies that when moving one segment forward in time,
+// the Pattern stays identical but pE advances by 1 (modulo pattern length).
+func TestPatternStabilityWithTimeShift(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	tmpDir := t.TempDir()
+	am := newAssetMgr(vodFS, tmpDir, false, false)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	err := am.discoverAssets(logger)
+	require.NoError(t, err)
+
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	cfg := NewResponseConfig()
+	cfg.SegTimelineMode = SegTimelineModePattern
+	cfg.TimeShiftBufferDepthS = Ptr(30)
+
+	// Get MPD at a base time that aligns with pattern start (pE=0)
+	baseNowMS := 8000000
+	baseMPD, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, baseNowMS)
+	require.NoError(t, err)
+
+	// Find audio adaptation set
+	var baseAudioAS *m.AdaptationSetType
+	for _, as := range baseMPD.Periods[0].AdaptationSets {
+		if as.ContentType == "audio" {
+			baseAudioAS = as
+			break
+		}
+	}
+	require.NotNil(t, baseAudioAS)
+
+	baseSTL := baseAudioAS.SegmentTemplate.SegmentTimeline
+	require.NotNil(t, baseSTL.Pattern)
+	require.Len(t, baseSTL.Pattern, 1)
+	basePattern := baseSTL.Pattern[0]
+
+	// Calculate pattern length
+	patternLen := 0
+	for _, p := range basePattern.P {
+		patternLen += int(p.R) + 1
+	}
+	require.Greater(t, patternLen, 1, "Pattern should have more than 1 entry")
+
+	basePE := int(*baseSTL.S[0].PE)
+	require.Equal(t, 0, basePE, "Base PE should be 0 at aligned time")
+
+	// Now shift time forward by 2 seconds (one video segment = one pattern step for audio)
+	// and verify pattern stays same but pE advances
+	for step := 1; step < patternLen+1; step++ {
+		shiftedNowMS := baseNowMS + (step * 2000) // 2s per step
+		t.Run(fmt.Sprintf("step_%d_pE_expected_%d", step, step%patternLen), func(t *testing.T) {
+			shiftedMPD, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, shiftedNowMS)
+			require.NoError(t, err)
+
+			var shiftedAudioAS *m.AdaptationSetType
+			for _, as := range shiftedMPD.Periods[0].AdaptationSets {
+				if as.ContentType == "audio" {
+					shiftedAudioAS = as
+					break
+				}
+			}
+			require.NotNil(t, shiftedAudioAS)
+
+			shiftedSTL := shiftedAudioAS.SegmentTemplate.SegmentTimeline
+			require.NotNil(t, shiftedSTL.Pattern)
+			require.Len(t, shiftedSTL.Pattern, 1)
+			shiftedPattern := shiftedSTL.Pattern[0]
+
+			// Verify Pattern stays identical
+			require.Equal(t, len(basePattern.P), len(shiftedPattern.P),
+				"Pattern structure should be identical")
+			for i := range basePattern.P {
+				assert.Equal(t, basePattern.P[i].D, shiftedPattern.P[i].D,
+					"Pattern duration at index %d should be identical", i)
+				assert.Equal(t, basePattern.P[i].R, shiftedPattern.P[i].R,
+					"Pattern repetition at index %d should be identical", i)
+			}
+
+			// Verify pE advances by 1 modulo pattern length
+			expectedPE := step % patternLen
+			actualPE := int(*shiftedSTL.S[0].PE)
+			assert.Equal(t, expectedPE, actualPE,
+				"pE should advance by 1 modulo pattern length (expected %d, got %d)",
+				expectedPE, actualPE)
+		})
+	}
+}
+
 // TestURLParsingForNrPattern tests that segtimelinenr_pattern/ URL parameter is correctly parsed
 func TestURLParsingForNrPattern(t *testing.T) {
 	testCases := []struct {
@@ -2452,16 +2601,14 @@ func TestPEOffsetCalculation(t *testing.T) {
 			actualPE := *result.S[0].PE
 			assert.Equal(t, tc.expectedPE, actualPE, "PE value should match expected for start durations %v", tc.durations[:4])
 
-			// Check that the duration is set to the pattern duration
-			// Pattern: [96256, 96256, 96256, 95232] = 384,000 total (8s at 48kHz timescale)
-			expectedPatternDuration := uint64(384000) // 8s at 48kHz timescale
-			assert.Equal(t, expectedPatternDuration, result.S[0].D, "S element duration should be 8s (384,000) at 48kHz timescale")
+			// When using patterns (P attribute), D should be omitted (zero value)
+			assert.Equal(t, uint64(0), result.S[0].D, "S element should not have D when using patterns")
 		})
 	}
 }
 
 func TestPatternDurationCalculation(t *testing.T) {
-	// Test that pattern duration calculation is correct
+	// Test that pattern detection works correctly
 	// testpic_2s has 2s video segments, 4 segments = 8s total
 	// Audio pattern: [96256, 96256, 96256, 95232] at 48kHz should equal 8s
 
@@ -2481,18 +2628,27 @@ func TestPatternDurationCalculation(t *testing.T) {
 	result := detectAndApplyPattern(se, 0)
 	require.NotNil(t, result, "Should detect pattern")
 
-	// Verify the pattern durations sum to 8s (384,000 at 48kHz)
-	expectedDuration := uint64(8 * 48000) // 8s * 48kHz = 384,000
-	actualDuration := result.S[0].D
+	// When using patterns (P attribute), D should be omitted (zero value)
+	assert.Equal(t, uint64(0), result.S[0].D, "S element should not have D when using patterns")
 
-	assert.Equal(t, expectedDuration, actualDuration, "Pattern duration should be exactly 8s (384,000) at 48kHz timescale")
+	// Verify the pattern durations in the Pattern element sum to 8s (384,000 at 48kHz)
+	require.NotNil(t, result.Pattern, "Should have Pattern element")
+	require.Len(t, result.Pattern, 1, "Should have exactly one Pattern")
+
+	var patternSum uint64
+	for _, p := range result.Pattern[0].P {
+		patternSum += p.D * (p.R + 1) // D * (R+1) gives total duration for this run
+	}
+
+	expectedDuration := uint64(8 * 48000) // 8s * 48kHz = 384,000
+	assert.Equal(t, expectedDuration, patternSum, "Pattern durations should sum to 8s (384,000) at 48kHz timescale")
 
 	// Also verify the arithmetic manually
 	manualSum := uint64(96256 + 96256 + 96256 + 95232)
-	assert.Equal(t, manualSum, actualDuration, "Pattern duration should equal sum of individual segment durations")
+	assert.Equal(t, manualSum, patternSum, "Pattern duration should equal sum of individual segment durations")
 	assert.Equal(t, uint64(384000), manualSum, "Manual sum should equal 384,000")
 
-	t.Logf("Pattern duration: %d (%.3fs at 48kHz)", actualDuration, float64(actualDuration)/48000)
+	t.Logf("Pattern duration sum: %d (%.3fs at 48kHz)", patternSum, float64(patternSum)/48000)
 }
 
 func TestComputeExpectedPatternLen(t *testing.T) {

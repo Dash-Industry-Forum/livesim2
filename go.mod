@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/Comcast/gots/v2 v2.2.1
-	github.com/Eyevinn/dash-mpd v0.14.0
+	github.com/Eyevinn/dash-mpd v0.14.1
 	github.com/Eyevinn/mp4ff v0.50.0
 	github.com/beevik/etree v1.5.0
 	github.com/caddyserver/certmagic v0.22.0
