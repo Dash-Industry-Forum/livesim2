@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/Eyevinn/dash-mpd/mpd"
 )
@@ -14,6 +15,7 @@ const (
 )
 
 type segmentTimelineGenerator struct {
+	mu             sync.RWMutex
 	segDataBuffers map[string]*segDataBuffer
 	dstDir         string
 	counters       *seqCounters
@@ -34,6 +36,8 @@ func newSegmentTimelineGenerator(dstDir string, windowSize uint32) *segmentTimel
 }
 
 func (s *segmentTimelineGenerator) addSegmentData(log *slog.Logger, item recSegData) (newSeqNr uint32, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s._shifted && !item.isShifted {
 		return 0, nil
 	}
@@ -55,7 +59,9 @@ func (s *segmentTimelineGenerator) addSegmentData(log *slog.Logger, item recSegD
 	return 0, nil
 }
 
-func (s *segmentTimelineGenerator) resize(newWindowSize uint32) {
+// resizeUnsafe is the internal version without locking.
+// Must be called with the lock held.
+func (s *segmentTimelineGenerator) resizeUnsafe(newWindowSize uint32) {
 	for _, buf := range s.segDataBuffers {
 		buf.resize(newWindowSize)
 	}
@@ -63,6 +69,13 @@ func (s *segmentTimelineGenerator) resize(newWindowSize uint32) {
 }
 
 func (s *segmentTimelineGenerator) dropSeqNr(seqNr uint32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.dropSeqNrUnsafe(seqNr)
+}
+
+// dropSeqNrUnsafe is the internal version without locking.
+func (s *segmentTimelineGenerator) dropSeqNrUnsafe(seqNr uint32) {
 	for _, buf := range s.segDataBuffers {
 		buf.dropSeqNr(seqNr)
 	}
@@ -70,16 +83,18 @@ func (s *segmentTimelineGenerator) dropSeqNr(seqNr uint32) {
 }
 
 func (s *segmentTimelineGenerator) start(newWindowSize uint32, isShifted bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s._started = true
 	s._shifted = isShifted
-	s.resize(newWindowSize)
+	s.resizeUnsafe(newWindowSize)
 	s.windowSize = uint32(newWindowSize)
 	if isShifted {
 		for _, buf := range s.segDataBuffers {
 			unshifted := buf.removeUnshifted()
 			if len(unshifted) > 0 {
 				for _, seqNr := range unshifted {
-					s.counters.drop(seqNr)
+					s.dropSeqNrUnsafe(seqNr)
 				}
 			}
 		}
@@ -87,11 +102,37 @@ func (s *segmentTimelineGenerator) start(newWindowSize uint32, isShifted bool) {
 	s._nrTracks = uint32(len(s.segDataBuffers))
 }
 
+// getBufferFirstSeqNr returns the first sequence number in the buffer for the given track, if available.
+// This is a thread-safe method for testing purposes.
+func (sg *segmentTimelineGenerator) getBufferFirstSeqNr(trName string) (seqNr uint32, ok bool) {
+	sg.mu.RLock()
+	defer sg.mu.RUnlock()
+	buf, exists := sg.segDataBuffers[trName]
+	if !exists || buf.nrItems() == 0 {
+		return 0, false
+	}
+	return buf.items[0].seqNr, true
+}
+
+// getBufferNrItems returns the number of items in the buffer for the given track.
+// This is a thread-safe method for testing purposes.
+func (sg *segmentTimelineGenerator) getBufferNrItems(trName string) uint32 {
+	sg.mu.RLock()
+	defer sg.mu.RUnlock()
+	buf, exists := sg.segDataBuffers[trName]
+	if !exists {
+		return 0
+	}
+	return buf.nrItems()
+}
+
 // generateSegmentTimelineNrMPD generates the SegmentTimelineNr MPD for the channel and writes it to disk.
 // The times are taken from the longest ending consecutive range of sequence numbers of all segments.
 // Latest number is >= newLatestSeqNr depending on the highest number in the buffers.
 // s.latestSeqNr is updated to the highest number used in the segment times.
 func (sg *segmentTimelineGenerator) generateSegmentTimelineNrMPD(log *slog.Logger, newLatestSeqNr uint32, ch *channel, nowMS int64) error {
+	sg.mu.Lock()
+	defer sg.mu.Unlock()
 	firstNr, lastNr := sg.counters.fullRange(sg._nrTracks)
 	if newLatestSeqNr <= sg.latestSeqNr {
 		return fmt.Errorf("newLatestSeqNr %d is not bigger than latestSeqNr %d", newLatestSeqNr, sg.latestSeqNr)
