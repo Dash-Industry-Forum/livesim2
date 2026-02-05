@@ -1122,9 +1122,9 @@ func detectAndApplyPattern(se segEntries, expectedPatternLen int) *m.SegmentTime
 
 			stl.Pattern = []*m.PatternType{patternElement}
 
-			// Calculate how many complete patterns we have in the sliding window
-			numPatterns := len(durations) / patternLen
-			if numPatterns > 0 {
+			// R represents the number of segments (like video), not pattern cycles
+			numSegments := len(durations)
+			if numSegments > 0 {
 				// Start with the first timestamp from original entries
 				startTime := uint64(0)
 				if len(se.entries) > 0 && se.entries[0].T != nil {
@@ -1139,16 +1139,10 @@ func detectAndApplyPattern(se segEntries, expectedPatternLen int) *m.SegmentTime
 					return nil
 				}
 
-				// Calculate the total duration of the pattern
-				var patternDuration uint64
-				for _, dur := range canonicalPattern {
-					patternDuration += dur
-				}
-
 				s := &m.S{
 					T: &startTime,
-					D: patternDuration, // Total duration of the pattern
-					R: numPatterns - 1,
+					// D is omitted when using patterns (P attribute)
+					R: numSegments - 1,
 					CommonDurationPatternAttributes: m.CommonDurationPatternAttributes{
 						P:  Ptr(uint32(1)),                  // Reference pattern id="1"
 						PE: Ptr(uint32(patternEntryOffset)), // Start at the correct offset in the canonical pattern

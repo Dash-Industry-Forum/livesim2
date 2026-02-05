@@ -5,8 +5,8 @@ cloud.google.com/go v0.34.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMT
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/Comcast/gots/v2 v2.2.1 h1:LU/SRg7p2KQqVkNqInV7I4MOQKAqvWQP/PSSLtygP2s=
 github.com/Comcast/gots/v2 v2.2.1/go.mod h1:firJ11on3eUiGHAhbY5cZNqG0OqhQ1+nSZHfsEEzVVU=
-github.com/Eyevinn/dash-mpd v0.14.0 h1:jKK3/EE/erPb6B6JBVzGJI27G3NXBjazGsQm2caogQk=
-github.com/Eyevinn/dash-mpd v0.14.0/go.mod h1:yym2itvB74evfJFDZB99p700LQddQFsN1YCbk9t6mAA=
+github.com/Eyevinn/dash-mpd v0.14.1 h1:Pr+SzpNQ3cxEkbGMdyJcdAK/DXCw0h3HLOUE3zFqKyQ=
+github.com/Eyevinn/dash-mpd v0.14.1/go.mod h1:mh/BF4gvesMIYxlNHJMI+H9FLsJYeud9yqGibxcgGpE=
 github.com/Eyevinn/mp4ff v0.50.0 h1:vFlsvpQh5Jfz++cuaeTI90vbID5dAabebvvN/l9lom0=
 github.com/Eyevinn/mp4ff v0.50.0/go.mod h1:hJNUUqOBryLAzUW9wpCJyw2HaI+TCd2rUPhafoS5lgg=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
