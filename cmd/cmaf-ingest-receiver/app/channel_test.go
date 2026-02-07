@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	mx "github.com/Dash-Industry-Forum/livesim2/pkg/mpd"
 	m "github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/Eyevinn/mp4ff/bits"
 	"github.com/Eyevinn/mp4ff/mp4"
@@ -42,11 +43,11 @@ func TestAddVideoInit(t *testing.T) {
 	assert.Equal(t, m.RFC6838ContentTypeType("video"), asSet.ContentType)
 	assert.Equal(t, "video/mp4", asSet.MimeType)
 	assert.Equal(t, "und", asSet.Lang)
-	stl := asSet.SegmentTemplate
-	assert.NotNil(t, stl)
-	assert.Equal(t, "$RepresentationID$/init.cmfv", stl.Initialization)
-	assert.Equal(t, "$RepresentationID$/$Number$.cmfv", stl.Media)
-	assert.Equal(t, uint32(90000), *asSet.SegmentTemplate.Timescale)
+	st := mx.SegmentTemplate(asSet)
+	assert.NotNil(t, st)
+	assert.Equal(t, "$RepresentationID$/init.cmfv", st.Initialization)
+	assert.Equal(t, "$RepresentationID$/$Number$.cmfv", st.Media)
+	assert.Equal(t, uint32(90000), *st.Timescale)
 	rep := asSet.Representations[0]
 	assert.Equal(t, "video", rep.Id)
 	assert.Equal(t, 800000, int(rep.Bandwidth))
@@ -83,11 +84,11 @@ func TestVideoDataFromInit(t *testing.T) {
 	assert.Equal(t, uint32(1), *asSet.Id)
 	assert.Equal(t, m.RFC6838ContentTypeType("video"), asSet.ContentType)
 	assert.Equal(t, "video/mp4", asSet.MimeType)
-	stl := asSet.SegmentTemplate
-	assert.NotNil(t, stl)
-	assert.Equal(t, "$RepresentationID$/init.cmfv", stl.Initialization)
-	assert.Equal(t, "$RepresentationID$/$Number$.cmfv", stl.Media)
-	assert.Equal(t, uint32(90000), *asSet.SegmentTemplate.Timescale)
+	st := mx.SegmentTemplate(asSet)
+	assert.NotNil(t, st)
+	assert.Equal(t, "$RepresentationID$/init.cmfv", st.Initialization)
+	assert.Equal(t, "$RepresentationID$/$Number$.cmfv", st.Media)
+	assert.Equal(t, uint32(90000), *st.Timescale)
 	rep := asSet.Representations[0]
 	assert.Equal(t, "video", rep.Id)
 	assert.Equal(t, 800000, int(rep.Bandwidth))

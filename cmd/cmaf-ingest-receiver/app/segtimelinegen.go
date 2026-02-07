@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	mx "github.com/Dash-Industry-Forum/livesim2/pkg/mpd"
 	"github.com/Eyevinn/dash-mpd/mpd"
 )
 
@@ -175,10 +176,10 @@ func (sg *segmentTimelineGenerator) generateSegmentTimelineNrMPD(log *slog.Logge
 
 // modifySegmentTemplate modifies the segment template to use the segment times for an adaptation set.
 func (sg *segmentTimelineGenerator) modifySegmentTemplate(as *mpd.AdaptationSetType, firstNr, lastNr uint32) error {
-	if as == nil || as.SegmentTemplate == nil || len(as.Representations) == 0 {
+	if as == nil || mx.SegmentTemplate(as) == nil {
 		return fmt.Errorf("adaptationSet or segmentTemplate is nil or no representations")
 	}
-	st := as.SegmentTemplate
+	st := mx.SegmentTemplate(as)
 	st.Duration = nil // Remove duration since we will use SegmentTimeline
 	st.StartNumber = mpd.Ptr(uint32(firstNr))
 	rep := as.Representations[0]

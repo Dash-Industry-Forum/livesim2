@@ -18,6 +18,7 @@ import (
 	"github.com/Eyevinn/dash-mpd/mpd"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
+	mx "github.com/Dash-Industry-Forum/livesim2/pkg/mpd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -192,7 +193,7 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 			assert.Equal(t, 1, len(manifest.Periods), "there should be 1 period")
 			assert.Equal(t, 2, len(manifest.Periods[0].AdaptationSets), "there should be 2 adaptation sets")
 			for _, as := range manifest.Periods[0].AdaptationSets {
-				stl := as.SegmentTemplate
+				stl := mx.SegmentTemplate(as)
 				assert.NotNil(t, stl, "segment template should exist")
 				nrSegments := 0
 				for _, s := range stl.SegmentTimeline.S {
@@ -426,8 +427,8 @@ func TestReceivingNonIdealInput(t *testing.T) {
 	assert.Equal(t, 1, len(manifest.Periods), "there should be 1 period")
 	assert.Equal(t, 4, len(manifest.Periods[0].AdaptationSets), "there should be 4 adaptation sets")
 	for _, as := range manifest.Periods[0].AdaptationSets {
-		stl := as.SegmentTemplate
-		assert.NotNil(t, stl, "segment template should exist")
+		st := mx.SegmentTemplate(as)
+		assert.NotNil(t, st, "segment template should exist")
 		assert.True(t, testFileExists(filepath.Join(dstDir, timelineNrMPD)), "manifest_timeline_nr.mpd should now exist")
 		data, err = os.ReadFile(filepath.Join(dstDir, timelineNrMPD))
 		require.NoError(t, err)
@@ -436,9 +437,9 @@ func TestReceivingNonIdealInput(t *testing.T) {
 		assert.Equal(t, 1, len(manifest.Periods), "there should be 1 period")
 		assert.Equal(t, 4, len(manifest.Periods[0].AdaptationSets), "there should be 4 adaptation sets")
 		for _, as := range manifest.Periods[0].AdaptationSets {
-			stl := as.SegmentTemplate
-			assert.NotNil(t, stl, "segment template should exist")
-			assert.Equal(t, 449002890, int(*stl.StartNumber))
+			st := mx.SegmentTemplate(as)
+			assert.NotNil(t, st, "segment template should exist")
+			assert.Equal(t, 449002890, int(*st.StartNumber))
 			data, err = os.ReadFile(filepath.Join(dstDir, timelineNrMPD))
 			require.NoError(t, err)
 			manifest, err = mpd.MPDFromBytes(data)
@@ -446,9 +447,9 @@ func TestReceivingNonIdealInput(t *testing.T) {
 			assert.Equal(t, 1, len(manifest.Periods), "there should be 1 period")
 			assert.Equal(t, 4, len(manifest.Periods[0].AdaptationSets), "there should be 4 adaptation sets")
 			for _, as := range manifest.Periods[0].AdaptationSets {
-				stl := as.SegmentTemplate
-				assert.NotNil(t, stl, "segment template should exist")
-				assert.Equal(t, 449002890, int(*stl.StartNumber), "start number should be 449002890")
+				st := mx.SegmentTemplate(as)
+				assert.NotNil(t, st, "segment template should exist")
+				assert.Equal(t, 449002890, int(*st.StartNumber), "start number should be 449002890")
 			}
 		}
 	}
@@ -476,7 +477,7 @@ func TestReceivingNonIdealInput(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 4, len(manifest.Periods[0].AdaptationSets), "there should be 4 adaptation sets")
 	for _, as := range manifest.Periods[0].AdaptationSets {
-		stl := as.SegmentTemplate
+		stl := mx.SegmentTemplate(as)
 		assert.NotNil(t, stl, "segment template should exist")
 		assert.Equal(t, 449002892, int(*stl.StartNumber), "start number should be 449002892")
 	}

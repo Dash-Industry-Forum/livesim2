@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	mx "github.com/Dash-Industry-Forum/livesim2/pkg/mpd"
 	m "github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/Eyevinn/dash-mpd/xml"
 	"github.com/stretchr/testify/assert"
@@ -85,17 +86,17 @@ func TestLiveMPDStart(t *testing.T) {
 		assert.Equal(t, "dynamic", *liveMPD.Type)
 		assert.Equal(t, m.DateTime("1970-01-01T00:00:00Z"), liveMPD.AvailabilityStartTime)
 		for _, as := range liveMPD.Periods[0].AdaptationSets {
-			stl := as.SegmentTemplate
-			assert.Nil(t, stl.SegmentTimeline)
-			assert.Equal(t, uint32(tc.startNr), *stl.StartNumber)
+			st := mx.SegmentTemplate(as)
+			assert.Nil(t, st.SegmentTimeline)
+			assert.Equal(t, uint32(tc.startNr), *st.StartNumber)
 			tcMedia := tc.nrMedia
 			if as.ContentType == "image" {
 				tcMedia = strings.Replace(tc.nrMedia, ".m4s", ".jpg", 1)
 			}
-			assert.Equal(t, tcMedia, stl.Media)
-			require.NotNil(t, stl.Duration)
-			require.Equal(t, tc.timescale, int(stl.GetTimescale()))
-			assert.Equal(t, 2, int(*stl.Duration)/int(stl.GetTimescale()))
+			assert.Equal(t, tcMedia, st.Media)
+			require.NotNil(t, st.Duration)
+			require.Equal(t, tc.timescale, int(st.GetTimescale()))
+			assert.Equal(t, 2, int(*st.Duration)/int(st.GetTimescale()))
 		}
 		// SegmentTimeline with $Time$
 		cfg.SegTimelineMode = SegTimelineModeTime
@@ -104,18 +105,18 @@ func TestLiveMPDStart(t *testing.T) {
 		assert.Equal(t, "dynamic", *liveMPD.Type)
 		assert.Equal(t, m.DateTime("1970-01-01T00:00:00Z"), liveMPD.AvailabilityStartTime)
 		for _, as := range liveMPD.Periods[0].AdaptationSets {
-			stl := as.SegmentTemplate
+			st := mx.SegmentTemplate(as)
 			switch as.ContentType {
 			case "video":
-				require.Greater(t, stl.SegmentTimeline.S[0].R, 0)
+				require.Greater(t, st.SegmentTimeline.S[0].R, 0)
 				fallthrough
 			case "audio", "text":
-				assert.Nil(t, stl.StartNumber)
-				assert.Equal(t, tc.timeMedia, stl.Media)
+				assert.Nil(t, st.StartNumber)
+				assert.Equal(t, tc.timeMedia, st.Media)
 			case "image":
 				tcMedia := strings.Replace(tc.nrMedia, ".m4s", ".jpg", 1)
-				assert.Equal(t, tcMedia, stl.Media)
-				assert.Equal(t, tc.startNr, *stl.StartNumber)
+				assert.Equal(t, tcMedia, st.Media)
+				assert.Equal(t, tc.startNr, *st.StartNumber)
 			default:
 				t.Errorf("unknown content type %s", as.ContentType)
 			}
@@ -236,12 +237,12 @@ func TestSegmentTimes(t *testing.T) {
 			wantedStartNr := (nowS - 62) / 2 // Sliding window of 60s + one segment
 			assert.NoError(t, err)
 			for _, as := range liveMPD.Periods[0].AdaptationSets {
+				st := mx.SegmentTemplate(as)
 				if !tc.useTime {
-					assert.Equal(t, wantedStartNr, int(*as.SegmentTemplate.StartNumber))
+					assert.Equal(t, wantedStartNr, int(*st.StartNumber))
 				}
-				stl := as.SegmentTemplate
 				nrSegs := 0
-				for _, s := range stl.SegmentTimeline.S {
+				for _, s := range st.SegmentTimeline.S {
 					nrSegs += s.R + 1
 				}
 				assert.True(t, 29 <= nrSegs && nrSegs <= 32, "nr segments in interval 29 <= x <= 32")
@@ -626,7 +627,8 @@ func TestNormalAvailabilityTimeOffset(t *testing.T) {
 			assert.NoError(t, err)
 			p := liveMPD.Periods[0]
 			for _, as := range p.AdaptationSets {
-				segTemplateATO := float64(as.SegmentTemplate.AvailabilityTimeOffset)
+				st := mx.SegmentTemplate(as)
+				segTemplateATO := float64(st.AvailabilityTimeOffset)
 				require.Equal(t, tc.wantedAtoVal, segTemplateATO)
 			}
 		})
@@ -773,16 +775,17 @@ func TestAudioSegmentTimeFollowsVideo(t *testing.T) {
 			assert.NoError(t, err)
 			adaptationSets := orderAdaptationSetsByContentType(liveMPD.Periods[0].AdaptationSets)
 			for _, as := range adaptationSets {
-				assert.NotNil(t, as.SegmentTemplate, "segment template")
-				stl := as.SegmentTemplate.SegmentTimeline
+				st := mx.SegmentTemplate(as)
+				assert.NotNil(t, st, "segment template")
+				stl := st.SegmentTimeline
 				assert.NotNil(t, stl, "segment timeline")
 				gotSegTimings := segTimingsFromS(stl.S)
 				switch as.ContentType {
 				case "video":
-					require.Equal(t, tc.wantedVideoTimescale, int(*as.SegmentTemplate.Timescale), "video timescale")
+					require.Equal(t, tc.wantedVideoTimescale, int(*st.Timescale), "video timescale")
 					require.Equal(t, tc.wantedVideoSegTimings, gotSegTimings, "video segment timings")
 				case "audio":
-					require.Equal(t, tc.wantedAudioTimescale, int(*as.SegmentTemplate.Timescale), "audio timescale")
+					require.Equal(t, tc.wantedAudioTimescale, int(*st.Timescale), "audio timescale")
 					require.Equal(t, tc.wantedAudioSegTimings, gotSegTimings, "audio segment timings")
 				default:
 					t.Errorf("unexpected content type %q", as.ContentType)
@@ -894,13 +897,13 @@ func TestMultiPeriod(t *testing.T) {
 			assert.Equal(t, tc.wantedNrPeriods, len(liveMPD.Periods))
 			for pNr, p := range liveMPD.Periods {
 				for asNr, as := range p.AdaptationSets {
-					stl := as.SegmentTemplate
+					st := mx.SegmentTemplate(as)
 					if tc.wantedStartNrs[pNr] == nil {
-						assert.Nil(t, stl.StartNumber)
+						assert.Nil(t, st.StartNumber)
 					} else {
-						assert.Equal(t, *tc.wantedStartNrs[pNr], int(*stl.StartNumber), "startNumber in period %d, AS %d", pNr, asNr)
+						assert.Equal(t, *tc.wantedStartNrs[pNr], int(*st.StartNumber), "startNumber in period %d, AS %d", pNr, asNr)
 					}
-					assert.Equal(t, tc.wantedPresentationTimeOffsets[pNr][asNr], int(*stl.PresentationTimeOffset))
+					assert.Equal(t, tc.wantedPresentationTimeOffsets[pNr][asNr], int(*st.PresentationTimeOffset))
 				}
 			}
 		})
@@ -979,16 +982,16 @@ func TestFractionalFramerateMPDs(t *testing.T) {
 		assert.Equal(t, "dynamic", *liveMPD.Type)
 		assert.Equal(t, m.DateTime("1970-01-01T00:00:00Z"), liveMPD.AvailabilityStartTime)
 		for _, as := range liveMPD.Periods[0].AdaptationSets {
-			stl := as.SegmentTemplate
-			assert.Nil(t, stl.SegmentTimeline)
-			require.Equal(t, 0, int(*stl.StartNumber))
+			st := mx.SegmentTemplate(as)
+			assert.Nil(t, st.SegmentTimeline)
+			require.Equal(t, 0, int(*st.StartNumber))
 			switch as.ContentType {
 			case "video":
-				require.Equal(t, 30000, int(*stl.Timescale))
-				require.Equal(t, 60060, int(*stl.Duration))
+				require.Equal(t, 30000, int(*st.Timescale))
+				require.Equal(t, 60060, int(*st.Duration))
 			case "audio":
-				require.Equal(t, 48000, int(*stl.Timescale))
-				require.Equal(t, 96096, int(*stl.Duration))
+				require.Equal(t, 48000, int(*st.Timescale))
+				require.Equal(t, 96096, int(*st.Duration))
 			default:
 				t.Errorf("unexpected content type %q", as.ContentType)
 			}
@@ -1041,8 +1044,8 @@ func TestEndNumberRemovedFromMPD(t *testing.T) {
 	aSets := liveMPD.Periods[0].AdaptationSets
 	assert.Len(t, aSets, 2)
 	for _, as := range aSets {
-		stl := as.SegmentTemplate
-		assert.Nil(t, stl.EndNumber)
+		st := mx.SegmentTemplate(as)
+		assert.Nil(t, st.EndNumber)
 	}
 }
 
@@ -1833,17 +1836,19 @@ func TestPatternConsistency(t *testing.T) {
 					}
 					require.NotNil(t, audioAS, "Should have audio adaptation set")
 
+					st := mx.SegmentTemplate(audioAS)
+
 					// Verify media template
-					assert.Equal(t, modeTest.expectedMedia, audioAS.SegmentTemplate.Media,
+					assert.Equal(t, modeTest.expectedMedia, st.Media,
 						"Media template should match expected for %s mode", modeTest.name)
 
 					// Verify startNumber
 					if modeTest.shouldHaveStartNr {
-						require.NotNil(t, audioAS.SegmentTemplate.StartNumber,
+						require.NotNil(t, st.StartNumber,
 							"StartNumber should be set for $Number$ mode")
 					}
 
-					stl := audioAS.SegmentTemplate.SegmentTimeline
+					stl := st.SegmentTimeline
 					require.NotNil(t, stl, "Should have SegmentTimeline")
 					require.NotNil(t, stl.Pattern, "Should have Pattern")
 					require.Len(t, stl.Pattern, 1, "Should have exactly one Pattern")
@@ -1983,8 +1988,8 @@ func TestVideoAudioSegmentCountMatch(t *testing.T) {
 			require.NotNil(t, audioAS, "Should have audio adaptation set")
 
 			// Get segment counts from both
-			videoSTL := videoAS.SegmentTemplate.SegmentTimeline
-			audioSTL := audioAS.SegmentTemplate.SegmentTimeline
+			videoSTL := mx.SegmentTemplate(videoAS).SegmentTimeline
+			audioSTL := mx.SegmentTemplate(audioAS).SegmentTimeline
 			require.NotNil(t, videoSTL, "Video should have SegmentTimeline")
 			require.NotNil(t, audioSTL, "Audio should have SegmentTimeline")
 			require.NotEmpty(t, videoSTL.S, "Video should have S elements")
@@ -2035,7 +2040,7 @@ func TestPatternStabilityWithTimeShift(t *testing.T) {
 	}
 	require.NotNil(t, baseAudioAS)
 
-	baseSTL := baseAudioAS.SegmentTemplate.SegmentTimeline
+	baseSTL := mx.SegmentTemplate(baseAudioAS).SegmentTimeline
 	require.NotNil(t, baseSTL.Pattern)
 	require.Len(t, baseSTL.Pattern, 1)
 	basePattern := baseSTL.Pattern[0]
@@ -2067,7 +2072,7 @@ func TestPatternStabilityWithTimeShift(t *testing.T) {
 			}
 			require.NotNil(t, shiftedAudioAS)
 
-			shiftedSTL := shiftedAudioAS.SegmentTemplate.SegmentTimeline
+			shiftedSTL := mx.SegmentTemplate(shiftedAudioAS).SegmentTimeline
 			require.NotNil(t, shiftedSTL.Pattern)
 			require.Len(t, shiftedSTL.Pattern, 1)
 			shiftedPattern := shiftedSTL.Pattern[0]
@@ -2182,12 +2187,13 @@ func TestURLToMPDWithPattern(t *testing.T) {
 			require.NotNil(t, audioAS, "Should have audio adaptation set")
 
 			// Verify media template
-			assert.Equal(t, tc.expectedMedia, audioAS.SegmentTemplate.Media,
+			aSt := mx.SegmentTemplate(audioAS)
+			assert.Equal(t, tc.expectedMedia, aSt.Media,
 				"Media template should match expected")
 
 			// Verify Pattern
 			if tc.shouldHavePattern {
-				stl := audioAS.SegmentTemplate.SegmentTimeline
+				stl := aSt.SegmentTimeline
 				require.NotNil(t, stl, "Should have SegmentTimeline")
 				require.NotNil(t, stl.Pattern, "Should have Pattern")
 				require.Len(t, stl.Pattern, 1, "Should have exactly one Pattern")
@@ -2208,7 +2214,7 @@ func TestURLToMPDWithPattern(t *testing.T) {
 
 			// For $Number$ mode, verify startNumber is set
 			if strings.Contains(tc.expectedMedia, "$Number$") {
-				require.NotNil(t, audioAS.SegmentTemplate.StartNumber,
+				require.NotNil(t, aSt.StartNumber,
 					"StartNumber should be set for $Number$ mode")
 			}
 		})
@@ -2776,8 +2782,9 @@ func TestPECalculationWithSpecificNowMS(t *testing.T) {
 			var audioAS *m.AdaptationSetType
 			for _, period := range mpd.Periods {
 				for _, as := range period.AdaptationSets {
-					if as.ContentType == "audio" && as.SegmentTemplate != nil && as.SegmentTemplate.SegmentTimeline != nil {
-						if len(as.SegmentTemplate.SegmentTimeline.Pattern) > 0 {
+					st := mx.SegmentTemplate(as)
+					if as.ContentType == "audio" && st != nil && st.SegmentTimeline != nil {
+						if len(st.SegmentTimeline.Pattern) > 0 {
 							audioAS = as
 							break
 						}
@@ -2785,11 +2792,12 @@ func TestPECalculationWithSpecificNowMS(t *testing.T) {
 				}
 			}
 
+			aSt := mx.SegmentTemplate(audioAS)
 			require.NotNil(t, audioAS, "Should find audio adaptation set with pattern")
-			require.NotNil(t, audioAS.SegmentTemplate.SegmentTimeline, "Should have SegmentTimeline")
-			require.Len(t, audioAS.SegmentTemplate.SegmentTimeline.S, 1, "Should have one S element")
+			require.NotNil(t, aSt.SegmentTimeline, "Should have SegmentTimeline")
+			require.Len(t, aSt.SegmentTimeline.S, 1, "Should have one S element")
 
-			sElement := audioAS.SegmentTemplate.SegmentTimeline.S[0]
+			sElement := aSt.SegmentTimeline.S[0]
 			require.NotNil(t, sElement.PE, "PE should be set")
 
 			actualPE := *sElement.PE
