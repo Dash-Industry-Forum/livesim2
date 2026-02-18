@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New URL options `segtimeline_pattern/` and `segtimelinenr_pattern/`
 - URL generator page options for both pattern cases
 - Documentation for CMAF Ingest
+- Support for SSR/L3D DASH with partial segments
 
 ### Fixed
 

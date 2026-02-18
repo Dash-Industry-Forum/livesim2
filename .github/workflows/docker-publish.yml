@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*' # Push events to matching v*, i.e. v1.1.2
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g., v1.9.0)'
+        required: true
+        type: string
 permissions:
   contents: read
   packages: write
@@ -12,8 +18,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Set tag name
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          ref: ${{ steps.tag.outputs.name }}
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v2
@@ -28,9 +45,9 @@ jobs:
       - name: Build Docker image
         run: |
           repo_name=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          docker build -t ghcr.io/${repo_name}/livesim2:"${{ github.ref_name }}" .
+          docker build -t ghcr.io/${repo_name}/livesim2:"${{ steps.tag.outputs.name }}" .
 
       - name: Push Docker image to GitHub Container Registry
         run: |
           repo_name=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          docker push ghcr.io/${repo_name}/livesim2:"${{ github.ref_name }}"
+          docker push ghcr.io/${repo_name}/livesim2:"${{ steps.tag.outputs.name }}"
