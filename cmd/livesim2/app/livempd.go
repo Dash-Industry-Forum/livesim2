@@ -137,11 +137,11 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 			strBuf.WriteString("/")
 			switch {
 			case strings.HasPrefix(cfg.URLParts[i], "startrel_"):
-				strBuf.WriteString(fmt.Sprintf("start_%d", cfg.StartTimeS))
+				fmt.Fprintf(&strBuf, "start_%d", cfg.StartTimeS)
 			case strings.HasPrefix(cfg.URLParts[i], "stoprel_"):
-				strBuf.WriteString(fmt.Sprintf("stop_%d", *cfg.StopTimeS))
+				fmt.Fprintf(&strBuf, "stop_%d", *cfg.StopTimeS)
 			default:
-				strBuf.WriteString(cfg.URLParts[i])
+				fmt.Fprintf(&strBuf, "%s", cfg.URLParts[i])
 			}
 		}
 		mpd.Location = []*m.LocationType{
@@ -1177,11 +1177,11 @@ func findCanonicalPattern(pattern []uint64) ([]uint64, int) {
 	bestStart := 0
 	bestRunLen := 0
 
-	for start := 0; start < len(pattern); start++ {
+	for start := range pattern {
 		if pattern[start] == maxDur {
 			// Count consecutive max values from this position
 			runLen := 0
-			for i := 0; i < len(pattern); i++ {
+			for i := range pattern {
 				if pattern[(start+i)%len(pattern)] == maxDur {
 					runLen++
 				} else {
@@ -1197,7 +1197,7 @@ func findCanonicalPattern(pattern []uint64) ([]uint64, int) {
 
 	// Rotate pattern to start at bestStart
 	canonical := make([]uint64, len(pattern))
-	for i := 0; i < len(pattern); i++ {
+	for i := range pattern {
 		canonical[i] = pattern[(bestStart+i)%len(pattern)]
 	}
 
@@ -1212,7 +1212,7 @@ func findPatternEntryOffset(slidingWindowDurations, canonicalPattern []uint64) (
 
 	// Try each offset until we find a match
 	patternLen := len(canonicalPattern)
-	for offset := 0; offset < patternLen; offset++ {
+	for offset := range patternLen {
 		// Check if pattern matches at this offset
 		match := true
 		for i := 0; i < len(slidingWindowDurations) && i < patternLen; i++ {
@@ -1324,8 +1324,8 @@ func parseSSRAS(config string) (nextMap, prevMap map[uint32]uint32, err error) {
 		return nil, nil, fmt.Errorf("configuration contains extra spaces: use exact format 'adaptationSetId,ssrValue;...' without spaces")
 	}
 
-	pairs := strings.Split(config, ";")
-	for _, pair := range pairs {
+	pairs := strings.SplitSeq(config, ";")
+	for pair := range pairs {
 		parts := strings.Split(pair, ",")
 		if len(parts) != 2 {
 			return nil, nil, fmt.Errorf("invalid format in pair '%s': expected 'adaptationSetId,ssrValue'", pair)
@@ -1362,8 +1362,8 @@ func parseChunkDurSSR(config string) (map[uint32]float64, error) {
 	}
 
 	chunkDurMap := make(map[uint32]float64)
-	pairs := strings.Split(config, ";")
-	for _, pair := range pairs {
+	pairs := strings.SplitSeq(config, ";")
+	for pair := range pairs {
 		parts := strings.Split(pair, ",")
 		if len(parts) != 2 {
 			return nil, fmt.Errorf("invalid format in pair '%s': expected 'adaptationSetId,chunkDuration'", pair)

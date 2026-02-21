@@ -37,8 +37,8 @@ func diffInternal(e, f []*etree.Element, equals func(*etree.Element, *etree.Elem
 		p := make([]int, Z)
 
 		hMax := L/2 + L%2 + 1
-		for h := 0; h < hMax; h++ {
-			for r := 0; r < 2; r++ {
+		for h := range hMax {
+			for r := range 2 {
 				var c, d []int
 				var o, m int
 				if r == 0 {
@@ -99,13 +99,13 @@ func diffInternal(e, f []*etree.Element, equals func(*etree.Element, *etree.Elem
 		}
 	} else if N > 0 {
 		res := make([]Op, N)
-		for n := 0; n < N; n++ {
+		for n := range N {
 			res[n] = Op{OpDelete, i + n, -1, e[n]}
 		}
 		return res
 	} else {
 		res := make([]Op, M)
-		for n := 0; n < M; n++ {
+		for n := range M {
 			res[n] = Op{OpInsert, i, j + n, f[n]}
 		}
 		return res

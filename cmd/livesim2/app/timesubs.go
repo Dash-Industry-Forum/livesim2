@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"text/template"
@@ -71,13 +72,7 @@ func matchTimeSubsInitLang(cfg *ResponseConfig, segmentPart string) (prefix, lan
 		return "", "", false, nil
 	}
 
-	matchingLang := false
-	for _, mpdLang := range langs {
-		if mpdLang == lang {
-			matchingLang = true
-			break
-		}
-	}
+	matchingLang := slices.Contains(langs, lang)
 	if !matchingLang {
 		return "", lang, true, fmt.Errorf("time subs language %q does not match config: %w", lang, errNotFound)
 	}
@@ -157,13 +152,7 @@ func writeTimeSubsMediaSegment(w http.ResponseWriter, cfg *ResponseConfig, a *as
 	if prefix == "" {
 		return false, nil
 	}
-	matchingLang := false
-	for _, mpdLang := range langs {
-		if mpdLang == lang {
-			matchingLang = true
-			break
-		}
-	}
+	matchingLang := slices.Contains(langs, lang)
 	if !matchingLang {
 		return true, fmt.Errorf("time subs language %q does not match config: %w", lang, errNotFound)
 	}

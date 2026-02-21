@@ -341,10 +341,3 @@ func AutoDir(rawMPDurl, outDir string) (string, error) {
 	outPath := path.Join(strings.Join(outParts, "/"), strings.Join(uBaseParts, "/"))
 	return outPath, nil
 }
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}

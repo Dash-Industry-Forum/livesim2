@@ -37,14 +37,14 @@ func TestRequestLimiter(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	for i := 0; i < maxNrRequests; i++ {
+	for i := range maxNrRequests {
 		doRequestAndCheckResponse(t, ts, i+1, maxNrRequests, http.StatusOK)
 	}
 	for i := maxNrRequests; i <= maxNrRequests+2; i++ {
 		doRequestAndCheckResponse(t, ts, i+1, maxNrRequests, http.StatusTooManyRequests)
 	}
 	time.Sleep(maxTime)
-	for i := 0; i < maxNrRequests; i++ {
+	for i := range maxNrRequests {
 		doRequestAndCheckResponse(t, ts, i+1, maxNrRequests, http.StatusOK)
 	}
 }

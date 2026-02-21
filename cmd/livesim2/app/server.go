@@ -38,7 +38,7 @@ func (s *Server) healthzHandlerFunc(w http.ResponseWriter, r *http.Request) {
 // jsonResponse marshals message and give response with code
 //
 // Don't add any more content after this since Content-Length is set
-func (s *Server) jsonResponse(w http.ResponseWriter, message interface{}, code int) {
+func (s *Server) jsonResponse(w http.ResponseWriter, message any, code int) {
 	raw, err := json.Marshal(message)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("{message: \"%s\"}", err), http.StatusInternalServerError)

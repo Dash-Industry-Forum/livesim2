@@ -34,7 +34,7 @@ func unpackBase64(b64 string) string {
 	b64 = strings.ReplaceAll(b64, "_", "/")
 	missing := 4 - len(b64)%4
 	if missing != 4 {
-		for i := 0; i < missing; i++ {
+		for range missing {
 			b64 += "="
 		}
 	}
@@ -95,7 +95,7 @@ func id16FromHex(hexStr string) (id16, error) {
 
 func keyToKid(key id16) (kid id16) {
 	copy(kid[:], key[:])
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if key[i] != keyStart[i] {
 			panic("key does not start with 3 key bytes")
 		}
@@ -106,7 +106,7 @@ func keyToKid(key id16) (kid id16) {
 
 func kidToKey(kid id16) (key id16) {
 	copy(key[:], kid[:])
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if kid[i] != kidStart[i] {
 			panic("keyID does not start with 3 k i d bytes")
 		}
@@ -127,7 +127,7 @@ func kidFromString(s string) id16 {
 		panic("md5 did not write 16 bytes")
 	}
 	copy(o[:], c.Sum(nil))
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		o[i] = kidStart[i]
 	}
 	k := id16(o)

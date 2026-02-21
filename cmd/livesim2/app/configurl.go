@@ -158,7 +158,7 @@ func CreateAllLossItvls(pattern string) ([]LossItvls, error) {
 	}
 	nr := strings.Count(pattern, ",") + 1
 	li := make([]LossItvls, 0, nr)
-	for _, s := range strings.Split(pattern, ",") {
+	for s := range strings.SplitSeq(pattern, ",") {
 		li1, err := CreateLossItvls(s)
 		if err != nil {
 			return nil, err
