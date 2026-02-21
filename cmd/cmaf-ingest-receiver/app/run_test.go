@@ -305,7 +305,7 @@ func TestReceivingNonIdealInput(t *testing.T) {
 	// Send the first media segments. That should trigger reading of init_org
 	wg := sync.WaitGroup{}
 	nextNr := 0
-	for i := 0; i < 1; i++ {
+	for range 1 {
 		wg.Add(1)
 		go func() {
 			for _, trd := range testTrackData {

@@ -435,7 +435,7 @@ func genWvttCueText(fss []mp4.FullSample) (string, error) {
 	var b strings.Builder
 
 	for nr, fs := range fss {
-		b.WriteString(fmt.Sprintf("Sample %d, pts=%d, dur=%d\n", nr, fs.PresentationTime(), fs.Dur))
+		fmt.Fprintf(&b, "Sample %d, pts=%d, dur=%d\n", nr, fs.PresentationTime(), fs.Dur)
 		buf := bytes.NewBuffer(fs.Data)
 		box, err := mp4.DecodeBox(0, buf)
 		if err != nil {

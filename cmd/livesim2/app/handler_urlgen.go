@@ -270,38 +270,38 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 		}
 		if t != defaultTimeShiftBufferDepthS {
 			data.Tsbd = t
-			sb.WriteString(fmt.Sprintf("tsbd_%d/", t))
+			fmt.Fprintf(&sb, "tsbd_%d/", t)
 		}
 	}
 	ato := q.Get("ato")
 	if ato != "" {
 		data.Ato = ato
-		sb.WriteString(fmt.Sprintf("ato_%s/", ato))
+		fmt.Fprintf(&sb, "ato_%s/", ato)
 	}
 	mup := q.Get("mup")
 	if mup != "" {
 		data.MinimumUpdatePeriodS = mup
-		sb.WriteString(fmt.Sprintf("mup_%s/", mup))
+		fmt.Fprintf(&sb, "mup_%s/", mup)
 	}
 	spd := q.Get("spd")
 	if spd != "" {
 		data.SuggestedPresentationDelayS = spd
-		sb.WriteString(fmt.Sprintf("spd_%s/", spd))
+		fmt.Fprintf(&sb, "spd_%s/", spd)
 	}
 	startNR := q.Get("snr")
 	if startNR != "" {
 		data.StartNR = startNR
-		sb.WriteString(fmt.Sprintf("snr_%s/", startNR))
+		fmt.Fprintf(&sb, "snr_%s/", startNR)
 	}
 	utc := q.Get("utc")
 	if utc != "" {
 		data.UTCTiming = utc
-		sb.WriteString(fmt.Sprintf("utc_%s/", utc))
+		fmt.Fprintf(&sb, "utc_%s/", utc)
 	}
 	periods := q.Get("periods")
 	if periods != "" {
 		data.Periods = periods
-		sb.WriteString(fmt.Sprintf("periods_%s/", periods))
+		fmt.Fprintf(&sb, "periods_%s/", periods)
 	}
 	continuous := q.Get("continuous")
 	if continuous != "" {
@@ -311,7 +311,7 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 	chunkDur := q.Get("chunkdur")
 	if chunkDur != "" {
 		data.ChunkDur = chunkDur
-		sb.WriteString(fmt.Sprintf("chunkdur_%s/", chunkDur))
+		fmt.Fprintf(&sb, "chunkdur_%s/", chunkDur)
 	}
 	if llTarget := q.Get("ltgt"); llTarget != "" {
 		lt, err := parseUint32(llTarget)
@@ -320,7 +320,7 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 		}
 		if lt != defaultLatencyTargetMS {
 			data.LlTarget = lt
-			sb.WriteString(fmt.Sprintf("ltgt_%d/", lt))
+			fmt.Fprintf(&sb, "ltgt_%d/", lt)
 		}
 	}
 	if ptl := q.Get("patch-ttl"); ptl != "" {
@@ -330,66 +330,66 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 		}
 		if patchTTL > 0 {
 			data.PatchTTL = ptl
-			sb.WriteString(fmt.Sprintf("patch_%s/", ptl))
+			fmt.Fprintf(&sb, "patch_%s/", ptl)
 		}
 	}
 	start := q.Get("start")
 	if start != "" {
 		data.Start = start
-		sb.WriteString(fmt.Sprintf("start_%s/", start))
+		fmt.Fprintf(&sb, "start_%s/", start)
 	}
 	stop := q.Get("stop")
 	if stop != "" {
 		data.Stop = stop
-		sb.WriteString(fmt.Sprintf("stop_%s/", stop))
+		fmt.Fprintf(&sb, "stop_%s/", stop)
 	}
 	startRel := q.Get("startrel")
 	if startRel != "" {
 		data.StartRel = startRel
-		sb.WriteString(fmt.Sprintf("startrel_%s/", startRel))
+		fmt.Fprintf(&sb, "startrel_%s/", startRel)
 	}
 	stopRel := q.Get("stoprel")
 	if stopRel != "" {
 		data.StopRel = stopRel
-		sb.WriteString(fmt.Sprintf("stoprel_%s/", stopRel))
+		fmt.Fprintf(&sb, "stoprel_%s/", stopRel)
 	}
 	timeSubsStpp := q.Get("timesubsstpp")
 	if timeSubsStpp != "" {
 		data.TimeSubsStpp = timeSubsStpp
-		sb.WriteString(fmt.Sprintf("timesubsstpp_%s/", timeSubsStpp))
+		fmt.Fprintf(&sb, "timesubsstpp_%s/", timeSubsStpp)
 	}
 	timeSubsWvtt := q.Get("timesubswvtt")
 	if timeSubsWvtt != "" {
 		data.TimeSubsWvtt = timeSubsWvtt
-		sb.WriteString(fmt.Sprintf("timesubswvtt_%s/", timeSubsWvtt))
+		fmt.Fprintf(&sb, "timesubswvtt_%s/", timeSubsWvtt)
 	}
 	timeSubsDur := q.Get("timesubsdur")
 	if timeSubsDur != "" && timeSubsDur != defaultTimeSubsDur {
 		data.TimeSubsDur = timeSubsDur
-		sb.WriteString(fmt.Sprintf("timesubsdur_%s/", timeSubsDur))
+		fmt.Fprintf(&sb, "timesubsdur_%s/", timeSubsDur)
 	}
 	timeSubsReg := q.Get("timesubsreg")
 	if timeSubsReg != "" && timeSubsReg != defaultTimeSubsReg {
 		data.TimeSubsReg = timeSubsReg
-		sb.WriteString(fmt.Sprintf("timesubsreg_%s/", timeSubsReg))
+		fmt.Fprintf(&sb, "timesubsreg_%s/", timeSubsReg)
 	}
 	drm := q.Get("drm")
 	switch drm {
 	case "", "None":
 		data.Drm = drm
 	default:
-		sb.WriteString(fmt.Sprintf("drm_%s/", drm))
+		fmt.Fprintf(&sb, "drm_%s/", drm)
 	}
 	data.DRMs = drmsFromAssetInfo(aI, drmCfg, q.Get("drm"))
 	scte35 := q.Get("scte35")
 	if scte35 != "" {
 		data.Scte35Var = scte35
-		sb.WriteString(fmt.Sprintf("scte35_%s/", scte35))
+		fmt.Fprintf(&sb, "scte35_%s/", scte35)
 	}
 	annexI := q.Get("annexI")
 	if annexI != "" {
 		data.AnnexI = annexI
-		sb.WriteString(fmt.Sprintf("annexI_%s/", annexI))
+		fmt.Fprintf(&sb, "annexI_%s/", annexI)
 	}
 	statusCodes := q.Get("statuscode")
 	if statusCodes != "" {
@@ -399,7 +399,7 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 			data.Errors = append(data.Errors, fmt.Sprintf("bad statuscode patterns: %s", sc.err.Error()))
 		}
 		data.StatusCodes = statusCodes
-		sb.WriteString(fmt.Sprintf("statuscode_%s/", statusCodes))
+		fmt.Fprintf(&sb, "statuscode_%s/", statusCodes)
 	}
 	traffic := q.Get("traffic")
 	if traffic != "" {
@@ -408,7 +408,7 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 			data.Errors = append(data.Errors, fmt.Sprintf("bad traffic pattern: %s", err.Error()))
 		}
 		data.Traffic = traffic
-		sb.WriteString(fmt.Sprintf("traffic_%s/", traffic))
+		fmt.Fprintf(&sb, "traffic_%s/", traffic)
 	}
 	ssrAS := q.Get("ssrAS")
 	if ssrAS != "" {
@@ -416,7 +416,7 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 			data.Errors = append(data.Errors, fmt.Sprintf("invalid ssrAS: %s", err.Error()))
 		} else {
 			data.SSRASConfig = ssrAS
-			sb.WriteString(fmt.Sprintf("ssras_%s/", ssrAS))
+			fmt.Fprintf(&sb, "ssras_%s/", ssrAS)
 		}
 	}
 	chunkDurSSR := q.Get("chunkDurSSR")
@@ -425,11 +425,11 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 			data.Errors = append(data.Errors, fmt.Sprintf("invalid chunkDurSSR: %s", err.Error()))
 		} else {
 			data.ChunkDurSSR = chunkDurSSR
-			sb.WriteString(fmt.Sprintf("chunkdurssr_%s/", chunkDurSSR))
+			fmt.Fprintf(&sb, "chunkdurssr_%s/", chunkDurSSR)
 		}
 	}
 
-	sb.WriteString(fmt.Sprintf("%s/%s", asset, mpd))
+	fmt.Fprintf(&sb, "%s/%s", asset, mpd)
 
 	if annexI != "" {
 		query, err := queryFromAnnexI(annexI)
@@ -460,8 +460,8 @@ func validateSSRAS(config string) error {
 		return nil
 	}
 
-	pairs := strings.Split(config, ";")
-	for _, pair := range pairs {
+	pairs := strings.SplitSeq(config, ";")
+	for pair := range pairs {
 		parts := strings.Split(pair, ",")
 		if len(parts) != 2 {
 			return fmt.Errorf("invalid format in pair '%s': expected 'adaptationSetId,ssrValue'", pair)
@@ -486,8 +486,8 @@ func validateChunkDurSSR(config string) error {
 	if config == "" {
 		return nil
 	}
-	pairs := strings.Split(config, ";")
-	for _, pair := range pairs {
+	pairs := strings.SplitSeq(config, ";")
+	for pair := range pairs {
 		parts := strings.Split(pair, ",")
 		if len(parts) != 2 {
 			return fmt.Errorf("invalid format in pair '%s': expected 'adaptationSetId,chunkDuration'", pair)
@@ -505,7 +505,7 @@ func validateChunkDurSSR(config string) error {
 }
 
 func queryFromAnnexI(annexI string) (string, error) {
-	out := ""
+	var out strings.Builder
 	pairs := strings.Split(annexI, ",")
 	for i, p := range pairs {
 		parts := strings.Split(p, "=")
@@ -513,10 +513,10 @@ func queryFromAnnexI(annexI string) (string, error) {
 			return "", fmt.Errorf("bad key-value pair: %s", p)
 		}
 		if i == 0 {
-			out += fmt.Sprintf("?%s=%s", parts[0], parts[1])
+			fmt.Fprintf(&out, "?%s=%s", parts[0], parts[1])
 		} else {
-			out += fmt.Sprintf("&%s=%s", parts[0], parts[1])
+			fmt.Fprintf(&out, "&%s=%s", parts[0], parts[1])
 		}
 	}
-	return out, nil
+	return out.String(), nil
 }

@@ -173,8 +173,8 @@ func (s *strConvAccErr) ParseSegStatusCodes(key, val string) []SegStatusCodes {
 	codes := make([]SegStatusCodes, len(parts))
 	for i, part := range parts {
 		// split on , and :
-		pairs := strings.Split(part, ",")
-		for _, p := range pairs {
+		pairs := strings.SplitSeq(part, ",")
+		for p := range pairs {
 			kv := strings.Split(p, ":")
 			if len(kv) != 2 {
 				s.err = fmt.Errorf("val=%q for key %q is not a valid. Bad pair", val, key)
