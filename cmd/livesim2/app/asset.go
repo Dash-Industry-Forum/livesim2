@@ -750,7 +750,7 @@ func (a *asset) validateEditListOffsetConsistency(logger *slog.Logger) error {
 			for _, as := range mpd.Periods[0].AdaptationSets {
 				for _, r := range as.Representations {
 					st := mx.ReprSegmentTemplate(r)
-					if r.Id == rep.ID && st != nil {
+					if r.Id == rep.ID && st != nil && st.SegmentTimeline != nil {
 						segmentTemplates = append(segmentTemplates, st)
 					}
 				}
