@@ -17,6 +17,7 @@ import (
 
 	"github.com/Dash-Industry-Forum/livesim2/internal"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/cmaf"
+	mx "github.com/Dash-Industry-Forum/livesim2/pkg/mpd"
 	m "github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/Eyevinn/mp4ff/bits"
 	"github.com/Eyevinn/mp4ff/mp4"
@@ -143,7 +144,7 @@ func (cm *cmafIngesterMgr) NewCmafIngester(req CmafIngesterSetup) (nr uint64, er
 			return 0, fmt.Errorf("unknown content type: %s", contentType)
 		}
 		for _, r := range a.Representations {
-			segTmpl := r.GetSegmentTemplate()
+			st := mx.ReprSegmentTemplate(r)
 			ext, err := cmaf.CMAFExtensionFromContentType(string(contentType))
 			if err != nil {
 				return 0, fmt.Errorf("error getting CMAF extension: %w", err)
@@ -152,9 +153,9 @@ func (cm *cmafIngesterMgr) NewCmafIngester(req CmafIngesterSetup) (nr uint64, er
 				repID:        r.Id,
 				contentType:  string(contentType),
 				mimeType:     mimeType,
-				initPath:     replaceIdentifiers(r, segTmpl.Initialization),
+				initPath:     replaceIdentifiers(r, st.Initialization),
 				extension:    ext,
-				mediaPattern: replaceIdentifiers(r, segTmpl.Media),
+				mediaPattern: replaceIdentifiers(r, st.Media),
 				bandWidth:    r.Bandwidth,
 				roles:        r.Parent().Roles,
 			}

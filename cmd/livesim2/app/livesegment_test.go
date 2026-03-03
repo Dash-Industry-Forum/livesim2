@@ -18,6 +18,7 @@ import (
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/drm"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
+	mx "github.com/Dash-Industry-Forum/livesim2/pkg/mpd"
 	m "github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/Eyevinn/mp4ff/bits"
 	"github.com/Eyevinn/mp4ff/mp4"
@@ -804,18 +805,20 @@ func TestMpeghAssets(t *testing.T) {
 			require.NotNil(t, videoAS, "Video adaptation set not found")
 
 			// Verify audio adaptation set
+			aSt := mx.SegmentTemplate(audioAS)
 			require.Equal(t, tc.expectedAudioCodec, audioAS.Codecs, "Audio codec mismatch")
 			require.Equal(t, "audio/mp4", audioAS.MimeType, "Audio mime type mismatch")
-			require.Equal(t, tc.expectedAudioTimescale, int(*audioAS.SegmentTemplate.Timescale), "Audio timescale mismatch")
+			require.Equal(t, tc.expectedAudioTimescale, int(*aSt.Timescale), "Audio timescale mismatch")
 			expectedAudioDuration := tc.expectedSegmentDurMs * tc.expectedAudioTimescale / 1000
-			require.Equal(t, expectedAudioDuration, int(*audioAS.SegmentTemplate.Duration), "Audio duration mismatch")
+			require.Equal(t, expectedAudioDuration, int(*aSt.Duration), "Audio duration mismatch")
 
 			// Verify video adaptation set
+			vSt := mx.SegmentTemplate(videoAS)
 			require.Equal(t, tc.expectedVideoCodec, videoAS.Codecs, "Video codec mismatch")
 			require.Equal(t, "video/mp4", videoAS.MimeType, "Video mime type mismatch")
-			require.Equal(t, tc.expectedVideoTimescale, int(*videoAS.SegmentTemplate.Timescale), "Video timescale mismatch")
+			require.Equal(t, tc.expectedVideoTimescale, int(*vSt.Timescale), "Video timescale mismatch")
 			expectedVideoDuration := tc.expectedSegmentDurMs * tc.expectedVideoTimescale / 1000
-			require.Equal(t, expectedVideoDuration, int(*videoAS.SegmentTemplate.Duration), "Video duration mismatch")
+			require.Equal(t, expectedVideoDuration, int(*vSt.Duration), "Video duration mismatch")
 
 			// Test audio init segment
 			audioInitPath := fmt.Sprintf("%s_init.mp4", tc.audioRepId)

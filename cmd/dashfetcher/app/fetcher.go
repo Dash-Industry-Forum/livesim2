@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/Dash-Industry-Forum/livesim2/internal"
+	mx "github.com/Dash-Industry-Forum/livesim2/pkg/mpd"
 	m "github.com/Eyevinn/dash-mpd/mpd"
 )
 
@@ -105,20 +106,17 @@ func start(ctx context.Context, o *Options) (counts, error) {
 	baseURL := getBase(mpdURL)
 	for _, period := range mpd.Periods {
 		for _, as := range period.AdaptationSets {
-			segTmpl := as.SegmentTemplate
 			for _, rep := range as.Representations {
-				if rep.SegmentTemplate != nil {
-					segTmpl = rep.SegmentTemplate
-				}
-				if segTmpl == nil {
+				st := mx.ReprSegmentTemplate(rep)
+				if st == nil {
 					return cnt, fmt.Errorf("no SegmentTemplate for representation: %s", rep.Id)
 				}
 				initStr, _ := rep.GetInit()
-				cnt = downloadInit(ctx, segTmpl, outDir, baseURL, initStr, cnt, o.Force)
+				cnt = downloadInit(ctx, st, outDir, baseURL, initStr, cnt, o.Force)
 				media, _ := rep.GetMedia()
 				switch {
-				case segTmpl.SegmentTimeline != nil:
-					stl := segTmpl.SegmentTimeline
+				case st.SegmentTimeline != nil:
+					stl := st.SegmentTimeline
 					switch {
 					case strings.Contains(media, "$Time$"):
 						cnt = downloadSegmentTimeLineWithTime(ctx, stl, media, outDir, baseURL, cnt, o.Force)
@@ -128,13 +126,13 @@ func start(ctx context.Context, o *Options) (counts, error) {
 					default:
 						return cnt, fmt.Errorf("strange media for SegmentTimeline")
 					}
-				case strings.Contains(segTmpl.Media, "$Number$"):
+				case strings.Contains(st.Media, "$Number$"):
 					periodDur, err := period.GetDuration()
 					if err != nil {
 						return cnt, fmt.Errorf("period duration issue: %w", err)
 					}
 					totDurMS := uint32(periodDur / 1_000_000)
-					cnt = downloadSegmentNumber(ctx, segTmpl, totDurMS, media, outDir, baseURL, cnt, o.Force)
+					cnt = downloadSegmentNumber(ctx, st, totDurMS, media, outDir, baseURL, cnt, o.Force)
 				default:
 					return cnt, fmt.Errorf("unsupported representation: %s", rep.Id)
 				}

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	mx "github.com/Dash-Industry-Forum/livesim2/pkg/mpd"
 	m "github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/Eyevinn/mp4ff/avc"
 	"github.com/Eyevinn/mp4ff/hevc"
@@ -244,14 +245,16 @@ func (ch *channel) addInitDataAndUpdateTimescale(stream stream, init *mp4.InitSe
 	rep := m.NewRepresentation()
 	rep.Id = stream.trName
 	currAsSet.AppendRepresentation(rep)
+	currSt := mx.SegmentTemplate(currAsSet)
 	ext := extFromMediaType[stream.mediaType]
-	if currAsSet.SegmentTemplate == nil {
-		currAsSet.SegmentTemplate = m.NewSegmentTemplate()
-		currAsSet.SegmentTemplate.Timescale = m.Ptr(uint32(trak.Mdia.Mdhd.Timescale))
-		currAsSet.SegmentTemplate.Media = fmt.Sprintf("$RepresentationID$/$Number$%s", ext)
-		currAsSet.SegmentTemplate.Initialization = fmt.Sprintf("$RepresentationID$/init%s", ext)
+	if currSt == nil {
+		currSt = m.NewSegmentTemplate()
+		currSt.Timescale = m.Ptr(uint32(trak.Mdia.Mdhd.Timescale))
+		currSt.Media = fmt.Sprintf("$RepresentationID$/$Number$%s", ext)
+		currSt.Initialization = fmt.Sprintf("$RepresentationID$/init%s", ext)
+		rep.SegmentTemplate = currSt
 	}
-	if uint32(trak.Mdia.Mdhd.Timescale) != *currAsSet.SegmentTemplate.Timescale {
+	if uint32(trak.Mdia.Mdhd.Timescale) != *currSt.Timescale {
 		return fmt.Errorf("timescale mismatch between track and adaptation set")
 	}
 
@@ -481,10 +484,10 @@ func extractTextData(stsd *mp4.StsdBox, rep *m.RepresentationType) error {
 
 func (ch *channel) updateAndWriteMPD(log *slog.Logger) error {
 	for _, asSet := range ch.mpd.Periods[0].AdaptationSets {
-		stl := asSet.SegmentTemplate
-		dur := uint64(ch.masterSegDuration) * uint64((*stl.Timescale)) / uint64(ch.masterTimescale)
-		stl.Duration = m.Ptr(uint32(dur))
-		stl.StartNumber = m.Ptr(uint32(0))
+		st := mx.SegmentTemplate(asSet)
+		dur := uint64(ch.masterSegDuration) * uint64((*st.Timescale)) / uint64(ch.masterTimescale)
+		st.Duration = m.Ptr(uint32(dur))
+		st.StartNumber = m.Ptr(uint32(0))
 	}
 	mpdPath := filepath.Join(ch.dir, "manifest.mpd")
 	err := writeMPD(ch.mpd, mpdPath)

@@ -16,6 +16,7 @@ import (
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/drm"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/scte35"
+	mx "github.com/Dash-Industry-Forum/livesim2/pkg/mpd"
 	m "github.com/Eyevinn/dash-mpd/mpd"
 )
 
@@ -203,8 +204,9 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 	adaptationSets := orderAdaptationSetsByContentType(period.AdaptationSets)
 	var refSegEntries segEntries
 	for asIdx, as := range adaptationSets {
-		if as.SegmentTemplate != nil {
-			as.SegmentTemplate.EndNumber = nil // Never output endNumber
+		st := mx.SegmentTemplate(as)
+		if st != nil {
+			st.EndNumber = nil // Never output endNumber
 		}
 
 		var explicitChunkDurS = (*float64)(nil)
@@ -340,8 +342,9 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 				if cfg.ChunkDurS != nil {
 					explicitChunkDurS = cfg.ChunkDurS //K calculation
 
-					if as.SegmentTemplate != nil {
-						as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Number$_$SubNumber$")
+					st := mx.SegmentTemplate(as)
+					if st != nil {
+						st.Media = strings.ReplaceAll(st.Media, "$Number$", "$Number$_$SubNumber$")
 					}
 
 					as.StartWithSAP = 1
@@ -468,8 +471,9 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 func updateSSRAdaptationSet(as *m.AdaptationSetType, nextID uint32, prevID *uint32,
 	chunkDurSSRMap map[uint32]float64, explicitChunkDurS **float64) {
 	// Add SubNumber to SegmentTemplate
-	if as.SegmentTemplate != nil {
-		as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Number$_$SubNumber$")
+	st := mx.SegmentTemplate(as)
+	if st != nil {
+		st.Media = strings.ReplaceAll(st.Media, "$Number$", "$Number$_$SubNumber$")
 	}
 
 	// SupplementalProperty schemeIdUri="urn:mpeg:dash:adaptation-set-switching:2016"
@@ -567,8 +571,10 @@ func splitPeriod(mpd *m.MPD, a *asset, cfg *ResponseConfig, wTimes wrapTimes) er
 		p.Id = fmt.Sprintf("P%d", pNr)
 		p.Start = m.Seconds2DurPtr(pNr * periodDur)
 		for aNr, as := range p.AdaptationSets {
-			inAS := inPeriod.AdaptationSets[aNr]
-			timeScale := int(as.SegmentTemplate.GetTimescale())
+			st := mx.SegmentTemplate(as)
+			inAs := inPeriod.AdaptationSets[aNr]
+			inSt := mx.SegmentTemplate(inAs)
+			timeScale := int(st.GetTimescale())
 			pto := Ptr(uint64(pNr * periodDur * timeScale))
 			templateType := cfg.liveMPDType()
 			if as.ContentType == "image" {
@@ -576,21 +582,21 @@ func splitPeriod(mpd *m.MPD, a *asset, cfg *ResponseConfig, wTimes wrapTimes) er
 			}
 			switch templateType {
 			case segmentNumber:
-				as.SegmentTemplate.PresentationTimeOffset = pto
-				segDur := int(*as.SegmentTemplate.Duration)
+				st.PresentationTimeOffset = pto
+				segDur := int(*st.Duration)
 				startNr := uint32(pNr * periodDur * timeScale / segDur)
-				as.SegmentTemplate.StartNumber = Ptr(startNr)
+				st.StartNumber = Ptr(startNr)
 			case timeLineTime:
-				as.SegmentTemplate.PresentationTimeOffset = pto
-				inS := inAS.SegmentTemplate.SegmentTimeline.S
+				st.PresentationTimeOffset = pto
+				inS := inSt.SegmentTimeline.S
 				periodStart, periodEnd := uint64(pNr*periodDur), uint64((pNr+1)*periodDur)
-				as.SegmentTemplate.SegmentTimeline.S, _ = reduceS(inS, nil, timeScale, periodStart, periodEnd)
+				st.SegmentTimeline.S, _ = reduceS(inS, nil, timeScale, periodStart, periodEnd)
 			case timeLineNumber:
-				as.SegmentTemplate.PresentationTimeOffset = pto
-				inS := inAS.SegmentTemplate.SegmentTimeline.S
-				startNr := inAS.SegmentTemplate.StartNumber
+				st.PresentationTimeOffset = pto
+				inS := inSt.SegmentTimeline.S
+				startNr := inSt.StartNumber
 				periodStart, periodEnd := uint64(pNr*periodDur), uint64((pNr+1)*periodDur)
-				as.SegmentTemplate.SegmentTimeline.S, as.SegmentTemplate.StartNumber = reduceS(inS, startNr, timeScale, periodStart, periodEnd)
+				st.SegmentTimeline.S, st.StartNumber = reduceS(inS, startNr, timeScale, periodStart, periodEnd)
 			default:
 				return fmt.Errorf("unknown mpd type")
 			}
@@ -731,7 +737,8 @@ func (s segEntries) lastTime() uint64 {
 // setOffsetInAdaptationSet sets the availabilityTimeOffset in the AdaptationSet.
 // Returns ErrAtoInfTimeline if infinite ato set with timeline.
 func setOffsetInAdaptationSet(cfg *ResponseConfig, as *m.AdaptationSetType) (atoMS int, err error) {
-	if as.SegmentTemplate == nil {
+	st := mx.SegmentTemplate(as)
+	if st == nil {
 		return 0, fmt.Errorf("no SegmentTemplate in AdaptationSet")
 	}
 	ato := cfg.getAvailabilityTimeOffsetS()
@@ -741,12 +748,12 @@ func setOffsetInAdaptationSet(cfg *ResponseConfig, as *m.AdaptationSetType) (ato
 		}
 	}
 	if ato != 0 {
-		as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(ato)
+		st.AvailabilityTimeOffset = m.FloatInf64(ato)
 	}
 	if !cfg.AvailabilityTimeCompleteFlag {
-		as.SegmentTemplate.AvailabilityTimeComplete = Ptr(false)
+		st.AvailabilityTimeComplete = Ptr(false)
 		if cfg.getAvailabilityTimeOffsetS() > 0 {
-			as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(cfg.getAvailabilityTimeOffsetS())
+			st.AvailabilityTimeOffset = m.FloatInf64(cfg.getAvailabilityTimeOffsetS())
 			as.ProducerReferenceTimes = createProducerReferenceTimes(cfg.StartTimeS)
 		}
 	}
@@ -756,24 +763,25 @@ func setOffsetInAdaptationSet(cfg *ResponseConfig, as *m.AdaptationSetType) (ato
 
 func adjustAdaptationSetForTimeline(cfg *ResponseConfig, se segEntries, as *m.AdaptationSetType,
 	refSE segEntries, a *asset) error {
-	if as.SegmentTemplate.SegmentTimeline == nil {
-		as.SegmentTemplate.SegmentTimeline = &m.SegmentTimelineType{}
+	st := mx.SegmentTemplate(as)
+	if st.SegmentTimeline == nil {
+		st.SegmentTimeline = &m.SegmentTimelineType{}
 	}
 
-	as.SegmentTemplate.Duration = nil
-	as.SegmentTemplate.Timescale = Ptr(se.mediaTimescale)
+	st.Duration = nil
+	st.Timescale = Ptr(se.mediaTimescale)
 
 	isNumberBased := cfg.SegTimelineMode == SegTimelineModeNr || cfg.SegTimelineMode == SegTimelineModeNrPattern
 	isPatternBased := cfg.SegTimelineMode == SegTimelineModePattern || cfg.SegTimelineMode == SegTimelineModeNrPattern
 
 	if isNumberBased {
-		as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
+		st.Media = strings.ReplaceAll(st.Media, "$Time$", "$Number$")
 		if se.startNr >= 0 {
-			as.SegmentTemplate.StartNumber = Ptr(uint32(se.startNr))
+			st.StartNumber = Ptr(uint32(se.startNr))
 		}
 	} else {
-		as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Time$")
-		as.SegmentTemplate.StartNumber = nil
+		st.Media = strings.ReplaceAll(st.Media, "$Number$", "$Time$")
+		st.StartNumber = nil
 	}
 
 	if as.ContentType == "audio" && isPatternBased {
@@ -789,7 +797,7 @@ func adjustAdaptationSetForTimeline(cfg *ResponseConfig, se segEntries, as *m.Ad
 		}
 		// Try to detect and apply pattern based on cyclic alignment
 		if patternSTL := detectAndApplyPattern(se, expectedPatternLen); patternSTL != nil {
-			as.SegmentTemplate.SegmentTimeline = patternSTL
+			st.SegmentTimeline = patternSTL
 			// Add EssentialProperty for pattern support
 			as.EssentialProperties = append(as.EssentialProperties, &m.DescriptorType{
 				SchemeIdUri: "urn:mpeg:dash:pattern:2024",
@@ -799,12 +807,13 @@ func adjustAdaptationSetForTimeline(cfg *ResponseConfig, se segEntries, as *m.Ad
 	}
 
 	// Default: use regular segment entries
-	as.SegmentTemplate.SegmentTimeline.S = se.entries
+	st.SegmentTimeline.S = se.entries
 	return nil
 }
 
 func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.AdaptationSetType, explicitChunkDurS *float64) error {
-	if as.SegmentTemplate.Duration == nil {
+	st := mx.SegmentTemplate(as)
+	if st.Duration == nil {
 		r0 := as.Representations[0]
 		rep0 := a.Reps[r0.Id]
 		timeScale := rep0.MediaTimescale
@@ -815,22 +824,22 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 		default:
 			dur = uint32(rep0.duration() / len(rep0.Segments))
 		}
-		as.SegmentTemplate.Duration = Ptr(uint32(dur))
-		as.SegmentTemplate.Timescale = Ptr(uint32(timeScale))
+		st.Duration = Ptr(uint32(dur))
+		st.Timescale = Ptr(uint32(timeScale))
 	}
-	as.SegmentTemplate.SegmentTimeline = nil
+	st.SegmentTimeline = nil
 	if cfg.StartNr != nil {
 		startNr := Ptr(uint32(*cfg.StartNr))
-		as.SegmentTemplate.StartNumber = startNr
+		st.StartNumber = startNr
 	}
-	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
+	st.Media = strings.ReplaceAll(st.Media, "$Time$", "$Number$")
 
 	if cfg.SSRFlag && explicitChunkDurS != nil {
-		k, err := calculateK(uint64(*as.SegmentTemplate.Duration), int(as.SegmentTemplate.GetTimescale()), explicitChunkDurS)
+		k, err := calculateK(uint64(*st.Duration), int(st.GetTimescale()), explicitChunkDurS)
 		if err != nil {
 			return err
 		}
-		as.SegmentTemplate.K = k
+		st.K = k
 	}
 
 	return nil
@@ -850,7 +859,7 @@ func addTimeSubs(cfg *ResponseConfig, a *asset, period *m.Period, languages []st
 	segDurMS := a.SegmentDurMS
 	typicalStppSegSizeBits := 2000 * 8 // 2kB
 	typicalWvttSegSizeBits := 200 * 8
-	vST := vAS.SegmentTemplate
+	vSt := mx.SegmentTemplate(vAS)
 	for i, lang := range languages {
 		rep := m.NewRepresentation()
 		rep.StartWithSAP = 1
@@ -863,15 +872,15 @@ func addTimeSubs(cfg *ResponseConfig, a *asset, period *m.Period, languages []st
 		}
 		st.SetTimescale(SUBS_TIME_TIMESCALE)
 
-		if vST.Duration != nil {
-			st.Duration = Ptr(*vST.Duration * 1000 / vST.GetTimescale())
+		if vSt.Duration != nil {
+			st.Duration = Ptr(*vSt.Duration * 1000 / vSt.GetTimescale())
 		}
-		if vST.StartNumber != nil {
-			st.StartNumber = vST.StartNumber
+		if vSt.StartNumber != nil {
+			st.StartNumber = vSt.StartNumber
 		}
-		if vST.SegmentTimeline != nil {
+		if vSt.SegmentTimeline != nil {
 			// Create segmentTimeline for subtitles from vST
-			st.SegmentTimeline = changeTimelineTimescale(vST.SegmentTimeline, int(*vST.Timescale), SUBS_TIME_TIMESCALE)
+			st.SegmentTimeline = changeTimelineTimescale(vSt.SegmentTimeline, int(*vSt.Timescale), SUBS_TIME_TIMESCALE)
 		}
 		as := m.NewAdaptationSet()
 		as.Id = Ptr(uint32(100 + i))
@@ -891,7 +900,7 @@ func addTimeSubs(cfg *ResponseConfig, a *asset, period *m.Period, languages []st
 		}
 		as.Roles = append(as.Roles,
 			&m.DescriptorType{SchemeIdUri: "urn:mpeg:dash:role:2011", Value: "subtitle"})
-		as.SegmentTemplate = st
+		rep.SegmentTemplate = st
 		as.AppendRepresentation(rep)
 		period.AppendAdaptationSet(as)
 	}

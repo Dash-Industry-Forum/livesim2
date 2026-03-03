@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/Dash-Industry-Forum/livesim2/internal"
+	mx "github.com/Dash-Industry-Forum/livesim2/pkg/mpd"
 	m "github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/Eyevinn/mp4ff/bits"
 	"github.com/Eyevinn/mp4ff/mp4"
@@ -137,13 +138,10 @@ func (am *assetMgr) loadAsset(logger *slog.Logger, mpdPath string) error {
 	fillContentTypes(assetPath, mpd.Periods[0])
 
 	for _, as := range mpd.Periods[0].AdaptationSets {
-		if as.SegmentTemplate == nil {
+		if mx.SegmentTemplate(as) == nil {
 			return fmt.Errorf("no SegmentTemplate in adaptation set")
 		}
 		for _, rep := range as.Representations {
-			if rep.SegmentTemplate != nil {
-				return fmt.Errorf("segmentTemplate on Representation level. Only supported on AdaptationSet level")
-			}
 			if _, ok := asset.Reps[rep.Id]; ok {
 				logger.Debug("Representation already loaded", "rep", rep.Id)
 				continue
@@ -191,10 +189,7 @@ func (am *assetMgr) loadRep(logger *slog.Logger, assetPath string, as *m.Adaptat
 		}
 	}
 	logger.Debug("Loading full representation by reading all segments")
-	st := as.SegmentTemplate
-	if rep.SegmentTemplate != nil {
-		st = rep.SegmentTemplate
-	}
+	st := mx.SegmentTemplate(as)
 	if st == nil {
 		return nil, fmt.Errorf("did not find a SegmentTemplate")
 	}
@@ -235,8 +230,6 @@ func (am *assetMgr) loadRep(logger *slog.Logger, assetPath string, as *m.Adaptat
 				t += d
 			}
 		}
-	case st.SegmentTimeline != nil && rp.typeURI() == numberURI:
-		return nil, fmt.Errorf("SegmentTimeline with $Number$ not yet supported")
 	case rp.typeURI() == numberURI: // SegmentTemplate with Number$
 		startNr := uint32(1)
 		if st.StartNumber != nil {
@@ -250,9 +243,10 @@ func (am *assetMgr) loadRep(logger *slog.Logger, assetPath string, as *m.Adaptat
 		var seg Segment
 		var err error
 		var segDur uint64
-		if rp.ContentType == "image" && as.SegmentTemplate.Duration != nil {
-			segDur = uint64(*as.SegmentTemplate.Duration)
-			rp.MediaTimescale = int(as.SegmentTemplate.GetTimescale())
+		st := mx.SegmentTemplate(as)
+		if rp.ContentType == "image" && st.Duration != nil {
+			segDur = uint64(*st.Duration)
+			rp.MediaTimescale = int(st.GetTimescale())
 		}
 		for {
 			// Loop until we cannot find more files
@@ -755,8 +749,9 @@ func (a *asset) validateEditListOffsetConsistency(logger *slog.Logger) error {
 			}
 			for _, as := range mpd.Periods[0].AdaptationSets {
 				for _, r := range as.Representations {
-					if r.Id == rep.ID && as.SegmentTemplate != nil && as.SegmentTemplate.SegmentTimeline != nil {
-						segmentTemplates = append(segmentTemplates, as.SegmentTemplate)
+					st := mx.ReprSegmentTemplate(r)
+					if r.Id == rep.ID && st != nil && st.SegmentTimeline != nil {
+						segmentTemplates = append(segmentTemplates, st)
 					}
 				}
 			}
