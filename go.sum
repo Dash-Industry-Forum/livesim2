@@ -7,8 +7,8 @@ github.com/Comcast/gots/v2 v2.2.1 h1:LU/SRg7p2KQqVkNqInV7I4MOQKAqvWQP/PSSLtygP2s
 github.com/Comcast/gots/v2 v2.2.1/go.mod h1:firJ11on3eUiGHAhbY5cZNqG0OqhQ1+nSZHfsEEzVVU=
 github.com/Eyevinn/dash-mpd v0.14.1 h1:Pr+SzpNQ3cxEkbGMdyJcdAK/DXCw0h3HLOUE3zFqKyQ=
 github.com/Eyevinn/dash-mpd v0.14.1/go.mod h1:mh/BF4gvesMIYxlNHJMI+H9FLsJYeud9yqGibxcgGpE=
-github.com/Eyevinn/mp4ff v0.50.0 h1:vFlsvpQh5Jfz++cuaeTI90vbID5dAabebvvN/l9lom0=
-github.com/Eyevinn/mp4ff v0.50.0/go.mod h1:hJNUUqOBryLAzUW9wpCJyw2HaI+TCd2rUPhafoS5lgg=
+github.com/Eyevinn/mp4ff v0.52.0 h1:QJUi2PtROeZGkcumbX7f4/91Jz6dlhjeKzpwSdCoYG8=
+github.com/Eyevinn/mp4ff v0.52.0/go.mod h1:LKZAf3K+OtWYdzlvte8uafD/e3g2aK2WcsgVohvjccU=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf/go.mod h1:ybxpYRFXyAe+OPACYpWeL0wqObRcbAqCMya13uyzqw0=
