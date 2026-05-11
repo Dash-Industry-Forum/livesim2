@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Nothing yet
+### Fixed
+
+- IV reuse across fragments in `cenc` encryption mode by chaining the IV
+  returned by `mp4.EncryptFragment` (Issue #295)
 
 ## [1.9.0] - 2026-02-06
 

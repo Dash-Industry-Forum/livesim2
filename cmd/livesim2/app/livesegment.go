@@ -498,10 +498,11 @@ func encryptFrags(log *slog.Logger, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
 	}
 	log.Debug("encrypting with DRM", "scheme", scheme, "kid", hex.EncodeToString(kid), "iv", hex.EncodeToString(iv))
 	for i, f := range frags {
-		err := mp4.EncryptFragment(f, key, iv, ipd)
+		nextIV, err := mp4.EncryptFragment(f, key, iv, ipd)
 		if err != nil {
 			return fmt.Errorf("encrypt fragment %d: %w", i, err)
 		}
+		iv = nextIV
 	}
 	return nil
 }
