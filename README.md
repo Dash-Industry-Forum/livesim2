@@ -80,7 +80,7 @@ via the command line looks like:
   --certpath string      path to TLS certificate file (for HTTPS). Use domains instead if possible
   --cfg string           path to a JSON config file
   --domains string       One or more DNS domains (comma-separated) for auto certificate from Lets Encrypt
-  --host string          host (and possible prefix) used in MPD elements. Overrides auto-detected full scheme://host
+  --host string          full scheme://host used in MPD Location/BaseURL. If empty, auto-detected from the request (honors X-Forwarded-Proto)
   --keypath string       path to TLS private key file (for HTTPS). Use domains instead if possible.
   --livewindow int       default live window (seconds) (default 300)
   --logformat string     log format [text, json, pretty, discard] (default "text")
@@ -91,7 +91,6 @@ via the command line looks like:
   --repdataroot string   Representation metadata root directory. "+" copies vodroot value. "-" disables usage. (default "+")
   --reqlimitint int      interval for request limit i seconds (only used if maxrequests > 0) (default 86400)
   --reqlimitlog string   path to request limit log file (only written if maxrequests > 0)
-  --scheme string        scheme used in Location and BaseURL elements. If empty, it is attempted to be auto-detected
   --timeout int          timeout for all requests (seconds) (default 60)
   --vodroot string       VoD root directory (default "./vod")
   --writerepdata         Write representation metadata if not present

@@ -132,8 +132,9 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 	f.String("domains", k.String("domains"), "One or more DNS domains (comma-separated) for auto certificate from Let's Encrypt")
 	f.String("certpath", k.String("certpath"), "path to TLS certificate file (for HTTPS). Use domains instead if possible")
 	f.String("keypath", k.String("keypath"), "path to TLS private key file (for HTTPS). Use domains instead if possible.")
-	f.String("scheme", k.String("scheme"), "scheme used in Location and BaseURL elements. If empty, it is attempted to be auto-detected")
-	f.String("host", k.String("host"), "host (and possible prefix) used in MPD elements. Overrides auto-detected full scheme://host")
+	f.String("host", k.String("host"),
+		"full scheme://host used in MPD Location/BaseURL. "+
+			"If empty, auto-detected from the request (honors X-Forwarded-Proto)")
 	f.String("playurl", k.String("playurl"), "URL template to play mpd. %s will be replaced by MPD URL")
 	f.String("drmcfgfile", k.String("drmcfgfile"), "DRM config file path")
 
