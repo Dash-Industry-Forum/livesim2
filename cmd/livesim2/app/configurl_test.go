@@ -5,6 +5,8 @@
 package app
 
 import (
+	"crypto/tls"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -313,6 +315,43 @@ func TestParseLossItvls(t *testing.T) {
 			gotItvls, err := CreateAllLossItvls(c.patter)
 			require.NoError(t, err)
 			require.Equal(t, c.wantedItvls, gotItvls)
+		})
+	}
+}
+
+func TestFullHost(t *testing.T) {
+	cases := []struct {
+		desc    string
+		cfgHost string
+		tls     bool
+		xfp     string
+		want    string
+	}{
+		{"cfgHost wins over everything", "https://override.example", true, "http", "https://override.example"},
+		{"cfgHost wins over XFP only", "https://override.example", false, "https", "https://override.example"},
+		{"plain http when no signals", "", false, "", "http://example.com"},
+		{"https when TLS terminates locally", "", true, "", "https://example.com"},
+		{"XFP=https sets https without local TLS", "", false, "https", "https://example.com"},
+		{"XFP=http overrides local TLS", "", true, "http", "http://example.com"},
+		{"XFP comma-list picks first entry", "", false, "https, http", "https://example.com"},
+		{"XFP case-insensitive", "", false, "HTTPS", "https://example.com"},
+		{"XFP with surrounding whitespace", "", false, "  https  ", "https://example.com"},
+		{"bogus XFP falls back to TLS detection", "", true, "ftp", "https://example.com"},
+		{"bogus XFP falls back to http when no TLS", "", false, "javascript", "http://example.com"},
+		{"empty XFP falls back to TLS detection", "", true, "", "https://example.com"},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			r, err := http.NewRequest("GET", "/", nil)
+			require.NoError(t, err)
+			r.Host = "example.com"
+			if c.tls {
+				r.TLS = &tls.ConnectionState{}
+			}
+			if c.xfp != "" {
+				r.Header.Set("X-Forwarded-Proto", c.xfp)
+			}
+			assert.Equal(t, c.want, fullHost(c.cfgHost, r))
 		})
 	}
 }

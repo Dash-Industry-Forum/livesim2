@@ -507,7 +507,13 @@ func (c *ResponseConfig) URLContentPart() string {
 	return strings.Join(c.URLParts[c.URLContentIdx:], "/")
 }
 
-// fullHost uses non-empty cfgHost or extracts from requests scheme://host from request.
+// fullHost returns scheme://host for use in MPD elements.
+//
+// Precedence:
+//  1. cfgHost (operator override, expected to already include scheme).
+//  2. X-Forwarded-Proto header (set by a fronting proxy), if it carries
+//     a recognized scheme.
+//  3. r.TLS — https when the connection itself is TLS, otherwise http.
 func fullHost(cfgHost string, r *http.Request) string {
 	if cfgHost != "" {
 		return cfgHost
@@ -515,6 +521,16 @@ func fullHost(cfgHost string, r *http.Request) string {
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
+	}
+	if xfp := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); xfp != "" {
+		// Some proxies send a comma-separated list; take the first entry.
+		if idx := strings.IndexByte(xfp, ','); idx >= 0 {
+			xfp = strings.TrimSpace(xfp[:idx])
+		}
+		switch strings.ToLower(xfp) {
+		case "http", "https":
+			scheme = strings.ToLower(xfp)
+		}
 	}
 	return fmt.Sprintf("%s://%s", scheme, r.Host)
 }

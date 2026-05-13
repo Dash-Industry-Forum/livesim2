@@ -7,10 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Honor the `X-Forwarded-Proto` header (set by a fronting proxy / CDN) when constructing the scheme in MPD `Location` and `BaseURL` elements. Only `http` and `https` are accepted; other values fall back to local TLS detection.
+
 ### Fixed
 
 - IV reuse across fragments in `cenc` encryption mode by chaining the IV
   returned by `mp4.EncryptFragment` (Issue #295)
+
+### Removed
+
+- `--scheme` CLI flag. It was never read by the server and had no effect. Use `--host=https://example.com` (full scheme://host) for a hard override, or rely on `X-Forwarded-Proto` from your proxy.
 
 ## [1.9.0] - 2026-02-06
 
