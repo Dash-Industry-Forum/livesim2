@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Upgraded the project to Go 1.25 (`go.mod`, GitHub Actions workflows, and the `Dockerfile` build stage).
+
 ### Added
 
 - Honor the `X-Forwarded-Proto` header (set by a fronting proxy / CDN) when constructing the scheme in MPD `Location` and `BaseURL` elements. Only `http` and `https` are accepted; other values fall back to local TLS detection.
