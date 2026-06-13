@@ -122,7 +122,7 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 	f.Int("livewindow", k.Int("livewindowS"), "default live window (seconds)")
 	f.String("vodroot", k.String("vodroot"), "VoD root directory")
 	f.String("repdataroot", k.String("repdataroot"), `Representation metadata root directory. "+" copies vodroot value. "-" disables usage.`)
-	f.Bool("writerepdata", k.Bool("writerepdata"), "Write representation metadata if not present")
+	f.Bool("writerepdata", k.Bool("writerepdata"), "(Re)generate and overwrite representation metadata (writemissingrepdata: only if absent)")
 	f.Bool("writemissingrepdata", k.Bool("writemissingrepdata"), "Write representation metadata only if missing (does not override existing)")
 	f.String("whitelistblocks", k.String("whitelistblocks"), "comma-separated list of CIDR blocks that are not rate limited")
 	f.Int("timeoutS", k.Int("timeouts"), "timeout for all requests (seconds)")

@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Misleading `--writerepdata` description in the CLI help and README: the flag always
+  (re)generates and overwrites representation metadata, but was documented as "if not
+  present". Corrected the help/README text and added the missing `--writemissingrepdata`
+  flag to the README option list (use it to write only missing files). Behavior unchanged.
 - IV reuse across fragments in `cenc` encryption mode by chaining the IV
   returned by `mp4.EncryptFragment` (Issue #295)
 

@@ -93,7 +93,8 @@ via the command line looks like:
   --reqlimitlog string   path to request limit log file (only written if maxrequests > 0)
   --timeout int          timeout for all requests (seconds) (default 60)
   --vodroot string       VoD root directory (default "./vod")
-  --writerepdata         Write representation metadata if not present
+  --writemissingrepdata  Write representation metadata only if missing (does not override existing)
+  --writerepdata         (Re)generate and write representation metadata, overwriting any existing files
 ```
 
 ### Quicker load by using metadata files
@@ -102,7 +103,9 @@ For assets with many segments, the scanning process can take a considerable time
 The possibility to generate and read extra representation metadata files has
 therefore been added. For representation `repX`, the corresponding metadata file
 is `repX_data.json.gz`. As the file extensions indicates, these files are gzipped
-JSON files. To generate such files, the option `writerepdata` must be on.
+JSON files. To generate such files, turn on `writerepdata` (always (re)generates and
+overwrites the files) or `writemissingrepdata` (writes only the files that are missing,
+leaving existing ones untouched).
 The root directory for such files is by default the same as the VoD root directory,
 meaning that the metadata files will be in the same directories as the corresponding
 MPDs. However, it is possible to use another path, by specifying `repdataroot`.
@@ -231,10 +234,12 @@ livesim2 will scan all the segments of all representations and store metadata ab
 each segments timing in memory.
 
 To avoid doing this at every startup, livesim2 supports storing and reading
-such representation data from a file. The generation of such data is controlled via the `writerepdata` and `repdataroot` configuration parameters.
+such representation data from a file. The generation of such data is controlled via the `writerepdata`, `writemissingrepdata` and `repdataroot` configuration parameters.
 
 If such files are detected at startup, they will be used instead of scanning the files,
-unles the `writerepdata` parameter is set.
+unless the `writerepdata` parameter is set, which forces a re-scan and overwrites the
+files. Use `writemissingrepdata` instead to generate only the files that are missing
+without overwriting (and still use any existing files).
 
 ### Bundled test streams with the livesim2 server
 
