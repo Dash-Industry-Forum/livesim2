@@ -13,6 +13,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Server-Guided Ad Insertion (SGAI) per DASH Ed.6 Alternative-MPD: `sgai_` URL option
+  injects Replace events (`urn:mpeg:dash:event:alternativeMPD:replace:2025`) with
+  Annex I RequestParam; `/sgai/ads` returns a personalized List MPD for an
+  interest-steered request (interest steering, per-session rotation within a match,
+  duration fit); ad creatives are SPS VoD assets under `<vodroot>/ads/` with optional
+  `ads.json` tags; `/sgai/beacon` records impression + quartile beacons; session store
+  with `/api/sgai/ads`, `/api/sgai/sessions[/{sid}]` APIs and a live
+  `/sgai/session_status` monitor page.
+- Periodic SGAI ad breaks: `sgai_p<period>:<dur>` schedules a break at every wall-clock
+  multiple of the period (e.g. `p60:20` = 20 s at every full UTC minute), with windowed
+  event signaling and stable per-occurrence ids; late joiners land mid-break.
+- Generated "AD BREAK" countdown slate served on the video track inside SGAI break
+  windows: encoded with hi264 against the representation's own SPS/PPS (IDR per second
+  + P_Skip), mirroring the replaced segment's frame timing and per-sample sizes
+  (filler-NALU padding) so frame rate and bitrate match; audio untouched.
+- An ad pod is only generated for an interest-steered request: with no `interests=` (the
+  default — e.g. a plain stream with no sessionId/interests) or interests that match no
+  ad, `/sgai/ads` answers 404 and the break stays unfilled, so the viewer keeps the
+  underlying AD BREAK slate (the base ad).
+- `Cache-Control: no-store` on ad creatives (`/vod/ads/*`) and List MPD responses.
+- SGAI section on the urlgen page; SGAI mentioned on the landing page and in the
+  OpenAPI description; ad creatives filtered out of the urlgen asset list.
 - Honor the `X-Forwarded-Proto` header (set by a fronting proxy / CDN) when constructing the scheme in MPD `Location` and `BaseURL` elements. Only `http` and `https` are accepted; other values fall back to local TLS detection.
 
 ### Fixed
