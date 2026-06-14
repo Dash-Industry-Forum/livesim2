@@ -35,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Cache-Control: no-store` on ad creatives (`/vod/ads/*`) and List MPD responses.
 - SGAI section on the urlgen page; SGAI mentioned on the landing page and in the
   OpenAPI description; ad creatives filtered out of the urlgen asset list.
+- Two minimal example ad creatives bundled under the test vodroot
+  (`testdata/assets/ads/`): `train_ad` (travel) and `gotland_runt_ad`
+  (sailing, boats), each a single 640×360 representation plus audio, so SGAI
+  works out of the box and `interests=travel,sailing` yields a two-ad pod.
 - Honor the `X-Forwarded-Proto` header (set by a fronting proxy / CDN) when constructing the scheme in MPD `Location` and `BaseURL` elements. Only `http` and `https` are accepted; other values fall back to local TLS detection.
 
 ### Fixed

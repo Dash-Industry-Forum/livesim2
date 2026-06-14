@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<!-- MPD file Generated with GPAC version 26.02-revrelease at 2026-06-11T13:12:21.179Z -->
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" minBufferTime="PT1.500S" type="static" mediaPresentationDuration="PT0H0M10S" maxSegmentDuration="PT0H0M2.006S" profiles="urn:mpeg:dash:profile:sps:2024">
+ <ProgramInformation moreInformationURL="https://gpac.io">
+  <Title>train_ad</Title>
+ </ProgramInformation>
+
+ <Period duration="PT0H0M10S">
+  <AdaptationSet segmentAlignment="true" maxWidth="640" maxHeight="360" maxFrameRate="30" par="16:9" mimeType="video/mp4" startWithSAP="1">
+   <SegmentTemplate media="$RepresentationID$/$Number$.m4s" initialization="$RepresentationID$/init.mp4" timescale="15360" startNumber="1" duration="30720"/>
+   <Representation id="V1" codecs="avc1.64001E" width="640" height="360" frameRate="30" sar="1:1" bandwidth="1007539">
+   </Representation>
+  </AdaptationSet>
+  <AdaptationSet segmentAlignment="true" lang="en" mimeType="audio/mp4" startWithSAP="1">
+   <SegmentTemplate media="$RepresentationID$/$Number$.m4s" initialization="$RepresentationID$/init.mp4" timescale="48000" startNumber="1" duration="96000"/>
+   <Representation id="A" codecs="mp4a.40.2" audioSamplingRate="48000" bandwidth="95892">
+    <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+   </Representation>
+  </AdaptationSet>
+ </Period>
+</MPD>
