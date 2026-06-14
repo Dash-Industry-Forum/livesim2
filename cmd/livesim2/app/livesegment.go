@@ -92,6 +92,20 @@ func genLiveSegment(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig
 			}
 		}
 
+		// SGAI: inside a Replace-event break window the video track serves a generated
+		// "AD BREAK <countdown>" slate — the visible "ad to be replaced". Players that
+		// execute the Alternative-MPD event cover this window with the personalized pod.
+		if cfg.SGAI != nil && contentType == "video" && cfg.DRM == "" && !meta.rep.PreEncrypted {
+			slateSeg, err := applySGAISlate(vodFS, a, cfg, meta, seg)
+			if err != nil {
+				return so, fmt.Errorf("applySGAISlate: %w", err)
+			}
+			if slateSeg != nil {
+				seg = slateSeg
+				log.Debug("SGAI slate segment", "asset", a.AssetPath, "segment", segmentPart)
+			}
+		}
+
 		if cfg.SCTE35PerMinute != nil && contentType == "video" {
 			startTime := uint64(meta.newTime)
 			endTime := startTime + uint64(meta.newDur)
