@@ -34,7 +34,7 @@ const (
 	defaultTimeSubsDurMS            = 900
 	defaultLatencyTargetMS          = uint32(3500)
 	//nolint:lll
-	defaultPlayURL = "https://reference.dashif.org/dash.js/latest/samples/dash-if-reference-player/index.html?mpd=%s&autoLoad=true&muted=true"
+	defaultPlayURL = "https://reference.dashif.org/dash.js/nightly/samples/dash-if-reference-player/index.html?mpd=%s&autoLoad=true&muted=true"
 )
 
 type ServerConfig struct {

@@ -86,7 +86,7 @@ via the command line looks like:
   --logformat string     log format [text, json, pretty, discard] (default "text")
   --loglevel string      log level [DEBUG, INFO, WARN, ERROR] (default "INFO")
   --maxrequests int      max nr of request per IP address per 24 hours
-  --playurl string       URL template to play mpd. %s will be replaced by MPD URL (default "https://reference.dashif.org/dash.js/latest/samples/dash-if-reference-player/index.html?mpd=%s&autoLoad=true&muted=true")
+  --playurl string       URL template to play mpd. %s will be replaced by MPD URL (default "https://reference.dashif.org/dash.js/nightly/samples/dash-if-reference-player/index.html?mpd=%s&autoLoad=true&muted=true")
   --port int             HTTP port (default 8888)
   --repdataroot string   Representation metadata root directory. "+" copies vodroot value. "-" disables usage. (default "+")
   --reqlimitint int      interval for request limit i seconds (only used if maxrequests > 0) (default 86400)
