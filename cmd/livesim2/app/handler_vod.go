@@ -17,6 +17,12 @@ func (s *Server) vodHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	rp := rctx.RoutePattern()
 	pathPrefix := strings.TrimSuffix(rp, "/*")
 	vodRoot := s.Cfg.VodRoot
+	// SGAI ad creatives (MPD + segments) must not be cached by browsers/proxies:
+	// the assets may be replaced on disk between sessions, and http.FileServer's
+	// Last-Modified would otherwise let a stale cached copy mask the new ad.
+	if strings.HasPrefix(r.URL.Path, pathPrefix+"/"+sgaiAdsBaseDir+"/") {
+		w.Header().Set("Cache-Control", "no-store")
+	}
 	fs := http.StripPrefix(pathPrefix, http.FileServer(http.Dir(vodRoot)))
 	fs.ServeHTTP(w, r)
 }
