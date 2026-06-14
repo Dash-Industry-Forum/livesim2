@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Upgraded the project to Go 1.25 (`go.mod`, GitHub Actions workflows, and the `Dockerfile` build stage).
+- Default `--playurl` reference player switched from `dash.js/latest` to `dash.js/nightly`,
+  since `latest` currently ignores the MPD URL parameters passed via `?mpd=`.
 
 ### Added
 
