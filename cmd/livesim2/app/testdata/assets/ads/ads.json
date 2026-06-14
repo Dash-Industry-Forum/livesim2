@@ -1,0 +1,10 @@
+{
+  "train_ad": {
+    "title": "Train Journey",
+    "interests": ["travel"]
+  },
+  "gotland_runt_ad": {
+    "title": "Gotland Runt Sailing Race",
+    "interests": ["sailing", "boats"]
+  }
+}
