@@ -1531,11 +1531,11 @@ func TestUpdateSSRAdaptationSet(t *testing.T) {
 			}
 
 			if tc.expectSegmentSequenceProps {
-				assert.NotNil(t, tc.as.SegmentSequenceProperties, "SegmentSequenceProperties should be set")
-				assert.Equal(t, uint32(1), tc.as.SegmentSequenceProperties.SapType)
-				assert.Equal(t, uint32(1), tc.as.SegmentSequenceProperties.Cadence)
+				require.Len(t, tc.as.SegmentSequenceProperties, 1, "SegmentSequenceProperties should be set")
+				assert.Equal(t, uint32(1), tc.as.SegmentSequenceProperties[0].SapType)
+				assert.Equal(t, uint32(1), tc.as.SegmentSequenceProperties[0].Cadence)
 			} else {
-				assert.Nil(t, tc.as.SegmentSequenceProperties, "SegmentSequenceProperties should not be set")
+				assert.Empty(t, tc.as.SegmentSequenceProperties, "SegmentSequenceProperties should not be set")
 			}
 
 			if tc.expectStartWithSAP {
@@ -2435,7 +2435,7 @@ func TestPatternDiscoveryWithSegments(t *testing.T) {
 				pattern := result.Pattern[0]
 				var actualDurations []uint64
 				for _, p := range pattern.P {
-					for i := uint64(0); i <= p.R; i++ {
+					for i := uint32(0); i <= p.R; i++ {
 						actualDurations = append(actualDurations, p.D)
 					}
 				}
@@ -2637,7 +2637,7 @@ func TestPatternDurationCalculation(t *testing.T) {
 
 	var patternSum uint64
 	for _, p := range result.Pattern[0].P {
-		patternSum += p.D * (p.R + 1) // D * (R+1) gives total duration for this run
+		patternSum += p.D * uint64(p.R+1) // D * (R+1) gives total duration for this run
 	}
 
 	expectedDuration := uint64(8 * 48000) // 8s * 48kHz = 384,000

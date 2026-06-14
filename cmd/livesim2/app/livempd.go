@@ -200,6 +200,10 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 
 	fillContentTypes(a.AssetPath, period)
 
+	if cfg.SGAI != nil {
+		addSGAIReplaceEvents(mpd, period, cfg, endTimeMS)
+	}
+
 	adaptationSets := orderAdaptationSetsByContentType(period.AdaptationSets)
 	var refSegEntries segEntries
 	for asIdx, as := range adaptationSets {
@@ -488,10 +492,10 @@ func updateSSRAdaptationSet(as *m.AdaptationSetType, nextID uint32, prevID *uint
 
 	if as.ContentType == "video" {
 		// Add SegmentSequenceProperties to signal Low-Delay
-		as.SegmentSequenceProperties = &m.SegmentSequencePropertiesType{
+		as.SegmentSequenceProperties = []*m.SegmentSequencePropertiesType{{
 			SapType: 1,
 			Cadence: 1,
-		}
+		}}
 
 		// AdaptationSet@startWithSAP = 1
 		as.StartWithSAP = 1
@@ -1107,7 +1111,7 @@ func detectAndApplyPattern(se segEntries, expectedPatternLen int) *m.SegmentTime
 			i := 0
 			for i < len(canonicalPattern) {
 				dur := canonicalPattern[i]
-				r := uint64(0)
+				r := uint32(0)
 				// Count consecutive occurrences
 				for j := i + 1; j < len(canonicalPattern) && canonicalPattern[j] == dur; j++ {
 					r++
