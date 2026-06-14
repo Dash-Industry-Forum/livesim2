@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 
@@ -26,6 +27,8 @@ type Server struct {
 	Cfg           *ServerConfig
 	assetMgr      *assetMgr
 	cmafMgr       *cmafIngesterMgr
+	sgaiAds       *adCatalog
+	sgaiAdsMu     sync.Mutex
 	textTemplates *ttmpl.Template
 	htmlTemplates *htmpl.Template
 	reqLimiter    *IPRequestLimiter

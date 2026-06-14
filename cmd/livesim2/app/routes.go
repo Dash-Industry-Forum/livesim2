@@ -59,6 +59,13 @@ func (s *Server) Routes(ctx context.Context) error {
 	s.Router.MethodFunc("OPTIONS", "/*", s.optionsHandlerFunc)
 	s.Router.Handle("/player/*", createReversePlayerProxy("/player", s.Cfg.PlayURL))
 	s.Router.MethodFunc("GET", "/patch/*", s.patchHandlerFunc)
+	// SGAI (Server-Guided Ad Insertion): ad-decisioning (List MPD) and beacon endpoints.
+	// HEAD is registered too: shaka probes a failed ad decision with HEAD retries.
+	s.Router.MethodFunc("GET", "/sgai/ads", s.sgaiAdsHandlerFunc)
+	s.Router.MethodFunc("HEAD", "/sgai/ads", s.sgaiAdsHandlerFunc)
+	// Beacons may arrive as GET or POST (shaka fires tracking beacons as POST).
+	s.Router.MethodFunc("GET", "/sgai/beacon/*", s.sgaiBeaconHandlerFunc)
+	s.Router.MethodFunc("POST", "/sgai/beacon/*", s.sgaiBeaconHandlerFunc)
 	s.Router.MethodFunc("GET", "/", s.indexHandlerFunc)
 	s.Router.MethodFunc("POST", "/*", s.laURLHandlerFunc)
 	// LiveRouter is mounted at /livesim2
