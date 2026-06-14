@@ -39,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`testdata/assets/ads/`): `train_ad` (travel) and `gotland_runt_ad`
   (sailing, boats), each a single 640×360 representation plus audio, so SGAI
   works out of the box and `interests=travel,sailing` yields a two-ad pod.
+- README section documenting SGAI: the `sgai_` schedule option, ad creatives
+  and `interests`/`sessionId` personalization, the pod-selection and AD BREAK
+  slate behavior, and the monitoring endpoints.
 - Honor the `X-Forwarded-Proto` header (set by a fronting proxy / CDN) when constructing the scheme in MPD `Location` and `BaseURL` elements. Only `http` and `https` are accepted; other values fall back to local TLS detection.
 
 ### Fixed
