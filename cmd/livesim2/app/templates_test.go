@@ -78,5 +78,14 @@ func TestHTMLTemplates(t *testing.T) {
 	require.NoError(t, err)
 	welcomeStr := buf.String()
 	require.Greater(t, strings.Index(welcomeStr, `href="http://localhost:8888/assets"`), 0)
-	require.Equal(t, 6, len(textTemplates.Templates()))
+	require.Equal(t, 7, len(textTemplates.Templates()))
+
+	// The SGAI status page is a template that loads its polling logic from a static asset and
+	// carries the host for proxy/base-path setups; both must be interpolated with the host.
+	buf.Reset()
+	err = textTemplates.ExecuteTemplate(&buf, "sgai_session_status.html", struct{ Host string }{Host: "http://localhost:8888"})
+	require.NoError(t, err)
+	statusStr := buf.String()
+	require.Contains(t, statusStr, `src="http://localhost:8888/static/sgai_session_status.js"`)
+	require.Contains(t, statusStr, `data-api="http://localhost:8888"`)
 }
