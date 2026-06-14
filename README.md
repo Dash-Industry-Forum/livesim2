@@ -484,6 +484,73 @@ curl http://localhost:8888/api/cmaf-ingests/1
 
 The receiver will store segments in `./segments/test_channel/` and generate playable MPD files.
 
+## Server-Guided Ad Insertion (SGAI)
+
+livesim2 can signal **Server-Guided Ad Insertion** using DASH 6th-edition *Alternative-MPD
+Replace* events. The main live stream stays a single continuous-timeline presentation; an
+`EventStream` of scheme `urn:mpeg:dash:event:alternativeMPD:replace:2025` marks the ad breaks
+and points each break at an ad-decisioning endpoint. A player resolves that endpoint during the
+break, plays the returned (personalized) ad pod, and then resumes the live edge. Players that do
+not support the event keep playing the underlying content, so it is always a graceful fallback.
+
+Enable it with the `sgai_` URL option, which schedules the breaks:
+
+- Fixed breaks: `sgai_30:15` (one 15 s break 30 s after the availabilityStartTime), or a
+  comma-separated list `sgai_18:20,48:20,78:20`.
+- Periodic breaks: `sgai_p60:20` (a 20 s break at every full UTC minute, recurring forever;
+  wall-clock anchored, so all sessions share the schedule and a late joiner lands mid-break).
+- Options are appended with `;key=val`: `skipafter=<s>`, `nojump=<0|1|2>`, `clip=<0|1>`,
+  `once=<0|1>`, `resolve=<s>` (earliest resolution offset), `ep=<path>` (ad endpoint). For
+  example `sgai_p60:20;skipafter=5`.
+
+The `/urlgen/` page and the [URL wiki page][urlparams] document the `sgai_` option and its
+parameters.
+
+### Ad creatives and personalization
+
+The ad creatives are ordinary Single-Period-Static DASH VoD assets placed under
+`<vodroot>/ads/` (one directory per ad). An optional `<vodroot>/ads/ads.json` tags each ad with
+a title and interest keywords, e.g.:
+
+```json
+{
+  "train_ad":        { "title": "Train Journey",             "interests": ["travel"] },
+  "gotland_runt_ad": { "title": "Gotland Runt Sailing Race", "interests": ["sailing", "boats"] }
+}
+```
+
+Those two creatives are bundled under the test vodroot, so SGAI works out of the box. A viewer is
+identified and steered with two query parameters that are propagated to the ad request via Annex I:
+`sessionId` (personalization key) and `interests` (a comma-separated list). They can be added on
+the `/urlgen/` page or directly on the MPD URL, for example
+`…/Manifest.mpd?sessionId=alice&interests=travel,sailing`.
+
+### How the ad pod is selected
+
+The `/sgai/ads` endpoint returns a personalized **List MPD** that imports the chosen ads as a pod.
+The selection follows these rules (see `selectPod` in `sgai_ads.go`):
+
+- Ads tagged with any requested interest come first (rotated per `sessionId` for variety),
+  then the remaining ads are used as filler.
+- The pod is trimmed to fit the break duration: ads are added while the running total stays within
+  the break, and at least the lead ad is always kept.
+- If the break is **longer** than the available ads, the pod is as long as the inventory allows and
+  the remainder of the break shows the generated **"AD BREAK" countdown slate** (the visible "ad to
+  be replaced") — a gapless mismatch is not padded.
+- If the break is **shorter** than a single ad, the lead ad is still returned and the player clamps
+  playout to the event's `maxDuration`.
+- With **no `interests`**, or interests that match **no** creative, `/sgai/ads` answers `404`; the
+  player skips the break and the viewer keeps the AD BREAK slate. A clean setup — interests that
+  match some ads and a break duration that is a multiple of the ad length (e.g. `sgai_…:20` for
+  the bundled 10 s ads, with `interests=travel,sailing`) — gives a gapless two-ad pod.
+
+### Monitoring
+
+Each ad fires impression and quartile callback beacons to `/sgai/beacon` (carrying the session and
+break id via Annex I). The per-session ad decisions and beacons are recorded and can be inspected
+live at `/sgai/session_status?sid=<sessionId>` or via the API at `/api/sgai/sessions[/{sid}]` and
+`/api/sgai/ads` (the ad catalog).
+
 ## Running tests
 
 The unit tests can be run from the top directory with the usual recursive Go test command
