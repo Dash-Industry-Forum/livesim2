@@ -137,6 +137,7 @@ type ResponseConfig struct {
 	SSRFlag                      bool              `json:"SSRFlag,omitempty"`
 	SSRAS                        string            `json:"SSRAS,omitempty"`
 	ChunkDurSSR                  string            `json:"ChunkDurSSR,omitempty"`
+	SGAI                         *SGAIConfig       `json:"SGAI,omitempty"`
 }
 
 // SegStatusCodes configures regular extraordinary segment response codes
@@ -446,6 +447,8 @@ cfgLoop:
 			cfg.SSRFlag = true
 		case "chunkdurssr":
 			cfg.ChunkDurSSR = val
+		case "sgai": // Ed.6 Alternative-MPD Replace ad breaks: <off>:<dur>[,...][;k=v...]
+			cfg.SGAI = sc.ParseSGAIConfig(key, val)
 		default:
 			contentStartIdx = i
 			break cfgLoop
@@ -499,6 +502,12 @@ func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 
 	if cfg.ChunkDurSSR != "" && cfg.SSRAS == "" {
 		return fmt.Errorf("chunkDurSSR requires ssrAS to be configured")
+	}
+	if cfg.SGAI != nil {
+		if cfg.PeriodsPerHour != nil || cfg.XlinkPeriodsPerHour != nil ||
+			cfg.EtpPeriodsPerHour != nil || cfg.InsertAdFlag {
+			return fmt.Errorf("sgai cannot be combined with periods/xlink/etp/insertad")
+		}
 	}
 	return nil
 }
