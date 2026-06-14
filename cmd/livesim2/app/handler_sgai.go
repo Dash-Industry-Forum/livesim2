@@ -209,7 +209,11 @@ func (s *Server) sgaiAdsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		// No ad pod: either no interests were given (the default — show the base ad) or the
 		// requested interests matched no creative. Either way the break stays unfilled: the
 		// 404 makes the player skip executing the Replace event, so the viewer keeps the
-		// underlying break content (the AD BREAK countdown slate).
+		// underlying break content (the AD BREAK countdown slate). Still recorded as a
+		// decision (with an empty pod) so the session monitor shows the break occurred.
+		if s.sgaiSessions != nil && r.URL.Query().Get("preview") != "1" {
+			s.sgaiSessions.RecordDecision(sid, interestsRaw, nil)
+		}
 		breakDur := time.Duration(durS) * time.Second
 		breakEnd := time.Now().Add(breakDur)
 		reason := "no interests: base ad break (AD BREAK slate kept)"
@@ -243,6 +247,11 @@ func (s *Server) sgaiAdsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		log.Error("sgai ads: write MPD", "err", err)
 		http.Error(w, "could not write List MPD", http.StatusInternalServerError)
 		return
+	}
+	// preview=1 is used by UI/tools to fetch the pod for display without it counting as a
+	// real ad decision in the session record.
+	if s.sgaiSessions != nil && r.URL.Query().Get("preview") != "1" {
+		s.sgaiSessions.RecordDecision(sid, interestsRaw, podIDs)
 	}
 	breakDur := time.Duration(durS) * time.Second
 	totalAdDur := 0
@@ -406,6 +415,10 @@ func (s *Server) sgaiBeaconHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	if cmcd == "" {
 		cmcd = r.Header.Get("CMCD-Request")
 	}
+	if s.sgaiSessions != nil {
+		s.sgaiSessions.RecordBeacon(sid, adID, event, cmcd, evID)
+	}
+
 	logAttrs := []any{"sid", sid, "adId", adID, "event", event}
 	if evID != "" {
 		logAttrs = append(logAttrs, "evId", evID)
@@ -416,4 +429,18 @@ func (s *Server) sgaiBeaconHandlerFunc(w http.ResponseWriter, r *http.Request) {
 
 	log.Info("sgai beacon", logAttrs...)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// sgaiSessionStatusHandlerFunc renders the live status page (templates/sgai_session_status.html)
+// that shows, live, the ad decisions and impression beacons recorded for a session id. The page
+// polls the JSON API (/api/sgai/sessions[/<sid>]) every second; with no ?sid= it lists the active
+// sessions. This is the way to observe SGAI activity on a public livesim2 deployment where the
+// process log is not visible. The page markup is a template and its polling logic lives in the
+// static asset /static/sgai_session_status.js.
+func (s *Server) sgaiSessionStatusHandlerFunc(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	data := struct{ Host string }{Host: fullHost(s.Cfg.Host, r)}
+	if err := s.htmlTemplates.ExecuteTemplate(w, "sgai_session_status.html", data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }

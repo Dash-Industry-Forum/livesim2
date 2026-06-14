@@ -66,6 +66,8 @@ func (s *Server) Routes(ctx context.Context) error {
 	// Beacons may arrive as GET or POST (shaka fires tracking beacons as POST).
 	s.Router.MethodFunc("GET", "/sgai/beacon/*", s.sgaiBeaconHandlerFunc)
 	s.Router.MethodFunc("POST", "/sgai/beacon/*", s.sgaiBeaconHandlerFunc)
+	// Live HTML view of per-session ad decisions and beacons (polls the /api/sgai/sessions API).
+	s.Router.MethodFunc("GET", "/sgai/session_status", s.sgaiSessionStatusHandlerFunc)
 	s.Router.MethodFunc("GET", "/", s.indexHandlerFunc)
 	s.Router.MethodFunc("POST", "/*", s.laURLHandlerFunc)
 	// LiveRouter is mounted at /livesim2

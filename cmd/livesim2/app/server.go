@@ -27,6 +27,7 @@ type Server struct {
 	Cfg           *ServerConfig
 	assetMgr      *assetMgr
 	cmafMgr       *cmafIngesterMgr
+	sgaiSessions  *SgaiSessionMgr
 	sgaiAds       *adCatalog
 	sgaiAdsMu     sync.Mutex
 	textTemplates *ttmpl.Template

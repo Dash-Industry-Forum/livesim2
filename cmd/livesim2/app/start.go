@@ -64,12 +64,13 @@ func SetupServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 
 	vodFS := os.DirFS(cfg.VodRoot)
 	server := Server{
-		Router:     r,
-		LiveRouter: l,
-		VodRouter:  v,
-		Cfg:        cfg,
-		assetMgr:   newAssetMgr(vodFS, cfg.RepDataRoot, cfg.WriteRepData, cfg.WriteMissingRepData),
-		reqLimiter: reqLimiter,
+		Router:       r,
+		LiveRouter:   l,
+		VodRouter:    v,
+		Cfg:          cfg,
+		assetMgr:     newAssetMgr(vodFS, cfg.RepDataRoot, cfg.WriteRepData, cfg.WriteMissingRepData),
+		reqLimiter:   reqLimiter,
+		sgaiSessions: NewSgaiSessionMgr(),
 	}
 
 	r.Route("/api", createRouteAPI(&server))
