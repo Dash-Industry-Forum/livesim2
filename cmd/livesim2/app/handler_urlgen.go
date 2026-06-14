@@ -20,6 +20,11 @@ import (
 func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	assets := make([]*asset, 0, len(s.assetMgr.assets))
 	for _, a := range s.assetMgr.assets {
+		// The SGAI ad creatives are VoD assets too, but they are pod material for the
+		// /sgai/ads decisioning — not looping live content to generate URLs for.
+		if a.AssetPath == sgaiAdsBaseDir || strings.HasPrefix(a.AssetPath, sgaiAdsBaseDir+"/") {
+			continue
+		}
 		assets = append(assets, a)
 	}
 	sort.Slice(assets, func(i, j int) bool {
@@ -162,6 +167,9 @@ type urlGenData struct {
 	StatusCodes                 string   // comma-separated list of response code patterns to return
 	AnnexI                      string   // comma-separated list of Annex I parameters as key=value pairs
 	Traffic                     string   // comma-separated list of up/down/slow/hang intervals for one or more BaseURLs in MPD
+	Sgai                        string   // SGAI (Ed.6 Alternative-MPD Replace) ad-break schedule and options
+	SgaiSessionID               string   // SGAI personalization session id (added as MPD-URL query parameter)
+	SgaiInterests               string   // SGAI comma-separated interest tags (added as MPD-URL query parameter)
 	Errors                      []string // error messages to display due to bad configuration
 }
 
@@ -386,6 +394,17 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 		data.Scte35Var = scte35
 		fmt.Fprintf(&sb, "scte35_%s/", scte35)
 	}
+	sgai := q.Get("sgai")
+	if sgai != "" {
+		data.Sgai = sgai
+		if _, err := CreateSGAIConfig(sgai); err != nil {
+			data.Errors = append(data.Errors, fmt.Sprintf("invalid sgai: %s", err.Error()))
+		} else if periods != "" {
+			data.Errors = append(data.Errors, "sgai cannot be combined with periods")
+		} else {
+			fmt.Fprintf(&sb, "sgai_%s/", sgai)
+		}
+	}
 	annexI := q.Get("annexI")
 	if annexI != "" {
 		data.AnnexI = annexI
@@ -441,6 +460,16 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 		} else {
 			sb.WriteString(query)
 		}
+	}
+	// SGAI personalization: sessionId and interests are plain MPD-URL query parameters that
+	// are propagated to the ad-decisioning request via Annex I (see addSGAIReplaceEvents).
+	if sessionID := q.Get("sgaiSessionId"); sessionID != "" {
+		data.SgaiSessionID = sessionID
+		appendQueryParam(&sb, "sessionId", sessionID)
+	}
+	if interests := q.Get("sgaiInterests"); interests != "" {
+		data.SgaiInterests = interests
+		appendQueryParam(&sb, "interests", interests)
 	}
 	if len(data.Errors) > 0 {
 		data.URL = ""
@@ -502,6 +531,16 @@ func validateChunkDurSSR(config string) error {
 		}
 	}
 	return nil
+}
+
+// appendQueryParam appends key=val to the URL being built, using "?" if no query string
+// exists yet and "&" otherwise.
+func appendQueryParam(sb *strings.Builder, key, val string) {
+	sep := "?"
+	if strings.Contains(sb.String(), "?") {
+		sep = "&"
+	}
+	fmt.Fprintf(sb, "%s%s=%s", sep, key, val)
 }
 
 func queryFromAnnexI(annexI string) (string, error) {

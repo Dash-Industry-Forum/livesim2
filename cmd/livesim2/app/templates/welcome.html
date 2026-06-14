@@ -48,7 +48,12 @@
         <li><a href="{{.Host}}/metrics">/metrics</a> return  Prometheus metrics for the system and all streaming content requests</li>
         <li><a href="{{.Host}}/reqcount">/reqcount</a> returns the number of requests if a limit is set</li>
         <li><a href="{{.Host}}/version">/version</a> returns the software version in JSON format</li>
-        <li><a href="{{.Host}}/api/docs#/">/api/docs</a> provides documentation for a REST API for <strong>CMAF ingest generation</strong> of streams to specified hosts</li>
+        <li><a href="{{.Host}}/api/docs#/">/api/docs</a> provides documentation for a REST API for
+          <strong>CMAF ingest generation</strong> of streams to specified hosts and for
+          <strong>SGAI ads</strong> (the ad catalog with interest tags, and per-session
+          ad decisions and impression beacons)</li>
+        <li><a href="{{.Host}}/sgai/session_status">/sgai/session_status</a> shows Server-Guided Ad Insertion
+          (SGAI) ad decisions and impression beacons live per session</li>
       </ul>
 
 
