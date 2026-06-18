@@ -3,6 +3,8 @@ package scte35
 
 import (
 	"errors"
+	"fmt"
+	"log/slog"
 
 	"github.com/Comcast/gots/v2"
 	"github.com/Comcast/gots/v2/scte35"
@@ -16,7 +18,7 @@ const (
 // Returns if requested adsPerMinute value is valid (1, 2, or 3)
 func IsValidSCTE35Interval(adsPerMinute int) error {
 	switch adsPerMinute {
-	case 1, 2, 3:
+	case 1, 2, 3, 11, 12, 13:
 		return nil
 	default:
 		return errors.New("scte35 per minute must be 1, 2, or 3")
@@ -28,14 +30,20 @@ func IsValidSCTE35Interval(adsPerMinute int) error {
 // 1: 10s after full minute (20s duration)
 // 2: 10s and 40s after full minute (10 duration)
 // 3: 10s, 36s, 46s after full minute (10s duration)
-func CreateEmsgAhead(segStart, segEnd, timescale uint64, perMinute int) (*mp4.EmsgBox, error) {
+func CreateEmsgAhead(log *slog.Logger, segStart, segEnd, timescale uint64, perMinute int) ([]*mp4.EmsgBox, error) {
 	if err := IsValidSCTE35Interval(perMinute); err != nil {
 		return nil, err
 	}
+
 	modMinute := segStart % (60 * timescale)
 	minuteStart := segStart - modMinute
 	var spliceInsertTimes []uint64
+	var emsgs []*mp4.EmsgBox
+	breakTypes := []scte35.SegDescType{scte35.SegDescProviderPOStart, scte35.SegDescProviderPOStart}
+
 	adDuration := 10 * timescale
+	timeSignal := false
+
 	switch perMinute {
 	case 1:
 		adDuration = 20 * timescale
@@ -43,6 +51,16 @@ func CreateEmsgAhead(segStart, segEnd, timescale uint64, perMinute int) (*mp4.Em
 	case 2:
 		spliceInsertTimes = []uint64{minuteStart + 10*timescale, minuteStart + 40*timescale}
 	case 3:
+		spliceInsertTimes = []uint64{minuteStart + 10*timescale, minuteStart + 36*timescale, minuteStart + 46*timescale}
+	case 11:
+		timeSignal = true
+		adDuration = 20 * timescale
+		spliceInsertTimes = []uint64{minuteStart + 10*timescale}
+	case 12:
+		timeSignal = true
+		spliceInsertTimes = []uint64{minuteStart + 10*timescale, minuteStart + 40*timescale}
+	case 13:
+		timeSignal = true
 		spliceInsertTimes = []uint64{minuteStart + 10*timescale, minuteStart + 36*timescale, minuteStart + 46*timescale}
 	}
 	// We do not need to look into next minute, since first start is 10s after full minute.
@@ -73,6 +91,7 @@ func CreateEmsgAhead(segStart, segEnd, timescale uint64, perMinute int) (*mp4.Em
 		SpliceImmediateFlag:        false,
 		AutoReturn:                 true,
 	}
+
 	e := mp4.EmsgBox{
 		Version:          1,
 		Flags:            0,
@@ -84,7 +103,18 @@ func CreateEmsgAhead(segStart, segEnd, timescale uint64, perMinute int) (*mp4.Em
 		Value:            "",
 		MessageData:      CreateSpliceInsertPayload(p),
 	}
-	return &e, nil
+
+	// If we're handling a timeSignal we need to add start and end segmentation descriptors into separate emsgs
+	if timeSignal {
+		for breakType := range breakTypes {
+			e.MessageData = CreateTimeSignalInsertPayload(p, scte35.SegDescType(breakType), log)
+			e.Value = "timesignal"
+		}
+	}
+
+	emsgs = append(emsgs, &e)
+
+	return emsgs, nil
 }
 
 type SpliceInsertParams struct {
@@ -122,4 +152,68 @@ func CreateSpliceInsertPayload(p SpliceInsertParams) []byte {
 	cmd.SetSpliceImmediate(p.SpliceImmediateFlag)
 	s.SetCommandInfo(cmd)
 	return s.UpdateData()
+}
+
+func CreateTimeSignalInsertPayload(p SpliceInsertParams, breakType scte35.SegDescType, log *slog.Logger) []byte {
+	// Create a time_signal structure (second option to signal Ad Break).
+	t := scte35.CreateSCTE35()
+	t.SetTier(uint16(p.Tier))
+
+	cmd := scte35.CreateTimeSignalCommand()
+	cmd.SetHasPTS(true)
+
+	if breakType == scte35.SegDescProviderPOEnd {
+		cmd.SetPTS(gots.PTS(p.PtsTime + p.Duration))
+	} else {
+		cmd.SetPTS(gots.PTS(p.PtsTime))
+	}
+
+	log.Debug("time_signal", "value", cmd)
+
+	descriptors := CreateDescriptors(p, breakType)
+
+	for i, d := range descriptors {
+		log.Debug(
+			"descriptor",
+			"index", i,
+			"value", fmt.Sprintf("%+v", d),
+		)
+	}
+
+	t.SetDescriptors(descriptors)
+
+	t.SetCommandInfo(cmd)
+	log.Debug("scte35", "value", fmt.Sprintf("%+v", t))
+
+	d := t.Descriptors()
+
+	log.Debug("SCTE35 Descriptors", "descriptors", fmt.Sprintf("%+v", d[0]))
+
+	return t.UpdateData()
+}
+
+func CreateDescriptors(p SpliceInsertParams, breakType scte35.SegDescType) []scte35.SegmentationDescriptor {
+	// Create a descriptor
+
+	var descList []scte35.SegmentationDescriptor
+
+	desc := scte35.CreateSegmentationDescriptor()
+
+	if p.Duration != 0 {
+		desc.SetHasDuration(true)
+		desc.SetDuration(gots.PTS(p.Duration))
+	}
+
+	desc.SetEventID(p.SpliceEventID)
+	desc.SetTypeID(breakType)
+	desc.SetIsEventCanceled(p.SpliceEventCancelIndicator)
+	desc.SetIsWebDeliveryAllowed(true)
+	desc.SetHasNoRegionalBlackout(true)
+	desc.SetSegmentNumber(1)
+	desc.SetSegmentsExpected(1)
+	desc.SetHasSubSegments(false)
+
+	descList = append(descList, desc)
+
+	return descList
 }
