@@ -314,10 +314,18 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 
 		if as.ContentType == "video" && cfg.SCTE35PerMinute != nil {
 			// Add SCTE35 signaling
+			var cmdType string
+
+			switch *cfg.SCTE35PerMinute {
+			case 1, 2, 3:
+				cmdType = ""
+			case 11, 12, 13:
+				cmdType = "timesignal"
+			}
 			as.InbandEventStreams = append(as.InbandEventStreams,
 				&m.EventStreamType{
 					SchemeIdUri: scte35.SchemeIDURI,
-					Value:       "",
+					Value:       cmdType,
 				})
 		}
 

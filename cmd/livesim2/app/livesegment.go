@@ -96,13 +96,23 @@ func genLiveSegment(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig
 			startTime := uint64(meta.newTime)
 			endTime := startTime + uint64(meta.newDur)
 			timescale := uint64(meta.timescale)
-			emsg, err := scte35.CreateEmsgAhead(startTime, endTime, timescale, *cfg.SCTE35PerMinute)
+			log.Debug("Calling CreateEsmgAhead", "startTime ", startTime, "endTime", endTime, "timescale ", timescale, "Config ", *cfg)
+
+			emsgs, err := scte35.CreateEmsgAhead(log, startTime, endTime, timescale, *cfg.SCTE35PerMinute)
 			if err != nil {
 				return so, fmt.Errorf("insertSCTE35: %w", err)
 			}
-			if emsg != nil {
-				seg.Fragments[0].AddEmsg(emsg)
-				log.Debug("added SCTE-35 emsg message", "asset", a.AssetPath, "segment", segmentPart)
+
+			for i, emsg := range emsgs {
+				log.Debug("EMSG:", "INDEX:", i, "emsgs", fmt.Sprintf("%+v", *emsg))
+			}
+
+			for i, emsg := range emsgs {
+				if emsg != nil {
+					seg.Fragments[0].AddEmsg(emsg)
+					log.Debug("added SCTE-35 emsg message", "asset", a.AssetPath, "segment", segmentPart)
+				}
+				log.Debug("End of for....loop", "Index", i)
 			}
 		}
 		outSeg.seg = seg
