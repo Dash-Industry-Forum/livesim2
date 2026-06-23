@@ -84,4 +84,11 @@ func TestHTMLTemplates(t *testing.T) {
 	statusStr := buf.String()
 	require.Contains(t, statusStr, `src="http://localhost:8888/static/sgai_session_status.js"`)
 	require.Contains(t, statusStr, `data-api="http://localhost:8888"`)
+
+	// The Content Steering status page follows the same pattern.
+	buf.Reset()
+	require.NoError(t, steeringSessionStatusPage("http://localhost:8888").Render(context.Background(), &buf))
+	steeringStr := buf.String()
+	require.Contains(t, steeringStr, `src="http://localhost:8888/static/steering_session_status.js"`)
+	require.Contains(t, steeringStr, `data-api="http://localhost:8888"`)
 }

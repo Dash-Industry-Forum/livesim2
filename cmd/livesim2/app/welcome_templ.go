@@ -231,20 +231,33 @@ func welcomePage(wi welcomeInfo) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\">/sgai/session_status</a> shows Server-Guided Ad Insertion (SGAI) ad decisions and impression beacons live per session</li></ul><h4>Further information</h4><p>For more information about the project, see</p><ul><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2\" target=\"_blank\">livesim2 Github project</a></li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki\" target=\"_blank\">livesim2 Github Wiki</a></li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki/Preparing-Content-for-livesim2\" target=\"_blank\">Preparing Content for livesim2</a></li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters\" target=\"_blank\">wiki list of url parameters</a></li><li><a href=\"https://github.com/orgs/Dash-Industry-Forum/projects/7\" target=\"_blank\">Github project for planning new features</a></li><li><a href=\"https://dashif.slack.com\" target=\"_blank\">The livesim channel in the DASH-IF slack</a></li></ul><p>Version: ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\">/sgai/session_status</a> shows Server-Guided Ad Insertion (SGAI) ad decisions and impression beacons live per session</li><li><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var17 string
-		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(wi.Version)
+		var templ_7745c5c3_Var17 templ.SafeURL
+		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/steering/session_status")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 81, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 71, Col: 52}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</p></main></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\">/steering/session_status</a> shows DASH Content Steering live: per-CDN segment requests, current pathway priority, and client-message verification per session or group</li></ul><h4>Further information</h4><p>For more information about the project, see</p><ul><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2\" target=\"_blank\">livesim2 Github project</a></li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki\" target=\"_blank\">livesim2 Github Wiki</a></li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki/Preparing-Content-for-livesim2\" target=\"_blank\">Preparing Content for livesim2</a></li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters\" target=\"_blank\">wiki list of url parameters</a></li><li><a href=\"https://github.com/orgs/Dash-Industry-Forum/projects/7\" target=\"_blank\">Github project for planning new features</a></li><li><a href=\"https://dashif.slack.com\" target=\"_blank\">The livesim channel in the DASH-IF slack</a></li></ul><p>Version: ")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var18 string
+		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(wi.Version)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 86, Col: 28}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</p></main></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -138,6 +138,10 @@ type ResponseConfig struct {
 	SSRAS                        string            `json:"SSRAS,omitempty"`
 	ChunkDurSSR                  string            `json:"ChunkDurSSR,omitempty"`
 	SGAI                         *SGAIConfig       `json:"SGAI,omitempty"`
+	Steer                        *SteeringConfig   `json:"Steer,omitempty"`
+	SteerLocation                string            `json:"-"` // service location of a steered segment request (cdn_ path token)
+	SteerSessionID               string            `json:"-"` // content-steering session id (sid_ path token or ?sessionId=)
+	SteerCSID                    string            `json:"-"` // content-steering group id (csid_ path token); shared group decision
 }
 
 // SegStatusCodes configures regular extraordinary segment response codes
@@ -449,6 +453,17 @@ cfgLoop:
 			cfg.ChunkDurSSR = val
 		case "sgai": // Ed.6 Alternative-MPD Replace ad breaks: <off>:<dur>[,...][;k=v...]
 			cfg.SGAI = sc.ParseSGAIConfig(key, val)
+		case "steer": // DASH Content Steering: <loc1>,<loc2>[,...][;ttl=s;mode=rotate|trigger;qbs=0|1;default=loc]
+			cfg.Steer = sc.ParseSteeringConfig(key, val)
+		case "cdn": // service location of a steered segment request (set in generated BaseURLs)
+			cfg.SteerLocation = val
+		case "sid": // content-steering session id (set in generated BaseURLs)
+			cfg.SteerSessionID = val
+		case "csid": // content-steering group id (author-set on the stream URL, shared steering decision)
+			if !isValidServiceLocation(val) {
+				sc.err = fmt.Errorf("csid %q: must be non-empty and use only [A-Za-z0-9._-]", val)
+			}
+			cfg.SteerCSID = val
 		default:
 			contentStartIdx = i
 			break cfgLoop
@@ -507,6 +522,15 @@ func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 		if cfg.PeriodsPerHour != nil || cfg.XlinkPeriodsPerHour != nil ||
 			cfg.EtpPeriodsPerHour != nil || cfg.InsertAdFlag {
 			return fmt.Errorf("sgai cannot be combined with periods/xlink/etp/insertad")
+		}
+	}
+	if cfg.Steer != nil {
+		if len(cfg.Steer.CDNs) < 2 {
+			return fmt.Errorf("steer needs at least two service locations")
+		}
+		// Content Steering owns BaseURL generation; the traffic feature also adds BaseURLs.
+		if len(cfg.Traffic) > 0 {
+			return fmt.Errorf("steer cannot be combined with traffic (both generate BaseURLs)")
 		}
 	}
 	return nil

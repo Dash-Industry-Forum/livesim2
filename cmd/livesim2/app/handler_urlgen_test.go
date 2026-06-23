@@ -89,6 +89,82 @@ func TestCreateURLSGAI(t *testing.T) {
 	}
 }
 
+func TestCreateURLSteering(t *testing.T) {
+	cases := []struct {
+		desc      string
+		params    map[string]string
+		wantInURL []string
+		wantErr   string
+	}{
+		{
+			desc:      "locations only",
+			params:    map[string]string{"steer": "alpha,beta;ttl=20"},
+			wantInURL: []string{"/livesim2/steer_alpha,beta;ttl=20/testpic_2s/Manifest.mpd"},
+		},
+		{
+			desc: "with session id",
+			params: map[string]string{
+				"steer":          "alpha,beta;mode=trigger",
+				"steerSessionId": "alice",
+			},
+			wantInURL: []string{
+				"/livesim2/steer_alpha,beta;mode=trigger/testpic_2s/Manifest.mpd",
+				"?sessionId=alice",
+			},
+		},
+		{
+			desc: "with group csid",
+			params: map[string]string{
+				"steer":          "alpha,beta;mode=trigger",
+				"steerCsid":      "groupA",
+				"steerSessionId": "alice",
+			},
+			wantInURL: []string{
+				"/livesim2/csid_groupA/steer_alpha,beta;mode=trigger/testpic_2s/Manifest.mpd",
+				"?sessionId=alice",
+			},
+		},
+		{
+			desc:    "invalid spec",
+			params:  map[string]string{"steer": "onlyone"},
+			wantErr: "invalid steer",
+		},
+		{
+			desc:    "invalid csid",
+			params:  map[string]string{"steer": "alpha,beta", "steerCsid": "bad/slash"},
+			wantErr: "invalid steerCsid",
+		},
+		{
+			desc:    "steer with traffic is rejected",
+			params:  map[string]string{"steer": "a,b", "traffic": "u20:d5"},
+			wantErr: "steer cannot be combined with traffic",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			q := url.Values{}
+			q.Set("asset", "testpic_2s")
+			q.Set("mpd", "Manifest.mpd")
+			q.Set("stl", "nr")
+			for k, v := range c.params {
+				q.Set(k, v)
+			}
+			r := httptest.NewRequest("GET", "/urlgen/create?"+q.Encode(), nil)
+			data := createURL(r, testAssetsInfo(), nil)
+			if c.wantErr != "" {
+				require.NotEmpty(t, data.Errors, "expected an error")
+				require.Contains(t, strings.Join(data.Errors, " | "), c.wantErr)
+				require.Empty(t, data.URL, "no URL should be produced on error")
+				return
+			}
+			require.Empty(t, data.Errors, "unexpected errors: %v", data.Errors)
+			for _, want := range c.wantInURL {
+				require.Contains(t, data.URL, want)
+			}
+		})
+	}
+}
+
 // TestURLGenTemplateRendersSGAI confirms the urlgenPage templ component renders
 // with the SGAI fields populated.
 func TestURLGenTemplateRendersSGAI(t *testing.T) {

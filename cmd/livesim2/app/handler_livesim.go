@@ -118,6 +118,11 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		if cfg.Steer != nil {
+			// The session id is client-supplied on the MPD URL (?sessionId=/?sid=); it is baked
+			// into the generated per-CDN BaseURLs and the ContentSteering server URL.
+			cfg.SteerSessionID = steeringSessionID(r)
+		}
 		_, mpdName := path.Split(contentPart)
 		err := writeLiveMPD(log, w, cfg, s.Cfg.DrmCfg, a, mpdName, nowMS)
 		if err != nil {
@@ -127,6 +132,14 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		}
 	case ".mp4", ".m4s", ".cmfv", ".cmfa", ".cmft", ".jpg", ".jpeg", ".m4v", ".m4a":
 		segmentPart := strings.TrimPrefix(contentPart, a.AssetPath) // includes heading slash
+		if cfg.SteerLocation != "" && s.steeringSessions != nil {
+			// Segment fetched via a content-steering BaseURL: attribute it to its service
+			// location (cdn_ path token) and session (sid_ path token), record the group
+			// (csid_ path token) so group membership is known from the first segment, and remember
+			// the address + segment last fetched, for the per-endpoint request distribution shown
+			// by the API and the status page.
+			s.steeringSessions.RecordSegment(cfg.SteerSessionID, cfg.SteerCSID, cfg.SteerLocation, segmentPart)
+		}
 		if len(cfg.Traffic) > 0 {
 			var patternNr int
 			patternNr, segmentPart = extractPattern(segmentPart)
