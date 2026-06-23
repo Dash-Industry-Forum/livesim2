@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/drm"
+	"github.com/a-h/templ"
 )
 
 // urlGenHandlerFunc returns page for generating URLs
@@ -64,14 +65,14 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html")
 
-	templateName := "urlgen.html"
 	var data urlGenData
+	var comp templ.Component
 	switch r.URL.Path {
 	case "/urlgen/mpds":
 		// Changing the asset updates two regions of the page from a single response: the MPD
 		// <select> (the primary hx-target) and the DRM options (an out-of-band swap into #drms).
 		// The DRM choices are asset-dependent: a pre-encrypted asset offers no DRM choice at all.
-		// See the "assetopts" template in urlgen.html.
+		// See the assetOpts component in urlgen.templ.
 		asset := r.URL.Query().Get("asset")
 		for _, a := range aInfo.Assets {
 			if a.Path == asset {
@@ -80,18 +81,20 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 				data.DRMs = drmsFromAssetInfo(a, s.Cfg.DrmCfg, "")
 			}
 		}
-		templateName = "assetopts"
+		comp = assetOpts(data)
 	case "/urlgen/create":
 		data = createURL(r, aInfo, s.Cfg.DrmCfg)
+		comp = urlgenPage(data)
 	default:
 		data, err = s.createInitData(aInfo)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		comp = urlgenPage(data)
 	}
-	// Execute the template and handle errors
-	if err := s.htmlTemplates.ExecuteTemplate(w, templateName, data); err != nil {
+	// Render the component and handle errors
+	if err := comp.Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
