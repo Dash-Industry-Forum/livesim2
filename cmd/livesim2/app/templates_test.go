@@ -78,7 +78,9 @@ func TestHTMLTemplates(t *testing.T) {
 	require.NoError(t, err)
 	welcomeStr := buf.String()
 	require.Greater(t, strings.Index(welcomeStr, `href="http://localhost:8888/assets"`), 0)
-	require.Equal(t, 7, len(textTemplates.Templates()))
+	// In addition to the .html files, urlgen.html defines the "mpds", "drms" and "assetopts"
+	// named templates, so the count exceeds the number of template files.
+	require.Equal(t, 8, len(textTemplates.Templates()))
 
 	// The SGAI status page is a template that loads its polling logic from a static asset and
 	// carries the host for proxy/base-path setups; both must be interpolated with the host.
