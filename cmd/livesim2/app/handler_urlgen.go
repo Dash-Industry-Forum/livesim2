@@ -68,23 +68,19 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	var data urlGenData
 	switch r.URL.Path {
 	case "/urlgen/mpds":
+		// Changing the asset updates two regions of the page from a single response: the MPD
+		// <select> (the primary hx-target) and the DRM options (an out-of-band swap into #drms).
+		// The DRM choices are asset-dependent: a pre-encrypted asset offers no DRM choice at all.
+		// See the "assetopts" template in urlgen.html.
 		asset := r.URL.Query().Get("asset")
 		for _, a := range aInfo.Assets {
 			if a.Path == asset {
 				data.MPDs = mpdsFromAssetInfo(a)
 				data.MPDs[0].Selected = true
+				data.DRMs = drmsFromAssetInfo(a, s.Cfg.DrmCfg, "")
 			}
 		}
-		templateName = "mpds"
-	case "/urlgen/drms":
-		asset := r.URL.Query().Get("asset")
-		for _, aI := range aInfo.Assets {
-			if aI.Path == asset {
-				data.DRMs = drmsFromAssetInfo(aI, s.Cfg.DrmCfg, "")
-				data.DRMs[0].Selected = true
-			}
-		}
-		templateName = "drms"
+		templateName = "assetopts"
 	case "/urlgen/create":
 		data = createURL(r, aInfo, s.Cfg.DrmCfg)
 	default:
@@ -114,7 +110,7 @@ func drmsFromAssetInfo(a *assetInfo, drmCfg *drm.DrmConfig, selected string) []n
 	}
 	drmPkgs := drmCfg.Packages
 	if a != nil && a.PreEncrypted {
-		return []nameWithSelect{{Name: "None", Selected: true,
+		return []nameWithSelect{{Name: "None", Selected: true, Disabled: true,
 			Desc: fmt.Sprintf("No DRM choice available because asset %q is pre-encrypted", a.Path)}}
 	}
 	drms := make([]nameWithSelect, 0, 3+len(drmPkgs))
@@ -196,6 +192,7 @@ type nameWithSelect struct {
 	Name     string
 	Desc     string
 	Selected bool
+	Disabled bool // render the option as disabled (e.g. DRM choices for a pre-encrypted asset)
 }
 
 type segmentTimelineType string

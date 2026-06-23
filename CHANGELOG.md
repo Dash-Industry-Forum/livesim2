@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Nothing yet
+### Changed
+
+- URL generator: DRM options now follow the selected asset and are disabled for pre-encrypted assets.
 
 ## [1.10.0] - 2026-06-15
 

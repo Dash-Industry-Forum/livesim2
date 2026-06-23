@@ -238,12 +238,13 @@
 			<summary>Encryption and DRM</summary>
 			<fieldset>
 				<legend>Encryption on-the-fly with keys via ECCP or commercial DRM systems. Pre-encrypted assets cannot be changed.</legend>
-				<!-- This should be asset dependent, but not got the right htmx to do that yet -->
+				<!-- Asset-dependent: refreshed via an htmx out-of-band swap whenever the asset
+				     changes (see the "assetopts" template). A pre-encrypted asset offers no DRM choice. -->
 				 <div name="drms" id="drms">
 				{{block "drms" .}}
 				{{range .DRMs}}
 				<label for="drm-{{.Name}}">
-					<input type="radio" id="drm-{{.Name}}" name="drm" value="{{.Name}}" {{if .Selected}} checked {{end}}>
+					<input type="radio" id="drm-{{.Name}}" name="drm" value="{{.Name}}" {{if .Selected}} checked {{end}}{{if .Disabled}} disabled {{end}}>
 					{{.Desc}}
 				</label>
 			    {{end}}
@@ -396,3 +397,15 @@
 		</main>
     </body>
 </html>
+
+{{/*
+  assetopts is the response served when the asset <select> changes. A single response updates
+  two distinct regions of the page: the MPD <select> (the primary hx-target #mpd) gets the MPD
+  options, and the DRM radio buttons are refreshed via an htmx out-of-band swap into #drms.
+  This is how the (asset-dependent) DRM choices follow the selected asset — in particular a
+  pre-encrypted asset collapses to a single, disabled "None" choice.
+*/}}
+{{define "assetopts" -}}
+{{template "mpds" .}}
+<div id="drms" hx-swap-oob="innerHTML">{{template "drms" .}}</div>
+{{- end}}
