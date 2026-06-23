@@ -551,6 +551,102 @@ break id via Annex I). The per-session ad decisions and beacons are recorded and
 live at `/sgai/session_status?sid=<sessionId>` or via the API at `/api/sgai/sessions[/{sid}]` and
 `/api/sgai/ads` (the ad catalog).
 
+## DASH Content Steering
+
+livesim2 can demonstrate **DASH Content Steering** (ISO/IEC 23009-1 6th ed. §K.3.6, ETSI TS
+103 998). A single server advertises two or more *service locations* ("CDNs") that all point
+back to itself, plus a root `<ContentSteering>` element referencing a steering endpoint on the
+same server. A DASH client (e.g. dash.js) polls that endpoint, which returns a steering manifest
+with a `PATHWAY-PRIORITY` ordering and a TTL; by changing the ordering the server makes the client
+switch CDN. Because every CDN points back here, the per-CDN segment requests are counted per
+session and can be watched live — which makes the switch observable.
+
+Enable it with the `steer_` URL option:
+
+- Service locations: a comma-separated list of names, at least two: `steer_alpha,beta` (or
+  `steer_cdnA,cdnB,cdnC`).
+- Options are appended with `;key=val`:
+  - `ttl=<seconds>` — steering-manifest TTL (default `300`); the client re-polls every TTL.
+  - `mode=rotate|trigger` — `trigger` (default) holds the priority at the default order until a
+    switch is triggered via the API / monitor; `rotate` rotates the priority one step every TTL
+    automatically (wall-clock based, so all clients rotate in lockstep).
+  - `qbs=<0|1>` — `ContentSteering@queryBeforeStart` (resolve the steering server before
+    playback starts).
+  - `default=<name>` — the initial top service location (default: the first one listed).
+
+A viewer is identified with a `sessionId` (or `sid`) query parameter, as for SGAI, e.g.
+`…/steer_alpha,beta;ttl=20/testpic_2s/Manifest.mpd?sessionId=alice`. The server bakes the session
+id and the chosen service location into each `<BaseURL>` so segment requests are attributable to a
+(session, CDN) pair.
+
+#### Moving several clients together — groups (`csid`)
+
+To switch a *group* of clients at once, add a `csid_<group>` path token before `steer_`, e.g.
+`…/csid_groupA/steer_alpha,beta;ttl=20/testpic_2s/Manifest.mpd?sessionId=alice`. The steering
+*decision* (the pinned priority and any manual override) is then owned by the group and shared by
+every member, so a single group switch moves them all on their next poll — while each member keeps
+its own per-CDN segment counts and `_DASH_pathway` verification. Give several viewers the same
+`csid` with distinct `sessionId`s. A stream with no `csid` behaves as before: a group of one that
+owns its own decision. (Note: in `mode=rotate` all clients already rotate in lockstep regardless of
+grouping — `csid` matters for `mode=trigger` and switches.)
+
+### Driving and monitoring the switch
+
+The live monitor at `/steering/session_status?sid=<sessionId>` shows, per session, the segment
+request distribution across the CDNs and the current `PATHWAY-PRIORITY`, polled every second. It
+has a **Switch CDN** button (advance one step) and a per-CDN **make top** button to set the order
+directly — handy for driving a switch by hand and watching the client follow on its next poll. A
+**Steering polls** table below it lists each poll's reported `_DASH_pathway`/`_DASH_throughput`,
+the priority served back, and the verification verdict for that client message (see below).
+
+### Verifying the client's steering messages
+
+On each poll the client appends `_DASH_pathway` and `_DASH_throughput`. These are a *per-pathway
+measurement report* — a positionally-paired list of the pathways the client has measured and their
+throughputs in bits/s (e.g. `_DASH_pathway=beta,alpha&_DASH_throughput=802522000,647618000`), in an
+implementation-defined order — **not** a declaration of the single pathway in use. livesim2 validates
+their **format** and flags:
+
+- a `_DASH_pathway` entry that is not one of the configured service locations,
+- a `_DASH_throughput` entry that is not a non-negative integer,
+- a `_DASH_pathway`/`_DASH_throughput` entry-count mismatch.
+
+Whether the client actually **followed** a steering decision is judged from its **segment requests**
+(the `cdn_` token in the BaseURL it fetches through) — the ground truth — not from `_DASH_pathway`.
+Once the client has been steered to a top CDN and had a **10 s grace period** to converge (measured
+from when it *received* that top on a poll, so a switch it has not yet polled for is never faulted),
+a segment still fetched from a different CDN marks the session **off-pathway** — the real "client
+ignored steering" signal. It clears as soon as the client fetches from the steered CDN again.
+
+Format issues (per poll) and off-pathway episodes are rolled up into a per-session `issueCount`. The
+monitor shows a **verify** verdict (`✓` conformant / `⚠ N`) per session, an off-pathway banner, and
+the timeline of polls/switches/off-pathway detections; the same is exposed over the API (`issueCount`
+and `offPathway` on the session, `issues` on each event). Each session also records when it last
+fetched steering (`lastPolledAt`) and the last address (`lastLocation`) and segment (`lastSegment`)
+it fetched, shown in the session, group and list views.
+
+Open the monitor with `?csid=<group>` for the **group view**: the aggregate per-CDN distribution
+across all members, the member list, a **Switch group** button that moves every member, and the
+group's switch timeline. With no `?sid=`/`?csid=` it lists active groups and sessions.
+
+The same is available over the API:
+
+- `GET /api/steering/sessions[/{sid}]` — list sessions / one session's per-CDN counts and timeline.
+- `POST /api/steering/sessions/{sid}/switch` with body `{"target":"next"}` (advance one step) or
+  `{"target":"<name>"}` (promote a service location) — pin a new priority. The client picks it up
+  on its next steering poll (within TTL). This is how an automated dash.js test can load a stream,
+  confirm a steady CDN, trigger a switch, and assert the client moves.
+- `POST /api/steering/sessions/{sid}/clear` and `POST /api/steering/sessions/clear` — reset.
+- `GET /api/steering/groups[/{csid}]` — list groups (member counts, aggregate per-CDN counts) / one
+  group's members, shared priority, and switch timeline.
+- `POST /api/steering/groups/{csid}/switch` (same body as the session switch) — move the whole group
+  at once. `POST /api/steering/groups/{csid}/clear` resets the group and its members.
+
+The steering endpoint itself is `GET /steering/[csid_<group>/]steer_<spec>?sessionId=<id>`, returning
+the steering manifest as `application/json`; the client appends `_DASH_pathway` and `_DASH_throughput`,
+which are recorded for inspection. `mode=trigger` (the default) is best for scripted/monitor-driven
+switches; use `mode=rotate` for a hands-off "switches every TTL" demo.
+
 ## Running tests
 
 The unit tests can be run from the top directory with the usual recursive Go test command

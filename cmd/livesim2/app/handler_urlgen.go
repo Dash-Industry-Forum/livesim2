@@ -169,6 +169,9 @@ type urlGenData struct {
 	Sgai                        string   // SGAI (Ed.6 Alternative-MPD Replace) ad-break schedule and options
 	SgaiSessionID               string   // SGAI personalization session id (added as MPD-URL query parameter)
 	SgaiInterests               string   // SGAI comma-separated interest tags (added as MPD-URL query parameter)
+	Steer                       string   // Content Steering service locations and options (steer_ option value)
+	SteerCSID                   string   // Content Steering group id (csid_ path token, shared decision for a group)
+	SteerSessionID              string   // Content Steering session id (added as MPD-URL query parameter)
 	Errors                      []string // error messages to display due to bad configuration
 }
 
@@ -429,6 +432,30 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 		data.Traffic = traffic
 		fmt.Fprintf(&sb, "traffic_%s/", traffic)
 	}
+	steerCsid := q.Get("steerCsid")
+	if steerCsid != "" {
+		if !isValidServiceLocation(steerCsid) {
+			data.Errors = append(data.Errors, fmt.Sprintf("invalid steerCsid %q: use only [A-Za-z0-9._-]", steerCsid))
+		} else {
+			data.SteerCSID = steerCsid
+		}
+	}
+	steer := q.Get("steer")
+	if steer != "" {
+		data.Steer = steer
+		if _, err := CreateSteeringConfig(steer); err != nil {
+			data.Errors = append(data.Errors, fmt.Sprintf("invalid steer: %s", err.Error()))
+		} else if traffic != "" {
+			data.Errors = append(data.Errors, "steer cannot be combined with traffic")
+		} else {
+			// The csid_ group token, if any, precedes the steer_ token so it is carried into the
+			// generated BaseURLs and the steering server URL (group = shared steering decision).
+			if data.SteerCSID != "" {
+				fmt.Fprintf(&sb, "csid_%s/", data.SteerCSID)
+			}
+			fmt.Fprintf(&sb, "steer_%s/", steer)
+		}
+	}
 	ssrAS := q.Get("ssrAS")
 	if ssrAS != "" {
 		if err := validateSSRAS(ssrAS); err != nil {
@@ -470,6 +497,14 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 	if interests := q.Get("sgaiInterests"); interests != "" {
 		data.SgaiInterests = interests
 		appendQueryParam(&sb, "interests", interests)
+	}
+	// Content Steering session id is a plain MPD-URL query parameter (sessionId), baked into the
+	// generated BaseURLs and steering server URL. Avoid a duplicate sessionId when SGAI also set it.
+	if steerSession := q.Get("steerSessionId"); steerSession != "" {
+		data.SteerSessionID = steerSession
+		if q.Get("sgaiSessionId") == "" {
+			appendQueryParam(&sb, "sessionId", steerSession)
+		}
 	}
 	if len(data.Errors) > 0 {
 		data.URL = ""
