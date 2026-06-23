@@ -89,22 +89,20 @@ func TestCreateURLSGAI(t *testing.T) {
 	}
 }
 
-// TestURLGenTemplateRendersSGAI confirms the urlgen.html template still parses and renders
+// TestURLGenTemplateRendersSGAI confirms the urlgenPage templ component renders
 // with the SGAI fields populated.
 func TestURLGenTemplateRendersSGAI(t *testing.T) {
-	tmpls, err := compileHTMLTemplates(content, "templates")
-	require.NoError(t, err)
 	r := httptest.NewRequest("GET",
 		"/urlgen/create?asset=testpic_2s&mpd=Manifest.mpd&stl=nr&sgai=30:15&sgaiSessionId=alice&sgaiInterests=boats", nil)
 	data := createURL(r, testAssetsInfo(), nil)
 	var buf bytes.Buffer
-	require.NoError(t, tmpls.ExecuteTemplate(&buf, "urlgen.html", data))
+	require.NoError(t, urlgenPage(data).Render(context.Background(), &buf))
 	out := buf.String()
 	require.Contains(t, out, `name="sgai"`)
 	require.Contains(t, out, `name="sgaiSessionId"`)
 	require.Contains(t, out, `name="sgaiInterests"`)
-	require.Contains(t, out, "value=\"30:15\"")
-	require.Contains(t, out, "value=\"alice\"")
+	require.Contains(t, out, `value="30:15"`)
+	require.Contains(t, out, `value="alice"`)
 }
 
 // TestURLGenAssetOptsOOB confirms that the "assetopts" template (served when the asset <select>
@@ -112,8 +110,6 @@ func TestURLGenTemplateRendersSGAI(t *testing.T) {
 // out-of-band swap, the DRM options for #drms. A pre-encrypted asset must disable the DRM choice;
 // a clear asset must offer the full DRM list.
 func TestURLGenAssetOptsOOB(t *testing.T) {
-	tmpls, err := compileHTMLTemplates(content, "templates")
-	require.NoError(t, err)
 	drmCfg := &drm.DrmConfig{Packages: []*drm.Package{{Name: "cbcs-all", Desc: "cbcs all tracks"}}}
 
 	render := func(a *assetInfo) string {
@@ -122,7 +118,7 @@ func TestURLGenAssetOptsOOB(t *testing.T) {
 			DRMs: drmsFromAssetInfo(a, drmCfg, ""),
 		}
 		var buf bytes.Buffer
-		require.NoError(t, tmpls.ExecuteTemplate(&buf, "assetopts", data))
+		require.NoError(t, assetOpts(data).Render(context.Background(), &buf))
 		return buf.String()
 	}
 

@@ -1,5 +1,13 @@
 
 repos:
+  - repo: local
+    hooks:
+      - id: templ-generate
+        name: templ generate (*_templ.go must match *.templ)
+        entry: make templ-check
+        language: system
+        files: '\.templ$'
+        pass_filenames: false
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.3.0
     hooks:

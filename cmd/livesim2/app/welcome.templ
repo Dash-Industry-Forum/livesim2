@@ -1,0 +1,85 @@
+// Copyright 2023, DASH-Industry Forum. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE.md file.
+
+package app
+
+// welcomePage renders the landing page served at "/".
+templ welcomePage(wi welcomeInfo) {
+	<!doctype html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<link rel="stylesheet" href={ wi.Host + "/static/pico.min.css" }/>
+			<link rel="stylesheet" href={ wi.Host + "/static/custom.css" }/>
+			<title>livesim2</title>
+		</head>
+		<body>
+			<main class="container">
+				<hgroup>
+					<h1>Welcome to livesim2!</h1>
+					<p>Running at { wi.Host }</p>
+				</hgroup>
+				<p>
+					livesim2 is a simulator for MPEG-DASH live streaming developed by DASH-IF. It uses VoD assets
+					and converts them to wall-clock synchronized "live" streams, by rewriting
+					timestamps, segment numbers, and segment URLs. It also re-fragments segments so that they can be used for
+					low-latency DASH streaming.
+				</p>
+				<p>
+					The live stream URLs start with /livesim2/. After that comes an big optional set of parameters, followed by
+					the asset name, and finally the MPD. There may be multiple MPDs for one asset corresponding to different
+					sets of media tracks or other fixed settings in the MPD. The available parameters are listed on the
+					<a href="https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters" target="_blank">Wiki parameters page</a>.
+					The easiest way to configure the URLs to with such parameters is the <a href={ wi.Host + "/urlgen" }>URL generator</a> page.
+					Note, the URL generator and other pages include links for direct playback using online versions of
+					<a href="https://reference.dashif.org/dash.js/nightly/samples/dash-if-reference-player/index.html">dash.js </a> or
+					any other configured player. However, some restrictions may apply as discussed on the Wiki page
+					<a href="https://github.com/Dash-Industry-Forum/livesim2/wiki/Direct-Playback">Direct Playback</a>.
+				</p>
+				<p>
+					A new feature is <strong>CMAF ingest generation</strong>. For testing reception of such streams,
+					there is also a separate component "cmaf-ingest-receiver" available in the livesim2 Github repo.
+				</p>
+				<h4>Useful local URLs</h4>
+				<p>
+					The following URLs should work at { wi.Host }. Some of them provides streaming URLs or even URLs that start
+					a DASH player with the corresponding asset URL. Others provide information about the server.
+				</p>
+				<ul>
+					<li><a href={ wi.Host + "/urlgen" }>/urlgen</a> is a form to generate URLs for live streaming from this host</li>
+					<li><a href={ wi.Host + "/assets" }>/assets</a> provides a list of all loaded assets and their MPDs</li>
+					<li><a href="https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters">livesim2-wiki</a> compares url parameters between livesim2 and livesim1</li>
+					<li><a href={ wi.Host + "/vod" }>/vod</a> provides a list of all VoD assets and their MPDs</li>
+					<li><a href={ wi.Host + "/healthz" }>/healthz</a> returns true if server is running</li>
+					<li><a href={ wi.Host + "/config" }>/config</a> return the current config of the server in JSON format</li>
+					<li><a href={ wi.Host + "/metrics" }>/metrics</a> return  Prometheus metrics for the system and all streaming content requests</li>
+					<li><a href={ wi.Host + "/reqcount" }>/reqcount</a> returns the number of requests if a limit is set</li>
+					<li><a href={ wi.Host + "/version" }>/version</a> returns the software version in JSON format</li>
+					<li>
+						<a href={ wi.Host + "/api/docs#/" }>/api/docs</a> provides documentation for a REST API for
+						<strong>CMAF ingest generation</strong> of streams to specified hosts and for
+						<strong>SGAI ads</strong> (the ad catalog with interest tags, and per-session
+						ad decisions and impression beacons)
+					</li>
+					<li>
+						<a href={ wi.Host + "/sgai/session_status" }>/sgai/session_status</a> shows Server-Guided Ad Insertion
+						(SGAI) ad decisions and impression beacons live per session
+					</li>
+				</ul>
+				<h4>Further information</h4>
+				<p>For more information about the project, see</p>
+				<ul>
+					<li><a href="https://github.com/Dash-Industry-Forum/livesim2" target="_blank">livesim2 Github project</a></li>
+					<li><a href="https://github.com/Dash-Industry-Forum/livesim2/wiki" target="_blank">livesim2 Github Wiki</a></li>
+					<li><a href="https://github.com/Dash-Industry-Forum/livesim2/wiki/Preparing-Content-for-livesim2" target="_blank">Preparing Content for livesim2</a></li>
+					<li><a href="https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters" target="_blank">wiki list of url parameters</a></li>
+					<li><a href="https://github.com/orgs/Dash-Industry-Forum/projects/7" target="_blank">Github project for planning new features</a></li>
+					<li><a href="https://dashif.slack.com" target="_blank">The livesim channel in the DASH-IF slack</a></li>
+				</ul>
+				<p>Version: { wi.Version }</p>
+			</main>
+		</body>
+	</html>
+}

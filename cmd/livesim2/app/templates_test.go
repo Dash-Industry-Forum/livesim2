@@ -6,6 +6,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -69,24 +70,17 @@ func TestTemplates(t *testing.T) {
 }
 
 func TestHTMLTemplates(t *testing.T) {
-	templateRoot := os.DirFS("templates")
-	textTemplates, err := compileHTMLTemplates(templateRoot, "")
-	require.NoError(t, err)
 	var buf bytes.Buffer
 	wi := welcomeInfo{Host: "http://localhost:8888", Version: "1.2.3"}
-	err = textTemplates.ExecuteTemplate(&buf, "welcome.html", wi)
-	require.NoError(t, err)
+	require.NoError(t, welcomePage(wi).Render(context.Background(), &buf))
 	welcomeStr := buf.String()
-	require.Greater(t, strings.Index(welcomeStr, `href="http://localhost:8888/assets"`), 0)
-	// In addition to the .html files, urlgen.html defines the "mpds", "drms" and "assetopts"
-	// named templates, so the count exceeds the number of template files.
-	require.Equal(t, 8, len(textTemplates.Templates()))
+	require.Contains(t, welcomeStr, `href="http://localhost:8888/assets"`)
+	require.Contains(t, welcomeStr, "1.2.3")
 
-	// The SGAI status page is a template that loads its polling logic from a static asset and
-	// carries the host for proxy/base-path setups; both must be interpolated with the host.
+	// The SGAI status page loads its polling logic from a static asset and carries the
+	// host for proxy/base-path setups; both must be interpolated with the host.
 	buf.Reset()
-	err = textTemplates.ExecuteTemplate(&buf, "sgai_session_status.html", struct{ Host string }{Host: "http://localhost:8888"})
-	require.NoError(t, err)
+	require.NoError(t, sgaiSessionStatusPage("http://localhost:8888").Render(context.Background(), &buf))
 	statusStr := buf.String()
 	require.Contains(t, statusStr, `src="http://localhost:8888/static/sgai_session_status.js"`)
 	require.Contains(t, statusStr, `data-api="http://localhost:8888"`)

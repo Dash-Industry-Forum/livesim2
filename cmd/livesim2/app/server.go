@@ -14,7 +14,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	htmpl "html/template"
 	ttmpl "text/template"
 
 	_ "net/http/pprof"
@@ -31,7 +30,6 @@ type Server struct {
 	sgaiAds       *adCatalog
 	sgaiAdsMu     sync.Mutex
 	textTemplates *ttmpl.Template
-	htmlTemplates *htmpl.Template
 	reqLimiter    *IPRequestLimiter
 }
 
@@ -64,11 +62,6 @@ func (s *Server) compileTemplates() error {
 		return fmt.Errorf("compileTextTemplates: %w", err)
 	}
 	slog.Debug("text templates", "defined", s.textTemplates.DefinedTemplates())
-	s.htmlTemplates, err = compileHTMLTemplates(content, "templates")
-	if err != nil {
-		return fmt.Errorf("compileHTMLTemplates: %w", err)
-	}
-	slog.Debug("html templates", "defined", s.htmlTemplates.DefinedTemplates())
 
 	return nil
 }

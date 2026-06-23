@@ -9,7 +9,10 @@ import (
 	"net/http"
 )
 
-//go:embed static/* templates/*
+// HTML pages are rendered by compiled templ components (*.templ); only the
+// text/template XML subtitle templates still need to be embedded here.
+//
+//go:embed static/* templates/*.xml
 var content embed.FS
 
 // embeddedStaticHandlerFunc handles static files in tree starting at static
