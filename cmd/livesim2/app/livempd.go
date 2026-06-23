@@ -319,7 +319,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 			switch *cfg.SCTE35PerMinute {
 			case 1, 2, 3:
 				cmdType = ""
-			case 11, 12, 13:
+			case 11, 12, 13, 21, 22, 23:
 				cmdType = "timesignal"
 			}
 			as.InbandEventStreams = append(as.InbandEventStreams,
