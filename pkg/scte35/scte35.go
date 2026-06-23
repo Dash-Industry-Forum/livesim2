@@ -18,7 +18,7 @@ const (
 // Returns if requested adsPerMinute value is valid (1, 2, or 3)
 func IsValidSCTE35Interval(adsPerMinute int) error {
 	switch adsPerMinute {
-	case 1, 2, 3, 11, 12, 13:
+	case 1, 2, 3, 11, 12, 13, 21, 22, 23:
 		return nil
 	default:
 		return errors.New("scte35 per minute must be 1, 2, or 3")
@@ -39,7 +39,10 @@ func CreateEmsgAhead(log *slog.Logger, segStart, segEnd, timescale uint64, perMi
 	minuteStart := segStart - modMinute
 	var spliceInsertTimes []uint64
 	var emsgs []*mp4.EmsgBox
-	breakTypes := []scte35.SegDescType{scte35.SegDescProviderPOStart, scte35.SegDescProviderPOStart}
+	var breakTypes []scte35.SegDescType
+
+	breakTypesPO := []scte35.SegDescType{scte35.SegDescProviderPOStart, scte35.SegDescProviderPOEnd}
+	breakTypesDP := []scte35.SegDescType{scte35.SegDescDistributorPOStart, scte35.SegDescDistributorPOEnd}
 
 	adDuration := 10 * timescale
 	timeSignal := false
@@ -55,12 +58,28 @@ func CreateEmsgAhead(log *slog.Logger, segStart, segEnd, timescale uint64, perMi
 	case 11:
 		timeSignal = true
 		adDuration = 20 * timescale
+		breakTypes = breakTypesPO
 		spliceInsertTimes = []uint64{minuteStart + 10*timescale}
 	case 12:
 		timeSignal = true
+		breakTypes = breakTypesPO
 		spliceInsertTimes = []uint64{minuteStart + 10*timescale, minuteStart + 40*timescale}
 	case 13:
 		timeSignal = true
+		breakTypes = breakTypesPO
+		spliceInsertTimes = []uint64{minuteStart + 10*timescale, minuteStart + 36*timescale, minuteStart + 46*timescale}
+	case 21:
+		timeSignal = true
+		adDuration = 20 * timescale
+		breakTypes = breakTypesDP
+		spliceInsertTimes = []uint64{minuteStart + 10*timescale}
+	case 22:
+		timeSignal = true
+		breakTypes = breakTypesDP
+		spliceInsertTimes = []uint64{minuteStart + 10*timescale, minuteStart + 40*timescale}
+	case 23:
+		timeSignal = true
+		breakTypes = breakTypesDP
 		spliceInsertTimes = []uint64{minuteStart + 10*timescale, minuteStart + 36*timescale, minuteStart + 46*timescale}
 	}
 	// We do not need to look into next minute, since first start is 10s after full minute.
@@ -106,13 +125,22 @@ func CreateEmsgAhead(log *slog.Logger, segStart, segEnd, timescale uint64, perMi
 
 	// If we're handling a timeSignal we need to add start and end segmentation descriptors into separate emsgs
 	if timeSignal {
-		for breakType := range breakTypes {
-			e.MessageData = CreateTimeSignalInsertPayload(p, scte35.SegDescType(breakType), log)
+		log.Debug("ALL BREAKS", "ALLBREAKS", len(breakTypes))
+		for _, breakType := range breakTypes {
+			e.PresentationTime = uint64(spliceTime)
+			if breakType == scte35.SegDescProviderPOEnd || breakType == scte35.SegDescDistributorPOEnd {
+				e.PresentationTime = e.PresentationTime + uint64(adDuration)
+				e.ID = e.ID + 1
+			}
+			e.MessageData = CreateTimeSignalInsertPayload(p, breakType, log)
 			e.Value = "timesignal"
+			b := e
+			emsgs = append(emsgs, &b)
 		}
+	} else {
+		// Splice_insert much simpler!
+		emsgs = append(emsgs, &e)
 	}
-
-	emsgs = append(emsgs, &e)
 
 	return emsgs, nil
 }
@@ -162,13 +190,16 @@ func CreateTimeSignalInsertPayload(p SpliceInsertParams, breakType scte35.SegDes
 	cmd := scte35.CreateTimeSignalCommand()
 	cmd.SetHasPTS(true)
 
-	if breakType == scte35.SegDescProviderPOEnd {
+	if breakType == scte35.SegDescProviderPOEnd || breakType == scte35.SegDescDistributorPOEnd {
 		cmd.SetPTS(gots.PTS(p.PtsTime + p.Duration))
+		log.Debug("BREAK", "TYPE", breakType, "PTS", cmd.PTS())
 	} else {
 		cmd.SetPTS(gots.PTS(p.PtsTime))
+		log.Debug("BREAK", "TYPE", breakType, "PTS", cmd.PTS())
 	}
 
 	log.Debug("time_signal", "value", cmd)
+	log.Debug("Break Type:", "breakType", breakType)
 
 	descriptors := CreateDescriptors(p, breakType)
 
@@ -199,16 +230,16 @@ func CreateDescriptors(p SpliceInsertParams, breakType scte35.SegDescType) []sct
 
 	desc := scte35.CreateSegmentationDescriptor()
 
-	if p.Duration != 0 {
-		desc.SetHasDuration(true)
-		desc.SetDuration(gots.PTS(p.Duration))
-	}
+	desc.SetHasDuration(true)
+	desc.SetDuration(0)
 
 	desc.SetEventID(p.SpliceEventID)
 	desc.SetTypeID(breakType)
 	desc.SetIsEventCanceled(p.SpliceEventCancelIndicator)
 	desc.SetIsWebDeliveryAllowed(true)
+	desc.SetIsDeliveryNotRestricted(true)
 	desc.SetHasNoRegionalBlackout(true)
+	desc.SetHasProgramSegmentation(true)
 	desc.SetSegmentNumber(1)
 	desc.SetSegmentsExpected(1)
 	desc.SetHasSubSegments(false)
