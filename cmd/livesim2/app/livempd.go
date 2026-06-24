@@ -611,11 +611,14 @@ func splitPeriod(mpd *m.MPD, a *asset, cfg *ResponseConfig, wTimes wrapTimes) er
 	mpd.Periods = nil
 	for i, p := range periods {
 		if cfg.XlinkPeriods && cfg.PeriodId == "" && i < len(periods)-1 {
-			xlinkPeriod := p.Clone()
-			xlinkPeriod.AdaptationSets = nil
-			xlinkPeriod.XlinkHref = "./" + cfg.URLParts[len(cfg.URLParts)-1] + "?period=" + xlinkPeriod.Id
-			xlinkPeriod.XlinkActuate = "onRequest"
-			mpd.AppendPeriod(xlinkPeriod)
+			xlinkPeriod := m.Period{
+				Id:           p.Id,
+				Start:        p.Start,
+				Duration:     p.Duration,
+				XlinkHref:    "./" + cfg.URLParts[len(cfg.URLParts)-1] + "?period=" + p.Id,
+				XlinkActuate: "onRequest",
+			}
+			mpd.AppendPeriod(&xlinkPeriod)
 		} else {
 			mpd.AppendPeriod(p)
 		}
