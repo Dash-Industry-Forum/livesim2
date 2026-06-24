@@ -431,7 +431,7 @@ func (s *Server) sgaiBeaconHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// sgaiSessionStatusHandlerFunc renders the live status page (templates/sgai_session_status.html)
+// sgaiSessionStatusHandlerFunc renders the live status page (sgaiSessionStatusPage in sgai_session_status.templ)
 // that shows, live, the ad decisions and impression beacons recorded for a session id. The page
 // polls the JSON API (/api/sgai/sessions[/<sid>]) every second; with no ?sid= it lists the active
 // sessions. This is the way to observe SGAI activity on a public livesim2 deployment where the
@@ -439,8 +439,7 @@ func (s *Server) sgaiBeaconHandlerFunc(w http.ResponseWriter, r *http.Request) {
 // static asset /static/sgai_session_status.js.
 func (s *Server) sgaiSessionStatusHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	data := struct{ Host string }{Host: fullHost(s.Cfg.Host, r)}
-	if err := s.htmlTemplates.ExecuteTemplate(w, "sgai_session_status.html", data); err != nil {
+	if err := sgaiSessionStatusPage(fullHost(s.Cfg.Host, r)).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

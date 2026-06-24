@@ -75,12 +75,7 @@ func (s *Server) assetsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		aInfo.Assets = append(aInfo.Assets, &assetInfo)
 	}
 	w.Header().Set("Content-Type", "text/html")
-	templateName := "assets.html"
-	if forVod {
-		templateName = "assets_vod.html"
-	}
-	err = s.htmlTemplates.ExecuteTemplate(w, templateName, aInfo)
-	if err != nil {
+	if err := assetsPage(aInfo, forVod).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

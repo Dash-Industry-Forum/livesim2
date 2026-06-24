@@ -1,0 +1,404 @@
+// Copyright 2023, DASH-Industry Forum. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE.md file.
+
+package app
+
+import "strconv"
+
+// mpdsFragment renders the <option> list for the MPD <select>. It is composed
+// into urlgenPage and also rendered standalone for the htmx /urlgen/mpds swap.
+templ mpdsFragment(mpds []nameWithSelect) {
+	for _, m := range mpds {
+		<option value={ m.Name } selected?={ m.Selected }>{ m.Name }</option>
+	}
+}
+
+// drmsFragment renders the DRM radio buttons. Composed into urlgenPage and also
+// rendered (inside assetOpts) for the htmx out-of-band swap into #drms. A choice
+// is rendered disabled when Disabled is set (e.g. the lone "None" for a
+// pre-encrypted asset).
+templ drmsFragment(drms []nameWithSelect) {
+	for _, dr := range drms {
+		<label for={ "drm-" + dr.Name }>
+			<input type="radio" id={ "drm-" + dr.Name } name="drm" value={ dr.Name } checked?={ dr.Selected } disabled?={ dr.Disabled }/>
+			{ dr.Desc }
+		</label>
+	}
+}
+
+// assetOpts is the response served when the asset <select> changes. One response
+// updates two regions: the MPD <select> (the primary hx-target #mpd) gets the MPD
+// options, and the DRM radios are refreshed via an htmx out-of-band swap into
+// #drms. The DRM choices are asset-dependent — a pre-encrypted asset collapses to
+// a single, disabled "None".
+templ assetOpts(d urlGenData) {
+	@mpdsFragment(d.MPDs)
+	<div id="drms" hx-swap-oob="innerHTML">
+		@drmsFragment(d.DRMs)
+	</div>
+}
+
+// urlgenPage renders the URL-generator form served at /urlgen/.
+templ urlgenPage(d urlGenData) {
+	<!doctype html>
+	<html lang="en">
+		<head>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta charset="utf-8"/>
+			<script src={ d.Host + "/static/htmx.min.js" }></script>
+			<link rel="stylesheet" href={ d.Host + "/static/pico.min.css" }/>
+			<link rel="stylesheet" href={ d.Host + "/static/custom.css" }/>
+			<title>Livesim2 URL generator</title>
+		</head>
+		<body>
+			<main class="container">
+				<hgroup>
+					<h1>Livesim2 URL generator</h1>
+					<p>host={ d.Host }</p>
+				</hgroup>
+				if d.URL != "" {
+					<article>
+						URL= { d.URL }<br/>
+						<div class="grid">
+							<span onclick={ templ.JSFuncCall("navigator.clipboard.writeText", d.URL) } role="button">Copy</span>
+							<a href={ d.PlayURL } target="_blank" role="button">Play</a>
+							<span onclick="window.location.href='/urlgen/';" role="button" class="secondary">Reset</span>
+						</div>
+					</article>
+				}
+				if len(d.Errors) > 0 {
+					<article>
+						for _, e := range d.Errors {
+							{ e }<br/>
+						}
+					</article>
+				}
+				<form action={ d.Host + "/urlgen/create" } method="get">
+					<label for="asset">
+						Asset
+						<select name="asset" hx-get={ d.Host + "/urlgen/mpds" } hx-target="#mpd" hx-indicator=".htmx-indicator">
+							for _, a := range d.Assets {
+								<option value={ a.AssetPath } selected?={ a.Selected }>{ a.AssetPath } </option>
+							}
+						</select>
+					</label>
+					<label for="mpd">
+						MPDs
+						<select id="mpd" name="mpd">
+							@mpdsFragment(d.MPDs)
+						</select>
+					</label>
+					<fieldset>
+						<legend>SegmentTemplate variant</legend>
+						<label for="nr">
+							<input type="radio" id="nr" name="stl" value="nr" checked?={ d.Stl == Number }/>
+							$Number$
+						</label>
+						<label for="tlt">
+							<input type="radio" id="tlt" name="stl" value="tlt" checked?={ d.Stl == TimelineTime }/>
+							SegmentTimeline with $Time$
+						</label>
+						<label for="tlnr">
+							<input type="radio" id="tlnr" name="stl" value="tlnr" checked?={ d.Stl == TimelineNumber }/>
+							SegmentTimeline with $Number$
+						</label>
+						<label for="tltp">
+							<input type="radio" id="tltp" name="stl" value="tltp" checked?={ d.Stl == TimelineTimePattern }/>
+							SegmentTimeline with $Time$ using Pattern for audio
+						</label>
+						<label for="tlnrp">
+							<input type="radio" id="tlnrp" name="stl" value="tlnrp" checked?={ d.Stl == TimelineNumberPattern }/>
+							SegmentTimeline with $Number$ using Pattern for audio
+						</label>
+					</fieldset>
+					<details>
+						<summary>General timing ...</summary>
+						<label for="tsbd">
+							time-shift buffer depth (seconds)
+							<input type="text" id="tsbd" name="tsbd" value={ strconv.Itoa(d.Tsbd) }/>
+						</label>
+						<label for="mup">
+							minimum update period (seconds). Default is the segment duration
+							<input type="text" id="mup" name="mup" value={ d.MinimumUpdatePeriodS }/>
+						</label>
+						<label for="spd">
+							suggestedPresentationDelay (seconds)
+							<input type="text" id="spd" name="spd" value={ d.SuggestedPresentationDelayS }/>
+						</label>
+						<label for="utc">
+							UTCTiming methods (comma-separated list of: direct, head, ntp, sntp, httpxsdate, httpxsdatems,
+							httpiso, httpisoms, keep, none.
+							"keep" keeps values from the VoD MPD and cannot be combined with other values. Default is httpiso)
+							<input type="text" id="utc" name="utc" value={ d.UTCTiming }/>
+						</label>
+						<label for="snr">
+							startNumber (default=0) -1 translates to no value in MPD (fallback to default = 1)
+							<input type="text" id="snr" name="snr" value={ d.StartNR }/>
+						</label>
+					</details>
+					<details>
+						<summary>Multi-period ...</summary>
+						<label for="periods">
+							number periods per hour (1-60)
+							<input type="text" id="periods" name="periods" value={ d.Periods }/>
+						</label>
+						<label for="continuous">
+							period continuity signaling
+							<input type="checkbox" id="continuous" name="continuous" checked?={ d.Continuous }/>
+						</label>
+					</details>
+					<details>
+						<summary>Low latency...</summary>
+						<label for="ato">
+							availabilityTimeOffset (float in seconds or inf)
+							<input type="text" id="ato" name="ato" value={ d.Ato }/>
+						</label>
+						<label for="chunkdur">
+							chunk duration for low-latency (float in seconds)
+							<input type="text" id="chunkdur" name="chunkdur" value={ d.ChunkDur }/>
+						</label>
+						<label for="ltgt">
+							low-latency target (milliseconds)
+							<input type="text" id="ltgt" name="ltgt" value={ strconv.FormatUint(uint64(d.LlTarget), 10) }/>
+						</label>
+					</details>
+					<details>
+						<summary>SSR</summary>
+						<label for="ssrAS">
+							SSR Configuration (adaptationSetId,ssrValue;adaptationSetId,ssrValue;...)
+							<textarea id="ssrAS" name="ssrAS" rows="3">{ d.SSRASConfig }</textarea>
+						</label>
+						<label for="chunkDurSSR">
+							chunk duration for ssr (decimal) (adaptationSetId,chunkDuration;adaptationSetId,chunkDuration;...)
+							<textarea id="chunkDurSSR" name="chunkDurSSR" rows="3">{ d.ChunkDurSSR }</textarea>
+						</label>
+					</details>
+					<details>
+						<summary>MPD Patch...</summary>
+						<fieldset>
+							<legend>Provides delta DASH MPDs at a PatchLocation</legend>
+							<label for="patch-ttl">
+								<input type="text" id="patch-ttl" name="patch-ttl" value={ d.PatchTTL }/>
+							</label>
+							<p><em>Set a positive TTL in seconds</em></p>
+						</fieldset>
+					</details>
+					<details>
+						<summary>SCTE-35...</summary>
+						<fieldset>
+							<legend>SCTE-35 emsg frequency</legend>
+							<label for="scte35-none">
+								<input type="radio" id="scte35-none" name="scte35" value="" checked?={ d.Scte35Var == "" }/>
+								No SCTE-35 emsg boxes
+							</label>
+							<label for="scte35-1">
+								<input type="radio" id="scte35-1" name="scte35" value="1" checked?={ d.Scte35Var == "1" }/>
+								1 event per minute, duration 20s, start at hh:mm:10
+							</label>
+							<label for="scte35-2">
+								<input type="radio" id="scte35-2" name="scte35" value="2" checked?={ d.Scte35Var == "2" }/>
+								2 events per minute, duration 10s, start at hh:mm:10 and hh:mm:40
+							</label>
+							<label for="scte35-3">
+								<input type="radio" id="scte35-3" name="scte35" value="3" checked?={ d.Scte35Var == "3" }/>
+								3 events per minute, duration 10s, start at hh:mm:10, hh:mm:36, hh:mm:46
+							</label>
+						</fieldset>
+					</details>
+					<details>
+						<summary>Start and stop...</summary>
+						<label for="start">
+							timeline start (and availabilityStartTime) relative to Epoch (in seconds)
+							<input type="text" id="start" name="start" value={ d.Start }/>
+						</label>
+						<label for="stop">
+							stop time for time-limited event (in seconds)
+							<input type="text" id="stop" name="stop" value={ d.Stop }/>
+						</label>
+						<label for="relstart">
+							timeline start (and availabilityStartTime) relative to now (in seconds). Normally negative value.
+							<input type="text" id="startrel" name="startrel" value={ d.StartRel }/>
+						</label>
+						<label for="relstop">
+							stop time for time-limited event relative to now (in seconds)
+							<input type="text" id="stoprel" name="stoprel" value={ d.StopRel }/>
+						</label>
+					</details>
+					<details>
+						<summary>Generate time subtitles...</summary>
+						<label for="timesubsstpp">
+							languages for generated subtitles in stpp-format (comma-separated)
+							<input type="text" id="timesubsstpp" name="timesubsstpp" value={ d.TimeSubsStpp }/>
+						</label>
+						<label for="timesubswvtt">
+							languages for generated subtitles in wvtt-format (comma-separated)
+							<input type="text" id="timesubswvtt" name="timesubswvtt" value={ d.TimeSubsWvtt }/>
+						</label>
+						<label for="timesubsdur">
+							Cue duration of generated time subtitles in ms (&lt;=1000)
+							<input type="text" id="timesubsdur" name="timesubsdur" value={ d.TimeSubsDur }/>
+						</label>
+						<fieldset>
+							<legend>Time subtitle region</legend>
+							<label for="reg0">
+								<input type="radio" id="reg0" name="timesubsreg" value="0" checked?={ d.TimeSubsReg == "0" }/>
+								Region 0 (bottom)
+							</label>
+							<label for="reg1">
+								<input type="radio" id="reg1" name="timesubsreg" value="1" checked?={ d.TimeSubsReg == "1" }/>
+								Region 1 (top)
+							</label>
+						</fieldset>
+					</details>
+					<details>
+						<summary>Encryption and DRM</summary>
+						<fieldset>
+							<legend>Encryption on-the-fly with keys via ECCP or commercial DRM systems. Pre-encrypted assets cannot be changed.</legend>
+							<!-- This should be asset dependent, but not got the right htmx to do that yet -->
+							<div name="drms" id="drms">
+								@drmsFragment(d.DRMs)
+							</div>
+							<div>
+								See <a href={ d.Host + "/config" }>/config</a>{ " for what commercial DRMs are configured." }<br/>
+								For more about DASH-IF ECCP see <a href="https://dashif.org/docs/IOP-Guidelines/DASH-IF-IOP-Part6-v5.0.0.pdf" target="_blank">DASH-IF IOP Part 6</a>
+							</div>
+						</fieldset>
+					</details>
+					<details>
+						<summary>Annex I URL Parameters...</summary>
+						<label for="annexI">
+							query parameters in MPD to propagate to all video segment requests. Comma-separated key=value pairs.
+							<input type="text" id="annexI" name="annexI" value={ d.AnnexI }/>
+						</label>
+					</details>
+					<details>
+						<summary>Server-Guided Ad Insertion (SGAI, DASH Ed.6)...</summary>
+						<fieldset>
+							<legend>Personalized live ad replacement via Alternative-MPD Replace events</legend>
+							<label for="sgai">
+								Ad-break schedule and options
+								<input type="text" id="sgai" name="sgai" value={ d.Sgai } placeholder="30:15,90:15;skipafter=5"/>
+							</label>
+							<p>
+								The live stream is annotated with DASH 6th-edition <em>Alternative-MPD Replace</em>
+								events. At each break the player resolves an ad-decisioning endpoint
+								(default <code>/sgai/ads</code>), plays the returned ad pod (a List MPD), then
+								resumes the live stream. Grammar:
+								<pre>( &lt;off&gt;:&lt;dur&gt;[,&lt;off&gt;:&lt;dur&gt;...] | p&lt;period&gt;:&lt;dur&gt; )[;key=val;...]</pre>
+								where each <code>off:dur</code> is one break, both in <em>seconds</em>:
+							</p>
+							<ul>
+								<li><it>off</it> &mdash; break start, seconds from the period (availabilityStartTime) start</li>
+								<li><it>dur</it> &mdash; break duration; also the maximum ad-pod duration (ads are trimmed to fit)</li>
+								<li>
+									<it>p&lt;period&gt;:&lt;dur&gt;</it> &mdash; recurring breaks instead: a break of <it>dur</it> at
+									every wall-clock multiple of <it>period</it> (e.g. <code>p60:20</code> = 20&nbsp;s at every
+									start of a UTC minute, forever). Anchored to the wall clock, not the session start, so
+									all viewers share the schedule and a late joiner can land in the middle of a break.
+								</li>
+							</ul>
+							<p>Optional <code>;key=val</code> settings after the break list:</p>
+							<ul>
+								<li><it>skipafter=&lt;s&gt;</it> &mdash; ads become skippable after s seconds (default: not skippable)</li>
+								<li><it>nojump=&lt;0|1|2&gt;</it> &mdash; restrict skipping the break by seeking (default 0)</li>
+								<li><it>clip=&lt;0|1&gt;</it> &mdash; clip the replaced main content (default 1)</li>
+								<li><it>once=&lt;0|1&gt;</it> &mdash; each event executes only once (default 1)</li>
+								<li>
+									<it>resolve=&lt;s&gt;</it> &mdash; earliestResolutionTimeOffset: how many seconds before
+									the break the player may resolve the ad (default 60)
+								</li>
+								<li><it>ep=&lt;path&gt;</it> &mdash; ad-decisioning endpoint path (default /sgai/ads)</li>
+							</ul>
+							<p>
+								Example: <pre>30:15,90:15;skipafter=5;nojump=2</pre>
+								two 15&nbsp;s breaks (at 30&nbsp;s and 90&nbsp;s), skippable after 5&nbsp;s,
+								not skippable by seeking.
+								<br/>During each break the underlying (clear AVC) video track serves a generated
+								<em>AD&nbsp;BREAK</em> slate with a per-second countdown to the end of the break &mdash;
+								the visible "ad to be replaced", i.e. the base ad. Players that execute the Replace
+								event cover it with the personalized pod; others show the slate. Audio is untouched.
+								<br/><strong>An ad pod is only returned for an interest-steered request</strong>: with
+								no <em>interests</em> (or interests that match no creative) the decisioning answers
+								404, the Replace event is skipped, and every player keeps the AD&nbsp;BREAK slate
+								(the base ad). This is the default when neither sessionId nor interests are given.
+								<br/><em>Cannot be combined with the multi-period / xlink / insertad options.</em>
+							</p>
+							<label for="sgaiSessionId">
+								sessionId &mdash; personalization &amp; reporting key (keys the impression beacons; with
+								interests, rotates the pod per session for variety). On its own it does not produce a pod.
+								<input type="text" id="sgaiSessionId" name="sgaiSessionId" value={ d.SgaiSessionID } placeholder="alice"/>
+							</label>
+							<label for="sgaiInterests">
+								interests &mdash; comma-separated interest tags; matching ads (tagged in ads/ads.json) lead the pod.
+								<strong>Required to get an ad pod</strong> &mdash; without interests the player keeps the
+								AD&nbsp;BREAK slate (the base ad).
+								The bundled demo ads are tagged <code>travel</code> (train, Namibia&nbsp;&times;2, of which
+								one also <code>safari</code>) and <code>sailing</code>/<code>boats</code>
+								(Gotland&nbsp;Runt, Sailing in Stockholm) &mdash; see <a href={ d.Host + "/api/sgai/ads" } target="_blank">/api/sgai/ads</a>.
+								<input type="text" id="sgaiInterests" name="sgaiInterests" value={ d.SgaiInterests } placeholder="travel"/>
+							</label>
+							<p>
+								<em>sessionId</em> and <em>interests</em> are added as MPD-URL query parameters and
+								propagated to the ad-decisioning request via Annex I, so each viewer can receive a
+								different, interest-steered ad pod. With no interests the decisioning returns no pod
+								and the viewer sees the base ad (the AD&nbsp;BREAK slate). Watch ad decisions and
+								impression beacons live at
+								<a href={ d.Host + "/sgai/session_status" } target="_blank">/sgai/session_status</a>.
+							</p>
+						</fieldset>
+					</details>
+					<details>
+						<summary>Negative test cases...</summary>
+						<label for="statuscode">
+							<p><em>Patterns of cyclic segment response codes</em></p>
+							<input type="text" id="statuscode" name="statuscode" value={ d.StatusCodes }/>
+							<p>
+								A square-bracket-surrounded list of comma-separated patterns, like
+								<pre>{ "[{code:404,cycle:30,rsq:0,rep:video},{code:403,cycle:60,rsq:1}]" }</pre>
+								where:<br/>
+							</p>
+							<ul>
+								<li><it>code</it> is an HTTP response code in the range 400-599</li>
+								<li><it>cycle</it> is cycle in seconds</li>
+								<li><it>rsq</it> is the relative sequence number in the cycle</li>
+								<li><it>rep</it> is a comma-separated list of representation IDs to which the pattern applies (can be empty)</li>
+							</ul>
+						</label>
+						<label for="traffic">
+							<p><em>Traffic Patterns for one or more BaseURLs</em></p>
+							<input type="text" id="traffic" name="traffic" value={ d.Traffic }/>
+							<p>
+								Specify time interval for loss patterns for one or more BaseURLs
+								with "up (u)", "down (d)", "slow (s)", or "hang (h)" states, like
+								<pre>u50d10,u10d50</pre>
+								or
+								<pre>d1,u1,u45s10h5</pre>
+								where:<br/>
+							</p>
+							<ul>
+								<li><it>u50d10,u10d50</it> is two pairs (two base URLS)</li>
+								<li><it>u50d10 means 50s up time and 10s downtime (60s cycle)</it></li>
+								<li><it>u10d50 means 10s up time and 50s downtime (60s cycle)</it></li>
+								<li>
+									<it>d1,u1,u45s10h5</it> means three base URLS where the first is always down,
+									the second is always up,
+									and the third is up 45s, slow 10s, and hanging 5s every minute
+								</li>
+							</ul>
+							<ul>
+								<li>During a "down (d)" interval, all segment requests will result in a "404 Not Found" response.</li>
+								<li>During a "slow (s)" interval, all segment responses are delayed by 2s.</li>
+								<li>During a "hang (s)" interval, all segment responses hang for 10s before resulting in 503.</li>
+							</ul>
+						</label>
+					</details>
+					<div class="grid">
+						<button type="submit">Submit</button>
+						<input type="button" onclick="window.location.href='/urlgen/';" class="secondary" value="Reset"/>
+					</div>
+				</form>
+			</main>
+		</body>
+	</html>
+}

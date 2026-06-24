@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Nothing yet
+### Changed
+
+- URL generator: DRM options now follow the selected asset and are disabled for pre-encrypted assets.
+- Migrated the HTML web pages (welcome, assets, VoD assets, URL generator, SGAI
+  session status) from Go's `html/template` to type-safe [templ](https://templ.guide)
+  components (`*.templ` → generated `*_templ.go`). The `text/template` XML subtitle
+  templates (`stpptime.xml`, `stpptimecue.xml`) are unchanged. Building now runs
+  `templ generate` (see `make templ`); a `make templ-check` target and a pre-commit
+  hook keep the generated code in sync.
 
 ## [1.10.0] - 2026-06-15
 

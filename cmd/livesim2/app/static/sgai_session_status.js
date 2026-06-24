@@ -32,8 +32,10 @@
     refresh();
   });
 
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>]/g,
-    (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  // Escape for both HTML text and double-/single-quoted attribute contexts (esc() output is used in
+  // both, e.g. <tr class="..."), so a value can never break out of an attribute.
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g,
+    (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const fmtTime = (t) => { try { return new Date(t).toLocaleTimeString(); } catch (e) { return t; } };
 
   function renderSession(s) {

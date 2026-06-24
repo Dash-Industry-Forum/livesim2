@@ -21,8 +21,7 @@ type welcomeInfo struct {
 func (s *Server) indexHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	wi := welcomeInfo{Host: fullHost(s.Cfg.Host, r), Version: internal.GetVersion()}
-	err := s.htmlTemplates.ExecuteTemplate(w, "welcome.html", wi)
-	if err != nil {
+	if err := welcomePage(wi).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

@@ -1,8 +1,23 @@
 .PHONY: all
 all: test check coverage build
 
+# templ version used to generate *_templ.go from *.templ. Keep in sync with the
+# github.com/a-h/templ require in go.mod.
+TEMPL_VERSION := v0.3.1020
+
 .PHONY: build
-build: livesim2 dashfetcher cmaf-ingest-receiver
+build: templ livesim2 dashfetcher cmaf-ingest-receiver
+
+.PHONY: templ
+templ:
+	go run github.com/a-h/templ/cmd/templ@$(TEMPL_VERSION) generate
+
+# templ-check regenerates the templ code and fails if it differs from what is
+# committed. Use in CI/pre-commit so generated *_templ.go never goes stale.
+.PHONY: templ-check
+templ-check:
+	go run github.com/a-h/templ/cmd/templ@$(TEMPL_VERSION) generate
+	git diff --exit-code -- '*_templ.go'
 
 .PHONY: prepare
 prepare:
@@ -16,7 +31,7 @@ forlinux: prepare
 	GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/Dash-Industry-Forum/livesim2/internal.commitVersion=$$(git describe --tags HEAD) -X github.com/Dash-Industry-Forum/livesim2/internal.commitDate=$$(git log -1 --format=%ct)" -o out-linux/dashfetcher ./cmd/dashfetcher/main.go
 
 .PHONY: test
-test: prepare
+test: prepare templ
 	go test ./...
 
 .PHONY: coverage
@@ -30,7 +45,7 @@ coverage:
 	tail -1 coverage.txt
 
 .PHONY: check
-check: prepare
+check: prepare templ
 	golangci-lint run
 
 .PHONY: clean

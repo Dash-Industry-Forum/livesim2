@@ -35,3 +35,23 @@ jobs:
 
       - name: Test
         run: go test -v ./...
+
+  templ:
+    name: templ-generated-code-in-sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: "1.25"
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # Regenerate *_templ.go from *.templ and fail if it differs from what is
+      # committed, so a forgotten `templ generate` cannot land stale code.
+      # Pinned to the github.com/a-h/templ version in go.mod / Makefile.
+      - name: Verify templ generated code is up to date
+        run: |
+          go run github.com/a-h/templ/cmd/templ@v0.3.1020 generate
+          git diff --exit-code
