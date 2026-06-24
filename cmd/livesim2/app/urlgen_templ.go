@@ -11,10 +11,12 @@ package app
 
 //lint:file-ignore SA4006 This context is only used if a nested component is present.
 
-import "github.com/a-h/templ"
-import templruntime "github.com/a-h/templ/runtime"
+import (
+	"strconv"
 
-import "strconv"
+	"github.com/a-h/templ"
+	templruntime "github.com/a-h/templ/runtime"
+)
 
 // mpdsFragment renders the <option> list for the MPD <select>. It is composed
 // into urlgenPage and also rendered standalone for the htmx /urlgen/mpds swap.
@@ -595,6 +597,10 @@ func urlgenPage(d urlGenData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "\"></label> <label for=\"continuous\">period continuity signaling <input type=\"checkbox\" id=\"continuous\" name=\"continuous\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "\"></label> <label for=\"xlink\">XLink for completed periods <input type=\"checkbox\" id=\"xlink\" name=\"xlink\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
