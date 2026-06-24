@@ -105,7 +105,9 @@ type ResponseConfig struct {
 	TimeShiftBufferDepthS        *int              `json:"TimeShiftBufferDepthS,omitempty"`
 	MinimumUpdatePeriodS         *int              `json:"MinimumUpdatePeriodS,omitempty"`
 	PeriodsPerHour               *int              `json:"PeriodsPerHour,omitempty"`
+	XlinkPeriods                 bool              `json:"XlinkPeriods,omitempty"`
 	XlinkPeriodsPerHour          *int              `json:"XlinkPeriodsPerHour,omitempty"`
+	PeriodId                     string            `json:"PeriodId,omitempty"`
 	EtpPeriodsPerHour            *int              `json:"EtpPeriodsPerHour,omitempty"`
 	EtpDuration                  *int              `json:"EtpDuration,omitempty"`
 	PeriodOffset                 *int              `json:"PeriodOffset,omitempty"`
@@ -371,7 +373,8 @@ cfgLoop:
 		case "periods": // Make n periods per hour
 			cfg.PeriodsPerHour = sc.AtoiPtr(key, val)
 		case "xlink": // Make periods access via xlink
-			cfg.XlinkPeriodsPerHour = sc.AtoiPtr(key, val)
+			// cfg.XlinkPeriodsPerHour = sc.AtoiPtr(key, val)
+			cfg.XlinkPeriods = true
 		case "etp": // Early terminated periods per hour
 			cfg.EtpPeriodsPerHour = sc.AtoiPtr(key, val)
 		case "etpDuration": // Add a presentation duration for multiple periods
