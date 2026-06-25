@@ -149,7 +149,7 @@ templ urlgenPage(d urlGenData) {
 						</label>
 						<label for="xlink">
 						XLink for completed periods
-							<input type="checkbox" id="xlink" name="xlink" {{if .XlinkPeriods}}checked{{end}} />
+							<input type="checkbox" id="xlink" name="xlink" checked?={ d.XlinkPeriods } />
 						</label>
 					</details>
 					<details>
