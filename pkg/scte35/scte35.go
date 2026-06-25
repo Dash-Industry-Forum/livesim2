@@ -134,6 +134,7 @@ func CreateEmsgAhead(log *slog.Logger, segStart, segEnd, timescale uint64, perMi
 			}
 			e.MessageData = CreateTimeSignalInsertPayload(p, breakType, log)
 			e.Value = "timesignal"
+			// Simple way to avoid overwriting the emsg each iteration of the loop....
 			b := e
 			emsgs = append(emsgs, &b)
 		}
@@ -231,7 +232,11 @@ func CreateDescriptors(p SpliceInsertParams, breakType scte35.SegDescType) []sct
 	desc := scte35.CreateSegmentationDescriptor()
 
 	desc.SetHasDuration(true)
-	desc.SetDuration(0)
+	if breakType == scte35.SegDescProviderPOStart || breakType == scte35.SegDescDistributorPOStart {
+		desc.SetDuration(gots.PTS(p.Duration))
+	} else {
+		desc.SetDuration(0)
+	}
 
 	desc.SetEventID(p.SpliceEventID)
 	desc.SetTypeID(breakType)
