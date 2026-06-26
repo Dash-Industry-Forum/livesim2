@@ -295,7 +295,7 @@ func writeLiveMPD(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, 
 			}
 		}
 		if !found {
-			return fmt.Errorf("Period %s not found", cfg.PeriodId)
+			return fmt.Errorf("period %s not found", cfg.PeriodId)
 		}
 	} else {
 		size, err = lMPD.Write(buf, "  ", true)
