@@ -281,7 +281,26 @@ func writeLiveMPD(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, 
 	if err != nil {
 		return fmt.Errorf("convertToLive: %w", err)
 	}
-	size, err := lMPD.Write(buf, "  ", true, cfg.PeriodId)
+
+	var size int
+
+	// Write either Period element if specified (in response to XLink request) of full MPD
+	if cfg.PeriodId != "" {
+		found := false
+		for _, p := range lMPD.Periods {
+			if p.Id == cfg.PeriodId {
+				size, err = p.Write(buf, "  ")
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("Period %s not found", cfg.PeriodId)
+		}
+	} else {
+		size, err = lMPD.Write(buf, "  ", true)
+	}
+
 	if err != nil {
 		return err
 	}

@@ -242,7 +242,7 @@ func (s *Server) sgaiAdsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	mpd := buildAdListMPD(host, pod, durMS, breakID)
 
 	buf := bytes.NewBuffer(make([]byte, 0, 1024))
-	size, err := mpd.Write(buf, "  ", true, "")
+	size, err := mpd.Write(buf, "  ", true)
 	if err != nil {
 		log.Error("sgai ads: write MPD", "err", err)
 		http.Error(w, "could not write List MPD", http.StatusInternalServerError)
