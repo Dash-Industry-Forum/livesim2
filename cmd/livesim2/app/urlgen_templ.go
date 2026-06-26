@@ -604,236 +604,246 @@ func urlgenPage(d urlGenData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "></label></details> <details><summary>Low latency...</summary> <label for=\"ato\">availabilityTimeOffset (float in seconds or inf) <input type=\"text\" id=\"ato\" name=\"ato\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "></label> <label for=\"xlink\">XLink for completed periods <input type=\"checkbox\" id=\"xlink\" name=\"xlink\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if d.XlinkPeriods {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, " checked")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "></label></details> <details><summary>Low latency...</summary> <label for=\"ato\">availabilityTimeOffset (float in seconds or inf) <input type=\"text\" id=\"ato\" name=\"ato\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var29 string
 		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Ato)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 155, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 159, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "\"></label> <label for=\"chunkdur\">chunk duration for low-latency (float in seconds) <input type=\"text\" id=\"chunkdur\" name=\"chunkdur\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "\"></label> <label for=\"chunkdur\">chunk duration for low-latency (float in seconds) <input type=\"text\" id=\"chunkdur\" name=\"chunkdur\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var30 string
 		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.ChunkDur)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 159, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 163, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "\"></label> <label for=\"ltgt\">low-latency target (milliseconds) <input type=\"text\" id=\"ltgt\" name=\"ltgt\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "\"></label> <label for=\"ltgt\">low-latency target (milliseconds) <input type=\"text\" id=\"ltgt\" name=\"ltgt\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var31 string
 		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatUint(uint64(d.LlTarget), 10))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 163, Col: 98}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 167, Col: 98}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "\"></label></details> <details><summary>SSR</summary> <label for=\"ssrAS\">SSR Configuration (adaptationSetId,ssrValue;adaptationSetId,ssrValue;...) <textarea id=\"ssrAS\" name=\"ssrAS\" rows=\"3\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "\"></label></details> <details><summary>SSR</summary> <label for=\"ssrAS\">SSR Configuration (adaptationSetId,ssrValue;adaptationSetId,ssrValue;...) <textarea id=\"ssrAS\" name=\"ssrAS\" rows=\"3\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var32 string
 		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(d.SSRASConfig)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 170, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 174, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "</textarea></label> <label for=\"chunkDurSSR\">chunk duration for ssr (decimal) (adaptationSetId,chunkDuration;adaptationSetId,chunkDuration;...) <textarea id=\"chunkDurSSR\" name=\"chunkDurSSR\" rows=\"3\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "</textarea></label> <label for=\"chunkDurSSR\">chunk duration for ssr (decimal) (adaptationSetId,chunkDuration;adaptationSetId,chunkDuration;...) <textarea id=\"chunkDurSSR\" name=\"chunkDurSSR\" rows=\"3\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var33 string
 		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(d.ChunkDurSSR)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 174, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 178, Col: 77}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "</textarea></label></details> <details><summary>MPD Patch...</summary><fieldset><legend>Provides delta DASH MPDs at a PatchLocation</legend> <label for=\"patch-ttl\"><input type=\"text\" id=\"patch-ttl\" name=\"patch-ttl\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "</textarea></label></details> <details><summary>MPD Patch...</summary><fieldset><legend>Provides delta DASH MPDs at a PatchLocation</legend> <label for=\"patch-ttl\"><input type=\"text\" id=\"patch-ttl\" name=\"patch-ttl\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var34 string
 		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.PatchTTL)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 182, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 186, Col: 77}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "\"></label><p><em>Set a positive TTL in seconds</em></p></fieldset></details> <details><summary>SCTE-35...</summary><fieldset><legend>SCTE-35 emsg frequency</legend> <label for=\"scte35-none\"><input type=\"radio\" id=\"scte35-none\" name=\"scte35\" value=\"\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "\"></label><p><em>Set a positive TTL in seconds</em></p></fieldset></details> <details><summary>SCTE-35...</summary><fieldset><legend>SCTE-35 emsg frequency</legend> <label for=\"scte35-none\"><input type=\"radio\" id=\"scte35-none\" name=\"scte35\" value=\"\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if d.Scte35Var == "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, " checked")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "> No SCTE-35 emsg boxes</label> <label for=\"scte35-1\"><input type=\"radio\" id=\"scte35-1\" name=\"scte35\" value=\"1\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if d.Scte35Var == "1" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, " checked")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "> 1 event per minute, duration 20s, start at hh:mm:10</label> <label for=\"scte35-2\"><input type=\"radio\" id=\"scte35-2\" name=\"scte35\" value=\"2\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "> No SCTE-35 emsg boxes</label> <label for=\"scte35-1\"><input type=\"radio\" id=\"scte35-1\" name=\"scte35\" value=\"1\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if d.Scte35Var == "2" {
+		if d.Scte35Var == "1" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, " checked")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "> 2 events per minute, duration 10s, start at hh:mm:10 and hh:mm:40</label> <label for=\"scte35-3\"><input type=\"radio\" id=\"scte35-3\" name=\"scte35\" value=\"3\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "> 1 event per minute, duration 20s, start at hh:mm:10</label> <label for=\"scte35-2\"><input type=\"radio\" id=\"scte35-2\" name=\"scte35\" value=\"2\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if d.Scte35Var == "3" {
+		if d.Scte35Var == "2" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, " checked")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "> 3 events per minute, duration 10s, start at hh:mm:10, hh:mm:36, hh:mm:46</label></fieldset></details> <details><summary>Start and stop...</summary> <label for=\"start\">timeline start (and availabilityStartTime) relative to Epoch (in seconds) <input type=\"text\" id=\"start\" name=\"start\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "> 2 events per minute, duration 10s, start at hh:mm:10 and hh:mm:40</label> <label for=\"scte35-3\"><input type=\"radio\" id=\"scte35-3\" name=\"scte35\" value=\"3\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if d.Scte35Var == "3" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, " checked")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "> 3 events per minute, duration 10s, start at hh:mm:10, hh:mm:36, hh:mm:46</label></fieldset></details> <details><summary>Start and stop...</summary> <label for=\"start\">timeline start (and availabilityStartTime) relative to Epoch (in seconds) <input type=\"text\" id=\"start\" name=\"start\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var35 string
 		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Start)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 213, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 217, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "\"></label> <label for=\"stop\">stop time for time-limited event (in seconds) <input type=\"text\" id=\"stop\" name=\"stop\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "\"></label> <label for=\"stop\">stop time for time-limited event (in seconds) <input type=\"text\" id=\"stop\" name=\"stop\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var36 string
 		templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Stop)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 217, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 221, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var36)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "\"></label> <label for=\"relstart\">timeline start (and availabilityStartTime) relative to now (in seconds). Normally negative value. <input type=\"text\" id=\"startrel\" name=\"startrel\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "\"></label> <label for=\"relstart\">timeline start (and availabilityStartTime) relative to now (in seconds). Normally negative value. <input type=\"text\" id=\"startrel\" name=\"startrel\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var37 string
 		templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.StartRel)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 221, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 225, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "\"></label> <label for=\"relstop\">stop time for time-limited event relative to now (in seconds) <input type=\"text\" id=\"stoprel\" name=\"stoprel\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "\"></label> <label for=\"relstop\">stop time for time-limited event relative to now (in seconds) <input type=\"text\" id=\"stoprel\" name=\"stoprel\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var38 string
 		templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.StopRel)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 225, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 229, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "\"></label></details> <details><summary>Generate time subtitles...</summary> <label for=\"timesubsstpp\">languages for generated subtitles in stpp-format (comma-separated) <input type=\"text\" id=\"timesubsstpp\" name=\"timesubsstpp\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "\"></label></details> <details><summary>Generate time subtitles...</summary> <label for=\"timesubsstpp\">languages for generated subtitles in stpp-format (comma-separated) <input type=\"text\" id=\"timesubsstpp\" name=\"timesubsstpp\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var39 string
 		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.TimeSubsStpp)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 232, Col: 86}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 236, Col: 86}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "\"></label> <label for=\"timesubswvtt\">languages for generated subtitles in wvtt-format (comma-separated) <input type=\"text\" id=\"timesubswvtt\" name=\"timesubswvtt\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "\"></label> <label for=\"timesubswvtt\">languages for generated subtitles in wvtt-format (comma-separated) <input type=\"text\" id=\"timesubswvtt\" name=\"timesubswvtt\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var40 string
 		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.TimeSubsWvtt)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 236, Col: 86}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 240, Col: 86}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "\"></label> <label for=\"timesubsdur\">Cue duration of generated time subtitles in ms (&lt;=1000) <input type=\"text\" id=\"timesubsdur\" name=\"timesubsdur\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "\"></label> <label for=\"timesubsdur\">Cue duration of generated time subtitles in ms (&lt;=1000) <input type=\"text\" id=\"timesubsdur\" name=\"timesubsdur\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var41 string
 		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.TimeSubsDur)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 240, Col: 83}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 244, Col: 83}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var41)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "\"></label><fieldset><legend>Time subtitle region</legend> <label for=\"reg0\"><input type=\"radio\" id=\"reg0\" name=\"timesubsreg\" value=\"0\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "\"></label><fieldset><legend>Time subtitle region</legend> <label for=\"reg0\"><input type=\"radio\" id=\"reg0\" name=\"timesubsreg\" value=\"0\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if d.TimeSubsReg == "0" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, " checked")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "> Region 0 (bottom)</label> <label for=\"reg1\"><input type=\"radio\" id=\"reg1\" name=\"timesubsreg\" value=\"1\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if d.TimeSubsReg == "1" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, " checked")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "> Region 1 (top)</label></fieldset></details> <details><summary>Encryption and DRM</summary><fieldset><legend>Encryption on-the-fly with keys via ECCP or commercial DRM systems. Pre-encrypted assets cannot be changed.</legend><!-- This should be asset dependent, but not got the right htmx to do that yet --><div name=\"drms\" id=\"drms\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "> Region 0 (bottom)</label> <label for=\"reg1\"><input type=\"radio\" id=\"reg1\" name=\"timesubsreg\" value=\"1\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if d.TimeSubsReg == "1" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, " checked")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "> Region 1 (top)</label></fieldset></details> <details><summary>Encryption and DRM</summary><fieldset><legend>Encryption on-the-fly with keys via ECCP or commercial DRM systems. Pre-encrypted assets cannot be changed.</legend><!-- This should be asset dependent, but not got the right htmx to do that yet --><div name=\"drms\" id=\"drms\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -841,150 +851,150 @@ func urlgenPage(d urlGenData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "</div><div>See <a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "</div><div>See <a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var42 templ.SafeURL
 		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinURLErrs(d.Host + "/config")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 263, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 267, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "\">/config</a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "\">/config</a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var43 string
 		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(" for what commercial DRMs are configured.")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 263, Col: 99}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 267, Col: 99}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "<br>For more about DASH-IF ECCP see <a href=\"https://dashif.org/docs/IOP-Guidelines/DASH-IF-IOP-Part6-v5.0.0.pdf\" target=\"_blank\">DASH-IF IOP Part 6</a></div></fieldset></details> <details><summary>Annex I URL Parameters...</summary> <label for=\"annexI\">query parameters in MPD to propagate to all video segment requests. Comma-separated key=value pairs. <input type=\"text\" id=\"annexI\" name=\"annexI\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 86, "<br>For more about DASH-IF ECCP see <a href=\"https://dashif.org/docs/IOP-Guidelines/DASH-IF-IOP-Part6-v5.0.0.pdf\" target=\"_blank\">DASH-IF IOP Part 6</a></div></fieldset></details> <details><summary>Annex I URL Parameters...</summary> <label for=\"annexI\">query parameters in MPD to propagate to all video segment requests. Comma-separated key=value pairs. <input type=\"text\" id=\"annexI\" name=\"annexI\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var44 string
 		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.AnnexI)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 272, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 276, Col: 68}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var44)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "\"></label></details> <details><summary>Server-Guided Ad Insertion (SGAI, DASH Ed.6)...</summary><fieldset><legend>Personalized live ad replacement via Alternative-MPD Replace events</legend> <label for=\"sgai\">Ad-break schedule and options <input type=\"text\" id=\"sgai\" name=\"sgai\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "\"></label></details> <details><summary>Server-Guided Ad Insertion (SGAI, DASH Ed.6)...</summary><fieldset><legend>Personalized live ad replacement via Alternative-MPD Replace events</legend> <label for=\"sgai\">Ad-break schedule and options <input type=\"text\" id=\"sgai\" name=\"sgai\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var45 string
 		templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Sgai)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 281, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 285, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var45)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 86, "\" placeholder=\"30:15,90:15;skipafter=5\"></label><p>The live stream is annotated with DASH 6th-edition <em>Alternative-MPD Replace</em> events. At each break the player resolves an ad-decisioning endpoint (default <code>/sgai/ads</code>), plays the returned ad pod (a List MPD), then resumes the live stream. Grammar:<pre>( &lt;off&gt;:&lt;dur&gt;[,&lt;off&gt;:&lt;dur&gt;...] | p&lt;period&gt;:&lt;dur&gt; )[;key=val;...]</pre>where each <code>off:dur</code> is one break, both in <em>seconds</em>:</p><ul><li><it>off</it> &mdash; break start, seconds from the period (availabilityStartTime) start</li><li><it>dur</it> &mdash; break duration; also the maximum ad-pod duration (ads are trimmed to fit)</li><li><it>p&lt;period&gt;:&lt;dur&gt;</it> &mdash; recurring breaks instead: a break of <it>dur</it> at every wall-clock multiple of <it>period</it> (e.g. <code>p60:20</code> = 20&nbsp;s at every start of a UTC minute, forever). Anchored to the wall clock, not the session start, so all viewers share the schedule and a late joiner can land in the middle of a break.</li></ul><p>Optional <code>;key=val</code> settings after the break list:</p><ul><li><it>skipafter=&lt;s&gt;</it> &mdash; ads become skippable after s seconds (default: not skippable)</li><li><it>nojump=&lt;0|1|2&gt;</it> &mdash; restrict skipping the break by seeking (default 0)</li><li><it>clip=&lt;0|1&gt;</it> &mdash; clip the replaced main content (default 1)</li><li><it>once=&lt;0|1&gt;</it> &mdash; each event executes only once (default 1)</li><li><it>resolve=&lt;s&gt;</it> &mdash; earliestResolutionTimeOffset: how many seconds before the break the player may resolve the ad (default 60)</li><li><it>ep=&lt;path&gt;</it> &mdash; ad-decisioning endpoint path (default /sgai/ads)</li></ul><p>Example: <pre>30:15,90:15;skipafter=5;nojump=2</pre>two 15&nbsp;s breaks (at 30&nbsp;s and 90&nbsp;s), skippable after 5&nbsp;s, not skippable by seeking.<br>During each break the underlying (clear AVC) video track serves a generated <em>AD&nbsp;BREAK</em> slate with a per-second countdown to the end of the break &mdash; the visible \"ad to be replaced\", i.e. the base ad. Players that execute the Replace event cover it with the personalized pod; others show the slate. Audio is untouched.<br><strong>An ad pod is only returned for an interest-steered request</strong>: with no <em>interests</em> (or interests that match no creative) the decisioning answers 404, the Replace event is skipped, and every player keeps the AD&nbsp;BREAK slate (the base ad). This is the default when neither sessionId nor interests are given.<br><em>Cannot be combined with the multi-period / xlink / insertad options.</em></p><label for=\"sgaiSessionId\">sessionId &mdash; personalization &amp; reporting key (keys the impression beacons; with interests, rotates the pod per session for variety). On its own it does not produce a pod. <input type=\"text\" id=\"sgaiSessionId\" name=\"sgaiSessionId\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 88, "\" placeholder=\"30:15,90:15;skipafter=5\"></label><p>The live stream is annotated with DASH 6th-edition <em>Alternative-MPD Replace</em> events. At each break the player resolves an ad-decisioning endpoint (default <code>/sgai/ads</code>), plays the returned ad pod (a List MPD), then resumes the live stream. Grammar:<pre>( &lt;off&gt;:&lt;dur&gt;[,&lt;off&gt;:&lt;dur&gt;...] | p&lt;period&gt;:&lt;dur&gt; )[;key=val;...]</pre>where each <code>off:dur</code> is one break, both in <em>seconds</em>:</p><ul><li><it>off</it> &mdash; break start, seconds from the period (availabilityStartTime) start</li><li><it>dur</it> &mdash; break duration; also the maximum ad-pod duration (ads are trimmed to fit)</li><li><it>p&lt;period&gt;:&lt;dur&gt;</it> &mdash; recurring breaks instead: a break of <it>dur</it> at every wall-clock multiple of <it>period</it> (e.g. <code>p60:20</code> = 20&nbsp;s at every start of a UTC minute, forever). Anchored to the wall clock, not the session start, so all viewers share the schedule and a late joiner can land in the middle of a break.</li></ul><p>Optional <code>;key=val</code> settings after the break list:</p><ul><li><it>skipafter=&lt;s&gt;</it> &mdash; ads become skippable after s seconds (default: not skippable)</li><li><it>nojump=&lt;0|1|2&gt;</it> &mdash; restrict skipping the break by seeking (default 0)</li><li><it>clip=&lt;0|1&gt;</it> &mdash; clip the replaced main content (default 1)</li><li><it>once=&lt;0|1&gt;</it> &mdash; each event executes only once (default 1)</li><li><it>resolve=&lt;s&gt;</it> &mdash; earliestResolutionTimeOffset: how many seconds before the break the player may resolve the ad (default 60)</li><li><it>ep=&lt;path&gt;</it> &mdash; ad-decisioning endpoint path (default /sgai/ads)</li></ul><p>Example: <pre>30:15,90:15;skipafter=5;nojump=2</pre>two 15&nbsp;s breaks (at 30&nbsp;s and 90&nbsp;s), skippable after 5&nbsp;s, not skippable by seeking.<br>During each break the underlying (clear AVC) video track serves a generated <em>AD&nbsp;BREAK</em> slate with a per-second countdown to the end of the break &mdash; the visible \"ad to be replaced\", i.e. the base ad. Players that execute the Replace event cover it with the personalized pod; others show the slate. Audio is untouched.<br><strong>An ad pod is only returned for an interest-steered request</strong>: with no <em>interests</em> (or interests that match no creative) the decisioning answers 404, the Replace event is skipped, and every player keeps the AD&nbsp;BREAK slate (the base ad). This is the default when neither sessionId nor interests are given.<br><em>Cannot be combined with the multi-period / xlink / insertad options.</em></p><label for=\"sgaiSessionId\">sessionId &mdash; personalization &amp; reporting key (keys the impression beacons; with interests, rotates the pod per session for variety). On its own it does not produce a pod. <input type=\"text\" id=\"sgaiSessionId\" name=\"sgaiSessionId\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var46 string
 		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.SgaiSessionID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 330, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 334, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var46)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "\" placeholder=\"alice\"></label> <label for=\"sgaiInterests\">interests &mdash; comma-separated interest tags; matching ads (tagged in ads/ads.json) lead the pod. <strong>Required to get an ad pod</strong> &mdash; without interests the player keeps the AD&nbsp;BREAK slate (the base ad). The bundled demo ads are tagged <code>travel</code> (train, Namibia&nbsp;&times;2, of which one also <code>safari</code>) and <code>sailing</code>/<code>boats</code> (Gotland&nbsp;Runt, Sailing in Stockholm) &mdash; see <a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 89, "\" placeholder=\"alice\"></label> <label for=\"sgaiInterests\">interests &mdash; comma-separated interest tags; matching ads (tagged in ads/ads.json) lead the pod. <strong>Required to get an ad pod</strong> &mdash; without interests the player keeps the AD&nbsp;BREAK slate (the base ad). The bundled demo ads are tagged <code>travel</code> (train, Namibia&nbsp;&times;2, of which one also <code>safari</code>) and <code>sailing</code>/<code>boats</code> (Gotland&nbsp;Runt, Sailing in Stockholm) &mdash; see <a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var47 templ.SafeURL
 		templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinURLErrs(d.Host + "/api/sgai/ads")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 338, Col: 96}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 342, Col: 96}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 88, "\" target=\"_blank\">/api/sgai/ads</a>. <input type=\"text\" id=\"sgaiInterests\" name=\"sgaiInterests\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 90, "\" target=\"_blank\">/api/sgai/ads</a>. <input type=\"text\" id=\"sgaiInterests\" name=\"sgaiInterests\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var48 string
 		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.SgaiInterests)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 339, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 343, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var48)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 89, "\" placeholder=\"travel\"></label><p><em>sessionId</em> and <em>interests</em> are added as MPD-URL query parameters and propagated to the ad-decisioning request via Annex I, so each viewer can receive a different, interest-steered ad pod. With no interests the decisioning returns no pod and the viewer sees the base ad (the AD&nbsp;BREAK slate). Watch ad decisions and impression beacons live at <a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 91, "\" placeholder=\"travel\"></label><p><em>sessionId</em> and <em>interests</em> are added as MPD-URL query parameters and propagated to the ad-decisioning request via Annex I, so each viewer can receive a different, interest-steered ad pod. With no interests the decisioning returns no pod and the viewer sees the base ad (the AD&nbsp;BREAK slate). Watch ad decisions and impression beacons live at <a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var49 templ.SafeURL
 		templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinURLErrs(d.Host + "/sgai/session_status")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 347, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 351, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 90, "\" target=\"_blank\">/sgai/session_status</a>.</p></fieldset></details> <details><summary>Negative test cases...</summary> <label for=\"statuscode\"><p><em>Patterns of cyclic segment response codes</em></p><input type=\"text\" id=\"statuscode\" name=\"statuscode\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 92, "\" target=\"_blank\">/sgai/session_status</a>.</p></fieldset></details> <details><summary>Negative test cases...</summary> <label for=\"statuscode\"><p><em>Patterns of cyclic segment response codes</em></p><input type=\"text\" id=\"statuscode\" name=\"statuscode\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var50 string
 		templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.StatusCodes)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 355, Col: 81}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 359, Col: 81}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var50)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 91, "\"><p>A square-bracket-surrounded list of comma-separated patterns, like<pre>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 93, "\"><p>A square-bracket-surrounded list of comma-separated patterns, like<pre>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var51 string
 		templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs("[{code:404,cycle:30,rsq:0,rep:video},{code:403,cycle:60,rsq:1}]")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 358, Col: 80}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 362, Col: 80}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 92, "</pre>where:<br></p><ul><li><it>code</it> is an HTTP response code in the range 400-599</li><li><it>cycle</it> is cycle in seconds</li><li><it>rsq</it> is the relative sequence number in the cycle</li><li><it>rep</it> is a comma-separated list of representation IDs to which the pattern applies (can be empty)</li></ul></label> <label for=\"traffic\"><p><em>Traffic Patterns for one or more BaseURLs</em></p><input type=\"text\" id=\"traffic\" name=\"traffic\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 94, "</pre>where:<br></p><ul><li><it>code</it> is an HTTP response code in the range 400-599</li><li><it>cycle</it> is cycle in seconds</li><li><it>rsq</it> is the relative sequence number in the cycle</li><li><it>rep</it> is a comma-separated list of representation IDs to which the pattern applies (can be empty)</li></ul></label> <label for=\"traffic\"><p><em>Traffic Patterns for one or more BaseURLs</em></p><input type=\"text\" id=\"traffic\" name=\"traffic\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var52 string
 		templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Traffic)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 370, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 374, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var52)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 93, "\"><p>Specify time interval for loss patterns for one or more BaseURLs with \"up (u)\", \"down (d)\", \"slow (s)\", or \"hang (h)\" states, like<pre>u50d10,u10d50</pre>or<pre>d1,u1,u45s10h5</pre>where:<br></p><ul><li><it>u50d10,u10d50</it> is two pairs (two base URLS)</li><li><it>u50d10 means 50s up time and 10s downtime (60s cycle)</it></li><li><it>u10d50 means 10s up time and 50s downtime (60s cycle)</it></li><li><it>d1,u1,u45s10h5</it> means three base URLS where the first is always down, the second is always up, and the third is up 45s, slow 10s, and hanging 5s every minute</li></ul><ul><li>During a \"down (d)\" interval, all segment requests will result in a \"404 Not Found\" response.</li><li>During a \"slow (s)\" interval, all segment responses are delayed by 2s.</li><li>During a \"hang (s)\" interval, all segment responses hang for 10s before resulting in 503.</li></ul></label></details><div class=\"grid\"><button type=\"submit\">Submit</button> <input type=\"button\" onclick=\"window.location.href='/urlgen/';\" class=\"secondary\" value=\"Reset\"></div></form></main></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 95, "\"><p>Specify time interval for loss patterns for one or more BaseURLs with \"up (u)\", \"down (d)\", \"slow (s)\", or \"hang (h)\" states, like<pre>u50d10,u10d50</pre>or<pre>d1,u1,u45s10h5</pre>where:<br></p><ul><li><it>u50d10,u10d50</it> is two pairs (two base URLS)</li><li><it>u50d10 means 50s up time and 10s downtime (60s cycle)</it></li><li><it>u10d50 means 10s up time and 50s downtime (60s cycle)</it></li><li><it>d1,u1,u45s10h5</it> means three base URLS where the first is always down, the second is always up, and the third is up 45s, slow 10s, and hanging 5s every minute</li></ul><ul><li>During a \"down (d)\" interval, all segment requests will result in a \"404 Not Found\" response.</li><li>During a \"slow (s)\" interval, all segment responses are delayed by 2s.</li><li>During a \"hang (s)\" interval, all segment responses hang for 10s before resulting in 503.</li></ul></label></details><div class=\"grid\"><button type=\"submit\">Submit</button> <input type=\"button\" onclick=\"window.location.href='/urlgen/';\" class=\"secondary\" value=\"Reset\"></div></form></main></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
