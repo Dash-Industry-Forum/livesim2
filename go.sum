@@ -9,6 +9,8 @@ github.com/Eyevinn/dash-mpd v0.15.1 h1:lNm6bXigydZGrrtxyNMA+1upyjatYKYpsyfuI9rAt
 github.com/Eyevinn/dash-mpd v0.15.1/go.mod h1:mh/BF4gvesMIYxlNHJMI+H9FLsJYeud9yqGibxcgGpE=
 github.com/Eyevinn/dash-mpd v0.15.2-0.20260625163022-e7f37fd1080d h1:CGeqKW4jP2h2GxtGR8tzZZEiE5rHBbnitsnUhUv3d7s=
 github.com/Eyevinn/dash-mpd v0.15.2-0.20260625163022-e7f37fd1080d/go.mod h1:mh/BF4gvesMIYxlNHJMI+H9FLsJYeud9yqGibxcgGpE=
+github.com/Eyevinn/dash-mpd v0.16.0 h1:5HgrL/vOgT2cSop6jVucwc3RsyReKw1M/ME/20r1eFU=
+github.com/Eyevinn/dash-mpd v0.16.0/go.mod h1:mh/BF4gvesMIYxlNHJMI+H9FLsJYeud9yqGibxcgGpE=
 github.com/Eyevinn/hi264 v0.10.0 h1:4CgeRcBT8Y03BuHHr9u7ErMN5Iiw1mGbvKNU9s4QFPg=
 github.com/Eyevinn/hi264 v0.10.0/go.mod h1:ag1j/wxUs7EvZu6qEZBRyLJ0bJW4OUjO8ip8c2TfLTQ=
 github.com/Eyevinn/mp4ff v0.52.0 h1:QJUi2PtROeZGkcumbX7f4/91Jz6dlhjeKzpwSdCoYG8=
