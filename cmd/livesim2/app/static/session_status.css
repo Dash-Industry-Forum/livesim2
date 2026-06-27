@@ -1,27 +1,58 @@
 /* Shared styles for the live monitoring pages (SGAI + Content Steering).
-   Page-specific rules (accent colours, bars, verify badges, row vertical-align,
-   button hover) stay in a small inline <style> in each page.
-   Dark theme is hardcoded here for now; theming follows in a later step. */
+   Loaded after pico.min.css and uses Pico's theme variables, so the page chrome follows
+   the system light/dark setting like the index and urlgen pages.
 
-body { font-family: system-ui, sans-serif; margin: 0; background: #1b1b1f; color: #eee; }
-header { padding: 8px 18px; background: #111; }
+   These pages carry more columns/rows than the others, so they are deliberately:
+     - full width (no Pico .container — the body spans the viewport), and
+     - compact (small font, tight row padding) so many lines stay visible.
+   The table/button/input rules below intentionally override Pico's roomier defaults;
+   the inputs are matched by id (#sid/#csid) to beat Pico's high-specificity form rules.
+
+   Coloured status text (good/bad/info — used for kind/verify/ok/bad/dot/etc.) is defined
+   below as theme-aware variables so it stays legible on both light and dark backgrounds;
+   page-specific rules reference them from each page's inline <style>. Filled accents
+   (pills/bars/buttons) keep fixed saturated colours — white text reads on both themes. */
+
+:root {
+  --ss-good: #1a8245; /* green — ok / current / online */
+  --ss-bad:  #c0392b; /* red   — issues / off-pathway / offline */
+  --ss-info: #b35900; /* amber — ad-decision highlight */
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --ss-good: #2ecc71;
+    --ss-bad:  #ff6f61;
+    --ss-info: #fca52b;
+  }
+}
+
+body { font-family: system-ui, sans-serif; margin: 0;
+       background: var(--background-color); color: var(--color); }
+header { padding: 8px 18px; background: var(--card-background-color);
+         border-bottom: 1px solid var(--muted-border-color); }
 h1 { margin: 0; font-size: 18px; }
 .titlebar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .ctrls { display: flex; align-items: center; white-space: nowrap; }
-.sub { color: #aaa; font-size: 13px; margin-top: 4px; }
+.sub { color: var(--muted-color); font-size: 13px; margin-top: 4px; }
 .wrap { padding: 10px 18px; }
 .meta { margin: 6px 0 14px; font-size: 14px; }
-.meta b { color: #9cf; }
+.meta b { color: var(--primary); }
 .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px;
         background: #2980b9; color: #fff; margin-left: 6px; }
-table { border-collapse: collapse; width: 100%; font-size: 13px; }
-th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #333; }
-th { color: #aaa; font-weight: 600; }
-code { color: #9cf; }
-input { background: #111; color: #eee; border: 1px solid #444; border-radius: 4px;
-        padding: 4px 8px; font-size: 13px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 0; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--muted-border-color); }
+th { color: var(--muted-color); font-weight: 600; background: transparent; }
+code { color: var(--primary); background: transparent; padding: 0; font-size: inherit; }
+/* matched by id so they beat Pico's input:not(...) chain (keeps the toolbar inline + compact) */
+#sid, #csid { background: var(--form-element-background-color); color: var(--color);
+        border: 1px solid var(--form-element-border-color); border-radius: 4px;
+        padding: 4px 8px; font-size: 13px; width: auto; display: inline-block;
+        margin: 0; height: auto; vertical-align: middle; }
 button { background: #c0392b; color: #fff; border: none; border-radius: 4px;
-         padding: 4px 10px; font-size: 13px; cursor: pointer; margin-left: 6px; }
-button:disabled { background: #555; cursor: default; }
-a { color: #9cf; }
-.empty { color: #888; font-style: italic; margin-top: 10px; }
+         padding: 4px 10px; font-size: 13px; cursor: pointer; margin-left: 6px;
+         width: auto; display: inline-block; }
+button:disabled { background: #888; cursor: default; opacity: 0.75; }
+a { color: var(--primary); }
+.empty { color: var(--muted-color); font-style: italic; margin-top: 10px; }
+.dot.online { color: var(--ss-good); }
+.dot.offline { color: var(--ss-bad); }

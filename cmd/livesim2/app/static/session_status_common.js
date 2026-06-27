@@ -8,11 +8,12 @@
     (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   // fmtTime renders a timestamp in the viewer's locale, falling back to the raw value.
   const fmtTime = (t) => { try { return new Date(t).toLocaleTimeString(); } catch (e) { return t; } };
-  // setDot reflects poll connectivity in the header status dot.
+  // setDot reflects poll connectivity in the header status dot. The colour comes from the
+  // theme-aware .dot.online/.dot.offline rules in session_status.css.
   const setDot = (el, online) => {
     if (!el) return;
     el.textContent = online ? '●' : '● offline';
-    el.style.color = online ? '#27ae60' : '#c0392b';
+    el.className = online ? 'dot online' : 'dot offline';
   };
   window.SessionStatus = { esc, fmtTime, setDot };
 })();

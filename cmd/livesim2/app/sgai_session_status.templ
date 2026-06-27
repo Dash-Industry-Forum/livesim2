@@ -12,12 +12,13 @@ templ sgaiSessionStatusPage(host string) {
 		<head>
 			<meta charset="utf-8"/>
 			<title>livesim2 — SGAI session status</title>
+			<link rel="stylesheet" href={ host + "/static/pico.min.css" }/>
 			<link rel="stylesheet" href={ host + "/static/session_status.css" }/>
 			<style>
 		  td { vertical-align: top; }
 		  button:hover:enabled { background: #e74c3c; }
-		  tr.decision td.kind { color: #fc9900; font-weight: 700; }
-		  tr.beacon td.kind { color: #27ae60; font-weight: 700; }
+		  tr.decision td.kind { color: var(--ss-info); font-weight: 700; }
+		  tr.beacon td.kind { color: var(--ss-good); font-weight: 700; }
 		</style>
 		</head>
 		<body data-api={ host }>
