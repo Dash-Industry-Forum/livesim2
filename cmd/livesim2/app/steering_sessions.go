@@ -365,6 +365,12 @@ func (m *SteeringSessionMgr) Switch(sid, target string) ([]string, bool) {
 	if !ok || len(s.CDNs) == 0 {
 		return nil, false
 	}
+	// A grouped session's steering decision is owned by its group (see ComputeAndRecord), so a
+	// per-session switch would have no lasting effect. Refuse it; the monitor's session view points
+	// the user to the group view, where SwitchGroup moves every member together.
+	if s.CSID != "" {
+		return nil, false
+	}
 	base := s.CurrentPriority
 	if len(base) == 0 {
 		base = s.CDNs

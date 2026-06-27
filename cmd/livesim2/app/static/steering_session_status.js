@@ -88,7 +88,7 @@
 
   // barTable renders the per-CDN segment-request bars in the configured order, highlighting the
   // current top pathway, with a "make top" button per non-top row (promotes via data-switch).
-  function barTable(cdns, counts, priority) {
+  function barTable(cdns, counts, priority, grouped) {
     const top = priority[0];
     const max = Math.max(1, ...Object.values(counts));
     let rows = '';
@@ -97,9 +97,11 @@
       const w = Math.round(220 * n / max);
       const isTop = cdn === top;
       const rank = priority.indexOf(cdn);
+      // A grouped session follows its group's decision, so it offers no per-CDN switch here.
       const action = isTop ? '<span class="rank top">current</span>'
-        : '<button class="switch" data-switch="' + esc(cdn) + '" title="Make ' + esc(cdn)
-          + ' the top priority">make top</button>';
+        : (grouped ? '<span class="rank">–</span>'
+          : '<button class="switch" data-switch="' + esc(cdn) + '" title="Make ' + esc(cdn)
+            + ' the top priority">make top</button>');
       rows += '<tr><td><code>' + esc(cdn) + '</code></td>'
         + '<td class="rank' + (isTop ? ' top' : '') + '">' + (rank >= 0 ? '#' + (rank + 1) : '-') + '</td>'
         + '<td><span class="bar' + (isTop ? ' top' : '') + '" style="width:' + w + 'px"></span> '
@@ -113,7 +115,8 @@
     const priority = s.currentPriority || [];
     const counts = s.segmentCounts || {};
     const cdns = (s.cdns && s.cdns.length) ? s.cdns : Object.keys(counts);
-    const group = s.csid ? ' <span class="pill">group: <a href="?csid=' + encodeURIComponent(s.csid)
+    const grouped = !!s.csid;
+    const group = grouped ? ' <span class="pill">group: <a href="?csid=' + encodeURIComponent(s.csid)
       + '">' + esc(s.csid) + '</a></span>' : '';
     const lastPoll = s.lastPolledAt ? ' &nbsp; last steering poll: ' + fmtTime(s.lastPolledAt) : '';
     const lastFetched = s.lastSegment || s.lastLocation
@@ -130,7 +133,18 @@
       ' <span class="pill">priority: ' + esc(priority.join(' → ')) + '</span>' +
       ' &nbsp; steering polls: <b>' + (s.steeringRequestCount || 0) + '</b>' +
       ' &nbsp; verify: ' + verifyBadge(s) + offPathway + lastPoll + lastFetched;
-    document.getElementById('body').innerHTML = barTable(cdns, counts, priority) + renderPolls(s.events || []);
+    // A grouped session follows its group's steering decision; switching is done on the group, so
+    // point the user there and disable the session-level Switch CDN button rather than failing.
+    const groupHint = grouped
+      ? '<p class="empty">CDN priority is set by group <a href="?csid=' + encodeURIComponent(s.csid)
+        + '">' + esc(s.csid) + '</a> — switch it there to move every member.</p>'
+      : '';
+    document.getElementById('body').innerHTML =
+      barTable(cdns, counts, priority, grouped) + groupHint + renderPolls(s.events || []);
+    switchBtn.disabled = grouped;
+    switchBtn.title = grouped
+      ? 'This session follows group ' + s.csid + ' — switch in the group view'
+      : 'Advance this session to the next CDN';
   }
 
   function renderGroup(g) {
