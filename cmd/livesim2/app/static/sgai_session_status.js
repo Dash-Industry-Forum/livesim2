@@ -6,6 +6,7 @@
 // Served as a static asset and loaded by templates/sgai_session_status.html, which carries
 // the host (for proxy/base-path setups) on <body data-api>.
 (() => {
+  const { esc, fmtTime, setDot } = window.SessionStatus;
   const API = document.body.dataset.api || '';
   const qs = new URLSearchParams(location.search);
   const sidInput = document.getElementById('sid');
@@ -31,12 +32,6 @@
     } catch (e) { /* the next poll reflects the cleared state regardless */ }
     refresh();
   });
-
-  // Escape for both HTML text and double-/single-quoted attribute contexts (esc() output is used in
-  // both, e.g. <tr class="..."), so a value can never break out of an attribute.
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g,
-    (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const fmtTime = (t) => { try { return new Date(t).toLocaleTimeString(); } catch (e) { return t; } };
 
   function renderSession(s) {
     document.getElementById('meta').innerHTML =
@@ -97,9 +92,9 @@
         const d = await r.json();
         renderList(d.sessions || []);
       }
-      dot.textContent = '●'; dot.style.color = '#27ae60';
+      setDot(dot, true);
     } catch (e) {
-      dot.textContent = '● offline'; dot.style.color = '#c0392b';
+      setDot(dot, false);
     }
   }
   refresh();

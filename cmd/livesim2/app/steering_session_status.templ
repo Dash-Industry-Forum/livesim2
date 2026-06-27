@@ -12,37 +12,17 @@ templ steeringSessionStatusPage(host string) {
 		<head>
 			<meta charset="utf-8"/>
 			<title>livesim2 — Content Steering session status</title>
+			<link rel="stylesheet" href={ host + "/static/session_status.css" }/>
 			<style>
-		  body { font-family: system-ui, sans-serif; margin: 0; background: #1b1b1f; color: #eee; }
-		  header { padding: 8px 18px; background: #111; }
-		  h1 { margin: 0; font-size: 18px; }
-		  .titlebar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-		  .ctrls { display: flex; align-items: center; white-space: nowrap; }
-		  .sub { color: #aaa; font-size: 13px; margin-top: 4px; }
-		  .wrap { padding: 10px 18px; }
-		  .meta { margin: 6px 0 14px; font-size: 14px; }
-		  .meta b { color: #9cf; }
-		  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px;
-		          background: #2980b9; color: #fff; margin-left: 6px; }
+		  td { vertical-align: middle; }
+		  button.switch { background: #2980b9; }
+		  button:hover:enabled { filter: brightness(1.15); }
 		  .pill.mode { background: #8e44ad; }
-		  table { border-collapse: collapse; width: 100%; font-size: 13px; }
-		  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #333; vertical-align: middle; }
-		  th { color: #aaa; font-weight: 600; }
-		  code { color: #9cf; }
 		  .bar { display: inline-block; height: 14px; background: #2980b9; border-radius: 3px;
 		         vertical-align: middle; min-width: 1px; }
 		  .bar.top { background: #27ae60; }
 		  .rank { color: #888; }
 		  .rank.top { color: #27ae60; font-weight: 700; }
-		  input { background: #111; color: #eee; border: 1px solid #444; border-radius: 4px;
-		          padding: 4px 8px; font-size: 13px; }
-		  button { background: #c0392b; color: #fff; border: none; border-radius: 4px;
-		           padding: 4px 10px; font-size: 13px; cursor: pointer; margin-left: 6px; }
-		  button.switch { background: #2980b9; }
-		  button:hover:enabled { filter: brightness(1.15); }
-		  button:disabled { background: #555; cursor: default; }
-		  a { color: #9cf; }
-		  .empty { color: #888; font-style: italic; margin-top: 10px; }
 		  h2.polls { font-size: 14px; color: #aaa; font-weight: 600; margin: 22px 0 6px; }
 		  .verify.ok { color: #27ae60; font-weight: 700; }
 		  .verify.bad { color: #e74c3c; font-weight: 700; }
@@ -72,6 +52,7 @@ templ steeringSessionStatusPage(host string) {
 				<div id="meta" class="meta"></div>
 				<div id="body"></div>
 			</div>
+			<script src={ host + "/static/session_status_common.js" }></script>
 			<script src={ host + "/static/steering_session_status.js" }></script>
 		</body>
 	</html>

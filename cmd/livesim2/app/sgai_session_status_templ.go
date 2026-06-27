@@ -37,33 +37,59 @@ func sgaiSessionStatusPage(host string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>livesim2 — SGAI session status</title><style>\n\t\t  body { font-family: system-ui, sans-serif; margin: 0; background: #1b1b1f; color: #eee; }\n\t\t  header { padding: 8px 18px; background: #111; }\n\t\t  h1 { margin: 0; font-size: 18px; }\n\t\t  .titlebar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }\n\t\t  .ctrls { display: flex; align-items: center; white-space: nowrap; }\n\t\t  .sub { color: #aaa; font-size: 13px; margin-top: 4px; }\n\t\t  .wrap { padding: 10px 18px; }\n\t\t  .meta { margin: 6px 0 14px; font-size: 14px; }\n\t\t  .meta b { color: #9cf; }\n\t\t  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px;\n\t\t          background: #2980b9; color: #fff; margin-left: 6px; }\n\t\t  table { border-collapse: collapse; width: 100%; font-size: 13px; }\n\t\t  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #333; vertical-align: top; }\n\t\t  th { color: #aaa; font-weight: 600; }\n\t\t  tr.decision td.kind { color: #fc9900; font-weight: 700; }\n\t\t  tr.beacon td.kind { color: #27ae60; font-weight: 700; }\n\t\t  code { color: #9cf; }\n\t\t  input { background: #111; color: #eee; border: 1px solid #444; border-radius: 4px;\n\t\t          padding: 4px 8px; font-size: 13px; }\n\t\t  button { background: #c0392b; color: #fff; border: none; border-radius: 4px;\n\t\t           padding: 4px 10px; font-size: 13px; cursor: pointer; margin-left: 6px; }\n\t\t  button:hover:enabled { background: #e74c3c; }\n\t\t  button:disabled { background: #555; cursor: default; }\n\t\t  a { color: #9cf; }\n\t\t  .empty { color: #888; font-style: italic; margin-top: 10px; }\n\t\t</style></head><body data-api=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>livesim2 — SGAI session status</title><link rel=\"stylesheet\" href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var2 string
-		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(host)
+		var templ_7745c5c3_Var2 templ.SafeURL
+		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinURLErrs(host + "/static/session_status.css")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/sgai_session_status.templ`, Line: 43, Col: 23}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/sgai_session_status.templ`, Line: 15, Col: 68}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\"><header><div class=\"titlebar\"><h1>SGAI session status</h1><span class=\"ctrls\"><button id=\"reset\" type=\"button\" title=\"Clear this session's recorded status\">Reset session</button> <span id=\"dot\"></span></span></div><div class=\"sub\">Session: <input id=\"sid\" placeholder=\"(none — listing all)\"> &nbsp;— live ad decisions &amp; impression beacons, polled every second</div></header><div class=\"wrap\"><div id=\"meta\" class=\"meta\"></div><div id=\"body\"></div></div><script src=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\"><style>\n\t\t  td { vertical-align: top; }\n\t\t  button:hover:enabled { background: #e74c3c; }\n\t\t  tr.decision td.kind { color: #fc9900; font-weight: 700; }\n\t\t  tr.beacon td.kind { color: #27ae60; font-weight: 700; }\n\t\t</style></head><body data-api=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var3 string
-		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(host + "/static/sgai_session_status.js")
+		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(host)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/sgai_session_status.templ`, Line: 61, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/sgai_session_status.templ`, Line: 23, Col: 23}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"></script></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"><header><div class=\"titlebar\"><h1>SGAI session status</h1><span class=\"ctrls\"><button id=\"reset\" type=\"button\" title=\"Clear this session's recorded status\">Reset session</button> <span id=\"dot\"></span></span></div><div class=\"sub\">Session: <input id=\"sid\" placeholder=\"(none — listing all)\"> &nbsp;— live ad decisions &amp; impression beacons, polled every second</div></header><div class=\"wrap\"><div id=\"meta\" class=\"meta\"></div><div id=\"body\"></div></div><script src=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var4 string
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(host + "/static/session_status_common.js")
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/sgai_session_status.templ`, Line: 41, Col: 58}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\"></script><script src=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var5 string
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(host + "/static/sgai_session_status.js")
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/sgai_session_status.templ`, Line: 42, Col: 56}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\"></script></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

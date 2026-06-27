@@ -13,6 +13,7 @@
 // Served as a static asset and loaded by templates/steering_session_status.html, which carries the
 // host (for proxy/base-path setups) on <body data-api>.
 (() => {
+  const { esc, fmtTime, setDot } = window.SessionStatus;
   const API = document.body.dataset.api || '';
   const qs = new URLSearchParams(location.search);
   const sidInput = document.getElementById('sid');
@@ -73,11 +74,6 @@
     if (t) doSwitch(t.getAttribute('data-switch'));
   });
 
-  // Escape for both HTML text and double-/single-quoted attribute contexts (esc() output is used in
-  // both, e.g. data-switch="..."), so a value can never break out of an attribute.
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g,
-    (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const fmtTime = (t) => { try { return new Date(t).toLocaleTimeString(); } catch (e) { return t; } };
   const sumCounts = (c) => Object.values(c || {}).reduce((a, b) => a + b, 0);
   // verifyBadge renders the conformance verdict for the player steering messages of a session or
   // group: a green tick when polls were verified with no issues, a red warning with the issue count
@@ -281,9 +277,9 @@
         const sd = await sr.json();
         renderList(gd.groups || [], sd.sessions || []);
       }
-      dot.textContent = '●'; dot.style.color = '#27ae60';
+      setDot(dot, true);
     } catch (e) {
-      dot.textContent = '● offline'; dot.style.color = '#c0392b';
+      setDot(dot, false);
     }
   }
   refresh();
