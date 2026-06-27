@@ -12,32 +12,12 @@ templ sgaiSessionStatusPage(host string) {
 		<head>
 			<meta charset="utf-8"/>
 			<title>livesim2 — SGAI session status</title>
+			<link rel="stylesheet" href={ host + "/static/session_status.css" }/>
 			<style>
-		  body { font-family: system-ui, sans-serif; margin: 0; background: #1b1b1f; color: #eee; }
-		  header { padding: 8px 18px; background: #111; }
-		  h1 { margin: 0; font-size: 18px; }
-		  .titlebar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-		  .ctrls { display: flex; align-items: center; white-space: nowrap; }
-		  .sub { color: #aaa; font-size: 13px; margin-top: 4px; }
-		  .wrap { padding: 10px 18px; }
-		  .meta { margin: 6px 0 14px; font-size: 14px; }
-		  .meta b { color: #9cf; }
-		  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px;
-		          background: #2980b9; color: #fff; margin-left: 6px; }
-		  table { border-collapse: collapse; width: 100%; font-size: 13px; }
-		  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #333; vertical-align: top; }
-		  th { color: #aaa; font-weight: 600; }
+		  td { vertical-align: top; }
+		  button:hover:enabled { background: #e74c3c; }
 		  tr.decision td.kind { color: #fc9900; font-weight: 700; }
 		  tr.beacon td.kind { color: #27ae60; font-weight: 700; }
-		  code { color: #9cf; }
-		  input { background: #111; color: #eee; border: 1px solid #444; border-radius: 4px;
-		          padding: 4px 8px; font-size: 13px; }
-		  button { background: #c0392b; color: #fff; border: none; border-radius: 4px;
-		           padding: 4px 10px; font-size: 13px; cursor: pointer; margin-left: 6px; }
-		  button:hover:enabled { background: #e74c3c; }
-		  button:disabled { background: #555; cursor: default; }
-		  a { color: #9cf; }
-		  .empty { color: #888; font-style: italic; margin-top: 10px; }
 		</style>
 		</head>
 		<body data-api={ host }>
@@ -58,6 +38,7 @@ templ sgaiSessionStatusPage(host string) {
 				<div id="meta" class="meta"></div>
 				<div id="body"></div>
 			</div>
+			<script src={ host + "/static/session_status_common.js" }></script>
 			<script src={ host + "/static/sgai_session_status.js" }></script>
 		</body>
 	</html>

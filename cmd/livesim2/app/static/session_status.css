@@ -1,0 +1,27 @@
+/* Shared styles for the live monitoring pages (SGAI + Content Steering).
+   Page-specific rules (accent colours, bars, verify badges, row vertical-align,
+   button hover) stay in a small inline <style> in each page.
+   Dark theme is hardcoded here for now; theming follows in a later step. */
+
+body { font-family: system-ui, sans-serif; margin: 0; background: #1b1b1f; color: #eee; }
+header { padding: 8px 18px; background: #111; }
+h1 { margin: 0; font-size: 18px; }
+.titlebar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ctrls { display: flex; align-items: center; white-space: nowrap; }
+.sub { color: #aaa; font-size: 13px; margin-top: 4px; }
+.wrap { padding: 10px 18px; }
+.meta { margin: 6px 0 14px; font-size: 14px; }
+.meta b { color: #9cf; }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px;
+        background: #2980b9; color: #fff; margin-left: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #333; }
+th { color: #aaa; font-weight: 600; }
+code { color: #9cf; }
+input { background: #111; color: #eee; border: 1px solid #444; border-radius: 4px;
+        padding: 4px 8px; font-size: 13px; }
+button { background: #c0392b; color: #fff; border: none; border-radius: 4px;
+         padding: 4px 10px; font-size: 13px; cursor: pointer; margin-left: 6px; }
+button:disabled { background: #555; cursor: default; }
+a { color: #9cf; }
+.empty { color: #888; font-style: italic; margin-top: 10px; }
