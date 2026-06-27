@@ -9,40 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- DASH Content Steering (ISO/IEC 23009-1 6th ed. §K.3.6, ETSI TS 103 998): `steer_` URL option
-  advertises two or more service locations ("CDNs") that all point back to this server plus a root
-  `<ContentSteering>` element pointing at a steering endpoint here. The steering endpoint
-  (`/steering/steer_<spec>?sessionId=<id>`) returns a steering manifest (`VERSION`/`TTL`/`RELOAD-URI`/
-  `PATHWAY-PRIORITY`) with a configurable `ttl=`; `mode=trigger` (default) holds the priority until a
-  switch is triggered via the API/monitor, `mode=rotate` rotates the CDN priority every TTL
-  automatically. Per-session per-CDN
-  segment requests are tracked and exposed via `/api/steering/sessions[/{sid}]`, a
-  `POST /api/steering/sessions/{sid}/switch` trigger (target a service location or `next`), and a
-  live `/steering/session_status` monitor page with Switch CDN / make-top buttons. The `/urlgen/`
-  form has a Content Steering section and the index page links to the monitor. Each steering poll's
-  client message (`_DASH_pathway`/`_DASH_throughput`) is verified — unknown service location,
-  non-integer throughput, pathway/throughput count mismatch, or a pathway that ignores the served
-  steering decision — and surfaced per session (`issueCount`) and per poll (`issues`) via the API
-  and a verify verdict + steering-polls table on the monitor page. `_DASH_pathway`/`_DASH_throughput`
-  are validated for format only (each a known service location / non-negative integer; counts match),
-  since they are a per-pathway measurement report rather than the active pathway; whether the client
-  followed the steering decision is judged from its segment requests (the `cdn_` token): still
-  fetching from a non-steered CDN 10 s after receiving the top marks the session `offPathway`. Each
-  session also records when it last fetched steering (`lastPolledAt`) and the last address
-  (`lastLocation`) and segment (`lastSegment`) it fetched. An optional `csid_<group>` path
-  token groups sessions under one shared steering decision: a single `POST /api/steering/groups/{csid}/switch`
-  (or the monitor's `?csid=` group view) moves every member at once, while per-session segment
-  counts and verification stay individual. Group activity is exposed via `/api/steering/groups[/{csid}]`.
+- DASH Content Steering (ISO/IEC 23009-1 6th ed. §K.3.6, ETSI TS 103 998): the `steer_` URL option
+  advertises several service locations ("CDNs") that point back to this server and adds a
+  `<ContentSteering>` element; the steering endpoint returns a `PATHWAY-PRIORITY` manifest with a
+  configurable `ttl=` and `mode=trigger` (hold until switched) or `mode=rotate`. Per-session,
+  per-CDN segment requests are tracked and switchable via the `/api/steering/…` API and a live
+  `/steering/session_status` monitor page; client steering messages
+  (`_DASH_pathway`/`_DASH_throughput`) are verified and off-pathway clients flagged. An optional
+  `csid_<group>` token groups sessions under one shared decision. The `/urlgen/` form has a Content
+  Steering section and the index page links to the monitor.
 
 ### Changed
 
 - URL generator: DRM options now follow the selected asset and are disabled for pre-encrypted assets.
+- The SGAI and Content Steering live monitor pages (`/sgai/session_status`,
+  `/steering/session_status`) now follow the system light/dark setting (via Pico CSS) like the
+  other web pages, with theme-aware status colours for legibility on both backgrounds, while
+  staying full-width and compact for their denser tables. Their shared styles and JS helpers
+  (`esc`/`fmtTime`/`setDot`) are factored into `static/session_status.css` and
+  `static/session_status_common.js`.
 - Migrated the HTML web pages (welcome, assets, VoD assets, URL generator, SGAI
   session status) from Go's `html/template` to type-safe [templ](https://templ.guide)
   components (`*.templ` → generated `*_templ.go`). The `text/template` XML subtitle
   templates (`stpptime.xml`, `stpptimecue.xml`) are unchanged. Building now runs
   `templ generate` (see `make templ`); a `make templ-check` target and a pre-commit
-  hook keep the generated code in sync.
+  hook (triggered by both `*.templ` and `*_templ.go` changes) keep the generated code in
+  sync, and the generated `*_templ.go` files are excluded from `golangci-lint`.
 
 ## [1.10.0] - 2026-06-15
 
