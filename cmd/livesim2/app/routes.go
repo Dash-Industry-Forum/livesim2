@@ -68,6 +68,10 @@ func (s *Server) Routes(ctx context.Context) error {
 	s.Router.MethodFunc("POST", "/sgai/beacon/*", s.sgaiBeaconHandlerFunc)
 	// Live HTML view of per-session ad decisions and beacons (polls the /api/sgai/sessions API).
 	s.Router.MethodFunc("GET", "/sgai/session_status", s.sgaiSessionStatusHandlerFunc)
+	// Content Steering: live HTML view (specific path, registered before the wildcard) and the
+	// steering-manifest endpoint referenced by the MPD's <ContentSteering> element.
+	s.Router.MethodFunc("GET", "/steering/session_status", s.steeringSessionStatusHandlerFunc)
+	s.Router.MethodFunc("GET", "/steering/*", s.steeringManifestHandlerFunc)
 	s.Router.MethodFunc("GET", "/", s.indexHandlerFunc)
 	s.Router.MethodFunc("POST", "/*", s.laURLHandlerFunc)
 	// LiveRouter is mounted at /livesim2

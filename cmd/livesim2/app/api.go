@@ -234,6 +234,203 @@ func createListSgaiSessionsHdlr(s *Server) func(ctx context.Context, input *stru
 	}
 }
 
+// SteeringSessionResponse is the OpenAPI response for a single content-steering session.
+type SteeringSessionResponse struct {
+	Body struct {
+		Session SteeringSession `json:"session" doc:"Per-CDN request counts and steering timeline for the session"`
+	}
+}
+
+// SteeringSessionListResponse lists active content-steering sessions (no timelines).
+type SteeringSessionListResponse struct {
+	Body struct {
+		Sessions []SteeringSession `json:"sessions" doc:"Active sessions, most-recently-active first"`
+	}
+}
+
+type steeringSidInput struct {
+	Sid string `path:"sid" maxLength:"256" example:"alice" doc:"Session id (sessionId/sid carried on the stream)"`
+}
+
+// SteeringClearResponse is the OpenAPI response for clearing content-steering session status.
+type SteeringClearResponse struct {
+	Body struct {
+		Cleared int `json:"cleared" doc:"Number of sessions removed"`
+	}
+}
+
+// SteeringSwitchInput is the switch request: a session id (path) and an optional target.
+type SteeringSwitchInput struct {
+	Sid  string `path:"sid" maxLength:"256" example:"alice" doc:"Session id to switch"`
+	Body struct {
+		//nolint:lll
+		Target string `json:"target,omitempty" example:"next" doc:"Service location to promote to the top of the priority, or 'next' (the default) to advance one step"`
+	}
+}
+
+// SteeringSwitchResponse returns the new priority order after a switch.
+type SteeringSwitchResponse struct {
+	Body struct {
+		Sid      string   `json:"sid" doc:"Session id"`
+		Priority []string `json:"priority" doc:"New PATHWAY-PRIORITY (descending priority) the steering server will serve"`
+	}
+}
+
+func createListSteeringSessionsHdlr(s *Server) func(ctx context.Context, input *struct{}) (*SteeringSessionListResponse, error) {
+	return func(ctx context.Context, input *struct{}) (*SteeringSessionListResponse, error) {
+		resp := &SteeringSessionListResponse{}
+		if s.steeringSessions != nil {
+			resp.Body.Sessions = s.steeringSessions.List()
+		}
+		if resp.Body.Sessions == nil {
+			resp.Body.Sessions = []SteeringSession{}
+		}
+		return resp, nil
+	}
+}
+
+func createGetSteeringSessionHdlr(s *Server) func(ctx context.Context, input *steeringSidInput) (*SteeringSessionResponse, error) {
+	return func(ctx context.Context, input *steeringSidInput) (*SteeringSessionResponse, error) {
+		if s.steeringSessions == nil {
+			return nil, huma.Error404NotFound("session tracking not enabled")
+		}
+		sess, ok := s.steeringSessions.Get(input.Sid)
+		if !ok {
+			return nil, huma.Error404NotFound(fmt.Sprintf("no content-steering activity for session %q", input.Sid))
+		}
+		resp := &SteeringSessionResponse{}
+		resp.Body.Session = *sess
+		return resp, nil
+	}
+}
+
+func createSwitchSteeringSessionHdlr(s *Server) func(ctx context.Context, input *SteeringSwitchInput) (*SteeringSwitchResponse, error) {
+	return func(ctx context.Context, input *SteeringSwitchInput) (*SteeringSwitchResponse, error) {
+		if s.steeringSessions == nil {
+			return nil, huma.Error404NotFound("session tracking not enabled")
+		}
+		target := input.Body.Target
+		priority, ok := s.steeringSessions.Switch(input.Sid, target)
+		if !ok {
+			return nil, huma.Error404NotFound(fmt.Sprintf("cannot switch session %q (unknown session or invalid target %q)", input.Sid, target))
+		}
+		resp := &SteeringSwitchResponse{}
+		resp.Body.Sid = input.Sid
+		resp.Body.Priority = priority
+		return resp, nil
+	}
+}
+
+func createClearSteeringSessionsHdlr(s *Server) func(ctx context.Context, input *struct{}) (*SteeringClearResponse, error) {
+	return func(ctx context.Context, input *struct{}) (*SteeringClearResponse, error) {
+		resp := &SteeringClearResponse{}
+		if s.steeringSessions != nil {
+			resp.Body.Cleared = s.steeringSessions.Clear()
+		}
+		return resp, nil
+	}
+}
+
+func createClearSteeringSessionHdlr(s *Server) func(ctx context.Context, input *steeringSidInput) (*SteeringClearResponse, error) {
+	return func(ctx context.Context, input *steeringSidInput) (*SteeringClearResponse, error) {
+		resp := &SteeringClearResponse{}
+		if s.steeringSessions != nil && s.steeringSessions.ClearSession(input.Sid) {
+			resp.Body.Cleared = 1
+		}
+		return resp, nil
+	}
+}
+
+// SteeringGroupResponse is the OpenAPI response for a single content-steering group.
+type SteeringGroupResponse struct {
+	Body struct {
+		Group SteeringGroup `json:"group" doc:"Shared steering decision, aggregate counts, members and switch timeline"`
+	}
+}
+
+// SteeringGroupListResponse lists active content-steering groups (no members or timelines).
+type SteeringGroupListResponse struct {
+	Body struct {
+		Groups []SteeringGroup `json:"groups" doc:"Active groups, most-recently-active first"`
+	}
+}
+
+type steeringCsidInput struct {
+	Csid string `path:"csid" maxLength:"256" example:"groupA" doc:"Content-steering group id (csid path token on the stream)"`
+}
+
+// SteeringGroupSwitchInput is the group switch request: a group id (path) and an optional target.
+type SteeringGroupSwitchInput struct {
+	Csid string `path:"csid" maxLength:"256" example:"groupA" doc:"Content-steering group id to switch"`
+	Body struct {
+		//nolint:lll
+		Target string `json:"target,omitempty" example:"next" doc:"Service location to promote to the top for the whole group, or 'next' (the default) to advance one step"`
+	}
+}
+
+// SteeringGroupSwitchResponse returns the new shared priority order after a group switch.
+type SteeringGroupSwitchResponse struct {
+	Body struct {
+		Csid     string   `json:"csid" doc:"Content-steering group id"`
+		Priority []string `json:"priority" doc:"New shared PATHWAY-PRIORITY served to every member of the group"`
+	}
+}
+
+func createListSteeringGroupsHdlr(s *Server) func(ctx context.Context, input *struct{}) (*SteeringGroupListResponse, error) {
+	return func(ctx context.Context, input *struct{}) (*SteeringGroupListResponse, error) {
+		resp := &SteeringGroupListResponse{}
+		if s.steeringSessions != nil {
+			resp.Body.Groups = s.steeringSessions.ListGroups()
+		}
+		if resp.Body.Groups == nil {
+			resp.Body.Groups = []SteeringGroup{}
+		}
+		return resp, nil
+	}
+}
+
+func createGetSteeringGroupHdlr(s *Server) func(ctx context.Context, input *steeringCsidInput) (*SteeringGroupResponse, error) {
+	return func(ctx context.Context, input *steeringCsidInput) (*SteeringGroupResponse, error) {
+		if s.steeringSessions == nil {
+			return nil, huma.Error404NotFound("session tracking not enabled")
+		}
+		g, ok := s.steeringSessions.GetGroup(input.Csid)
+		if !ok {
+			return nil, huma.Error404NotFound(fmt.Sprintf("no content-steering group %q", input.Csid))
+		}
+		resp := &SteeringGroupResponse{}
+		resp.Body.Group = *g
+		return resp, nil
+	}
+}
+
+//nolint:lll
+func createSwitchSteeringGroupHdlr(s *Server) func(ctx context.Context, input *SteeringGroupSwitchInput) (*SteeringGroupSwitchResponse, error) {
+	return func(ctx context.Context, input *SteeringGroupSwitchInput) (*SteeringGroupSwitchResponse, error) {
+		if s.steeringSessions == nil {
+			return nil, huma.Error404NotFound("session tracking not enabled")
+		}
+		priority, ok := s.steeringSessions.SwitchGroup(input.Csid, input.Body.Target)
+		if !ok {
+			return nil, huma.Error404NotFound(fmt.Sprintf("cannot switch group %q (unknown or invalid target %q)", input.Csid, input.Body.Target))
+		}
+		resp := &SteeringGroupSwitchResponse{}
+		resp.Body.Csid = input.Csid
+		resp.Body.Priority = priority
+		return resp, nil
+	}
+}
+
+func createClearSteeringGroupHdlr(s *Server) func(ctx context.Context, input *steeringCsidInput) (*SteeringClearResponse, error) {
+	return func(ctx context.Context, input *steeringCsidInput) (*SteeringClearResponse, error) {
+		resp := &SteeringClearResponse{}
+		if s.steeringSessions != nil && s.steeringSessions.ClearGroup(input.Csid) {
+			resp.Body.Cleared = 1
+		}
+		return resp, nil
+	}
+}
+
 func createRouteAPI(s *Server) func(r chi.Router) {
 	return func(r chi.Router) {
 		config := huma.DefaultConfig("Livesim2 API for sessions", "1.0.0")
@@ -246,7 +443,13 @@ func createRouteAPI(s *Server) func(r chi.Router) {
 		The second use case is Server-Guided Ad Insertion (SGAI): list the available ad
 		creatives with their interest tags and durations (/sgai/ads), and follow the ad
 		decisions and impression/quartile beacons recorded per session (/sgai/sessions),
-		as shown live on the /sgai/session_status page.`
+		as shown live on the /sgai/session_status page.
+
+		The third use case is DASH Content Steering: follow the per-CDN (service location)
+		segment request counts and steering-poll timeline per session (/steering/sessions),
+		drive a CDN switch (/steering/sessions/{sid}/switch), and verify the client's
+		_DASH_pathway/_DASH_throughput steering messages (per-poll issues and a session
+		issueCount), as shown live on the /steering/session_status page.`
 
 		api := humachi.New(r, config)
 
@@ -353,5 +556,110 @@ func createRouteAPI(s *Server) func(r chi.Router) {
 			Description: "The ad catalog: the available Single-Period-Static ad creatives with their interest tags and durations, as used for ad-pod selection (interest steering + duration fit).",
 			Tags:        []string{"SGAI"},
 		}, createGetSgaiAdsHdlr(s))
+
+		// Register GET /steering/sessions — list active content-steering sessions.
+		huma.Register(api, huma.Operation{
+			OperationID: "list-steering-sessions",
+			Method:      http.MethodGet,
+			Path:        "/steering/sessions",
+			Summary:     "List active content-steering sessions",
+			//nolint: lll
+			Description: "List the session ids with recorded DASH Content Steering activity (per-CDN segment request counts and steering polls), most-recently-active first. Each session carries an issueCount: the number of client-message conformance problems (a malformed _DASH_pathway/_DASH_throughput, or a pathway that ignored the served steering decision) seen across its polls; 0 means conformant. Timelines are omitted; fetch a single session for its events.",
+			Tags:        []string{"ContentSteering"},
+		}, createListSteeringSessionsHdlr(s))
+
+		// Register GET /steering/sessions/{sid} — one session's per-CDN counts + timeline.
+		huma.Register(api, huma.Operation{
+			OperationID: "get-steering-session",
+			Method:      http.MethodGet,
+			Path:        "/steering/sessions/{sid}",
+			Summary:     "Get content-steering activity for a session",
+			//nolint: lll
+			Description: "Get the per-CDN (service location) segment request counts, the current PATHWAY-PRIORITY, when the client last fetched steering (lastPolledAt), the last address (lastLocation) and segment (lastSegment) it fetched, whether it is off-pathway, and the steering timeline for a session id. Steering events carry the client-reported _DASH_pathway/_DASH_throughput with any format issues (unknown service location, non-integer throughput, count mismatch); conformance with the steering decision is judged from segment requests (offPathway = still fetching from a non-steered CDN past the grace), not from _DASH_pathway. The session-level issueCount rolls up format issues and off-pathway episodes. Backs the live page at /steering/session_status?sid=<sid>.",
+			Tags:        []string{"ContentSteering"},
+			Errors:      []int{404},
+		}, createGetSteeringSessionHdlr(s))
+
+		// Register POST /steering/sessions/{sid}/switch — change the served CDN priority. POST
+		// (not PUT) for the same no-CORS-preflight reason as the clear routes below.
+		huma.Register(api, huma.Operation{
+			OperationID: "switch-steering-session",
+			Method:      http.MethodPost,
+			Path:        "/steering/sessions/{sid}/switch",
+			Summary:     "Switch the CDN priority for a session",
+			//nolint: lll
+			Description: "Pin a new PATHWAY-PRIORITY for a session: move a named service location to the top, or advance one step with target 'next' (the default). The DASH client picks up the change on its next steering poll (within TTL). This is how to drive a content-steering switch for a test.",
+			Tags:        []string{"ContentSteering"},
+			Errors:      []int{404},
+		}, createSwitchSteeringSessionHdlr(s))
+
+		// Register POST /steering/sessions/clear — wipe all recorded sessions.
+		huma.Register(api, huma.Operation{
+			OperationID: "clear-steering-sessions",
+			Method:      http.MethodPost,
+			Path:        "/steering/sessions/clear",
+			Summary:     "Clear all content-steering session status",
+			//nolint: lll
+			Description: "Remove all recorded DASH Content Steering session activity to get a clean slate.",
+			Tags:        []string{"ContentSteering"},
+		}, createClearSteeringSessionsHdlr(s))
+
+		// Register POST /steering/sessions/{sid}/clear — wipe one session's status.
+		huma.Register(api, huma.Operation{
+			OperationID: "clear-steering-session",
+			Method:      http.MethodPost,
+			Path:        "/steering/sessions/{sid}/clear",
+			Summary:     "Clear one content-steering session's status",
+			//nolint: lll
+			Description: "Remove the recorded per-CDN counts and steering timeline for a single session id, to reset just that session.",
+			Tags:        []string{"ContentSteering"},
+		}, createClearSteeringSessionHdlr(s))
+
+		// Register GET /steering/groups — list active content-steering groups.
+		huma.Register(api, huma.Operation{
+			OperationID: "list-steering-groups",
+			Method:      http.MethodGet,
+			Path:        "/steering/groups",
+			Summary:     "List active content-steering groups",
+			//nolint: lll
+			Description: "List the content-steering groups (csid) — sets of sessions that share one steering decision and switch together — most-recently-active first, with member counts and aggregate per-CDN segment counts. Member lists and timelines are omitted; fetch a single group for those.",
+			Tags:        []string{"ContentSteering"},
+		}, createListSteeringGroupsHdlr(s))
+
+		// Register GET /steering/groups/{csid} — one group's members + aggregate counts + timeline.
+		huma.Register(api, huma.Operation{
+			OperationID: "get-steering-group",
+			Method:      http.MethodGet,
+			Path:        "/steering/groups/{csid}",
+			Summary:     "Get a content-steering group",
+			//nolint: lll
+			Description: "Get the shared PATHWAY-PRIORITY, aggregate per-CDN segment counts, member sessions, and group switch timeline for a content-steering group id (csid). Backs the group view at /steering/session_status?csid=<csid>.",
+			Tags:        []string{"ContentSteering"},
+			Errors:      []int{404},
+		}, createGetSteeringGroupHdlr(s))
+
+		// Register POST /steering/groups/{csid}/switch — switch the whole group. POST (not PUT) for
+		// the same no-CORS-preflight reason as the clear routes.
+		huma.Register(api, huma.Operation{
+			OperationID: "switch-steering-group",
+			Method:      http.MethodPost,
+			Path:        "/steering/groups/{csid}/switch",
+			Summary:     "Switch the CDN priority for a whole group",
+			//nolint: lll
+			Description: "Pin a new shared PATHWAY-PRIORITY for a content-steering group: move a named service location to the top, or advance one step with target 'next' (the default). Every member of the group picks up the change on its next steering poll (within TTL). This is how to move multiple clients together.",
+			Tags:        []string{"ContentSteering"},
+			Errors:      []int{404},
+		}, createSwitchSteeringGroupHdlr(s))
+
+		// Register POST /steering/groups/{csid}/clear — wipe a group and its members.
+		huma.Register(api, huma.Operation{
+			OperationID: "clear-steering-group",
+			Method:      http.MethodPost,
+			Path:        "/steering/groups/{csid}/clear",
+			Summary:     "Clear one content-steering group's status",
+			//nolint: lll
+			Description: "Remove a content-steering group's shared decision and all of its member sessions, to reset just that group.",
+			Tags:        []string{"ContentSteering"},
+		}, createClearSteeringGroupHdlr(s))
 	}
 }

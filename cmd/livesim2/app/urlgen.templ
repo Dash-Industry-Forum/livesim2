@@ -41,7 +41,7 @@ templ assetOpts(d urlGenData) {
 
 // urlgenPage renders the URL-generator form served at /urlgen/.
 templ urlgenPage(d urlGenData) {
-	<!doctype html>
+	<!DOCTYPE html>
 	<html lang="en">
 		<head>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -59,7 +59,8 @@ templ urlgenPage(d urlGenData) {
 				</hgroup>
 				if d.URL != "" {
 					<article>
-						URL= { d.URL }<br/>
+						URL= { d.URL }
+						<br/>
 						<div class="grid">
 							<span onclick={ templ.JSFuncCall("navigator.clipboard.writeText", d.URL) } role="button">Copy</span>
 							<a href={ d.PlayURL } target="_blank" role="button">Play</a>
@@ -70,7 +71,8 @@ templ urlgenPage(d urlGenData) {
 				if len(d.Errors) > 0 {
 					<article>
 						for _, e := range d.Errors {
-							{ e }<br/>
+							{ e }
+							<br/>
 						}
 					</article>
 				}
@@ -260,7 +262,8 @@ templ urlgenPage(d urlGenData) {
 								@drmsFragment(d.DRMs)
 							</div>
 							<div>
-								See <a href={ d.Host + "/config" }>/config</a>{ " for what commercial DRMs are configured." }<br/>
+								See <a href={ d.Host + "/config" }>/config</a>{ " for what commercial DRMs are configured." }
+								<br/>
 								For more about DASH-IF ECCP see <a href="https://dashif.org/docs/IOP-Guidelines/DASH-IF-IOP-Part6-v5.0.0.pdf" target="_blank">DASH-IF IOP Part 6</a>
 							</div>
 						</fieldset>
@@ -311,23 +314,29 @@ templ urlgenPage(d urlGenData) {
 								<li><it>ep=&lt;path&gt;</it> &mdash; ad-decisioning endpoint path (default /sgai/ads)</li>
 							</ul>
 							<p>
-								Example: <pre>30:15,90:15;skipafter=5;nojump=2</pre>
+								Example:
+								<pre>30:15,90:15;skipafter=5;nojump=2</pre>
 								two 15&nbsp;s breaks (at 30&nbsp;s and 90&nbsp;s), skippable after 5&nbsp;s,
 								not skippable by seeking.
-								<br/>During each break the underlying (clear AVC) video track serves a generated
+								<br/>
+								During each break the underlying (clear AVC) video track serves a generated
 								<em>AD&nbsp;BREAK</em> slate with a per-second countdown to the end of the break &mdash;
 								the visible "ad to be replaced", i.e. the base ad. Players that execute the Replace
 								event cover it with the personalized pod; others show the slate. Audio is untouched.
-								<br/><strong>An ad pod is only returned for an interest-steered request</strong>: with
+								<br/>
+								<strong>An ad pod is only returned for an interest-steered request</strong>: with
 								no <em>interests</em> (or interests that match no creative) the decisioning answers
 								404, the Replace event is skipped, and every player keeps the AD&nbsp;BREAK slate
 								(the base ad). This is the default when neither sessionId nor interests are given.
-								<br/><em>Cannot be combined with the multi-period / xlink / insertad options.</em>
+								<br/>
+								<em>Cannot be combined with the multi-period / xlink / insertad options.</em>
 							</p>
 							<label for="sgaiSessionId">
 								sessionId &mdash; personalization &amp; reporting key (keys the impression beacons; with
 								interests, rotates the pod per session for variety). On its own it does not produce a pod.
-								<input type="text" id="sgaiSessionId" name="sgaiSessionId" value={ d.SgaiSessionID } placeholder="alice"/>
+								There is a single <em>sessionId</em> per viewer, shared with Content Steering &mdash; this field
+								and the steering one are kept in sync.
+								<input type="text" id="sgaiSessionId" name="sgaiSessionId" value={ d.SgaiSessionID } placeholder="alice" oninput="document.getElementById('steerSessionId').value=this.value"/>
 							</label>
 							<label for="sgaiInterests">
 								interests &mdash; comma-separated interest tags; matching ads (tagged in ads/ads.json) lead the pod.
@@ -349,6 +358,65 @@ templ urlgenPage(d urlGenData) {
 						</fieldset>
 					</details>
 					<details>
+						<summary>DASH Content Steering (ISO/IEC 23009-1 6th ed., ETSI TS 103 998)...</summary>
+						<fieldset>
+							<legend>Multi-CDN steering with a steering server on this same host</legend>
+							<label for="steer">
+								Service locations and options
+								<input type="text" id="steer" name="steer" value={ d.Steer } placeholder="alpha,beta;ttl=20"/>
+							</label>
+							<p>
+								The MPD advertises two or more <em>service locations</em> ("CDNs") &mdash; all pointing
+								back to this server &mdash; plus a root <code>&lt;ContentSteering&gt;</code> element
+								referencing a steering endpoint here. The player polls it, gets a
+								<code>PATHWAY-PRIORITY</code> ordering with a TTL, and switches CDN accordingly. Grammar:
+								<pre>&lt;loc1&gt;,&lt;loc2&gt;[,&lt;loc3&gt;...][;key=val;...]</pre>
+								at least two comma-separated service-location names, then optional
+								<code>;key=val</code> settings:
+							</p>
+							<ul>
+								<li><it>ttl=&lt;s&gt;</it> &mdash; steering-manifest TTL in seconds; the client re-polls every TTL (default 300)</li>
+								<li>
+									<it>mode=rotate|trigger</it> &mdash; <code>trigger</code> (default) holds the priority at the
+									default order until you trigger a switch via the API / monitor; <code>rotate</code> rotates
+									the priority one step every TTL automatically (wall-clock based, all clients in lockstep)
+								</li>
+								<li><it>qbs=&lt;0|1&gt;</it> &mdash; queryBeforeStart: resolve the steering server before playback starts (default 0)</li>
+								<li><it>default=&lt;name&gt;</it> &mdash; the initial top service location (default: the first one listed)</li>
+							</ul>
+							<p>
+								Example:
+								<pre>alpha,beta;ttl=20</pre>
+								two CDNs, 20&nbsp;s TTL, priority held on alpha until you flip it (trigger is the default).
+								<br/>
+								<em>Cannot be combined with the traffic option (both generate BaseURLs).</em>
+							</p>
+							<label for="steerSessionId">
+								sessionId &mdash; per-viewer steering &amp; reporting key (baked into each BaseURL so segment
+								requests are attributed per CDN; required to follow one session in the monitor).
+								There is a single <em>sessionId</em> per viewer, shared with SGAI &mdash; this field and the
+								SGAI one are kept in sync.
+								<input type="text" id="steerSessionId" name="steerSessionId" value={ d.SteerSessionID } placeholder="alice" oninput="document.getElementById('sgaiSessionId').value=this.value"/>
+							</label>
+							<label for="steerCsid">
+								csid &mdash; optional content-steering <em>group</em> id (path token). Give several viewers the
+								same csid (with distinct sessionIds) and one switch moves the whole group together, while each
+								viewer's per-CDN counts and verification stay individual. Leave empty for a standalone stream.
+								<input type="text" id="steerCsid" name="steerCsid" value={ d.SteerCSID } placeholder="groupA"/>
+							</label>
+							<p>
+								Watch the per-CDN segment request distribution and the current priority live, and drive a
+								change with the Switch CDN / make-top buttons, at
+								<a href={ d.Host + "/steering/session_status" } target="_blank">/steering/session_status</a>,
+								or via the API at <code>/api/steering/sessions[/&lt;sid&gt;]</code> and
+								<code>POST /api/steering/sessions/&lt;sid&gt;/switch</code>. To move a whole group at once use
+								<code>/api/steering/groups[/&lt;csid&gt;]</code> and
+								<code>POST /api/steering/groups/&lt;csid&gt;/switch</code>, or open the monitor with
+								<code>?csid=&lt;group&gt;</code>.
+							</p>
+						</fieldset>
+					</details>
+					<details>
 						<summary>Negative test cases...</summary>
 						<label for="statuscode">
 							<p><em>Patterns of cyclic segment response codes</em></p>
@@ -356,7 +424,8 @@ templ urlgenPage(d urlGenData) {
 							<p>
 								A square-bracket-surrounded list of comma-separated patterns, like
 								<pre>{ "[{code:404,cycle:30,rsq:0,rep:video},{code:403,cycle:60,rsq:1}]" }</pre>
-								where:<br/>
+								where:
+								<br/>
 							</p>
 							<ul>
 								<li><it>code</it> is an HTTP response code in the range 400-599</li>
@@ -374,7 +443,8 @@ templ urlgenPage(d urlGenData) {
 								<pre>u50d10,u10d50</pre>
 								or
 								<pre>d1,u1,u45s10h5</pre>
-								where:<br/>
+								where:
+								<br/>
 							</p>
 							<ul>
 								<li><it>u50d10,u10d50</it> is two pairs (two base URLS)</li>

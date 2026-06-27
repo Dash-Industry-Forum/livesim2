@@ -20,17 +20,18 @@ import (
 )
 
 type Server struct {
-	Router        *chi.Mux
-	LiveRouter    *chi.Mux
-	VodRouter     *chi.Mux
-	Cfg           *ServerConfig
-	assetMgr      *assetMgr
-	cmafMgr       *cmafIngesterMgr
-	sgaiSessions  *SgaiSessionMgr
-	sgaiAds       *adCatalog
-	sgaiAdsMu     sync.Mutex
-	textTemplates *ttmpl.Template
-	reqLimiter    *IPRequestLimiter
+	Router           *chi.Mux
+	LiveRouter       *chi.Mux
+	VodRouter        *chi.Mux
+	Cfg              *ServerConfig
+	assetMgr         *assetMgr
+	cmafMgr          *cmafIngesterMgr
+	sgaiSessions     *SgaiSessionMgr
+	sgaiAds          *adCatalog
+	sgaiAdsMu        sync.Mutex
+	steeringSessions *SteeringSessionMgr
+	textTemplates    *ttmpl.Template
+	reqLimiter       *IPRequestLimiter
 }
 
 func (s *Server) healthzHandlerFunc(w http.ResponseWriter, r *http.Request) {

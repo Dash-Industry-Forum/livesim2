@@ -204,6 +204,10 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		addSGAIReplaceEvents(mpd, period, cfg, endTimeMS)
 	}
 
+	if cfg.Steer != nil {
+		addContentSteering(mpd, period, cfg)
+	}
+
 	adaptationSets := orderAdaptationSetsByContentType(period.AdaptationSets)
 	var refSegEntries segEntries
 	for asIdx, as := range adaptationSets {
