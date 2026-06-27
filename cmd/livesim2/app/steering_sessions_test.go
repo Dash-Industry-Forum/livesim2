@@ -214,6 +214,31 @@ func TestSteeringGroupSharedDecision(t *testing.T) {
 	assert.False(t, ok, "member sessions removed with the group")
 }
 
+// TestSteeringSwitchGroupedSessionRefused checks that a grouped session cannot be switched at the
+// session level: the decision is owned by the group, so Switch refuses (the monitor's session view
+// points the user to the group view) and the served order is unchanged. Switching the group works
+// and is what moves the member.
+func TestSteeringSwitchGroupedSessionRefused(t *testing.T) {
+	m := NewSteeringSessionMgr()
+	now, _ := fixedClock(time.Unix(105, 0).UTC())
+	m.now = now
+	cfg := &SteeringConfig{CDNs: []string{"a", "b"}, TTL: 10, Mode: steeringModeTrigger, Default: "a"}
+
+	// Alice is a member of groupA and is served the group's default order.
+	assert.Equal(t, []string{"a", "b"}, m.ComputeAndRecord("alice", "groupA", cfg, "a", "100"))
+
+	// A per-session switch is refused for a grouped session (no stray, ineffective override).
+	_, ok := m.Switch("alice", "b")
+	assert.False(t, ok, "a grouped session cannot be switched at the session level")
+	assert.Equal(t, []string{"a", "b"}, m.ComputeAndRecord("alice", "groupA", cfg, "a", "100"))
+
+	// Switching the group is the way to move a member, and it sticks across polls.
+	p, ok := m.SwitchGroup("groupA", "b")
+	require.True(t, ok)
+	assert.Equal(t, []string{"b", "a"}, p)
+	assert.Equal(t, []string{"b", "a"}, m.ComputeAndRecord("alice", "groupA", cfg, "a", "100"))
+}
+
 func TestSteeringComputeAndRecordManual(t *testing.T) {
 	m := NewSteeringSessionMgr()
 	now, _ := fixedClock(time.Unix(105, 0).UTC())

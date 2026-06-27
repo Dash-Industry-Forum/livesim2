@@ -39,6 +39,9 @@ h1 { margin: 0; font-size: 18px; }
 .meta b { color: var(--primary); }
 .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px;
         background: #2980b9; color: #fff; margin-left: 6px; }
+/* a link inside a pill (e.g. the group csid) must read on the fixed blue background, not use the
+   theme link colour which is near-invisible on the pill (notably in dark mode). */
+.pill a { color: #fff; text-decoration: underline; }
 table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 0; }
 th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--muted-border-color); }
 th { color: var(--muted-color); font-weight: 600; background: transparent; }
