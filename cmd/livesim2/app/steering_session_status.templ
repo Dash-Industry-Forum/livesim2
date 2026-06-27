@@ -12,6 +12,7 @@ templ steeringSessionStatusPage(host string) {
 		<head>
 			<meta charset="utf-8"/>
 			<title>livesim2 — Content Steering session status</title>
+			<link rel="stylesheet" href={ host + "/static/pico.min.css" }/>
 			<link rel="stylesheet" href={ host + "/static/session_status.css" }/>
 			<style>
 		  td { vertical-align: middle; }
@@ -21,15 +22,15 @@ templ steeringSessionStatusPage(host string) {
 		  .bar { display: inline-block; height: 14px; background: #2980b9; border-radius: 3px;
 		         vertical-align: middle; min-width: 1px; }
 		  .bar.top { background: #27ae60; }
-		  .rank { color: #888; }
-		  .rank.top { color: #27ae60; font-weight: 700; }
-		  h2.polls { font-size: 14px; color: #aaa; font-weight: 600; margin: 22px 0 6px; }
-		  .verify.ok { color: #27ae60; font-weight: 700; }
-		  .verify.bad { color: #e74c3c; font-weight: 700; }
-		  .verify.none { color: #666; }
-		  .ok { color: #27ae60; }
-		  .bad { color: #e74c3c; }
-		  tr.badrow td { background: #3a1f1f; }
+		  .rank { color: var(--muted-color); }
+		  .rank.top { color: var(--ss-good); font-weight: 700; }
+		  h2.polls { font-size: 14px; color: var(--muted-color); font-weight: 600; margin: 22px 0 6px; }
+		  .verify.ok { color: var(--ss-good); font-weight: 700; }
+		  .verify.bad { color: var(--ss-bad); font-weight: 700; }
+		  .verify.none { color: var(--muted-color); }
+		  .ok { color: var(--ss-good); }
+		  .bad { color: var(--ss-bad); }
+		  tr.badrow td { background: rgba(231, 76, 60, 0.15); }
 		</style>
 		</head>
 		<body data-api={ host }>
