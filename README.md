@@ -523,7 +523,9 @@ Those two creatives are bundled under the test vodroot, so SGAI works out of the
 identified and steered with two query parameters that are propagated to the ad request via Annex I:
 `sessionId` (personalization key) and `interests` (a comma-separated list). They can be added on
 the `/urlgen/` page or directly on the MPD URL, for example
-`…/Manifest.mpd?sessionId=alice&interests=travel,sailing`.
+`…/Manifest.mpd?sessionId=alice&interests=travel,sailing`. With no `sessionId`, ad decisions and
+impression beacons are still recorded but grouped under a single shared `anon` session in the
+monitor and API.
 
 ### How the ad pod is selected
 
@@ -553,8 +555,8 @@ live at `/sgai/session_status?sid=<sessionId>` or via the API at `/api/sgai/sess
 
 ## DASH Content Steering
 
-livesim2 can demonstrate **DASH Content Steering** (ISO/IEC 23009-1 6th ed. §K.3.6, ETSI TS
-103 998). A single server advertises two or more *service locations* ("CDNs") that all point
+livesim2 can be used to demonstrate and test client behavior for **DASH Content Steering**
+(ISO/IEC 23009-1 6th ed. §K.3.6, ETSI TS 103 998). A single server advertises two or more *service locations* ("CDNs") that all point
 back to itself, plus a root `<ContentSteering>` element referencing a steering endpoint on the
 same server. A DASH client (e.g. dash.js) polls that endpoint, which returns a steering manifest
 with a `PATHWAY-PRIORITY` ordering and a TTL; by changing the ordering the server makes the client
@@ -577,7 +579,9 @@ Enable it with the `steer_` URL option:
 A viewer is identified with a `sessionId` (or `sid`) query parameter, as for SGAI, e.g.
 `…/steer_alpha,beta;ttl=20/testpic_2s/Manifest.mpd?sessionId=alice`. The server bakes the session
 id and the chosen service location into each `<BaseURL>` so segment requests are attributable to a
-(session, CDN) pair.
+(session, CDN) pair. If no `sessionId` is supplied, requests fall back to a single shared `anon`
+session — they still show as one bucket in the monitor and API, and the generated URLs use
+`sid_anon` and `?sessionId=anon`.
 
 #### Moving several clients together — groups (`csid`)
 
