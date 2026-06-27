@@ -6,7 +6,9 @@ repos:
         name: templ generate (*_templ.go must match *.templ)
         entry: make templ-check
         language: system
-        files: '\.templ$'
+        # Trigger on either side so a stale *_templ.go cannot land even when no
+        # *.templ is part of the commit (matches the CI check in go.yml).
+        files: '(\.templ|_templ\.go)$'
         pass_filenames: false
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.3.0
