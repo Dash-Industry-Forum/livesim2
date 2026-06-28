@@ -110,10 +110,9 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 				wg.Done()
 			}()
 			wg.Wait()
-			time.Sleep(50 * time.Millisecond) // Need to finish the asynchronous writing of metadata
-			// Check that first media segment has been written
+			// Check that first media segment has been written (poll: the write is asynchronous)
 			for _, trd := range testTrackData {
-				assert.True(t, testFileExists(filepath.Join(dstDir, trd.trName, fmt.Sprintf("%d%s", trd.minNr-c.startNr, trd.ext))),
+				assert.True(t, waitForFile(filepath.Join(dstDir, trd.trName, fmt.Sprintf("%d%s", trd.minNr-c.startNr, trd.ext))),
 					fmt.Sprintf("%s/%d%s should exist", trd.trName, trd.minNr-c.startNr, trd.ext))
 			}
 
@@ -129,13 +128,13 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 				wg.Done()
 			}()
 			wg.Wait()
-			time.Sleep(50 * time.Millisecond) // Need to finish the asynchronous writing
-			assert.True(t, !testFileExists(filepath.Join(dstDir, "content_info.json")), "content_info.json should not exist yet")
-			// Check that the second media segment has been written
+			// Check that the second media segment has been written (poll: the write is asynchronous)
 			for _, trd := range testTrackData {
-				assert.True(t, testFileExists(filepath.Join(dstDir, trd.trName, fmt.Sprintf("%d%s", trd.minNr+1-c.startNr, trd.ext))),
+				assert.True(t, waitForFile(filepath.Join(dstDir, trd.trName, fmt.Sprintf("%d%s", trd.minNr+1-c.startNr, trd.ext))),
 					fmt.Sprintf("%s/%d%s should exist", trd.trName, trd.minNr+1-c.startNr, trd.ext))
 			}
+			// content_info.json is only written once two segments share a duration, so not yet
+			assert.False(t, testFileExists(filepath.Join(dstDir, "content_info.json")), "content_info.json should not exist yet")
 			// Send the third media segments. Since the duration of segment 2 and 3 are the same, manifest and content_info
 			// should have been written unless shifted.
 			wg = sync.WaitGroup{}
@@ -149,10 +148,11 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 				wg.Done()
 			}()
 			wg.Wait()
-			time.Sleep(50 * time.Millisecond) // Need to finish the asynchronous writing of metadata
+			// Poll for the manifest (written asynchronously); the SegmentTimeline-number MPD must not
+			// appear until a later segment triggers it.
+			assert.True(t, waitForFile(filepath.Join(dstDir, "manifest.mpd")), "manifest.mpd should exist")
 			ch, ok := receiver.channelMgr.GetChannel(chName)
 			assert.True(t, ok, "channel should exist")
-			assert.True(t, testFileExists(filepath.Join(dstDir, "manifest.mpd")), "manifest.mpd should exist")
 			require.False(t, testFileExists(filepath.Join(dstDir, timelineNrMPD)), "manifest_time_nrß.mpd should not exist")
 
 			var videoTrackData trTestData
@@ -161,15 +161,19 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 					videoTrackData = trd
 				}
 			}
-			if !ch.isShifted() {
-				firstSeqNr, ok := ch.segTimesGen.getBufferFirstSeqNr("video")
-				assert.True(t, ok, "segment data buffer should have items")
-				assert.Equal(t, firstSeqNr, uint32(videoTrackData.minNr+1-c.startNr),
-					"first sequence number in segment data buffer should be the second segment")
-			} else {
-				nrItems := ch.segTimesGen.getBufferNrItems("video")
-				assert.Equal(t, 0, int(nrItems), "shifted segment data buffer should be empty")
-			}
+			// The segment-data buffer is updated asynchronously as segments are processed, so poll it
+			// to its expected state rather than reading it at a single fixed moment.
+			require.EventuallyWithT(t, func(ct *assert.CollectT) {
+				if !ch.isShifted() {
+					firstSeqNr, ok := ch.segTimesGen.getBufferFirstSeqNr("video")
+					assert.True(ct, ok, "segment data buffer should have items")
+					assert.Equal(ct, firstSeqNr, uint32(videoTrackData.minNr+1-c.startNr),
+						"first sequence number in segment data buffer should be the second segment")
+				} else {
+					nrItems := ch.segTimesGen.getBufferNrItems("video")
+					assert.Equal(ct, 0, int(nrItems), "shifted segment data buffer should be empty")
+				}
+			}, asyncWriteTimeout, asyncWritePollTick)
 
 			// Send the fourth media segments.
 			// If shifted, there should be segments in the SegmentTimel line MPD, if not, just one segment.
@@ -183,14 +187,14 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 				wg.Done()
 			}()
 			wg.Wait()
-			time.Sleep(50 * time.Millisecond) // Need to finish the asynchronous writing of metadata
-			assert.True(t, testFileExists(filepath.Join(dstDir, timelineNrMPD)), "manifest_timeline_nr.mpd should now exist")
-			data, err := os.ReadFile(filepath.Join(dstDir, timelineNrMPD))
-			require.NoError(t, err)
-			manifest, err := mpd.MPDFromBytes(data)
-			require.NoError(t, err)
-			assert.Equal(t, 1, len(manifest.Periods), "there should be 1 period")
-			assert.Equal(t, 2, len(manifest.Periods[0].AdaptationSets), "there should be 2 adaptation sets")
+			// Poll until the SegmentTimeline-number MPD has been written to the expected state.
+			expStartNr, expNrSegments := 896605655, 3
+			if ch.isShifted() { // Just one segment
+				expStartNr, expNrSegments = 896605657, 1
+			}
+			manifest := waitForMPD(t, filepath.Join(dstDir, timelineNrMPD), func(m *mpd.MPD) bool {
+				return mpdReady(m, 2, expStartNr)
+			})
 			for _, as := range manifest.Periods[0].AdaptationSets {
 				stl := as.SegmentTemplate
 				assert.NotNil(t, stl, "segment template should exist")
@@ -198,14 +202,8 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 				for _, s := range stl.SegmentTimeline.S {
 					nrSegments += int(s.R) + 1
 				}
-				if ch.isShifted() { // Just one segment
-					require.Equal(t, 896605657, int(*stl.StartNumber), "start number should be 896605657")
-					require.Equal(t, 1, nrSegments, "number of segments should be 1")
-				} else {
-					require.Equal(t, 896605655, int(*stl.StartNumber), "start number should be 896605655")
-					require.Equal(t, 3, nrSegments, "number of segments should be 3")
-
-				}
+				assert.Equal(t, expStartNr, int(*stl.StartNumber), "start number")
+				assert.Equal(t, expNrSegments, nrSegments, "number of segments")
 			}
 
 			// Check that the manifest fetched from the file server is the same as the one in the storage
@@ -344,7 +342,7 @@ func TestReceivingNonIdealInput(t *testing.T) {
 			t.Fatalf("Unknown content type %s", contentType)
 		}
 		assert.Equal(t, 0, int(ch.startTime), "startTime should be zero")
-		assert.True(t, testFileExists(filepath.Join(dstDir, trd.trName, fmt.Sprintf("%d%s", 8090, trd.ext))))
+		assert.True(t, waitForFile(filepath.Join(dstDir, trd.trName, fmt.Sprintf("%d%s", 8090, trd.ext))))
 	}
 
 	// Send second media segments and check that they have been received
@@ -359,7 +357,6 @@ func TestReceivingNonIdealInput(t *testing.T) {
 	}()
 	wg.Wait()
 	nextNr++
-	time.Sleep(50 * time.Millisecond) // Need to finish the asynchronous writing of metadata
 	// Check that second segment has been written to nr 8091, except for second video track which has been updated
 	// It is updated because data from the first video track is used to determine the shift.
 	seqNr := 8091
@@ -368,16 +365,12 @@ func TestReceivingNonIdealInput(t *testing.T) {
 			seqNr = 449002889
 		}
 		fName := fmt.Sprintf("%d%s", seqNr, trd.ext)
-		assert.True(t, testFileExists(filepath.Join(dstDir, trd.trName, fName)), fmt.Sprintf("%s should exist", fName))
+		assert.True(t, waitForFile(filepath.Join(dstDir, trd.trName, fName)), fmt.Sprintf("%s should exist", fName))
 	}
-	// Check that metadata has been written (two segments with same duration)
-	assert.True(t, testFileExists(filepath.Join(dstDir, "manifest.mpd")), "manifest.mpd should exist")
-	data, err := os.ReadFile(filepath.Join(dstDir, "manifest.mpd"))
-	require.NoError(t, err)
-	manifest, err := mpd.MPDFromBytes(data)
-	require.NoError(t, err)
-	assert.Equal(t, 1, len(manifest.Periods), "there should be 1 period")
-	assert.Equal(t, 4, len(manifest.Periods[0].AdaptationSets), "there should be 4 adaptation sets")
+	// Check that metadata has been written (two segments with same duration); poll for the async write
+	manifest := waitForMPD(t, filepath.Join(dstDir, "manifest.mpd"), func(m *mpd.MPD) bool {
+		return mpdReady(m, 4, -1)
+	})
 	for _, as := range manifest.Periods[0].AdaptationSets {
 		switch as.ContentType {
 		case "video":
@@ -417,40 +410,14 @@ func TestReceivingNonIdealInput(t *testing.T) {
 	}()
 	wg.Wait()
 	nextNr++
-	time.Sleep(50 * time.Millisecond) // Need to finish the asynchronous writing of metadata
-	assert.True(t, testFileExists(filepath.Join(dstDir, timelineNrMPD)), "manifest_timeline_nr.mpd should now exist")
-	data, err = os.ReadFile(filepath.Join(dstDir, timelineNrMPD))
-	require.NoError(t, err)
-	manifest, err = mpd.MPDFromBytes(data)
-	require.NoError(t, err)
-	assert.Equal(t, 1, len(manifest.Periods), "there should be 1 period")
-	assert.Equal(t, 4, len(manifest.Periods[0].AdaptationSets), "there should be 4 adaptation sets")
+	// Poll until the SegmentTimeline-number MPD has been written (startNumber settles to 449002890).
+	manifest = waitForMPD(t, filepath.Join(dstDir, timelineNrMPD), func(m *mpd.MPD) bool {
+		return mpdReady(m, 4, 449002890)
+	})
 	for _, as := range manifest.Periods[0].AdaptationSets {
 		stl := as.SegmentTemplate
 		assert.NotNil(t, stl, "segment template should exist")
-		assert.True(t, testFileExists(filepath.Join(dstDir, timelineNrMPD)), "manifest_timeline_nr.mpd should now exist")
-		data, err = os.ReadFile(filepath.Join(dstDir, timelineNrMPD))
-		require.NoError(t, err)
-		manifest, err = mpd.MPDFromBytes(data)
-		require.NoError(t, err)
-		assert.Equal(t, 1, len(manifest.Periods), "there should be 1 period")
-		assert.Equal(t, 4, len(manifest.Periods[0].AdaptationSets), "there should be 4 adaptation sets")
-		for _, as := range manifest.Periods[0].AdaptationSets {
-			stl := as.SegmentTemplate
-			assert.NotNil(t, stl, "segment template should exist")
-			assert.Equal(t, 449002890, int(*stl.StartNumber))
-			data, err = os.ReadFile(filepath.Join(dstDir, timelineNrMPD))
-			require.NoError(t, err)
-			manifest, err = mpd.MPDFromBytes(data)
-			require.NoError(t, err)
-			assert.Equal(t, 1, len(manifest.Periods), "there should be 1 period")
-			assert.Equal(t, 4, len(manifest.Periods[0].AdaptationSets), "there should be 4 adaptation sets")
-			for _, as := range manifest.Periods[0].AdaptationSets {
-				stl := as.SegmentTemplate
-				assert.NotNil(t, stl, "segment template should exist")
-				assert.Equal(t, 449002890, int(*stl.StartNumber), "start number should be 449002890")
-			}
-		}
+		assert.Equal(t, 449002890, int(*stl.StartNumber), "start number should be 449002890")
 	}
 
 	// Next, let us have a jump in the sequence numbers, so segmentTimes should have one new number.
@@ -467,14 +434,10 @@ func TestReceivingNonIdealInput(t *testing.T) {
 	}()
 	wg.Wait()
 	nextNr++
-	time.Sleep(50 * time.Millisecond) // Need to finish the asynchronous writing of metadata
-	require.NoError(t, err)
-	assert.True(t, testFileExists(filepath.Join(dstDir, timelineNrMPD)))
-	data, err = os.ReadFile(filepath.Join(dstDir, timelineNrMPD))
-	require.NoError(t, err)
-	manifest, err = mpd.MPDFromBytes(data)
-	require.NoError(t, err)
-	assert.Equal(t, 4, len(manifest.Periods[0].AdaptationSets), "there should be 4 adaptation sets")
+	// Poll until the SegmentTimeline-number MPD has been re-written (startNumber settles to 449002892).
+	manifest = waitForMPD(t, filepath.Join(dstDir, timelineNrMPD), func(m *mpd.MPD) bool {
+		return mpdReady(m, 4, 449002892)
+	})
 	for _, as := range manifest.Periods[0].AdaptationSets {
 		stl := as.SegmentTemplate
 		assert.NotNil(t, stl, "segment template should exist")
@@ -579,6 +542,78 @@ func testFileExists(filePath string) bool {
 		return false
 	}
 	return !info.IsDir()
+}
+
+// The receiver writes segments and manifests asynchronously after the upload request returns, so
+// tests must wait for those writes before asserting on them. The helpers below poll for that
+// instead of using a fixed sleep, which flaked on the slower Windows CI runner.
+//
+// TODO: once net/http works under testing/synctest (golang/go#76608, expected ~Go 1.27), replace
+// the polling with a synctest bubble and synctest.Wait() for deterministic, instant coordination.
+
+// Poll budget and cadence for those async writes. The tick comfortably exceeds the time to read and
+// parse one of these small manifests; testify's EventuallyWithT runs the condition serially (it
+// waits for one call to return before scheduling the next tick), so the tick never overlaps a parse.
+const (
+	asyncWriteTimeout  = 10 * time.Second
+	asyncWritePollTick = 50 * time.Millisecond
+)
+
+// waitForFile polls (up to asyncWriteTimeout) for filePath to exist with content, returning true once it does.
+func waitForFile(filePath string) bool {
+	deadline := time.Now().Add(asyncWriteTimeout)
+	for {
+		if info, err := os.Stat(filePath); err == nil && !info.IsDir() && info.Size() > 0 {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(asyncWritePollTick)
+	}
+}
+
+// mpdReady reports whether m has exactly nrAS adaptation sets in a single period and, when startNr
+// is >= 0, that every adaptation set's SegmentTemplate carries startNr as its StartNumber. It is the
+// "settled state" predicate used to wait past an in-progress or stale (re)write.
+func mpdReady(m *mpd.MPD, nrAS, startNr int) bool {
+	if len(m.Periods) != 1 || len(m.Periods[0].AdaptationSets) != nrAS {
+		return false
+	}
+	if startNr < 0 {
+		return true
+	}
+	for _, as := range m.Periods[0].AdaptationSets {
+		stl := as.SegmentTemplate
+		if stl == nil || stl.StartNumber == nil || int(*stl.StartNumber) != startNr {
+			return false
+		}
+	}
+	return true
+}
+
+// waitForMPD polls (up to asyncWriteTimeout) until filePath parses into an MPD satisfying cond, then returns it,
+// so callers can run their detailed assertions on a settled manifest. cond lets a caller wait for a
+// specific state (e.g. an updated startNumber), not just the file's first appearance — a plain
+// existence check would read stale content on a re-write.
+func waitForMPD(t *testing.T, filePath string, cond func(*mpd.MPD) bool) *mpd.MPD {
+	t.Helper()
+	var manifest *mpd.MPD
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		data, err := os.ReadFile(filePath)
+		if !assert.NoError(c, err) {
+			return
+		}
+		m, err := mpd.MPDFromBytes(data)
+		if !assert.NoError(c, err) {
+			return
+		}
+		if !assert.True(c, cond(m), "manifest %s is not yet in the expected state", filePath) {
+			return
+		}
+		manifest = m
+	}, asyncWriteTimeout, asyncWritePollTick)
+	return manifest
 }
 
 func addOrigInitSegments(srcDir, chName, tmpDir string, ttd []trTestData) error {
