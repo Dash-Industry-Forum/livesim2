@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hook (triggered by both `*.templ` and `*_templ.go` changes) keep the generated code in
   sync, and the generated `*_templ.go` files are excluded from `golangci-lint`.
 
+### Fixed
+
+- cmaf-ingest-receiver tests: replaced fixed `time.Sleep` waits for the receiver's asynchronous
+  writes with polling (`EventuallyWithT`), fixing intermittent failures on the Windows CI runner.
+
 ## [1.10.0] - 2026-06-15
 
 ### Changed
