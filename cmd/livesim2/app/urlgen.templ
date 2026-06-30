@@ -149,6 +149,10 @@ templ urlgenPage(d urlGenData) {
 							period continuity signaling
 							<input type="checkbox" id="continuous" name="continuous" checked?={ d.Continuous }/>
 						</label>
+						<label for="xlink">
+						XLink for completed periods
+							<input type="checkbox" id="xlink" name="xlink" checked?={ d.XlinkPeriods } />
+						</label>
 					</details>
 					<details>
 						<summary>Low latency...</summary>

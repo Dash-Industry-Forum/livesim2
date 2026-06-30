@@ -156,6 +156,7 @@ type urlGenData struct {
 	UTCTiming                   string
 	Periods                     string   // number of periods per hour (1-60)
 	Continuous                  bool     // period continuity signaling
+	XlinkPeriods                bool     // XLink periods signaling
 	StartNR                     string   // startNumber (default=0) -1 translates to no value in MPD (fallback to default = 1)
 	Start                       string   // sets timeline start (and availabilityStartTime) relative to Epoch (in seconds)
 	Stop                        string   // sets stop-time for time-limited event (in seconds)
@@ -318,6 +319,11 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 	if continuous != "" {
 		data.Continuous = true
 		sb.WriteString("continuous_1/")
+	}
+	xlink := q.Get("xlink")
+	if xlink != "" {
+		data.XlinkPeriods = true
+		sb.WriteString("xlink_1/")
 	}
 	chunkDur := q.Get("chunkdur")
 	if chunkDur != "" {

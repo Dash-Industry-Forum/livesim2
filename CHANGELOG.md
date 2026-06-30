@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `csid_<group>` token groups sessions under one shared decision. The `/urlgen/` form has a Content
   Steering section and the index page links to the monitor.
 
+- DASH XLink for multi-period: the `xlink_1` URL option activates the replacement of completed past
+  periods elements with remote elements using XLink elements with `xlink:href="onRequest"`.
+  The XLink urls for each completed period target the same endpoint as the manifest and adding the
+  `?period=<period_id>` query parameter, which is interpreted by livesim2 to return the corresponding Period element.
+
 ### Changed
 
 - URL generator: DRM options now follow the selected asset and are disabled for pre-encrypted assets.
