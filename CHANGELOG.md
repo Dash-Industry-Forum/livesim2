@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Nothing yet
+
+## [1.11.0] - 2026-06-30
+
 ### Added
 
 - DASH Content Steering (ISO/IEC 23009-1 6th ed. §K.3.6, ETSI TS 103 998): the `steer_` URL option
@@ -18,7 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`_DASH_pathway`/`_DASH_throughput`) are verified and off-pathway clients flagged. An optional
   `csid_<group>` token groups sessions under one shared decision. The `/urlgen/` form has a Content
   Steering section and the index page links to the monitor.
-
 - DASH XLink for multi-period: the `xlink_1` URL option activates the replacement of completed past
   periods elements with remote elements using XLink elements with `xlink:href="onRequest"`.
   The XLink urls for each completed period target the same endpoint as the manifest and adding the
@@ -40,11 +43,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `templ generate` (see `make templ`); a `make templ-check` target and a pre-commit
   hook (triggered by both `*.templ` and `*_templ.go` changes) keep the generated code in
   sync, and the generated `*_templ.go` files are excluded from `golangci-lint`.
+- Updated `github.com/go-chi/chi/v5` from v5.2.2 to v5.2.4.
 
 ### Fixed
 
 - cmaf-ingest-receiver tests: replaced fixed `time.Sleep` waits for the receiver's asynchronous
   writes with polling (`EventuallyWithT`), fixing intermittent failures on the Windows CI runner.
+- Hardened the `esc()` helper on the SGAI session-status page (added in v1.10.0) to also escape
+  `"` and `'`, so values interpolated into double-quoted HTML attributes cannot break out of the
+  attribute (attribute XSS); matches the same hardening on the content-steering status page.
 
 ## [1.10.0] - 2026-06-15
 
@@ -451,7 +458,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - features and URLs listed at livesim2 root page
 - configurable generated stpp subtitles with timing info
 
-[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.10.0...HEAD
+[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.7.0...v1.8.0
