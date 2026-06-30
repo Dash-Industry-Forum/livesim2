@@ -69,6 +69,8 @@ func cfgFromRequest(r *http.Request, log *slog.Logger) (nowMS int, cfg *Response
 		}
 	}
 
+	periodId := q.Get("period")
+
 	cfg, err = processURLCfg(u.String(), nowMS)
 	if err != nil {
 		msg := fmt.Sprintf("processURL error: %q", err)
@@ -84,6 +86,10 @@ func cfgFromRequest(r *http.Request, log *slog.Logger) (nowMS int, cfg *Response
 		tooEarlyMS := cfg.StartTimeS - nowMS
 		msg := fmt.Sprintf("%dms too early", tooEarlyMS)
 		return 0, nil, generateAndLogHttpError(log, msg, http.StatusTooEarly)
+	}
+
+	if periodId != "" {
+		cfg.PeriodId = periodId
 	}
 
 	return nowMS, cfg, nil
@@ -288,7 +294,26 @@ func writeLiveMPD(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, 
 	if err != nil {
 		return fmt.Errorf("convertToLive: %w", err)
 	}
-	size, err := lMPD.Write(buf, "  ", true)
+
+	var size int
+
+	// Write either Period element if specified (in response to XLink request) of full MPD
+	if cfg.PeriodId != "" {
+		found := false
+		for _, p := range lMPD.Periods {
+			if p.Id == cfg.PeriodId {
+				size, err = p.Write(buf, "  ")
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("period %s not found", cfg.PeriodId)
+		}
+	} else {
+		size, err = lMPD.Write(buf, "  ", true)
+	}
+
 	if err != nil {
 		return err
 	}
