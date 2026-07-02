@@ -98,7 +98,7 @@ func genLiveSegment(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig
 			timescale := uint64(meta.timescale)
 			log.Debug("Calling CreateEsmgAhead", "startTime ", startTime, "endTime", endTime, "timescale ", timescale, "Config ", *cfg)
 
-			emsgs, err := scte35.CreateEmsgAhead(log, startTime, endTime, timescale, *cfg.SCTE35PerMinute)
+			emsgs, err := scte35.CreateEmsgAhead(startTime, endTime, timescale, *cfg.SCTE35PerMinute)
 			if err != nil {
 				return so, fmt.Errorf("insertSCTE35: %w", err)
 			}

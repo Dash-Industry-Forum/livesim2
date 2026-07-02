@@ -3,8 +3,6 @@ package scte35
 
 import (
 	"errors"
-	"fmt"
-	"log/slog"
 
 	"github.com/Comcast/gots/v2"
 	"github.com/Comcast/gots/v2/scte35"
@@ -30,7 +28,7 @@ func IsValidSCTE35Interval(adsPerMinute int) error {
 // 1: 10s after full minute (20s duration)
 // 2: 10s and 40s after full minute (10 duration)
 // 3: 10s, 36s, 46s after full minute (10s duration)
-func CreateEmsgAhead(log *slog.Logger, segStart, segEnd, timescale uint64, perMinute int) ([]*mp4.EmsgBox, error) {
+func CreateEmsgAhead(segStart, segEnd, timescale uint64, perMinute int) ([]*mp4.EmsgBox, error) {
 	if err := IsValidSCTE35Interval(perMinute); err != nil {
 		return nil, err
 	}
@@ -125,14 +123,13 @@ func CreateEmsgAhead(log *slog.Logger, segStart, segEnd, timescale uint64, perMi
 
 	// If we're handling a timeSignal we need to add start and end segmentation descriptors into separate emsgs
 	if timeSignal {
-		log.Debug("ALL BREAKS", "ALLBREAKS", len(breakTypes))
 		for _, breakType := range breakTypes {
 			e.PresentationTime = uint64(spliceTime)
 			if breakType == scte35.SegDescProviderPOEnd || breakType == scte35.SegDescDistributorPOEnd {
 				e.PresentationTime = e.PresentationTime + uint64(adDuration)
 				e.ID = e.ID + 1
 			}
-			e.MessageData = CreateTimeSignalInsertPayload(p, breakType, log)
+			e.MessageData = CreateTimeSignalInsertPayload(p, breakType)
 			e.Value = "timesignal"
 			// Simple way to avoid overwriting the emsg each iteration of the loop....
 			b := e
@@ -183,7 +180,7 @@ func CreateSpliceInsertPayload(p SpliceInsertParams) []byte {
 	return s.UpdateData()
 }
 
-func CreateTimeSignalInsertPayload(p SpliceInsertParams, breakType scte35.SegDescType, log *slog.Logger) []byte {
+func CreateTimeSignalInsertPayload(p SpliceInsertParams, breakType scte35.SegDescType) []byte {
 	// Create a time_signal structure (second option to signal Ad Break).
 	t := scte35.CreateSCTE35()
 	t.SetTier(uint16(p.Tier))
@@ -193,33 +190,15 @@ func CreateTimeSignalInsertPayload(p SpliceInsertParams, breakType scte35.SegDes
 
 	if breakType == scte35.SegDescProviderPOEnd || breakType == scte35.SegDescDistributorPOEnd {
 		cmd.SetPTS(gots.PTS(p.PtsTime + p.Duration))
-		log.Debug("BREAK", "TYPE", breakType, "PTS", cmd.PTS())
 	} else {
 		cmd.SetPTS(gots.PTS(p.PtsTime))
-		log.Debug("BREAK", "TYPE", breakType, "PTS", cmd.PTS())
 	}
-
-	log.Debug("time_signal", "value", cmd)
-	log.Debug("Break Type:", "breakType", breakType)
 
 	descriptors := CreateDescriptors(p, breakType)
-
-	for i, d := range descriptors {
-		log.Debug(
-			"descriptor",
-			"index", i,
-			"value", fmt.Sprintf("%+v", d),
-		)
-	}
 
 	t.SetDescriptors(descriptors)
 
 	t.SetCommandInfo(cmd)
-	log.Debug("scte35", "value", fmt.Sprintf("%+v", t))
-
-	d := t.Descriptors()
-
-	log.Debug("SCTE35 Descriptors", "descriptors", fmt.Sprintf("%+v", d[0]))
 
 	return t.UpdateData()
 }
