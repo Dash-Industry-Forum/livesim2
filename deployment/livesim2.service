@@ -1,0 +1,15 @@
+[Unit]
+Description=DASH-IF livesim2 Service
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+User=ec2-user
+Group=ec2-user
+ExecStart=/usr/local/bin/livesim2 --vodroot=/var/media/vod  --maxrequests=500 --domains=my.company.com --logformat=journald
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+
