@@ -6,7 +6,7 @@ require (
 	github.com/Comcast/gots/v2 v2.2.1
 	github.com/Eyevinn/dash-mpd v0.16.0
 	github.com/Eyevinn/hi264 v0.10.0
-	github.com/Eyevinn/mp4ff v0.52.0
+	github.com/Eyevinn/mp4ff v0.54.0
 	github.com/a-h/templ v0.3.1020
 	github.com/beevik/etree v1.5.0
 	github.com/caddyserver/certmagic v0.22.0
