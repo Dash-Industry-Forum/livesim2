@@ -9,8 +9,8 @@ github.com/Eyevinn/dash-mpd v0.16.0 h1:5HgrL/vOgT2cSop6jVucwc3RsyReKw1M/ME/20r1e
 github.com/Eyevinn/dash-mpd v0.16.0/go.mod h1:mh/BF4gvesMIYxlNHJMI+H9FLsJYeud9yqGibxcgGpE=
 github.com/Eyevinn/hi264 v0.10.0 h1:4CgeRcBT8Y03BuHHr9u7ErMN5Iiw1mGbvKNU9s4QFPg=
 github.com/Eyevinn/hi264 v0.10.0/go.mod h1:ag1j/wxUs7EvZu6qEZBRyLJ0bJW4OUjO8ip8c2TfLTQ=
-github.com/Eyevinn/mp4ff v0.52.0 h1:QJUi2PtROeZGkcumbX7f4/91Jz6dlhjeKzpwSdCoYG8=
-github.com/Eyevinn/mp4ff v0.52.0/go.mod h1:LKZAf3K+OtWYdzlvte8uafD/e3g2aK2WcsgVohvjccU=
+github.com/Eyevinn/mp4ff v0.54.0 h1:WSkbWQbvlB1jAuTfUlqjhqdp3nkH+oe7Ht6hzDCWx+g=
+github.com/Eyevinn/mp4ff v0.54.0/go.mod h1:AhC+bOI7GSZmzuN4zFY9U76qMedbHI+8BdQXWrC9+8U=
 github.com/a-h/templ v0.3.1020 h1:ypAT/L5ySWEnZ6Zft/5yfoWXYYkhFNvEFOeeqecg4tw=
 github.com/a-h/templ v0.3.1020/go.mod h1:A2DlK61v+K+NRoGnhmYbNYVmtYHcFO5/AisMvBdDxTM=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
