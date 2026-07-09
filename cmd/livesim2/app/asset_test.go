@@ -66,6 +66,37 @@ func TestLoadAsset(t *testing.T) {
 			},
 		},
 		{
+			desc:      "testpic_2s_av1 (AV1 video + AAC audio)",
+			assetPath: "assets/testpic_2s_av1",
+			ad: wantedAssetData{
+				nrReps:         3,
+				loopDurationMS: 10000,
+			},
+			rds: map[string]wantedRepData{
+				"av1": {
+					nrSegs:         5,
+					initURI:        "av1/init.mp4",
+					mpdTimescale:   12_800,
+					mediaTimescale: 12_800,
+					duration:       128_000,
+				},
+				"av1_600": {
+					nrSegs:         5,
+					initURI:        "av1_600/init.mp4",
+					mpdTimescale:   12_800,
+					mediaTimescale: 12_800,
+					duration:       128_000,
+				},
+				"A48": {
+					nrSegs:         5,
+					initURI:        "A48/init.mp4",
+					mpdTimescale:   1,
+					mediaTimescale: 48_000,
+					duration:       480_256,
+				},
+			},
+		},
+		{
 			desc:         "testpic_2s",
 			assetPath:    "assets/testpic_2s",
 			segmentEndNr: 0, // Will not be used

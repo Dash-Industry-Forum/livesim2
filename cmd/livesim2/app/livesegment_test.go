@@ -55,6 +55,13 @@ func TestLiveSegment(t *testing.T) {
 			mediaTimescale:  90000,
 		},
 		{
+			asset:           "testpic_2s_av1",
+			initialization:  "av1/init.mp4",
+			media:           "av1/$NrOrTime$.m4s",
+			segmentMimeType: "video/mp4",
+			mediaTimescale:  12800,
+		},
+		{
 			asset:           "testpic_2s",
 			initialization:  "A48/init.mp4",
 			media:           "A48/$NrOrTime$.m4s",

@@ -7,7 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Nothing yet
+### Added
+
+- AV1 video support: assets with `av01`/`av1C` sample entries are recognized as video and served,
+  and AV1 segments can be encrypted on the fly for both `cenc` and `cbcs` schemes. Per-segment
+  common-encryption protection ranges (clear OBU/tile headers, protected tile data) are computed by
+  mp4ff via `mp4.EncryptFragments`, which builds a fresh AV1 frame-header decoder per segment so
+  concurrent requests are race-free. A new `testpic_2s_av1` test asset (AV1 1280x720@25 at 400 and
+  600 kbps, using moqlivemock content, + AAC) exercises the path.
+
+### Changed
+
+- Bumped `github.com/Eyevinn/mp4ff` to v0.54.0 for AV1 common-encryption (cenc/cbcs) support and
+  the immutable-`InitProtectData` / `EncryptFragments` API; segment encryption now calls
+  `mp4.EncryptFragments` per segment instead of looping `EncryptFragment`.
 
 ## [1.11.0] - 2026-06-30
 
