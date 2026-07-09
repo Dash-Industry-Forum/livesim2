@@ -511,12 +511,11 @@ func encryptFrags(log *slog.Logger, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
 		key = keyData.Key
 	}
 	log.Debug("encrypting with DRM", "scheme", scheme, "kid", hex.EncodeToString(kid), "iv", hex.EncodeToString(iv))
-	for i, f := range frags {
-		nextIV, err := mp4.EncryptFragment(f, key, iv, ipd)
-		if err != nil {
-			return fmt.Errorf("encrypt fragment %d: %w", i, err)
-		}
-		iv = nextIV
+	// A segment's fragments form one decode sequence, so encrypt them together. mp4ff builds a
+	// fresh per-sequence sample protector, which keeps AV1 reference-frame state consistent across
+	// the fragments and safe under concurrent requests (ipd itself is immutable and shared).
+	if _, err := mp4.EncryptFragments(frags, key, iv, ipd); err != nil {
+		return fmt.Errorf("encrypt fragments: %w", err)
 	}
 	return nil
 }

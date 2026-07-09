@@ -1271,7 +1271,7 @@ func fillContentTypes(assetPath string, period *m.Period) {
 	}
 }
 
-var videoCodecPrefixes = []string{"avc", "hev", "hvc"}
+var videoCodecPrefixes = []string{"avc", "hev", "hvc", "av01"}
 var audioCodecPrefixes = []string{"mp4a", "ac-3", "ec-3", "ac-4"}
 var textCodecPrefixes = []string{"stpp", "wvtt"}
 
