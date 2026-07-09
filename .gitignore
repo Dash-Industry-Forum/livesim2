@@ -69,4 +69,9 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
+# tar files etc
+*.tgz
+*.tar
+*.zip
+
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,go,windows
