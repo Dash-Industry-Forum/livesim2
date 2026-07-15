@@ -193,7 +193,7 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 				expStartNr, expNrSegments = 896605657, 1
 			}
 			manifest := waitForMPD(t, filepath.Join(dstDir, timelineNrMPD), func(m *mpd.MPD) bool {
-				return mpdReady(m, 2, expStartNr)
+				return mpdReady(m, 2, expStartNr) && mpdSegmentCountsMatch(m, expNrSegments)
 			})
 			for _, as := range manifest.Periods[0].AdaptationSets {
 				stl := as.SegmentTemplate
@@ -586,6 +586,27 @@ func mpdReady(m *mpd.MPD, nrAS, startNr int) bool {
 	for _, as := range m.Periods[0].AdaptationSets {
 		stl := as.SegmentTemplate
 		if stl == nil || stl.StartNumber == nil || int(*stl.StartNumber) != startNr {
+			return false
+		}
+	}
+	return true
+}
+
+// mpdSegmentCountsMatch reports whether every adaptation set's SegmentTimeline sums to exactly
+// nrSegments. Without this check, mpdReady alone can be satisfied by a manifest that has settled on
+// the expected start number but not yet accumulated every expected segment, since the two are
+// written to independently by the async processing.
+func mpdSegmentCountsMatch(m *mpd.MPD, nrSegments int) bool {
+	for _, as := range m.Periods[0].AdaptationSets {
+		stl := as.SegmentTemplate
+		if stl == nil || stl.SegmentTimeline == nil {
+			return false
+		}
+		got := 0
+		for _, s := range stl.SegmentTimeline.S {
+			got += int(s.R) + 1
+		}
+		if got != nrSegments {
 			return false
 		}
 	}
