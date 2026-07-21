@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sort"
 	"testing"
 	"time"
 
@@ -57,16 +58,25 @@ type cc608Flip struct {
 // feeds them to a decoder, returning the on-screen changes.
 func decodeSamples(t *testing.T, samples []mp4.FullSample, codec carriage.Codec) []cc608Flip {
 	t.Helper()
+	// A conformant receiver reassembles cc_data in presentation (PTS) order, so
+	// decode the samples in that order (this is what dash.js/hls.js/Shaka do).
+	order := make([]int, len(samples))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(a, b int) bool {
+		return samples[order[a]].PresentationTime() < samples[order[b]].PresentationTime()
+	})
 	var dec cta608.Decoder
 	var flips []cc608Flip
-	for i := range samples {
-		nalus, err := avc.GetNalusFromSample(samples[i].Data)
+	for rank, idx := range order {
+		nalus, err := avc.GetNalusFromSample(samples[idx].Data)
 		require.NoError(t, err)
 		f1, _, err := carriage.FieldPairs(nalus, codec)
 		require.NoError(t, err)
 		require.NoError(t, dec.Feed(f1))
 		if dec.Changed() {
-			flips = append(flips, cc608Flip{i, cc608RowText(dec.Screen(), cc608Line1Row), cc608RowText(dec.Screen(), cc608Line2Row)})
+			flips = append(flips, cc608Flip{rank, cc608RowText(dec.Screen(), cc608Line1Row), cc608RowText(dec.Screen(), cc608Line2Row)})
 		}
 	}
 	return flips

@@ -7,6 +7,7 @@ package app
 import (
 	"encoding/binary"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -65,6 +66,13 @@ func cc608CueContent(segNr uint32) generate.CueContentFunc {
 // the resulting per-frame SEI NALU before the first VCL NALU of each sample,
 // updating Data and Size. samples are the video track's FullSamples in decode
 // order; fps and unitStartMS give the caption timing; segNr is the segment number.
+//
+// BuildUnitCues yields a presentation-ordered per-frame schedule, but samples
+// arrive in decode order. Since receivers reassemble cc_data by presentation time
+// (PTS) — dash.js, hls.js and Shaka all sort caption pairs by PTS — the k-th
+// caption frame must ride the k-th sample in *presentation* order. With B-frames
+// (decode order != presentation order) a naive frames[i]->samples[i] mapping
+// permutes the CEA-608 byte stream and garbles the caption.
 func injectCC608(samples []mp4.FullSample, fps float64, unitStartMS int64, segNr uint32, codec carriage.Codec) error {
 	if len(samples) == 0 {
 		return nil
@@ -78,15 +86,23 @@ func injectCC608(samples []mp4.FullSample, fps float64, unitStartMS int64, segNr
 	if len(frames) != len(samples) {
 		return fmt.Errorf("cc608: got %d frames for %d samples", len(frames), len(samples))
 	}
-	for i := range samples {
-		f := frames[i]
+	// order[k] = decode-order index of the k-th sample in presentation order.
+	order := make([]int, len(samples))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(a, b int) bool {
+		return samples[order[a]].PresentationTime() < samples[order[b]].PresentationTime()
+	})
+	for k, idx := range order {
+		f := frames[k]
 		seiNALU := carriage.FrameSEINALU(f.Field1, f.Field2, f.CCCount, codec)
-		newData, err := spliceSEIBeforeVCL(samples[i].Data, seiNALU, codec)
+		newData, err := spliceSEIBeforeVCL(samples[idx].Data, seiNALU, codec)
 		if err != nil {
-			return fmt.Errorf("cc608 splice sample %d: %w", i, err)
+			return fmt.Errorf("cc608 splice sample %d: %w", idx, err)
 		}
-		samples[i].Data = newData
-		samples[i].Size = uint32(len(newData))
+		samples[idx].Data = newData
+		samples[idx].Size = uint32(len(newData))
 	}
 	return nil
 }
