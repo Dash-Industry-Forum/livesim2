@@ -182,6 +182,53 @@ var liveSubEn = "" +
  <Representation id="timestpp-en" bandwidth="8000" startWithSAP="1"></Representation>
  </AdaptationSetType>`
 
+// TestLiveMPDWithCC608 checks that timecc608 adds a CEA-608 Accessibility
+// descriptor to every video AdaptationSet (and to no other), without creating a
+// new AdaptationSet.
+func TestLiveMPDWithCC608(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	logger := slog.Default()
+	require.NoError(t, am.discoverAssets(logger))
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+	const nowMS = 100_000
+
+	cfg := NewResponseConfig()
+	cfg.CC608 = &CC608Config{Channel: "CC1", Lang: "eng"}
+	liveMPD, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, nowMS)
+	require.NoError(t, err)
+
+	nVideo, nText := 0, 0
+	for _, as := range liveMPD.Periods[0].AdaptationSets {
+		switch as.ContentType {
+		case "video":
+			nVideo++
+			found := false
+			for _, acc := range as.Accessibilities {
+				if acc.SchemeIdUri == CEA608AccessibilitySchemeIdUri {
+					require.Equal(t, "CC1=eng", acc.Value)
+					found = true
+				}
+			}
+			require.True(t, found, "video AdaptationSet missing CEA-608 accessibility")
+		case "text":
+			nText++
+		}
+	}
+	require.GreaterOrEqual(t, nVideo, 1)
+	require.Zero(t, nText, "timecc608 must not create a text AdaptationSet")
+
+	// Without the option there is no CEA-608 accessibility descriptor.
+	plainMPD, err := LiveMPD(asset, "Manifest.mpd", NewResponseConfig(), nil, nowMS)
+	require.NoError(t, err)
+	for _, as := range plainMPD.Periods[0].AdaptationSets {
+		for _, acc := range as.Accessibilities {
+			require.NotEqual(t, CEA608AccessibilitySchemeIdUri, acc.SchemeIdUri)
+		}
+	}
+}
+
 // TestSegmentTimes checks that the right number of entries are in the SegmentTimeline
 func TestSegmentTimes(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
