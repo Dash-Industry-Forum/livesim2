@@ -7,6 +7,7 @@ package app
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -60,6 +61,11 @@ func cc608CueContent(segNr uint32) generate.CueContentFunc {
 func injectCC608(samples []mp4.FullSample, fps float64, unitStartMS int64, segNr uint32, codec carriage.Codec) error {
 	if len(samples) == 0 {
 		return nil
+	}
+	// Guard the frame rate before go-608's scheduler would panic: cc_count =
+	// round(600/fps) must land in carriage's valid 2..31 window.
+	if cc := int(math.Round(600.0 / fps)); cc < 2 || cc > 31 {
+		return fmt.Errorf("cc608: fps %.3f is out of the CEA-608 range (cc_count %d not in 2..31)", fps, cc)
 	}
 	frames, err := generate.BuildUnitCues(fps, len(samples), unitStartMS, cc608TargetPeriodMS, cc608CueContent(segNr))
 	if err != nil {
@@ -119,4 +125,94 @@ func isVCLNalu(nalu []byte, codec carriage.Codec) bool {
 		return hevc.IsVideoNaluType(hevc.GetNaluType(nalu[0]))
 	}
 	return avc.IsVideoNaluType(avc.GetNaluType(nalu[0]))
+}
+
+// applyCC608 injects in-band CTA-608 captions into a decoded video segment in
+// place. For each fragment it reads the full samples, splices the per-frame SEI
+// (via injectCC608), and writes the grown samples back into the fragment's trun
+// sizes and mdat. It is only called for clear (non-DRM, non-pre-encrypted) video,
+// so there is no senc/saio to adjust; and since only per-sample size *values*
+// change, the moof size is unchanged and trun.DataOffset / mdat.StartPos stay
+// valid (mirroring the tfdt-shift bookkeeping in genLiveSegment).
+func applyCC608(seg *mp4.MediaSegment, meta segMeta, cfg *ResponseConfig) error {
+	rep := meta.rep
+	codec, ok := cc608CodecFor(rep.Codecs)
+	if !ok {
+		return fmt.Errorf("cc608: codec %q is not AVC or HEVC", rep.Codecs)
+	}
+	if rep.initSeg == nil || rep.initSeg.Moov == nil || rep.initSeg.Moov.Mvex == nil {
+		return fmt.Errorf("cc608: missing init/trex for representation %q", rep.ID)
+	}
+	trex := rep.initSeg.Moov.Mvex.Trex
+	for _, frag := range seg.Fragments {
+		samples, err := frag.GetFullSamples(trex)
+		if err != nil {
+			return fmt.Errorf("cc608 getFullSamples: %w", err)
+		}
+		if len(samples) == 0 {
+			continue
+		}
+		fps, err := cc608FPS(rep, samples)
+		if err != nil {
+			return err
+		}
+		fragStart := frag.Moof.Traf.Tfdt.BaseMediaDecodeTime()
+		unitStartMS := int64(cfg.StartTimeS)*1000 + int64(fragStart)*1000/int64(meta.timescale)
+		if err := injectCC608(samples, fps, unitStartMS, meta.newNr, codec); err != nil {
+			return err
+		}
+		if err := writeBackCC608Samples(frag, samples); err != nil {
+			return err
+		}
+	}
+	// Injection grows each fragment, so a segment index (sidx) that references the
+	// fragments by size would go stale. genLiveSegment's other mutations are
+	// size-invariant, so this is the only place that must fix it. No-op unless the
+	// stored segment carries a sidx with one reference per fragment.
+	if seg.Sidx != nil && len(seg.Sidx.SidxRefs) == len(seg.Fragments) {
+		for i, frag := range seg.Fragments {
+			seg.Sidx.SidxRefs[i].ReferencedSize = uint32(frag.Moof.Size() + frag.Mdat.Size())
+		}
+	}
+	return nil
+}
+
+// cc608FPS derives the video frame rate from the representation, preferring a
+// known constant sample duration and falling back to the first sample's duration.
+func cc608FPS(rep *RepData, samples []mp4.FullSample) (float64, error) {
+	durTicks := rep.DefaultSampleDuration
+	if rep.ConstantSampleDuration != nil && *rep.ConstantSampleDuration != 0 {
+		durTicks = *rep.ConstantSampleDuration
+	}
+	if durTicks == 0 && len(samples) > 0 {
+		durTicks = samples[0].Dur
+	}
+	if durTicks == 0 || rep.MediaTimescale == 0 {
+		return 0, fmt.Errorf("cc608: cannot determine fps (timescale=%d, sampleDur=%d)", rep.MediaTimescale, durTicks)
+	}
+	return float64(rep.MediaTimescale) / float64(durTicks), nil
+}
+
+// writeBackCC608Samples writes grown samples back into a fragment: it updates each
+// trun per-sample size and rebuilds the mdat from the samples' data. The samples
+// must already be the injected ones (new, non-aliased Data).
+func writeBackCC608Samples(frag *mp4.Fragment, samples []mp4.FullSample) error {
+	trun := frag.Moof.Traf.Trun
+	if !trun.HasSampleSize() {
+		return fmt.Errorf("cc608: trun without per-sample sizes is not supported")
+	}
+	if len(trun.Samples) != len(samples) {
+		return fmt.Errorf("cc608: trun has %d samples but got %d", len(trun.Samples), len(samples))
+	}
+	total := 0
+	for i := range samples {
+		total += len(samples[i].Data)
+	}
+	data := make([]byte, 0, total)
+	for i := range samples {
+		data = append(data, samples[i].Data...)
+		trun.Samples[i].Size = samples[i].Size
+	}
+	frag.Mdat.Data = data
+	return nil
 }
