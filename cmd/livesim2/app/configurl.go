@@ -91,6 +91,9 @@ const (
 	UrlParamSchemeIdUri               = "urn:mpeg:dash:urlparam:2014"
 	SsrSchemeIdUri                    = "urn:mpeg:dash:ssr:2023"
 	AdaptationSetSwitchingSchemeIdUri = "urn:mpeg:dash:adaptation-set-switching:2016"
+	// CEA608AccessibilitySchemeIdUri is the Accessibility descriptor scheme for in-band
+	// CTA-608 (CEA-608) captions, attached to the video AdaptationSet (value e.g. "CC1=eng").
+	CEA608AccessibilitySchemeIdUri = "urn:scte:dash:cc:cea-608:2015"
 )
 
 type ResponseConfig struct {
@@ -130,6 +133,7 @@ type ResponseConfig struct {
 	TimeSubsWvtt                 []string          `json:"TimeSubsWvttLanguages,omitempty"`
 	TimeSubsDurMS                int               `json:"TimeSubsDurMS,omitempty"`
 	TimeSubsRegion               int               `json:"TimeSubsRegion,omitempty"`
+	CC608                        *CC608Config      `json:"CC608,omitempty"`
 	Host                         string            `json:"Host,omitempty"`
 	PatchTTL                     int               `json:"Patch,omitempty"`
 	DRM                          string            `json:"DRM,omitempty"` // Includes ECCP as eccp-cbcs or eccp-cenc
@@ -434,6 +438,8 @@ cfgLoop:
 			cfg.TimeSubsDurMS = sc.Atoi(key, val)
 		case "timesubsreg": // region (0 or 1)
 			cfg.TimeSubsRegion = sc.Atoi(key, val)
+		case "timecc608": // in-band CTA-608 captions: <channel>-<lang> (e.g. CC1-eng)
+			cfg.CC608 = sc.ParseCC608Config(key, val)
 		case "statuscode":
 			cfg.SegStatusCodes = sc.ParseSegStatusCodes(key, val)
 		case "traffic":
@@ -517,6 +523,13 @@ func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 	}
 	// We do not check here that the drm is one that has been configured,
 	// since pre-encrypted content will influence what is valid.
+
+	if cfg.CC608 != nil && cfg.DRM != "" {
+		// SEI must be spliced into the clear elementary stream, so in-band CTA-608
+		// injection is incompatible with on-the-fly encryption. Pre-encrypted assets
+		// are rejected later, at serve time, when the representation is known.
+		return fmt.Errorf("timecc608 cannot be combined with drm (SEI must be added in the clear)")
+	}
 
 	if cfg.ChunkDurSSR != "" && cfg.SSRAS == "" {
 		return fmt.Errorf("chunkDurSSR requires ssrAS to be configured")
