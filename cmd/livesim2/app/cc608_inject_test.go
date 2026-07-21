@@ -214,11 +214,17 @@ func TestGenLiveSegmentCC608(t *testing.T) {
 	}
 
 	flips := decodeSamples(t, samples, carriage.CodecAVC)
-	require.GreaterOrEqual(t, len(flips), 1, "at least one cue")
+	for i, fl := range flips {
+		t.Logf("cue %d @rank %d: line1=%q line2=%q", i, fl.frame, fl.line1, fl.line2)
+	}
+	// A 2s segment at 30fps has N=2 cues; both must decode (in presentation order),
+	// each two lines, and the times must tick by one second.
+	require.Len(t, flips, 2, "two ticking cues per 2s segment")
 	require.Regexp(t, `^\d\d:\d\d:\d\d\.\d\d\d$`, flips[0].line1)
 	require.Regexp(t, `^SEG \d+$`, flips[0].line2)
-	t.Logf("segment nr=%d: %d samples, %d cues; first cue line1=%q line2=%q",
-		nr, len(samples), len(flips), flips[0].line1, flips[0].line2)
+	require.Regexp(t, `^\d\d:\d\d:\d\d\.\d\d\d$`, flips[1].line1)
+	require.Equal(t, flips[0].line2, flips[1].line2, "segment number is constant across the segment's cues")
+	require.NotEqual(t, flips[0].line1, flips[1].line1, "the two cues must show different (ticking) times")
 }
 
 // TestGenLiveSegmentCC608AudioUnchanged confirms timecc608 is a no-op for audio
