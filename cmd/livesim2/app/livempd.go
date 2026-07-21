@@ -440,6 +440,11 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 			return nil, fmt.Errorf("addTimeSubs wvtt: %w", err)
 		}
 	}
+	if cfg.CC608 != nil {
+		if err = addCC608Accessibility(cfg, period); err != nil {
+			return nil, fmt.Errorf("addCC608Accessibility: %w", err)
+		}
+	}
 	if cfg.PeriodsPerHour == nil {
 		if afterStop {
 			mpdDurS := *cfg.StopTimeS - cfg.StartTimeS
@@ -913,6 +918,29 @@ func addTimeSubs(cfg *ResponseConfig, a *asset, period *m.Period, languages []st
 		as.SegmentTemplate = st
 		as.AppendRepresentation(rep)
 		period.AppendAdaptationSet(as)
+	}
+	return nil
+}
+
+// addCC608Accessibility advertises the injected in-band CTA-608 captions by adding
+// an Accessibility descriptor (urn:scte:dash:cc:cea-608:2015, value "CC1=<lang>")
+// to every video AdaptationSet. Unlike subtitles, no new AdaptationSet is created —
+// the captions ride inside the existing video track.
+func addCC608Accessibility(cfg *ResponseConfig, period *m.Period) error {
+	found := false
+	value := fmt.Sprintf("%s=%s", cfg.CC608.Channel, cfg.CC608.Lang)
+	for _, as := range period.AdaptationSets {
+		if as.ContentType != "video" {
+			continue
+		}
+		as.Accessibilities = append(as.Accessibilities, &m.DescriptorType{
+			SchemeIdUri: CEA608AccessibilitySchemeIdUri,
+			Value:       value,
+		})
+		found = true
+	}
+	if !found {
+		return fmt.Errorf("no video adaptation set found")
 	}
 	return nil
 }
