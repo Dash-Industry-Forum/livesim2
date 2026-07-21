@@ -7,7 +7,6 @@ package app
 import (
 	"encoding/binary"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -62,14 +61,14 @@ func injectCC608(samples []mp4.FullSample, fps float64, unitStartMS int64, segNr
 	if len(samples) == 0 {
 		return nil
 	}
-	// Guard the frame rate before go-608's scheduler would panic: cc_count =
-	// round(600/fps) must land in carriage's valid 2..31 window.
-	if cc := int(math.Round(600.0 / fps)); cc < 2 || cc > 31 {
-		return fmt.Errorf("cc608: fps %.3f is out of the CEA-608 range (cc_count %d not in 2..31)", fps, cc)
-	}
+	// BuildUnitCues validates the frame rate and returns an error (never panics)
+	// if it is out of the CEA-608 range.
 	frames, err := generate.BuildUnitCues(fps, len(samples), unitStartMS, cc608TargetPeriodMS, cc608CueContent(segNr))
 	if err != nil {
 		return fmt.Errorf("cc608 build cues: %w", err)
+	}
+	if len(frames) != len(samples) {
+		return fmt.Errorf("cc608: got %d frames for %d samples", len(frames), len(samples))
 	}
 	for i := range samples {
 		f := frames[i]
@@ -177,13 +176,10 @@ func applyCC608(seg *mp4.MediaSegment, meta segMeta, cfg *ResponseConfig) error 
 	return nil
 }
 
-// cc608FPS derives the video frame rate from the representation, preferring a
-// known constant sample duration and falling back to the first sample's duration.
+// cc608FPS derives the video frame rate from the representation, reusing the
+// shared RepData.sampleDur() and falling back to the first sample's duration.
 func cc608FPS(rep *RepData, samples []mp4.FullSample) (float64, error) {
-	durTicks := rep.DefaultSampleDuration
-	if rep.ConstantSampleDuration != nil && *rep.ConstantSampleDuration != 0 {
-		durTicks = *rep.ConstantSampleDuration
-	}
+	durTicks := rep.sampleDur()
 	if durTicks == 0 && len(samples) > 0 {
 		durTicks = samples[0].Dur
 	}
