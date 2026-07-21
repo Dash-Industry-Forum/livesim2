@@ -119,6 +119,16 @@ func genLiveSegment(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig
 				log.Debug("added SCTE-35 emsg message", "asset", a.AssetPath, "segment", segmentPart)
 			}
 		}
+
+		// CTA-608: inject an in-band caption (UTC clock + segment number) into the
+		// video samples as user_data_registered_itu_t_t35 SEI. Clear content only
+		// (SEI must precede any encryption), matching the SGAI/pre-encrypted guards.
+		if cfg.CC608 != nil && contentType == "video" && cfg.DRM == "" && !meta.rep.PreEncrypted {
+			if err := applyCC608(seg, meta, cfg); err != nil {
+				return so, fmt.Errorf("applyCC608: %w", err)
+			}
+			log.Debug("injected CTA-608 captions", "asset", a.AssetPath, "segment", segmentPart)
+		}
 		outSeg.seg = seg
 		outSeg.data = nil
 	}

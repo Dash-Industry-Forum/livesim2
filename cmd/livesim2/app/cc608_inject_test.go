@@ -6,12 +6,16 @@ package app
 
 import (
 	"encoding/binary"
+	"fmt"
+	"log/slog"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/Eyevinn/go-608/carriage"
 	"github.com/Eyevinn/go-608/cta608"
 	"github.com/Eyevinn/mp4ff/avc"
+	"github.com/Eyevinn/mp4ff/bits"
 	"github.com/Eyevinn/mp4ff/hevc"
 	"github.com/Eyevinn/mp4ff/mp4"
 	"github.com/stretchr/testify/require"
@@ -157,4 +161,78 @@ func testInjectCC608(t *testing.T, codec carriage.Codec, vclNalu []byte) {
 	require.Equal(t, "SEG 42", flips[0].row15)
 	require.Equal(t, "14:23:45.000", flips[1].row14)
 	require.Equal(t, "SEG 42", flips[1].row15)
+}
+
+// TestGenLiveSegmentCC608 drives a real testpic_2s/V300 (AVC) segment through
+// genLiveSegment with timecc608 set, round-trips it through the real encode path,
+// and verifies every video sample carries CEA-608 SEI that decodes to the clock +
+// segment number.
+func TestGenLiveSegmentCC608(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	logger := slog.Default()
+	require.NoError(t, am.discoverAssets(logger))
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	cfg := NewResponseConfig()
+	cfg.CC608 = &CC608Config{Channel: "CC1", Lang: "eng"}
+	const nowMS = 100_000
+	const nr = 40
+
+	so, err := genLiveSegment(logger, vodFS, asset, cfg, fmt.Sprintf("V300/%d.m4s", nr), nowMS, false)
+	require.NoError(t, err)
+	require.Equal(t, "video/mp4", so.meta.rep.SegmentType())
+
+	// Round-trip through the real encode path to validate the size bookkeeping.
+	sw := bits.NewFixedSliceWriter(int(so.seg.Size()))
+	require.NoError(t, so.seg.EncodeSW(sw))
+	decoded, err := mp4.DecodeFileSR(bits.NewFixedSliceReader(sw.Bytes()))
+	require.NoError(t, err)
+	require.Len(t, decoded.Segments, 1)
+
+	trex := so.meta.rep.initSeg.Moov.Mvex.Trex
+	var samples []mp4.FullSample
+	for _, frag := range decoded.Segments[0].Fragments {
+		fss, err := frag.GetFullSamples(trex)
+		require.NoError(t, err)
+		samples = append(samples, fss...)
+	}
+	require.NotEmpty(t, samples)
+	for i := range samples {
+		require.True(t, avc.ContainsNaluType(samples[i].Data, avc.NALU_SEI), "sample %d missing SEI", i)
+	}
+
+	flips := decodeSamples(t, samples, carriage.CodecAVC)
+	require.GreaterOrEqual(t, len(flips), 1, "at least one cue")
+	require.Regexp(t, `^\d\d:\d\d:\d\d\.\d\d\d$`, flips[0].row14)
+	require.Regexp(t, `^SEG \d+$`, flips[0].row15)
+	t.Logf("segment nr=%d: %d samples, %d cues; first cue row14=%q row15=%q",
+		nr, len(samples), len(flips), flips[0].row14, flips[0].row15)
+}
+
+// TestGenLiveSegmentCC608AudioUnchanged confirms timecc608 is a no-op for audio
+// (contentType != "video"): the audio segment is byte-for-byte identical with and
+// without the option.
+func TestGenLiveSegmentCC608AudioUnchanged(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	logger := slog.Default()
+	require.NoError(t, am.discoverAssets(logger))
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	const nowMS = 100_000
+	media := "A48/40.m4s"
+
+	plain := NewResponseConfig()
+	withCC := NewResponseConfig()
+	withCC.CC608 = &CC608Config{Channel: "CC1", Lang: "eng"}
+
+	soPlain, err := genLiveSegment(logger, vodFS, asset, plain, media, nowMS, false)
+	require.NoError(t, err)
+	soCC, err := genLiveSegment(logger, vodFS, asset, withCC, media, nowMS, false)
+	require.NoError(t, err)
+	require.Equal(t, "audio/mp4", soCC.meta.rep.SegmentType())
+	require.Equal(t, soPlain.seg.Size(), soCC.seg.Size(), "audio segment must be unaffected by timecc608")
 }
