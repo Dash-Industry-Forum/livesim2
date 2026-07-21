@@ -50,7 +50,7 @@ func cc608RowText(s cta608.Screen, idx int) string {
 
 type cc608Flip struct {
 	frame        int
-	row14, row15 string
+	line1, line2 string
 }
 
 // decodeSamples extracts the CTA-608 field pairs from each sample's NALUs and
@@ -66,7 +66,7 @@ func decodeSamples(t *testing.T, samples []mp4.FullSample, codec carriage.Codec)
 		require.NoError(t, err)
 		require.NoError(t, dec.Feed(f1))
 		if dec.Changed() {
-			flips = append(flips, cc608Flip{i, cc608RowText(dec.Screen(), 14), cc608RowText(dec.Screen(), 15)})
+			flips = append(flips, cc608Flip{i, cc608RowText(dec.Screen(), cc608Line1Row), cc608RowText(dec.Screen(), cc608Line2Row)})
 		}
 	}
 	return flips
@@ -157,10 +157,10 @@ func testInjectCC608(t *testing.T, codec carriage.Codec, vclNalu []byte) {
 	// The injected captions decode to the two per-second cues with the seg number.
 	flips := decodeSamples(t, samples, codec)
 	require.Len(t, flips, 2, "one flip per cue")
-	require.Equal(t, "14:23:44.000", flips[0].row14)
-	require.Equal(t, "SEG 42", flips[0].row15)
-	require.Equal(t, "14:23:45.000", flips[1].row14)
-	require.Equal(t, "SEG 42", flips[1].row15)
+	require.Equal(t, "14:23:44.000", flips[0].line1)
+	require.Equal(t, "SEG 42", flips[0].line2)
+	require.Equal(t, "14:23:45.000", flips[1].line1)
+	require.Equal(t, "SEG 42", flips[1].line2)
 }
 
 // TestGenLiveSegmentCC608 drives a real testpic_2s/V300 (AVC) segment through
@@ -205,10 +205,10 @@ func TestGenLiveSegmentCC608(t *testing.T) {
 
 	flips := decodeSamples(t, samples, carriage.CodecAVC)
 	require.GreaterOrEqual(t, len(flips), 1, "at least one cue")
-	require.Regexp(t, `^\d\d:\d\d:\d\d\.\d\d\d$`, flips[0].row14)
-	require.Regexp(t, `^SEG \d+$`, flips[0].row15)
-	t.Logf("segment nr=%d: %d samples, %d cues; first cue row14=%q row15=%q",
-		nr, len(samples), len(flips), flips[0].row14, flips[0].row15)
+	require.Regexp(t, `^\d\d:\d\d:\d\d\.\d\d\d$`, flips[0].line1)
+	require.Regexp(t, `^SEG \d+$`, flips[0].line2)
+	t.Logf("segment nr=%d: %d samples, %d cues; first cue line1=%q line2=%q",
+		nr, len(samples), len(flips), flips[0].line1, flips[0].line2)
 }
 
 // TestGenLiveSegmentCC608AudioUnchanged confirms timecc608 is a no-op for audio

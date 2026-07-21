@@ -23,6 +23,14 @@ import (
 // two ~1.001s cues, a 1.92s segment two ~0.96s cues, etc.
 const cc608TargetPeriodMS = 1000
 
+// cc608Line1Row and cc608Line2Row are the CEA-608 rows (1..15, 15 = bottom) that
+// the two caption lines occupy. Near the top, so they don't collide with the
+// player's control bar or the content's own bottom-of-frame overlays.
+const (
+	cc608Line1Row = 2
+	cc608Line2Row = 3
+)
+
 // cc608CodecFor maps a representation codec string to the go-608 carriage codec.
 func cc608CodecFor(codecs string) (carriage.Codec, bool) {
 	switch {
@@ -45,8 +53,8 @@ func cc608CueContent(segNr uint32) generate.CueContentFunc {
 		ts := time.UnixMilli(cueStartMS).UTC().Format("15:04:05.000")
 		seg := fmt.Sprintf("SEG %d", segNr)
 		return generate.UnitCue{Lines: []cta608.Line{
-			{Row: 14, Align: cta608.AlignCenter, Runs: []cta608.Run{{Text: ts, Pen: cta608.Pen{Color: cta608.White}}}},
-			{Row: 15, Align: cta608.AlignCenter, Runs: []cta608.Run{{Text: seg, Pen: cta608.Pen{Color: cta608.Yellow}}}},
+			{Row: cc608Line1Row, Align: cta608.AlignCenter, Runs: []cta608.Run{{Text: ts, Pen: cta608.Pen{Color: cta608.White}}}},
+			{Row: cc608Line2Row, Align: cta608.AlignCenter, Runs: []cta608.Run{{Text: seg, Pen: cta608.Pen{Color: cta608.Yellow}}}},
 		}}
 	}
 }
