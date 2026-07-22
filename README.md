@@ -30,6 +30,12 @@ This is done by a URL parameter like `/timesubsstpp_en,sv` which will result in
 two `stpp` (segmented TTML) subtitle tracks with with language codes "en" and "sv", respectively.
 There is a corresponding setting for `wvtt` (segmented WebVTT) subtitles using `/timesubswvtt_en,sv`.
 
+For in-band closed captions, `/timecc608_CC1-eng` injects a CTA-608 (CEA-608) caption
+into the AVC/HEVC video itself, showing a ticking UTC clock and the segment number on
+channel CC1, and advertises it with a CEA-608 `Accessibility` descriptor. The value is
+`<channel>-<lang>` (only `CC1` is supported so far). It cannot be combined with encryption
+and is rejected for assets that already carry captions.
+
 The new `livesim2` software is written in Go instead of Python and designed to handle
 content in a more flexible and versatile way. It is intended to be very easy to install and deploy locally
 since it is compiled into a single binary that serves the content via a built-in

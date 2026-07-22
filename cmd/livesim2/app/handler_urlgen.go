@@ -152,6 +152,7 @@ type urlGenData struct {
 	TimeSubsWvtt                string // languages for generated subtitles in wvtt-format (comma-separated)
 	TimeSubsDur                 string // cue duration of generated subtitles (in milliseconds)
 	TimeSubsReg                 string // 0 for bottom and 1 for top
+	TimeCC608                   string // in-band CTA-608 caption channel and language (e.g. CC1-eng)
 	Drm                         string // empty means no DRM setup
 	UTCTiming                   string
 	Periods                     string   // number of periods per hour (1-60)
@@ -389,6 +390,15 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 	if timeSubsReg != "" && timeSubsReg != defaultTimeSubsReg {
 		data.TimeSubsReg = timeSubsReg
 		fmt.Fprintf(&sb, "timesubsreg_%s/", timeSubsReg)
+	}
+	timeCC608 := q.Get("timecc608")
+	if timeCC608 != "" {
+		data.TimeCC608 = timeCC608
+		if _, err := CreateCC608Config(timeCC608); err != nil {
+			data.Errors = append(data.Errors, fmt.Sprintf("invalid timecc608: %s", err.Error()))
+		} else {
+			fmt.Fprintf(&sb, "timecc608_%s/", timeCC608)
+		}
 	}
 	drm := q.Get("drm")
 	switch drm {
