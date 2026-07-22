@@ -101,13 +101,22 @@ func TestLoadAsset(t *testing.T) {
 			assetPath:    "assets/testpic_2s",
 			segmentEndNr: 0, // Will not be used
 			ad: wantedAssetData{
-				nrReps:         5,
+				nrReps:         6,
 				loopDurationMS: 8000,
 			},
 			rds: map[string]wantedRepData{
 				"V300": {
 					nrSegs:         4,
 					initURI:        "V300/init.mp4",
+					mpdTimescale:   1,
+					mediaTimescale: 90_000,
+					duration:       720_000,
+				},
+				// Same testpic content as V300 but with two in-band CEA-608
+				// caption tracks (CC1=eng;CC3=swe), referenced by cea608.mpd.
+				"V300_with_cc1_and_cc3": {
+					nrSegs:         4,
+					initURI:        "V300_with_cc1_and_cc3/init.mp4",
 					mpdTimescale:   1,
 					mediaTimescale: 90_000,
 					duration:       720_000,
@@ -126,13 +135,20 @@ func TestLoadAsset(t *testing.T) {
 			assetPath:    "assets/testpic_2s",
 			segmentEndNr: 2, // Shorten representations to 2 segments via SegmentTemplate,
 			ad: wantedAssetData{
-				nrReps:         5,
+				nrReps:         6,
 				loopDurationMS: 4000,
 			},
 			rds: map[string]wantedRepData{
 				"V300": {
 					nrSegs:         2,
 					initURI:        "V300/init.mp4",
+					mpdTimescale:   1,
+					mediaTimescale: 90_000,
+					duration:       360_000,
+				},
+				"V300_with_cc1_and_cc3": {
+					nrSegs:         2,
+					initURI:        "V300_with_cc1_and_cc3/init.mp4",
 					mpdTimescale:   1,
 					mediaTimescale: 90_000,
 					duration:       360_000,
@@ -240,7 +256,7 @@ func TestWriteMissingRepData(t *testing.T) {
 	asset, ok := am2.findAsset(assetPath)
 	require.True(t, ok)
 	require.NotNil(t, asset)
-	require.Equal(t, 5, len(asset.Reps), "should have 5 reps")
+	require.Equal(t, 6, len(asset.Reps), "should have 6 reps")
 
 	// Verify both reps are present and have correct data
 	v300, ok := asset.Reps["V300"]
