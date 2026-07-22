@@ -227,6 +227,60 @@ func TestGenLiveSegmentCC608(t *testing.T) {
 	require.NotEqual(t, flips[0].line1, flips[1].line1, "the two cues must show different (ticking) times")
 }
 
+// TestGenLiveSegmentCC608HEVC is the HEVC counterpart of TestGenLiveSegmentCC608:
+// it drives a real hev1 segment (bbb_hevc_ac3_8s, 24 fps, 2s segments) through
+// genLiveSegment with timecc608, round-trips it through the encode path, and
+// verifies every video sample carries a CEA-608 SEI prefix NAL that decodes (in
+// presentation order) to the ticking clock + segment number. This proves the
+// injection path — SEI splicing, VCL detection, presentation-order distribution and
+// the trun/mdat write-back — is codec-generic for HEVC end to end.
+func TestGenLiveSegmentCC608HEVC(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	logger := slog.Default()
+	require.NoError(t, am.discoverAssets(logger))
+	asset, ok := am.findAsset("bbb_hevc_ac3_8s")
+	require.True(t, ok)
+
+	cfg := NewResponseConfig()
+	cfg.CC608 = &CC608Config{Channel: "CC1", Lang: "eng"}
+	const nowMS = 100_000
+	const nr = 40 // 2s segments -> segment 40 starts at 80s = 00:01:20
+
+	so, err := genLiveSegment(logger, vodFS, asset, cfg, fmt.Sprintf("video_%d.m4s", nr), nowMS, false)
+	require.NoError(t, err)
+	require.Equal(t, "video/mp4", so.meta.rep.SegmentType())
+	codec, ok := cc608CodecFor(so.meta.rep.Codecs)
+	require.True(t, ok)
+	require.Equal(t, carriage.CodecHEVC, codec)
+
+	// Round-trip through the real encode path to validate the size bookkeeping.
+	sw := bits.NewFixedSliceWriter(int(so.seg.Size()))
+	require.NoError(t, so.seg.EncodeSW(sw))
+	decoded, err := mp4.DecodeFileSR(bits.NewFixedSliceReader(sw.Bytes()))
+	require.NoError(t, err)
+	require.Len(t, decoded.Segments, 1)
+
+	trex := so.meta.rep.initSeg.Moov.Mvex.Trex
+	var samples []mp4.FullSample
+	for _, frag := range decoded.Segments[0].Fragments {
+		fss, err := frag.GetFullSamples(trex)
+		require.NoError(t, err)
+		samples = append(samples, fss...)
+	}
+	require.NotEmpty(t, samples)
+	for i := range samples {
+		require.True(t, hevc.ContainsNaluType(samples[i].Data, hevc.NALU_SEI_PREFIX), "sample %d missing SEI", i)
+	}
+
+	flips := decodeSamples(t, samples, carriage.CodecHEVC)
+	require.Len(t, flips, 2, "two ticking cues per 2s segment")
+	require.Equal(t, "00:01:20.000", flips[0].line1)
+	require.Equal(t, "SEG 40", flips[0].line2)
+	require.Equal(t, "00:01:21.000", flips[1].line1)
+	require.Equal(t, "SEG 40", flips[1].line2)
+}
+
 // TestPrepareChunksCC608 exercises the low-latency chunked path: a chunked
 // timecc608 request must produce chunks whose video samples all carry the CEA-608
 // SEI. The captions are injected once over the whole segment in genLiveSegment
