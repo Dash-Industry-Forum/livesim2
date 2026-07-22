@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mp4ff via `mp4.EncryptFragments`, which builds a fresh AV1 frame-header decoder per segment so
   concurrent requests are race-free. A new `testpic_2s_av1` test asset (AV1 1280x720@25 at 400 and
   600 kbps, using moqlivemock content, + AAC) exercises the path.
+- In-band CTA-608 (CEA-608) closed captions: the `timecc608_<channel>-<lang>` URL option (e.g.
+  `timecc608_CC1-eng`) injects a caption into the AVC/HEVC video elementary stream itself, showing a
+  ticking UTC clock and the segment number on channel CC1, frame-accurate to wall-clock. The caption is
+  built by the shared [go-608](https://github.com/Eyevinn/go-608) `generate.BuildUnitCues` helper (one
+  self-contained pop-on cue per ~second, distributed one 608 pair per frame in presentation order) and
+  carried as `user_data_registered_itu_t_t35` SEI on every frame, on both the default whole-segment path
+  and the low-latency chunked path. The video AdaptationSet is advertised with a
+  `urn:scte:dash:cc:cea-608:2015` `Accessibility` descriptor. The option cannot be combined with
+  encryption and is rejected (HTTP 400) for assets that already carry CEA-608/708 captions (detected from
+  the source MPD descriptor or existing `cc_data` SEI at scan time). Surfaced in the `/urlgen/` form.
+- New test asset `testpic_2s/cea608.mpd` (video representation `V300_with_cc1_and_cc3`, `CC1=eng;CC3=swe`)
+  carrying real in-band CEA-608 captions, used as the "already captioned" reject case.
 
 ### Changed
 
