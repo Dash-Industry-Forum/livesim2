@@ -262,12 +262,12 @@ func TestWriteMissingRepData(t *testing.T) {
 	v300, ok := asset.Reps["V300"]
 	require.True(t, ok)
 	require.Equal(t, 4, len(v300.Segments))
-	require.Equal(t, 0, v300.Version, "RepData version should be 0")
+	require.Equal(t, currentRepDataVersion, v300.Version, "RepData version should be current")
 
 	a48, ok := asset.Reps["A48"]
 	require.True(t, ok)
 	require.Equal(t, 4, len(a48.Segments))
-	require.Equal(t, 0, a48.Version, "RepData version should be 0")
+	require.Equal(t, currentRepDataVersion, a48.Version, "RepData version should be current")
 }
 
 func TestAssetLookupForNameOverlap(t *testing.T) {

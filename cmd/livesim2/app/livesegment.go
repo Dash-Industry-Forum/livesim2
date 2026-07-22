@@ -120,6 +120,13 @@ func genLiveSegment(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig
 			}
 		}
 
+		// CTA-608: refuse to inject if this video representation already carries
+		// captions (detected at scan time), so we never emit a second, conflicting
+		// caption stream. The MPD request is rejected the same way in LiveMPD; this
+		// guards a direct segment request too.
+		if cfg.CC608 != nil && contentType == "video" && meta.rep.HasCEA608 {
+			return so, errCC608AlreadyCaptioned
+		}
 		// CTA-608: inject an in-band caption (UTC clock + segment number) into the
 		// video samples as user_data_registered_itu_t_t35 SEI. Clear content only
 		// (SEI must precede any encryption), matching the SGAI/pre-encrypted guards.

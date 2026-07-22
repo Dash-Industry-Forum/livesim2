@@ -174,7 +174,7 @@ func (am *assetMgr) loadAsset(logger *slog.Logger, mpdPath string) error {
 func (am *assetMgr) loadRep(logger *slog.Logger, assetPath string, as *m.AdaptationSetType, rep *m.RepresentationType) (*RepData, error) {
 	logger = logger.With("rep", rep.Id)
 	rp := RepData{
-		Version:      0, // Default version for RepData format
+		Version:      currentRepDataVersion,
 		ID:           rep.Id,
 		ContentType:  string(as.ContentType),
 		Codecs:       as.Codecs,
@@ -299,6 +299,22 @@ segLoop:
 	if commonSampleDur >= 0 {
 		rp.ConstantSampleDuration = Ptr(uint32(commonSampleDur))
 	}
+	// Detect whether the video already carries in-band CEA-608 captions, so a
+	// timecc608 request can be rejected instead of injecting a second caption stream
+	// on top (#321). Scan-time only; the result is persisted in the RepData JSON.
+	if rp.ContentType == "video" && len(rp.Segments) > 0 {
+		segData, err := fs.ReadFile(am.vodFS, path.Join(assetPath, rp.firstSegmentURI()))
+		if err != nil {
+			return nil, fmt.Errorf("read first segment for cc608 detection: %w", err)
+		}
+		rp.HasCEA608, err = detectCC608InSegment(rp.initSeg, segData, rp.Codecs)
+		if err != nil {
+			return nil, fmt.Errorf("detect cc608: %w", err)
+		}
+		if rp.HasCEA608 {
+			logger.Info("Representation already carries CEA-608 captions", "rep", rp.ID)
+		}
+	}
 	// Write to JSON if:
 	// - writeRepData is true (always write/overwrite), OR
 	// - writeMissingRepData is true AND JSON wasn't loaded (write only if missing)
@@ -349,9 +365,18 @@ func (rp *RepData) loadFromJSON(logger *slog.Logger, vodFS fs.FS, repDataDir, as
 	if len(data) == 0 {
 		return false, nil
 	}
-	if err := json.Unmarshal(data, &rp); err != nil {
+	// Unmarshal into a temporary so a stale cache neither corrupts rp (whose ID/
+	// ContentType/Codecs the full-scan path relies on) nor leaves half-filled slices.
+	var loaded RepData
+	if err := json.Unmarshal(data, &loaded); err != nil {
 		return true, err
 	}
+	if loaded.Version < currentRepDataVersion {
+		logger.Info("RepData cache is stale, regenerating",
+			"path", repDataPath, "have", loaded.Version, "want", currentRepDataVersion)
+		return false, nil // triggers a full re-scan in loadRep
+	}
+	*rp = loaded
 	err = rp.addRegExpAndInit(logger, vodFS, assetPath)
 	if err != nil {
 		return true, fmt.Errorf("addRegExpAndInit: %w", err)
@@ -862,9 +887,15 @@ const (
 	timeURI
 )
 
+// currentRepDataVersion is the version of the RepData JSON format. Bump it whenever a
+// new field must be derived from the media (not just read from an older cache) so that
+// stale <id>_data.json.gz files are regenerated instead of silently lacking the field.
+// v1 added HasCEA608 (caption detection, #321).
+const currentRepDataVersion = 1
+
 // RepData provides information about a representation
 type RepData struct {
-	Version                int              `json:"version"` // Version of RepData format (default: 0)
+	Version                int              `json:"version"` // Version of RepData format, see currentRepDataVersion
 	ID                     string           `json:"id"`
 	ContentType            string           `json:"contentType"`
 	Codecs                 string           `json:"codecs"`
@@ -877,6 +908,7 @@ type RepData struct {
 	ConstantSampleDuration *uint32          `json:"constantSampleDuration,omitempty"` // Non-zero if all samples have the same duration
 	EditListOffset         int64            `json:"editListOffset,omitempty"`
 	PreEncrypted           bool             `json:"preEncrypted"`
+	HasCEA608              bool             `json:"hasCEA608,omitempty"`    // Video samples already carry CEA-608 cc_data SEI (#321)
 	ChunkDurSSRS           *float64         `json:"chunkDurSSRS,omitempty"` // Low delay chunk duration in seconds
 	mediaRegexp            *regexp.Regexp   `json:"-"`
 	initSeg                *mp4.InitSegment `json:"-"`
@@ -1116,6 +1148,16 @@ func getInitBytes(initSeg *mp4.InitSegment) ([]byte, error) {
 }
 
 // readMP4Segment extracts segment data and returns an error if file does not exist.
+// firstSegmentURI returns the media URI of the representation's first segment,
+// resolving $Number$ or $Time$ from Segments[0]. Caller must ensure Segments is set.
+func (r *RepData) firstSegmentURI() string {
+	seg0 := r.Segments[0]
+	if r.typeURI() == timeURI {
+		return replaceTimeAndNr(r.MediaURI, seg0.StartTime, 0)
+	}
+	return replaceTimeAndNr(r.MediaURI, 0, seg0.Nr)
+}
+
 func (r *RepData) readMP4Segment(vodFS fs.FS, assetPath string, time uint64, nr uint32) (Segment, error) {
 	var seg Segment
 	uri := replaceTimeAndNr(r.MediaURI, time, nr)
