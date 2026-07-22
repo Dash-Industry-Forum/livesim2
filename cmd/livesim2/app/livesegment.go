@@ -904,6 +904,13 @@ func createChunk(styp *mp4.StypBox, trackID, seqNr uint32) chunk {
 // If chunkIndex is non-nil, returns only the chunk at that specific index (0-based).
 // Note: This processes all chunks up to the requested index, which is inefficient
 // for large segments when only the last chunk is needed.
+//
+// CTA-608 captions (timecc608) need no handling here: prepareChunks calls
+// genLiveSegment first, which injects the per-frame SEI into the whole segment's
+// video samples (applyCC608) before this function runs. The FullSamples read below
+// therefore already carry their caption SEI, and each chunk inherits its share (the
+// per-second cues are self-contained per segment and reassembled by the receiver in
+// presentation order across the chunks). Re-injecting here would duplicate the SEI.
 func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta, chunkDur int, chunkIndex *int) ([]chunk, error) {
 	trex := init.Moov.Mvex.Trex
 	fs := make([]mp4.FullSample, 0, 32)
