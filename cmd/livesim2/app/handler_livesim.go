@@ -132,6 +132,11 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		_, mpdName := path.Split(contentPart)
 		err := writeLiveMPD(log, w, cfg, s.Cfg.DrmCfg, a, mpdName, nowMS)
 		if err != nil {
+			if errors.Is(err, errCC608AlreadyCaptioned) {
+				log.Info("liveMPD rejected", "err", err)
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 			log.Error("liveMPD", "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -185,6 +190,9 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 			switch {
 			case errors.Is(err, errNotFound):
 				http.Error(w, "Not Found", http.StatusNotFound)
+				return
+			case errors.Is(err, errCC608AlreadyCaptioned):
+				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			case errors.As(err, &tooEarly):
 				http.Error(w, tooEarly.Error(), http.StatusTooEarly)

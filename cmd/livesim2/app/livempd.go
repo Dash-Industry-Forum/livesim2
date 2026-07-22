@@ -441,6 +441,9 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		}
 	}
 	if cfg.CC608 != nil {
+		if cc608AlreadyCaptioned(a, period) {
+			return nil, errCC608AlreadyCaptioned
+		}
 		if err = addCC608Accessibility(cfg, period); err != nil {
 			return nil, fmt.Errorf("addCC608Accessibility: %w", err)
 		}
