@@ -89,6 +89,55 @@ func TestCreateURLSGAI(t *testing.T) {
 	}
 }
 
+func TestCreateURLCC608(t *testing.T) {
+	cases := []struct {
+		desc      string
+		params    map[string]string
+		wantInURL []string
+		wantErr   string
+	}{
+		{
+			desc:      "valid CC1-eng",
+			params:    map[string]string{"timecc608": "CC1-eng"},
+			wantInURL: []string{"/livesim2/timecc608_CC1-eng/testpic_2s/Manifest.mpd"},
+		},
+		{
+			desc:    "unsupported channel",
+			params:  map[string]string{"timecc608": "CC2-eng"},
+			wantErr: "invalid timecc608",
+		},
+		{
+			desc:    "malformed value",
+			params:  map[string]string{"timecc608": "bad"},
+			wantErr: "invalid timecc608",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			q := url.Values{}
+			q.Set("asset", "testpic_2s")
+			q.Set("mpd", "Manifest.mpd")
+			q.Set("stl", "nr")
+			for k, v := range c.params {
+				q.Set(k, v)
+			}
+			r := httptest.NewRequest("GET", "/urlgen/create?"+q.Encode(), nil)
+			data := createURL(r, testAssetsInfo(), nil)
+			if c.wantErr != "" {
+				require.NotEmpty(t, data.Errors, "expected an error")
+				require.Contains(t, strings.Join(data.Errors, " | "), c.wantErr)
+				require.Empty(t, data.URL, "no URL should be produced on error")
+				return
+			}
+			require.Empty(t, data.Errors, "unexpected errors: %v", data.Errors)
+			require.Equal(t, "CC1-eng", data.TimeCC608)
+			for _, want := range c.wantInURL {
+				require.Contains(t, data.URL, want)
+			}
+		})
+	}
+}
+
 func TestCreateURLSteering(t *testing.T) {
 	cases := []struct {
 		desc      string

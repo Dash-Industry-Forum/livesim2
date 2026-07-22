@@ -258,6 +258,13 @@ templ urlgenPage(d urlGenData) {
 						</fieldset>
 					</details>
 					<details>
+						<summary>Inject in-band CTA-608 captions...</summary>
+						<label for="timecc608">
+							CEA-608 channel and language as &lt;channel&gt;-&lt;lang&gt; (e.g. CC1-eng). Injected into the AVC/HEVC video as a ticking UTC clock plus segment number, and advertised with an Accessibility descriptor. Only CC1 is supported. Rejected for encrypted or already-captioned assets.
+							<input type="text" id="timecc608" name="timecc608" value={ d.TimeCC608 } placeholder="CC1-eng"/>
+						</label>
+					</details>
+					<details>
 						<summary>Encryption and DRM</summary>
 						<fieldset>
 							<legend>Encryption on-the-fly with keys via ECCP or commercial DRM systems. Pre-encrypted assets cannot be changed.</legend>
