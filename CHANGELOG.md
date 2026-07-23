@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Nothing yet
+
+## [1.12.0] - 2026-07-23
+
 ### Added
 
 - AV1 video support: assets with `av01`/`av1C` sample entries are recognized as video and served,
@@ -483,7 +487,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - features and URLs listed at livesim2 root page
 - configurable generated stpp subtitles with timing info
 
-[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.11.0...HEAD
+[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.12.0...HEAD
+[1.12.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.8.0...v1.9.0
