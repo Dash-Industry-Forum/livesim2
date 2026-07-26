@@ -7,6 +7,7 @@ package app
 import (
 	"encoding/binary"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"sort"
@@ -132,51 +133,134 @@ func TestInjectCC608HEVC(t *testing.T) {
 	testInjectCC608(t, carriage.CodecHEVC, []byte{0x26, 0x01, 0x80, 0x00})
 }
 
+// cc608TestSamples returns nFrames identical samples carrying just vclNalu.
+func cc608TestSamples(nFrames int, vclNalu []byte) []mp4.FullSample {
+	samples := make([]mp4.FullSample, nFrames)
+	size := len(avccSample(vclNalu))
+	for i := range samples {
+		samples[i] = mp4.FullSample{
+			Sample: mp4.Sample{Size: uint32(size)},
+			Data:   avccSample(vclNalu),
+		}
+	}
+	return samples
+}
+
+// testInjectCC608 injects two consecutive units and decodes them as one stream.
+//
+// Two units are needed because a cue's build is transmitted ahead of its flip: the
+// build for unit B's first cue rides unit A's tail, so only a two-unit stream can
+// show that the flip lands on the unit boundary with the right text. Within a unit,
+// the flip for cue k lands on cue k's first frame.
 func testInjectCC608(t *testing.T, codec carriage.Codec, vclNalu []byte) {
 	t.Helper()
 	const fps = 30.0
 	const nFrames = 60 // 2 s at 30 fps -> 2 cues
-	unitStart := time.Date(2026, 7, 20, 14, 23, 44, 0, time.UTC).UnixMilli()
+	unitAStart := time.Date(2026, 7, 20, 14, 23, 44, 0, time.UTC).UnixMilli()
+	unitBStart := unitAStart + 2000
 
-	samples := make([]mp4.FullSample, nFrames)
+	unitA := cc608TestSamples(nFrames, vclNalu)
+	unitB := cc608TestSamples(nFrames, vclNalu)
 	origSize := len(avccSample(vclNalu))
-	for i := range samples {
-		samples[i] = mp4.FullSample{
-			Sample: mp4.Sample{Size: uint32(origSize)},
-			Data:   avccSample(vclNalu),
-		}
-	}
 
-	require.NoError(t, injectCC608(samples, fps, unitStart, 42, codec))
+	require.NoError(t, injectCC608(unitA, fps, unitAStart, 42, 43, codec))
+	require.NoError(t, injectCC608(unitB, fps, unitBStart, 43, 44, codec))
 
 	// Every sample gained an SEI NALU placed before the VCL, and Size was updated.
-	for i := range samples {
-		nalus, err := avc.GetNalusFromSample(samples[i].Data)
-		require.NoError(t, err, "sample %d", i)
-		require.Len(t, nalus, 2, "sample %d: SEI + VCL", i)
-		if codec == carriage.CodecHEVC {
-			require.Equal(t, hevc.NALU_SEI_PREFIX, hevc.GetNaluType(nalus[0][0]))
-		} else {
-			require.Equal(t, avc.NALU_SEI, avc.GetNaluType(nalus[0][0]))
+	for _, samples := range [][]mp4.FullSample{unitA, unitB} {
+		for i := range samples {
+			nalus, err := avc.GetNalusFromSample(samples[i].Data)
+			require.NoError(t, err, "sample %d", i)
+			require.Len(t, nalus, 2, "sample %d: SEI + VCL", i)
+			if codec == carriage.CodecHEVC {
+				require.Equal(t, hevc.NALU_SEI_PREFIX, hevc.GetNaluType(nalus[0][0]))
+			} else {
+				require.Equal(t, avc.NALU_SEI, avc.GetNaluType(nalus[0][0]))
+			}
+			require.True(t, isVCLNalu(nalus[1], codec), "sample %d VCL after SEI", i)
+			require.Equal(t, uint32(len(samples[i].Data)), samples[i].Size, "sample %d Size", i)
+			require.Greater(t, len(samples[i].Data), origSize, "sample %d grew", i)
 		}
-		require.True(t, isVCLNalu(nalus[1], codec), "sample %d VCL after SEI", i)
-		require.Equal(t, uint32(len(samples[i].Data)), samples[i].Size, "sample %d Size", i)
-		require.Greater(t, len(samples[i].Data), origSize, "sample %d grew", i)
 	}
 
-	// The injected captions decode to the two per-second cues with the seg number.
-	flips := decodeSamples(t, samples, codec)
-	require.Len(t, flips, 2, "one flip per cue")
-	require.Equal(t, "14:23:44.000", flips[0].line1)
-	require.Equal(t, "SEG 42", flips[0].line2)
-	require.Equal(t, "14:23:45.000", flips[1].line1)
-	require.Equal(t, "SEG 42", flips[1].line2)
+	// Decoded as one continuous stream, every flip lands on a cue boundary (frames
+	// 30, 60, 90) and shows the time of the interval it is displayed over. Unit A's
+	// own first cue (frame 0) has no build here — it would have come from the unit
+	// before A — which is the documented mid-stream-join behaviour.
+	flips := decodeSamples(t, append(append([]mp4.FullSample{}, unitA...), unitB...), codec)
+	require.Equal(t, []cc608Flip{
+		{30, "14:23:45.000", "SEG 42"},
+		{60, "14:23:46.000", "SEG 43"}, // built in unit A's tail, flipped by unit B
+		{90, "14:23:47.000", "SEG 43"},
+	}, flips)
 }
 
-// TestGenLiveSegmentCC608 drives a real testpic_2s/V300 (AVC) segment through
-// genLiveSegment with timecc608 set, round-trips it through the real encode path,
-// and verifies every video sample carries CEA-608 SEI that decodes to the clock +
-// segment number.
+// TestCC608UnitFramesBuildDoesNotFit checks that a unit too short to carry the build
+// for the next cue is reported rather than silently producing an EOC with nothing
+// loaded (a caption that would never appear).
+func TestCC608UnitFramesBuildDoesNotFit(t *testing.T) {
+	unitStart := time.Date(2026, 7, 20, 14, 23, 44, 0, time.UTC).UnixMilli()
+	_, err := cc608UnitFrames(30.0, 10, unitStart, cc608CueContent(42), cc608CueContent(43))
+	require.ErrorContains(t, err, "frames of build but only")
+}
+
+// TestInjectCC608FirstCueUnbuilt documents what a receiver sees when it starts on a
+// unit whose first cue was built in the previous (unavailable) unit: the leading EOC
+// flips an unloaded screen, so there is no caption until the next cue boundary,
+// rather than a stale or garbled one.
+func TestInjectCC608FirstCueUnbuilt(t *testing.T) {
+	const fps = 30.0
+	const nFrames = 60
+	unitStart := time.Date(2026, 7, 20, 14, 23, 44, 0, time.UTC).UnixMilli()
+	samples := cc608TestSamples(nFrames, []byte{0x65, 0x88, 0x80, 0x00})
+
+	require.NoError(t, injectCC608(samples, fps, unitStart, 42, 43, carriage.CodecAVC))
+
+	flips := decodeSamples(t, samples, carriage.CodecAVC)
+	require.Equal(t, []cc608Flip{
+		{30, "14:23:45.000", "SEG 42"},
+	}, flips, "only the cue whose build is inside this unit appears")
+}
+
+// cc608SegSamples generates one segment through genLiveSegment and returns its video
+// samples. With roundTrip set, the segment is encoded and re-decoded first, which
+// validates the injection's size bookkeeping through the real encode path.
+func cc608SegSamples(t *testing.T, vodFS fs.FS, a *asset, cfg *ResponseConfig, media string, nowMS int, roundTrip bool) []mp4.FullSample {
+	t.Helper()
+	so, err := genLiveSegment(slog.Default(), vodFS, a, cfg, media, nowMS, false)
+	require.NoError(t, err)
+	require.Equal(t, "video/mp4", so.meta.rep.SegmentType())
+
+	seg := so.seg
+	if roundTrip {
+		sw := bits.NewFixedSliceWriter(int(so.seg.Size()))
+		require.NoError(t, so.seg.EncodeSW(sw))
+		decoded, err := mp4.DecodeFileSR(bits.NewFixedSliceReader(sw.Bytes()))
+		require.NoError(t, err)
+		require.Len(t, decoded.Segments, 1)
+		seg = decoded.Segments[0]
+	}
+
+	trex := so.meta.rep.initSeg.Moov.Mvex.Trex
+	var samples []mp4.FullSample
+	for _, frag := range seg.Fragments {
+		fss, err := frag.GetFullSamples(trex)
+		require.NoError(t, err)
+		samples = append(samples, fss...)
+	}
+	require.NotEmpty(t, samples)
+	return samples
+}
+
+// TestGenLiveSegmentCC608 drives two consecutive real testpic_2s/V300 (AVC) segments
+// through genLiveSegment with timecc608 set, round-trips them through the real encode
+// path, and verifies every video sample carries CEA-608 SEI that decodes to the clock
+// + segment number.
+//
+// Two segments are required: a cue's build is transmitted during the preceding cue,
+// so the first caption of segment 41 is built in segment 40's tail. Decoding the pair
+// as one stream is what proves the flip lands on the segment boundary carrying the
+// next segment's number.
 func TestGenLiveSegmentCC608(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	am := newAssetMgr(vodFS, "", false, false)
@@ -188,27 +272,12 @@ func TestGenLiveSegmentCC608(t *testing.T) {
 	cfg := NewResponseConfig()
 	cfg.CC608 = &CC608Config{Channel: "CC1", Lang: "eng"}
 	const nowMS = 100_000
-	const nr = 40
+	const nr = 40 // 2s segments -> segment 40 starts at 80s = 00:01:20
 
-	so, err := genLiveSegment(logger, vodFS, asset, cfg, fmt.Sprintf("V300/%d.m4s", nr), nowMS, false)
-	require.NoError(t, err)
-	require.Equal(t, "video/mp4", so.meta.rep.SegmentType())
-
-	// Round-trip through the real encode path to validate the size bookkeeping.
-	sw := bits.NewFixedSliceWriter(int(so.seg.Size()))
-	require.NoError(t, so.seg.EncodeSW(sw))
-	decoded, err := mp4.DecodeFileSR(bits.NewFixedSliceReader(sw.Bytes()))
-	require.NoError(t, err)
-	require.Len(t, decoded.Segments, 1)
-
-	trex := so.meta.rep.initSeg.Moov.Mvex.Trex
 	var samples []mp4.FullSample
-	for _, frag := range decoded.Segments[0].Fragments {
-		fss, err := frag.GetFullSamples(trex)
-		require.NoError(t, err)
-		samples = append(samples, fss...)
+	for _, n := range []int{nr, nr + 1} {
+		samples = append(samples, cc608SegSamples(t, vodFS, asset, cfg, fmt.Sprintf("V300/%d.m4s", n), nowMS, true)...)
 	}
-	require.NotEmpty(t, samples)
 	for i := range samples {
 		require.True(t, avc.ContainsNaluType(samples[i].Data, avc.NALU_SEI), "sample %d missing SEI", i)
 	}
@@ -217,23 +286,25 @@ func TestGenLiveSegmentCC608(t *testing.T) {
 	for i, fl := range flips {
 		t.Logf("cue %d @rank %d: line1=%q line2=%q", i, fl.frame, fl.line1, fl.line2)
 	}
-	// A 2s segment at 30fps has N=2 cues; both must decode (in presentation order),
-	// each two lines, and the times must tick by one second.
-	require.Len(t, flips, 2, "two ticking cues per 2s segment")
-	require.Regexp(t, `^\d\d:\d\d:\d\d\.\d\d\d$`, flips[0].line1)
-	require.Regexp(t, `^SEG \d+$`, flips[0].line2)
-	require.Regexp(t, `^\d\d:\d\d:\d\d\.\d\d\d$`, flips[1].line1)
-	require.Equal(t, flips[0].line2, flips[1].line2, "segment number is constant across the segment's cues")
-	require.NotEqual(t, flips[0].line1, flips[1].line1, "the two cues must show different (ticking) times")
+	// Each 2s segment at 30fps holds two ~1s cues. Across the pair the visible flips
+	// are: segment 40's second cue (frame 30), then segment 41's two cues at frames 60
+	// and 90 — the frame-60 flip being the one built in segment 40's tail. Segment 40's
+	// own first cue was built in segment 39, which is not part of this stream.
+	require.Equal(t, []cc608Flip{
+		{30, "00:01:21.000", "SEG 40"},
+		{60, "00:01:22.000", "SEG 41"},
+		{90, "00:01:23.000", "SEG 41"},
+	}, flips)
 }
 
 // TestGenLiveSegmentCC608HEVC is the HEVC counterpart of TestGenLiveSegmentCC608:
-// it drives a real hev1 segment (bbb_hevc_ac3_8s, 24 fps, 2s segments) through
-// genLiveSegment with timecc608, round-trips it through the encode path, and
-// verifies every video sample carries a CEA-608 SEI prefix NAL that decodes (in
-// presentation order) to the ticking clock + segment number. This proves the
-// injection path — SEI splicing, VCL detection, presentation-order distribution and
-// the trun/mdat write-back — is codec-generic for HEVC end to end.
+// it drives two consecutive real hev1 segments (bbb_hevc_ac3_8s, 24 fps, 2s
+// segments) through genLiveSegment with timecc608, round-trips them through the
+// encode path, and verifies every video sample carries a CEA-608 SEI prefix NAL that
+// decodes (in presentation order) to the ticking clock + segment number. This proves
+// the injection path — SEI splicing, VCL detection, presentation-order distribution
+// and the trun/mdat write-back — is codec-generic for HEVC end to end, including the
+// cue whose build crosses the segment boundary.
 func TestGenLiveSegmentCC608HEVC(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	am := newAssetMgr(vodFS, "", false, false)
@@ -247,38 +318,20 @@ func TestGenLiveSegmentCC608HEVC(t *testing.T) {
 	const nowMS = 100_000
 	const nr = 40 // 2s segments -> segment 40 starts at 80s = 00:01:20
 
-	so, err := genLiveSegment(logger, vodFS, asset, cfg, fmt.Sprintf("video_%d.m4s", nr), nowMS, false)
-	require.NoError(t, err)
-	require.Equal(t, "video/mp4", so.meta.rep.SegmentType())
-	codec, ok := cc608CodecFor(so.meta.rep.Codecs)
-	require.True(t, ok)
-	require.Equal(t, carriage.CodecHEVC, codec)
-
-	// Round-trip through the real encode path to validate the size bookkeeping.
-	sw := bits.NewFixedSliceWriter(int(so.seg.Size()))
-	require.NoError(t, so.seg.EncodeSW(sw))
-	decoded, err := mp4.DecodeFileSR(bits.NewFixedSliceReader(sw.Bytes()))
-	require.NoError(t, err)
-	require.Len(t, decoded.Segments, 1)
-
-	trex := so.meta.rep.initSeg.Moov.Mvex.Trex
 	var samples []mp4.FullSample
-	for _, frag := range decoded.Segments[0].Fragments {
-		fss, err := frag.GetFullSamples(trex)
-		require.NoError(t, err)
-		samples = append(samples, fss...)
+	for _, n := range []int{nr, nr + 1} {
+		samples = append(samples, cc608SegSamples(t, vodFS, asset, cfg, fmt.Sprintf("video_%d.m4s", n), nowMS, true)...)
 	}
-	require.NotEmpty(t, samples)
 	for i := range samples {
 		require.True(t, hevc.ContainsNaluType(samples[i].Data, hevc.NALU_SEI_PREFIX), "sample %d missing SEI", i)
 	}
 
 	flips := decodeSamples(t, samples, carriage.CodecHEVC)
-	require.Len(t, flips, 2, "two ticking cues per 2s segment")
-	require.Equal(t, "00:01:20.000", flips[0].line1)
-	require.Equal(t, "SEG 40", flips[0].line2)
-	require.Equal(t, "00:01:21.000", flips[1].line1)
-	require.Equal(t, "SEG 40", flips[1].line2)
+	require.Equal(t, []cc608Flip{
+		{24, "00:01:21.000", "SEG 40"},
+		{48, "00:01:22.000", "SEG 41"}, // built in segment 40's tail
+		{72, "00:01:23.000", "SEG 41"},
+	}, flips)
 }
 
 // TestPrepareChunksCC608 exercises the low-latency chunked path: a chunked
@@ -319,20 +372,23 @@ func TestPrepareChunksCC608(t *testing.T) {
 		samples = append(samples, fss...)
 	}
 
+	// Reassembled across the chunks, the segment's second cue flips on its boundary.
+	// The first cue's build lives in segment 39, which this test does not fetch (see
+	// TestGenLiveSegmentCC608 for the cross-segment case).
 	flips := decodeSamples(t, samples, carriage.CodecAVC)
-	require.Len(t, flips, 2, "two ticking cues per 2s segment, reassembled across the chunks")
-	require.Equal(t, "00:01:20.000", flips[0].line1)
-	require.Equal(t, "SEG 40", flips[0].line2)
-	require.Equal(t, "00:01:21.000", flips[1].line1)
-	require.Equal(t, "SEG 40", flips[1].line2)
+	require.Equal(t, []cc608Flip{
+		{30, "00:01:21.000", "SEG 40"},
+	}, flips)
 }
 
-// TestGenLiveSegmentCC608_2997fps drives a real 29.97 fps (30000/1001) AVC asset
-// through genLiveSegment with timecc608. Unlike the 30 fps testpic assets, this
-// content has non-integer fps and 2.002s segments, so it checks that the go-608 fps
-// guard accepts 29.97, that the caption pairs are distributed one-per-frame over the
-// 60 frames, and that the two per-second cues stay frame-accurate to the wall clock
-// (segment 40 starts at 40*2.002s = 80.08s = 00:01:20.080).
+// TestGenLiveSegmentCC608_2997fps drives two consecutive real 29.97 fps (30000/1001)
+// AVC segments through genLiveSegment with timecc608. Unlike the 30 fps testpic
+// assets, this content has non-integer fps and 2.002s segments, so it checks that the
+// go-608 fps guard accepts 29.97, that the caption pairs are distributed one-per-frame
+// over the 60 frames, and that the cues stay frame-accurate to the wall clock across a
+// segment boundary — where a fractional frame duration is most likely to drift, since
+// the cue built at the end of segment 40 must name exactly the start of segment 41
+// (40*2.002s = 80.080s, so segment 41 starts at 82.082s = 00:01:22.082).
 func TestGenLiveSegmentCC608_2997fps(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	am := newAssetMgr(vodFS, "", false, false)
@@ -346,31 +402,20 @@ func TestGenLiveSegmentCC608_2997fps(t *testing.T) {
 	const nowMS = 100_000
 	const nr = 40
 
-	so, err := genLiveSegment(logger, vodFS, asset, cfg, fmt.Sprintf("video/avc1/seg-%d.m4s", nr), nowMS, false)
-	require.NoError(t, err)
-	require.Equal(t, "video/mp4", so.meta.rep.SegmentType())
-	require.EqualValues(t, 30000, so.meta.rep.MediaTimescale)
-	require.EqualValues(t, 1001, so.meta.rep.sampleDur()) // 30000/1001 = 29.97 fps
-
-	trex := so.meta.rep.initSeg.Moov.Mvex.Trex
 	var samples []mp4.FullSample
-	for _, frag := range so.seg.Fragments {
-		fss, err := frag.GetFullSamples(trex)
-		require.NoError(t, err)
-		samples = append(samples, fss...)
+	for _, n := range []int{nr, nr + 1} {
+		samples = append(samples, cc608SegSamples(t, vodFS, asset, cfg, fmt.Sprintf("video/avc1/seg-%d.m4s", n), nowMS, false)...)
 	}
-	require.NotEmpty(t, samples)
 	for i := range samples {
 		require.True(t, avc.ContainsNaluType(samples[i].Data, avc.NALU_SEI), "sample %d missing SEI", i)
 	}
 
 	flips := decodeSamples(t, samples, carriage.CodecAVC)
-	require.Len(t, flips, 2, "two ticking cues per 2.002s segment")
-	// 40*2.002s = 80.080s; the second cue is ~1.001s later.
-	require.Equal(t, "00:01:20.080", flips[0].line1)
-	require.Equal(t, "SEG 40", flips[0].line2)
-	require.Equal(t, "00:01:21.081", flips[1].line1)
-	require.Equal(t, "SEG 40", flips[1].line2)
+	require.Equal(t, []cc608Flip{
+		{30, "00:01:21.081", "SEG 40"},
+		{60, "00:01:22.082", "SEG 41"}, // built in segment 40's tail, on the boundary
+		{90, "00:01:23.083", "SEG 41"},
+	}, flips)
 }
 
 // TestGenLiveSegmentCC608AudioUnchanged confirms timecc608 is a no-op for audio
