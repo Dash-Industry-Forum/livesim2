@@ -13,15 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- In-band CTA-608 captions (`timecc608`) are now displayed over exactly the interval their text names.
-  A pop-on caption needs a build (written into non-displayed memory) and an EOC that flips it on screen,
-  and both drain at one 608 pair per frame. The build used to start at its own cue's first frame, which
-  put the flip 15-20 frames — 0.6-0.75 s of a one-second cue — *after* the time the caption displays.
-  Each cue's EOC now rides its cue's first frame with the build transmitted over the preceding frames, so
-  the flip coincides with the cue boundary. Captions consequently span segment boundaries: a segment
-  carries the build for the first cue of whatever follows it, so a client that starts or seeks mid-stream
-  gets a leading EOC without its build, shows no caption for that first cue period, and is correct from
-  the next cue on. The 608 data rate is unchanged at one pair per frame.
+- In-band CTA-608 captions (`timecc608`) are now displayed over exactly the interval their text names,
+  instead of appearing 0.6-0.75 s into it. Each cue's pop-on flip rides its cue's first frame, with the
+  build sent over the preceding frames. Captions consequently span segment boundaries, which costs a
+  client that starts or seeks mid-stream its first cue period — see the [README](README.md).
 
 ## [1.12.0] - 2026-07-23
 

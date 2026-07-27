@@ -36,6 +36,24 @@ channel CC1, and advertises it with a CEA-608 `Accessibility` descriptor. The va
 `<channel>-<lang>` (only `CC1` is supported so far). It cannot be combined with encryption
 and is rejected for assets that already carry captions.
 
+Each caption is displayed over exactly the interval its text names. A pop-on caption is
+two transmissions — a build written into the receiver's non-displayed memory, and an `EOC`
+that flips it on screen — and both drain at one 608 byte pair per frame. The flip rides the
+first frame of its cue, and the ~15-19 pair build is sent over the frames *before* it,
+which for a segment's first cue means the **previous segment**; each segment likewise
+carries the build for the first cue of the segment that follows it. Segments are still
+generated independently and on demand, since both sides derive that shared cue from the
+same wall-clock time and segment number.
+
+The trade-off is that captions are no longer self-contained per segment. A client that
+starts, seeks, or joins mid-stream gets a segment's leading `EOC` without the build that
+belongs to it, and what it shows for that first cue period depends on its decoder: a fresh
+608 decoder has nothing loaded and shows **no caption**, while one that keeps 608 state
+across the discontinuity flips whatever was last preloaded and can show **one cue of a
+stale caption**. Either way it corrects at the next cue boundary, typically within a
+second. The server cannot avoid this — any pair sent ahead of the `EOC` to clear the
+state would erase the build that is about to be flipped.
+
 The new `livesim2` software is written in Go instead of Python and designed to handle
 content in a more flexible and versatile way. It is intended to be very easy to install and deploy locally
 since it is compiled into a single binary that serves the content via a built-in

@@ -100,9 +100,13 @@ func cc608PairCount(toks []cta608.Token) int {
 // caption is shown exactly over the interval its text names. The consequence is that
 // a cue's build lives in the preceding cue's frames: the first cue's build belongs to
 // the *previous* unit, and this unit's tail carries the build for the next unit's
-// first cue (nextContent). Captions therefore span unit boundaries — a receiver
-// starting mid-stream gets the first EOC without its build and shows no caption for
-// one cue period, then is correct.
+// first cue (nextContent). Captions therefore span unit boundaries — a receiver that
+// starts, seeks, or joins mid-stream gets the first EOC without the build that belongs
+// to it. What it shows for that cue period depends on its decoder state: a fresh
+// decoder has empty non-displayed memory and shows nothing, while one that keeps 608
+// state across the discontinuity flips whatever was last preloaded and can show a
+// stale caption. Either way it is correct from the next cue on, and the server cannot
+// prevent it — an ENM ahead of the EOC would erase the build about to be flipped.
 //
 // Each cue is encoded with a fresh cta608.Encoder so its build is always a complete
 // rebuild. That keeps every EOC paired with a build that fully describes its screen,
