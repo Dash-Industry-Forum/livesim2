@@ -51,8 +51,12 @@ belongs to it, and what it shows for that first cue period depends on its decode
 608 decoder has nothing loaded and shows **no caption**, while one that keeps 608 state
 across the discontinuity flips whatever was last preloaded and can show **one cue of a
 stale caption**. Either way it corrects at the next cue boundary, typically within a
-second. The server cannot avoid this — any pair sent ahead of the `EOC` to clear the
-state would erase the build that is about to be flipped.
+second.
+
+This is a receiver-side matter, not something the server can paper over: any pair sent
+ahead of the `EOC` to clear the state would erase the build that is about to be flipped.
+A player should reset its 608 decoder state on a seek or other discontinuity — which is
+what turns the stale case into the blank one — exactly as it resets any other decoder.
 
 The new `livesim2` software is written in Go instead of Python and designed to handle
 content in a more flexible and versatile way. It is intended to be very easy to install and deploy locally

@@ -105,8 +105,10 @@ func cc608PairCount(toks []cta608.Token) int {
 // to it. What it shows for that cue period depends on its decoder state: a fresh
 // decoder has empty non-displayed memory and shows nothing, while one that keeps 608
 // state across the discontinuity flips whatever was last preloaded and can show a
-// stale caption. Either way it is correct from the next cue on, and the server cannot
-// prevent it — an ENM ahead of the EOC would erase the build about to be flipped.
+// stale caption. Either way it is correct from the next cue on. Recovering faster is a
+// receiver-side matter — a player resetting its 608 state on a seek turns the stale
+// case into the blank one — and not something the server can paper over, since an ENM
+// ahead of the EOC would erase the build about to be flipped.
 //
 // Each cue is encoded with a fresh cta608.Encoder so its build is always a complete
 // rebuild. That keeps every EOC paired with a build that fully describes its screen,
