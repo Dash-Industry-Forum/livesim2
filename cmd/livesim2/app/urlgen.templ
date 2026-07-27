@@ -213,6 +213,50 @@ templ urlgenPage(d urlGenData) {
 						</fieldset>
 					</details>
 					<details>
+						<summary>SCTE-35 (time_signal)...</summary>
+						<fieldset>
+							<legend>SCTE-35 emsg (time_signal: Provider Opportunity) frequency</legend>
+							<label for="scte35-none">
+								<input type="radio" id="scte35-none" name="scte35" value="" checked?={ d.Scte35Var == "" }/>
+								No SCTE-35 emsg boxes
+							</label>
+							<label for="scte35-11">
+								<input type="radio" id="scte35-11" name="scte35" value="11" checked?={ d.Scte35Var == "11" }/>
+								1 event per minute, duration 20s, start at hh:mm:10
+							</label>
+							<label for="scte35-12">
+								<input type="radio" id="scte35-12" name="scte35" value="12" checked?={ d.Scte35Var == "12" }/>
+								2 events per minute, duration 10s, start at hh:mm:10 and hh:mm:40
+							</label>
+							<label for="scte35-13">
+								<input type="radio" id="scte35-13" name="scte35" value="13" checked?={ d.Scte35Var == "13" }/>
+								3 events per minute, duration 10s, start at hh:mm:10, hh:mm:36, hh:mm:46
+							</label>
+						</fieldset>
+					</details>
+					<details>
+						<summary>SCTE-35 (time_signal)...</summary>
+						<fieldset>
+							<legend>SCTE-35 emsg (time_signal: Distributor Opportunity) frequency</legend>
+							<label for="scte35-none">
+								<input type="radio" id="scte35-none" name="scte35" value="" checked?={ d.Scte35Var == "" }/>
+								No SCTE-35 emsg boxes
+							</label>
+							<label for="scte35-21">
+								<input type="radio" id="scte35-21" name="scte35" value="21" checked?={ d.Scte35Var == "21" }/>
+								1 event per minute, duration 20s, start at hh:mm:10
+							</label>
+							<label for="scte35-22">
+								<input type="radio" id="scte35-22" name="scte35" value="22" checked?={ d.Scte35Var == "22" }/>
+								2 events per minute, duration 10s, start at hh:mm:10 and hh:mm:40
+							</label>
+							<label for="scte35-23">
+								<input type="radio" id="scte35-23" name="scte35" value="23" checked?={ d.Scte35Var == "23" }/>
+								3 events per minute, duration 10s, start at hh:mm:10, hh:mm:36, hh:mm:46
+							</label>
+						</fieldset>
+					</details>					
+					<details>
 						<summary>Start and stop...</summary>
 						<label for="start">
 							timeline start (and availabilityStartTime) relative to Epoch (in seconds)
