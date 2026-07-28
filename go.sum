@@ -9,12 +9,12 @@ github.com/Comcast/gots/v2 v2.3.0 h1:UQ5zx90hTYg6cuyLPFwrts0J+MSpxDnjIrAtPi4zkVg
 github.com/Comcast/gots/v2 v2.3.0/go.mod h1:firJ11on3eUiGHAhbY5cZNqG0OqhQ1+nSZHfsEEzVVU=
 github.com/Eyevinn/dash-mpd v0.16.0 h1:5HgrL/vOgT2cSop6jVucwc3RsyReKw1M/ME/20r1eFU=
 github.com/Eyevinn/dash-mpd v0.16.0/go.mod h1:mh/BF4gvesMIYxlNHJMI+H9FLsJYeud9yqGibxcgGpE=
-github.com/Eyevinn/go-608 v0.6.0 h1:4SYnjjW94+OQkARD5q45HCS7nvLpIP8YVx0tx79ucNo=
-github.com/Eyevinn/go-608 v0.6.0/go.mod h1:nHxTZQC/V47EJaFci5Vh+CCsEuo4NF7qt/mmvWyE0AI=
+github.com/Eyevinn/go-608 v0.7.0 h1:vrSvMFjRUb8GPgLc/cPhsiEQQcjPGHIHEwqJI+mFWuY=
+github.com/Eyevinn/go-608 v0.7.0/go.mod h1:Rs0dVVIrIgSaFYYV0QfeZOXlYgkr0XV9ri0bA63j4pA=
 github.com/Eyevinn/hi264 v0.10.0 h1:4CgeRcBT8Y03BuHHr9u7ErMN5Iiw1mGbvKNU9s4QFPg=
 github.com/Eyevinn/hi264 v0.10.0/go.mod h1:ag1j/wxUs7EvZu6qEZBRyLJ0bJW4OUjO8ip8c2TfLTQ=
-github.com/Eyevinn/mp4ff v0.54.0 h1:WSkbWQbvlB1jAuTfUlqjhqdp3nkH+oe7Ht6hzDCWx+g=
-github.com/Eyevinn/mp4ff v0.54.0/go.mod h1:AhC+bOI7GSZmzuN4zFY9U76qMedbHI+8BdQXWrC9+8U=
+github.com/Eyevinn/mp4ff v0.55.0 h1:wFShr5eqcJaVd15/uPMe747sAWPbz7dl2TfhusDx+Kk=
+github.com/Eyevinn/mp4ff v0.55.0/go.mod h1:AhC+bOI7GSZmzuN4zFY9U76qMedbHI+8BdQXWrC9+8U=
 github.com/a-h/templ v0.3.1020 h1:ypAT/L5ySWEnZ6Zft/5yfoWXYYkhFNvEFOeeqecg4tw=
 github.com/a-h/templ v0.3.1020/go.mod h1:A2DlK61v+K+NRoGnhmYbNYVmtYHcFO5/AisMvBdDxTM=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=

@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Nothing yet
+### Changed
+
+- mp4ff dependency bumped to v0.55.0 and go-608 to v0.7.0
 
 ## [1.12.0] - 2026-07-23
 
