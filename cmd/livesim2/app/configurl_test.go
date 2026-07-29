@@ -143,11 +143,27 @@ func TestProcessURLCfg(t *testing.T) {
 			err: "",
 		},
 		{
+			url:         "/livesim2/timecc608_CC1-eng-sc/asset.mpd",
+			nowMS:       0,
+			contentPart: "asset.mpd",
+			wantedCfg: &ResponseConfig{
+				URLParts:                     []string{"", "livesim2", "timecc608_CC1-eng-sc", "asset.mpd"},
+				URLContentIdx:                3,
+				StartTimeS:                   0,
+				TimeShiftBufferDepthS:        Ptr(defaultTimeShiftBufferDepthS),
+				StartNr:                      Ptr(uint32(0)),
+				AvailabilityTimeCompleteFlag: true,
+				TimeSubsDurMS:                defaultTimeSubsDurMS,
+				CC608:                        &CC608Config{Channel: "CC1", Lang: "eng", SelfContained: true},
+			},
+			err: "",
+		},
+		{
 			url:         "/livesim2/timecc608_CC1/asset.mpd",
 			nowMS:       0,
 			contentPart: "",
 			wantedCfg:   nil,
-			err:         `key=timecc608, err=timecc608 must be <channel>-<lang>, got "CC1"`,
+			err:         `key=timecc608, err=timecc608 must be <channel>-<lang>[-sc], got "CC1"`,
 		},
 		{
 			url:         "/livesim2/timecc608_CC2-eng/asset.mpd",

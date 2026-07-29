@@ -21,8 +21,18 @@ func TestCreateCC608Config(t *testing.T) {
 		{"two-letter", "CC1-sv", &CC608Config{Channel: "CC1", Lang: "sv"}, ""},
 		{"region subtag", "CC1-en-US", &CC608Config{Channel: "CC1", Lang: "en-US"}, ""},
 		{"script subtag", "CC1-zh-Hans", &CC608Config{Channel: "CC1", Lang: "zh-Hans"}, ""},
-		{"missing hyphen", "CC1", nil, `timecc608 must be <channel>-<lang>, got "CC1"`},
-		{"empty", "", nil, `timecc608 must be <channel>-<lang>, got ""`},
+		{"self-contained", "CC1-eng-sc", &CC608Config{Channel: "CC1", Lang: "eng", SelfContained: true}, ""},
+		{"self-contained subtag lang", "CC1-en-US-sc",
+			&CC608Config{Channel: "CC1", Lang: "en-US", SelfContained: true}, ""},
+		// "sc" is only the self-contained field when something precedes it, so a lone
+		// "sc" is the Sardinian language tag.
+		{"lang sc", "CC1-sc", &CC608Config{Channel: "CC1", Lang: "sc"}, ""},
+		{"lang sc self-contained", "CC1-sc-sc", &CC608Config{Channel: "CC1", Lang: "sc", SelfContained: true}, ""},
+		// Only a literal "sc" is the self-contained field; anything else trailing is
+		// part of the language tag.
+		{"other trailing field", "CC1-eng-xx", &CC608Config{Channel: "CC1", Lang: "eng-xx"}, ""},
+		{"missing hyphen", "CC1", nil, `timecc608 must be <channel>-<lang>[-sc], got "CC1"`},
+		{"empty", "", nil, `timecc608 must be <channel>-<lang>[-sc], got ""`},
 		{"channel CC2", "CC2-eng", nil, `timecc608 channel "CC2" not supported (only CC1)`},
 		{"channel word", "SERVICE1-eng", nil, `timecc608 channel "SERVICE1" not supported (only CC1)`},
 		{"empty lang", "CC1-", nil, `timecc608 language "" is not a valid RFC-5646 code`},

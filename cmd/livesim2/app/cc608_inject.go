@@ -85,17 +85,36 @@ func cc608PairCount(toks []cta608.Token) int {
 	})) / 2
 }
 
+// cc608FlipMode selects where a cue's pop-on flip lands relative to the cue it names.
+type cc608FlipMode int
+
+const (
+	// cc608FlipAtCueStart puts each EOC on its cue's first frame, transmitting the
+	// build over the preceding frames. Frame-accurate, but captions span unit
+	// boundaries. This is the default.
+	cc608FlipAtCueStart cc608FlipMode = iota
+	// cc608SelfContained keeps a cue's build and flip inside the cue's own frames, so
+	// no unit depends on its neighbour. The flip lands ~build-pairs frames into the
+	// cue, i.e. the caption lags the interval its text names.
+	cc608SelfContained
+)
+
 // cc608UnitFrames builds the per-frame CTA-608 schedule for one unit (one fragment)
 // of nFrames frames starting at unitStartMS.
 //
 // A pop-on caption occupies two transmissions: a build (RCL + ENM + rows) written
 // into non-displayed memory, and an EOC that flips it on screen. Both drain at one
-// 608 pair per frame, so where the build is placed decides when the caption
-// appears. go-608's generate.BuildUnitCues starts the build at its cue's first
-// frame, which puts the flip ~pairs frames *into* the cue — ~0.5-0.75s of a
-// one-second cue — so the caption became visible well after the time it displays.
+// 608 pair per frame, so where the build is placed decides when the caption appears.
 //
-// Here each cue's EOC rides its cue's first frame and its build drains over the
+// With mode cc608SelfContained, both ride the cue's own frames: the build drains from
+// the cue's first frame and the flip follows it, which puts the flip ~pairs frames
+// *into* the cue — 0.6-0.75s of a one-second cue — so the caption is visible well
+// after the time its text names. Nothing crosses a unit boundary, so every segment
+// decodes standalone and a client that starts, seeks or joins anywhere sees a correct
+// (if late) caption. nextContent is unused in this mode.
+//
+// With the default cc608FlipAtCueStart, each cue's EOC rides its cue's first frame
+// and its build drains over the
 // frames immediately before it, so the flip coincides with the cue boundary and the
 // caption is shown exactly over the interval its text names. The consequence is that
 // a cue's build lives in the preceding cue's frames: the first cue's build belongs to
@@ -110,12 +129,15 @@ func cc608PairCount(toks []cta608.Token) int {
 // case into the blank one — and not something the server can paper over, since an ENM
 // ahead of the EOC would erase the build about to be flipped.
 //
-// Each cue is encoded with a fresh cta608.Encoder so its build is always a complete
-// rebuild. That keeps every EOC paired with a build that fully describes its screen,
-// which is what makes independently generated, on-demand units line up: the build in
-// unit N's tail and the flip at unit N+1's first frame are produced by separate
-// calls and must agree without sharing encoder state.
-func cc608UnitFrames(fps float64, nFrames int, unitStartMS int64, content, nextContent generate.CueContentFunc) ([]schedule.Frame, error) {
+// In both modes each cue is encoded with a fresh cta608.Encoder so its build is always
+// a complete rebuild rather than a diff against the previous cue. That keeps every EOC
+// paired with a build that fully describes its screen, which is what makes
+// independently generated, on-demand units line up: the build in unit N's tail and the
+// flip at unit N+1's first frame are produced by separate calls and must agree without
+// sharing encoder state. It is also what lets a receiver joining mid-unit get a whole
+// caption rather than one row of one.
+func cc608UnitFrames(fps float64, nFrames int, unitStartMS int64, content, nextContent generate.CueContentFunc,
+	mode cc608FlipMode) ([]schedule.Frame, error) {
 	if nFrames <= 0 {
 		return nil, fmt.Errorf("cc608: nFrames must be > 0, got %d", nFrames)
 	}
@@ -130,6 +152,36 @@ func cc608UnitFrames(fps float64, nFrames int, unitStartMS int64, content, nextC
 	// boundary(k) is the first unit-relative frame of cue k; boundary(n) == nFrames.
 	boundary := func(k int) int { return int(math.Round(float64(k) * float64(nFrames) / float64(n))) }
 
+	// cueTokens encodes cue k from a clean encoder, split into the build and the EOC
+	// that flips it. Pushes drain in push order (the scheduler is a FIFO gated by
+	// eligibility time), so a build pushed before its EOC keeps the byte stream ordered.
+	cueTokens := func(cue generate.UnitCue) (build, eoc []cta608.Token) {
+		var enc cta608.Encoder
+		return cc608SplitEOC(enc.Apply(cta608.CaptionBlock{Lines: cue.Lines, Mode: cta608.PopOn}))
+	}
+
+	sched := schedule.NewScheduler(fps, schedule.WithDoubling(cta608.DoublingOff))
+	if mode == cc608SelfContained {
+		for k := 0; k < n; k++ {
+			start, end := boundary(k), boundary(k+1)
+			build, eoc := cueTokens(content(k, wallAt(start)))
+			// Build and EOC are both eligible at the cue's first frame and drain one pair
+			// per frame, so the flip lands at start+pairs. Require it to leave at least
+			// one frame of display before the next cue takes the screen.
+			if pairs := cc608PairCount(build) + cc608PairCount(eoc); start+pairs >= end {
+				return nil, fmt.Errorf("cc608: cue %d needs %d frames to build and flip but its slice is only "+
+					"%d frames at %g fps; shorten the lines or lower the update rate", k, pairs, end-start, fps)
+			}
+			if len(build) > 0 {
+				sched.Push(schedule.TimedTokens{TimeMS: wallAt(start), Field: 1, Tokens: build})
+			}
+			if len(eoc) > 0 {
+				sched.Push(schedule.TimedTokens{TimeMS: wallAt(start), Field: 1, Tokens: eoc})
+			}
+		}
+		return cc608CollectFrames(sched, nFrames, wallAt), nil
+	}
+
 	// Cue k flips at boundary(k). The extra entry at nFrames is the next unit's first
 	// cue: its build drains this unit's tail, its EOC belongs to the next unit.
 	type flip struct {
@@ -142,11 +194,9 @@ func cc608UnitFrames(fps float64, nFrames int, unitStartMS int64, content, nextC
 	}
 	flips = append(flips, flip{nFrames, nextContent(0, wallAt(nFrames))})
 
-	sched := schedule.NewScheduler(fps, schedule.WithDoubling(cta608.DoublingOff))
 	prevFlip := -1 // last frame already claimed by a flip
 	for i, f := range flips {
-		var enc cta608.Encoder
-		build, eoc := cc608SplitEOC(enc.Apply(cta608.CaptionBlock{Lines: f.cue.Lines, Mode: cta608.PopOn}))
+		build, eoc := cueTokens(f.cue)
 		buildStart := f.frame - cc608PairCount(build)
 		// The first cue flips at frame 0, so its build was transmitted by the previous
 		// unit and there is nothing to place here. Every other build must fit between
@@ -158,9 +208,6 @@ func cc608UnitFrames(fps float64, nFrames int, unitStartMS int64, content, nextC
 				return nil, fmt.Errorf("cc608: cue flipping at frame %d needs %d frames of build but only %d are free "+
 					"at %g fps; shorten the lines or lower the update rate", f.frame, f.frame-buildStart, free, fps)
 			}
-			// Pushes drain in push order (the scheduler is a FIFO gated by eligibility
-			// time), so pushing the build before its EOC keeps the byte stream ordered
-			// and lands the flip on f.frame exactly.
 			sched.Push(schedule.TimedTokens{TimeMS: wallAt(buildStart), Field: 1, Tokens: build})
 		}
 		if f.frame < nFrames && len(eoc) > 0 {
@@ -168,12 +215,16 @@ func cc608UnitFrames(fps float64, nFrames int, unitStartMS int64, content, nextC
 		}
 		prevFlip = f.frame
 	}
+	return cc608CollectFrames(sched, nFrames, wallAt), nil
+}
 
+// cc608CollectFrames drains the scheduler into one entry per unit frame.
+func cc608CollectFrames(sched *schedule.Scheduler, nFrames int, wallAt func(int) int64) []schedule.Frame {
 	frames := make([]schedule.Frame, nFrames)
 	for i := range frames {
 		frames[i] = sched.Frame(wallAt(i))
 	}
-	return frames, nil
+	return frames
 }
 
 // injectCC608 splices in-band CTA-608 caption SEI into a unit's video samples in
@@ -182,7 +233,8 @@ func cc608UnitFrames(fps float64, nFrames int, unitStartMS int64, content, nextC
 // SEI NALU before the first VCL NALU of each sample, updating Data and Size. samples
 // are the video track's FullSamples in decode order; fps and unitStartMS give the
 // caption timing; segNr is this unit's segment number and nextSegNr the segment
-// number of the unit that follows (the same segment for a non-final fragment).
+// number of the unit that follows (the same segment for a non-final fragment); mode
+// selects where each cue flips (nextSegNr is unused for cc608SelfContained).
 //
 // The schedule is presentation-ordered but samples arrive in decode order. Since
 // receivers reassemble cc_data by presentation time (PTS) — dash.js, hls.js and
@@ -190,13 +242,14 @@ func cc608UnitFrames(fps float64, nFrames int, unitStartMS int64, content, nextC
 // sample in *presentation* order. With B-frames (decode order != presentation order)
 // a naive frames[i]->samples[i] mapping permutes the CEA-608 byte stream and garbles
 // the caption.
-func injectCC608(samples []mp4.FullSample, fps float64, unitStartMS int64, segNr, nextSegNr uint32, codec carriage.Codec) error {
+func injectCC608(samples []mp4.FullSample, fps float64, unitStartMS int64, segNr, nextSegNr uint32,
+	codec carriage.Codec, mode cc608FlipMode) error {
 	if len(samples) == 0 {
 		return nil
 	}
 	// cc608UnitFrames validates the frame rate and returns an error (never panics)
 	// if it is out of the CEA-608 range.
-	frames, err := cc608UnitFrames(fps, len(samples), unitStartMS, cc608CueContent(segNr), cc608CueContent(nextSegNr))
+	frames, err := cc608UnitFrames(fps, len(samples), unitStartMS, cc608CueContent(segNr), cc608CueContent(nextSegNr), mode)
 	if err != nil {
 		return fmt.Errorf("cc608 build cues: %w", err)
 	}
@@ -275,11 +328,12 @@ func isVCLNalu(nalu []byte, codec carriage.Codec) bool {
 // change, the moof size is unchanged and trun.DataOffset / mdat.StartPos stay
 // valid (mirroring the tfdt-shift bookkeeping in genLiveSegment).
 //
-// Each fragment is one caption unit. Because a cue's build is transmitted ahead of
-// its flip (see cc608UnitFrames), a fragment also carries the build for the first
-// cue of whatever follows it: the next fragment of this segment, or — for the last
+// Each fragment is one caption unit. In the default mode a cue's build is transmitted
+// ahead of its flip (see cc608UnitFrames), so a fragment also carries the build for the
+// first cue of whatever follows it: the next fragment of this segment, or — for the last
 // fragment — the first cue of the next segment, which is why the next unit's segment
-// number is passed down.
+// number is passed down. With timecc608's "-sc" (CC608Config.SelfContained) each unit
+// keeps its captions to itself and the next number goes unused.
 func applyCC608(seg *mp4.MediaSegment, meta segMeta, cfg *ResponseConfig) error {
 	rep := meta.rep
 	codec, ok := cc608CodecFor(rep.Codecs)
@@ -288,6 +342,10 @@ func applyCC608(seg *mp4.MediaSegment, meta segMeta, cfg *ResponseConfig) error 
 	}
 	if rep.initSeg == nil || rep.initSeg.Moov == nil || rep.initSeg.Moov.Mvex == nil {
 		return fmt.Errorf("cc608: missing init/trex for representation %q", rep.ID)
+	}
+	mode := cc608FlipAtCueStart
+	if cfg.CC608 != nil && cfg.CC608.SelfContained {
+		mode = cc608SelfContained
 	}
 	trex := rep.initSeg.Moov.Mvex.Trex
 	for i, frag := range seg.Fragments {
@@ -310,7 +368,7 @@ func applyCC608(seg *mp4.MediaSegment, meta segMeta, cfg *ResponseConfig) error 
 		if i == len(seg.Fragments)-1 {
 			nextSegNr = meta.newNr + 1
 		}
-		if err := injectCC608(samples, fps, unitStartMS, meta.newNr, nextSegNr, codec); err != nil {
+		if err := injectCC608(samples, fps, unitStartMS, meta.newNr, nextSegNr, codec, mode); err != nil {
 			return err
 		}
 		if err := writeBackCC608Samples(frag, samples); err != nil {

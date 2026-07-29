@@ -843,7 +843,7 @@ func urlgenPage(d urlGenData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "> Region 1 (top)</label></fieldset></details> <details><summary>Inject in-band CTA-608 captions...</summary> <label for=\"timecc608\">CEA-608 channel and language as &lt;channel&gt;-&lt;lang&gt; (e.g. CC1-eng). Injected into the AVC/HEVC video as a ticking UTC clock plus segment number, and advertised with an Accessibility descriptor. Only CC1 is supported. Rejected for encrypted or already-captioned assets. <input type=\"text\" id=\"timecc608\" name=\"timecc608\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "> Region 1 (top)</label></fieldset></details> <details><summary>Inject in-band CTA-608 captions...</summary> <label for=\"timecc608\">CEA-608 channel and language as &lt;channel&gt;-&lt;lang&gt;[-sc] (e.g. CC1-eng). Injected into the AVC/HEVC video as a ticking UTC clock plus segment number, and advertised with an Accessibility descriptor. Only CC1 is supported. Rejected for encrypted or already-captioned assets. Each caption flips on the first frame of the second it names, which makes it span the segment boundary. Append -sc (e.g. CC1-eng-sc) to keep every caption inside its own segment instead, which costs ~0.5 s of delay before each caption appears. <input type=\"text\" id=\"timecc608\" name=\"timecc608\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

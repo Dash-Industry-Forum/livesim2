@@ -33,7 +33,7 @@ There is a corresponding setting for `wvtt` (segmented WebVTT) subtitles using `
 For in-band closed captions, `/timecc608_CC1-eng` injects a CTA-608 (CEA-608) caption
 into the AVC/HEVC video itself, showing a ticking UTC clock and the segment number on
 channel CC1, and advertises it with a CEA-608 `Accessibility` descriptor. The value is
-`<channel>-<lang>` (only `CC1` is supported so far). It cannot be combined with encryption
+`<channel>-<lang>[-sc]` (only `CC1` is supported so far). It cannot be combined with encryption
 and is rejected for assets that already carry captions.
 
 Each caption is displayed over exactly the interval its text names. A pop-on caption is
@@ -57,6 +57,14 @@ This is a receiver-side matter, not something the server can paper over: any pai
 ahead of the `EOC` to clear the state would erase the build that is about to be flipped.
 A player should reset its 608 decoder state on a seek or other discontinuity — which is
 what turns the stale case into the blank one — exactly as it resets any other decoder.
+
+Appending `-sc` (`/timecc608_CC1-eng-sc`) switches this trade the other way: a cue's build
+and its flip both ride the cue's own frames, so every caption stays inside the segment that
+carries it and no segment depends on its neighbour. A client can then start, seek or join
+anywhere and see a complete caption immediately. The cost is latency — the flip can only
+follow its own build, so each caption appears ~0.5 s into the second its clock names and
+remains up into the next one. Use the default for frame-accurate timing, `-sc` to test a
+player against captions that are decodable segment by segment.
 
 The new `livesim2` software is written in Go instead of Python and designed to handle
 content in a more flexible and versatile way. It is intended to be very easy to install and deploy locally

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Optional `-sc` field on `timecc608` (e.g. `timecc608_CC1-eng-sc`) keeps every CTA-608 caption inside the
+  segment that carries it, so segments stay independently decodable for a client that starts, seeks or joins
+  mid-stream. In exchange each caption appears ~0.5 s into the second its clock names, which is the behaviour
+  from before the flip-on-cue-start fix below.
+
 ### Changed
 
 - mp4ff dependency bumped to v0.55.0 and go-608 to v0.7.0

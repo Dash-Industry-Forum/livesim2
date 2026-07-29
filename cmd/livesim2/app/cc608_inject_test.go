@@ -163,8 +163,8 @@ func testInjectCC608(t *testing.T, codec carriage.Codec, vclNalu []byte) {
 	unitB := cc608TestSamples(nFrames, vclNalu)
 	origSize := len(avccSample(vclNalu))
 
-	require.NoError(t, injectCC608(unitA, fps, unitAStart, 42, 43, codec))
-	require.NoError(t, injectCC608(unitB, fps, unitBStart, 43, 44, codec))
+	require.NoError(t, injectCC608(unitA, fps, unitAStart, 42, 43, codec, cc608FlipAtCueStart))
+	require.NoError(t, injectCC608(unitB, fps, unitBStart, 43, 44, codec, cc608FlipAtCueStart))
 
 	// Every sample gained an SEI NALU placed before the VCL, and Size was updated.
 	for _, samples := range [][]mp4.FullSample{unitA, unitB} {
@@ -200,8 +200,46 @@ func testInjectCC608(t *testing.T, codec carriage.Codec, vclNalu []byte) {
 // loaded (a caption that would never appear).
 func TestCC608UnitFramesBuildDoesNotFit(t *testing.T) {
 	unitStart := time.Date(2026, 7, 20, 14, 23, 44, 0, time.UTC).UnixMilli()
-	_, err := cc608UnitFrames(30.0, 10, unitStart, cc608CueContent(42), cc608CueContent(43))
+	_, err := cc608UnitFrames(30.0, 10, unitStart, cc608CueContent(42), cc608CueContent(43), cc608FlipAtCueStart)
 	require.ErrorContains(t, err, "frames of build but only")
+}
+
+// TestInjectCC608SelfContained covers timecc608's "-sc" mode, where a cue's build and
+// its flip both ride the cue's own frames. A single unit then carries every caption it
+// shows: both cues appear from this unit alone, with no dependency on a neighbour — the
+// contrast with TestInjectCC608FirstCueUnbuilt, where the same unit shows only its
+// second cue. The price is latency: each flip lands build-pairs frames *into* its cue,
+// so the caption named 14:23:44 first appears a little over half a second late.
+func TestInjectCC608SelfContained(t *testing.T) {
+	const fps = 30.0
+	const nFrames = 60 // 2 s at 30 fps -> 2 cues
+	unitStart := time.Date(2026, 7, 20, 14, 23, 44, 0, time.UTC).UnixMilli()
+	samples := cc608TestSamples(nFrames, []byte{0x65, 0x88, 0x80, 0x00})
+
+	require.NoError(t, injectCC608(samples, fps, unitStart, 42, 43, carriage.CodecAVC, cc608SelfContained))
+
+	flips := decodeSamples(t, samples, carriage.CodecAVC)
+	require.Len(t, flips, 2, "both cues are visible from this unit alone")
+	require.Equal(t, "14:23:44.000", flips[0].line1)
+	require.Equal(t, "SEG 42", flips[0].line2)
+	require.Equal(t, "14:23:45.000", flips[1].line1)
+	require.Equal(t, "SEG 42", flips[1].line2)
+	// Each flip lags its cue's boundary (frames 0 and 30) by the build it had to drain,
+	// and still leaves display time before the next cue.
+	require.Greater(t, flips[0].frame, 0, "cue 0 flips after its build, not on frame 0")
+	require.Less(t, flips[0].frame, 30, "cue 0 is displayed before cue 1 takes over")
+	require.Greater(t, flips[1].frame, 30, "cue 1 flips after its build")
+	require.Less(t, flips[1].frame, nFrames)
+	t.Logf("self-contained flips at frames %d and %d (cue boundaries 0 and 30)", flips[0].frame, flips[1].frame)
+}
+
+// TestCC608UnitFramesSelfContainedDoesNotFit checks the self-contained counterpart of
+// TestCC608UnitFramesBuildDoesNotFit: cues too short to hold their own build and flip
+// are reported instead of emitting a caption that is never displayed.
+func TestCC608UnitFramesSelfContainedDoesNotFit(t *testing.T) {
+	unitStart := time.Date(2026, 7, 20, 14, 23, 44, 0, time.UTC).UnixMilli()
+	_, err := cc608UnitFrames(30.0, 10, unitStart, cc608CueContent(42), cc608CueContent(43), cc608SelfContained)
+	require.ErrorContains(t, err, "frames to build and flip")
 }
 
 // TestInjectCC608FirstCueUnbuilt documents what a receiver sees when it starts on a
@@ -214,7 +252,7 @@ func TestInjectCC608FirstCueUnbuilt(t *testing.T) {
 	unitStart := time.Date(2026, 7, 20, 14, 23, 44, 0, time.UTC).UnixMilli()
 	samples := cc608TestSamples(nFrames, []byte{0x65, 0x88, 0x80, 0x00})
 
-	require.NoError(t, injectCC608(samples, fps, unitStart, 42, 43, carriage.CodecAVC))
+	require.NoError(t, injectCC608(samples, fps, unitStart, 42, 43, carriage.CodecAVC, cc608FlipAtCueStart))
 
 	flips := decodeSamples(t, samples, carriage.CodecAVC)
 	require.Equal(t, []cc608Flip{
@@ -295,6 +333,38 @@ func TestGenLiveSegmentCC608(t *testing.T) {
 		{60, "00:01:22.000", "SEG 41"},
 		{90, "00:01:23.000", "SEG 41"},
 	}, flips)
+}
+
+// TestGenLiveSegmentCC608SelfContainedSegment drives the "-sc" mode through the real
+// request path (CC608Config.SelfContained -> applyCC608), which is what a client asking
+// for timecc608_CC1-eng-sc gets. One segment on its own must show both of its cues,
+// where the default mode shows only the second (TestGenLiveSegmentCC608 needs two
+// segments to see the first). Each flip lands inside the cue it names instead of on its
+// boundary, which is the latency this mode trades for self-containment.
+func TestGenLiveSegmentCC608SelfContainedSegment(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	logger := slog.Default()
+	require.NoError(t, am.discoverAssets(logger))
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	cfg := NewResponseConfig()
+	cfg.CC608 = &CC608Config{Channel: "CC1", Lang: "eng", SelfContained: true}
+	const nowMS = 100_000
+	const nr = 40 // 2s segments -> segment 40 starts at 80s = 00:01:20
+
+	samples := cc608SegSamples(t, vodFS, asset, cfg, fmt.Sprintf("V300/%d.m4s", nr), nowMS, true)
+	flips := decodeSamples(t, samples, carriage.CodecAVC)
+
+	require.Len(t, flips, 2, "a single segment carries both its captions")
+	require.Equal(t, "00:01:20.000", flips[0].line1)
+	require.Equal(t, "SEG 40", flips[0].line2)
+	require.Equal(t, "00:01:21.000", flips[1].line1)
+	require.Equal(t, "SEG 40", flips[1].line2)
+	require.Greater(t, flips[0].frame, 0, "the flip follows its own build, so it lags the cue boundary")
+	require.Less(t, flips[0].frame, 30)
+	require.Greater(t, flips[1].frame, 30)
 }
 
 // TestGenLiveSegmentCC608NrTimeOffset covers the case where a segment does not start at
