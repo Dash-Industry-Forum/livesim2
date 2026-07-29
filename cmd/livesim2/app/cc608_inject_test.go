@@ -297,6 +297,68 @@ func TestGenLiveSegmentCC608(t *testing.T) {
 	}, flips)
 }
 
+// TestGenLiveSegmentCC608NrTimeOffset covers the case where a segment does not start at
+// segmentNr * segmentDuration. Two URL options decouple the two: startnr_ renumbers the
+// segments (nr 45 with startnr_5 is the segment at media time 80 s, not 90 s), and a
+// non-zero availabilityStartTime shifts every segment's wall clock without touching its
+// number. The caption clock must follow the segment's own media time — applyCC608 derives
+// it from the fragment's already-shifted tfdt plus cfg.StartTimeS, never from the segment
+// number — while "SEG <nr>" keeps naming the number the client asked for. Both cases below
+// carry the same media (80 s onwards), so the number moves independently of the clock.
+func TestGenLiveSegmentCC608NrTimeOffset(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	logger := slog.Default()
+	require.NoError(t, am.discoverAssets(logger))
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	cases := []struct {
+		desc       string
+		startNr    uint32
+		startTimeS int
+		nr         int
+		nowMS      int
+		want       []cc608Flip
+	}{
+		{
+			// startnr_5: media time is (nr-5)*2 s, so segment 45 is the 80 s one and the
+			// clock must read 00:01:2x, not the 00:01:3x that 45*2 s would give.
+			desc: "startnr_5", startNr: 5, nr: 45, nowMS: 100_000,
+			want: []cc608Flip{
+				{30, "00:01:21.000", "SEG 45"},
+				{60, "00:01:22.000", "SEG 46"},
+				{90, "00:01:23.000", "SEG 46"},
+			},
+		},
+		{
+			// availabilityStartTime one hour past the epoch: same media time and same
+			// numbers, every caption clock an hour later.
+			desc: "ast_3600", startTimeS: 3600, nr: 40, nowMS: 3_700_000,
+			want: []cc608Flip{
+				{30, "01:01:21.000", "SEG 40"},
+				{60, "01:01:22.000", "SEG 41"},
+				{90, "01:01:23.000", "SEG 41"},
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			cfg := NewResponseConfig()
+			cfg.CC608 = &CC608Config{Channel: "CC1", Lang: "eng"}
+			cfg.StartNr = Ptr(c.startNr)
+			cfg.StartTimeS = c.startTimeS
+
+			var samples []mp4.FullSample
+			for _, n := range []int{c.nr, c.nr + 1} {
+				samples = append(samples, cc608SegSamples(t, vodFS, asset, cfg,
+					fmt.Sprintf("V300/%d.m4s", n), c.nowMS, true)...)
+			}
+			require.Equal(t, c.want, decodeSamples(t, samples, carriage.CodecAVC))
+		})
+	}
+}
+
 // TestGenLiveSegmentCC608HEVC is the HEVC counterpart of TestGenLiveSegmentCC608:
 // it drives two consecutive real hev1 segments (bbb_hevc_ac3_8s, 24 fps, 2s
 // segments) through genLiveSegment with timecc608, round-trips them through the
