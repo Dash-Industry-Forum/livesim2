@@ -260,7 +260,7 @@ templ urlgenPage(d urlGenData) {
 					<details>
 						<summary>Inject in-band CTA-608 captions...</summary>
 						<label for="timecc608">
-							CEA-608 channel and language as &lt;channel&gt;-&lt;lang&gt; (e.g. CC1-eng). Injected into the AVC/HEVC video as a ticking UTC clock plus segment number, and advertised with an Accessibility descriptor. Only CC1 is supported. Rejected for encrypted or already-captioned assets.
+							CEA-608 channel and language as &lt;channel&gt;-&lt;lang&gt;[-&lt;mode&gt;[-&lt;modifier&gt;]] (e.g. CC1-eng). Injected into the AVC/HEVC video as a ticking UTC clock plus segment number, and advertised with an Accessibility descriptor. Only CC1 is supported, and the language is a three-letter ISO 639-2 code (eng, swe), the form that descriptor's value takes. Rejected for encrypted or already-captioned assets. The mode decides how a caption reaches the screen: paint (the default) clears the screen each second and types the caption on two characters per frame, pop builds it hidden and flips it on whole, and roll2/roll3 type it onto the base row of a scrolling window of that many rows. Only pop makes a caption span the segment boundary, in exchange for being displayed over exactly the second it names; append -sc to it (CC1-eng-pop-sc) to keep it inside its own segment at the cost of ~0.5 s of delay. The other modes are self-contained per segment already.
 							<input type="text" id="timecc608" name="timecc608" value={ d.TimeCC608 } placeholder="CC1-eng"/>
 						</label>
 					</details>

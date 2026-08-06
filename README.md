@@ -33,8 +33,68 @@ There is a corresponding setting for `wvtt` (segmented WebVTT) subtitles using `
 For in-band closed captions, `/timecc608_CC1-eng` injects a CTA-608 (CEA-608) caption
 into the AVC/HEVC video itself, showing a ticking UTC clock and the segment number on
 channel CC1, and advertises it with a CEA-608 `Accessibility` descriptor. The value is
-`<channel>-<lang>` (only `CC1` is supported so far). It cannot be combined with encryption
-and is rejected for assets that already carry captions.
+`<channel>-<lang>[-<mode>[-<modifier>]]` (only `CC1` is supported so far). It cannot be
+combined with encryption and is rejected for assets that already carry captions.
+
+`<lang>` is a three-letter ISO 639-2 code, since it ends up in the SCTE 214-1 descriptor
+value — `<Accessibility schemeIdUri="urn:scte:dash:cc:cea-608:2015" value="CC1=eng"/>` —
+whose scheme is defined in those terms. That is a different language form from DASH's
+RFC 5646 `@lang` attribute, which this option leaves alone, so `eng` and `swe` are codes
+here while `en`, `en-US` and `zh-Hans` are rejected.
+
+The optional mode field picks how a caption reaches the screen. All three write one 608
+byte pair per frame — that is the CTA-608 wire rate — so what differs is where those pairs
+go and what a receiver needs besides the segment in hand:
+
+| mode | URL | caption appears | self-contained segments |
+|---|---|---|---|
+| paint-on | `/timecc608_CC1-eng` (default) | types on, two characters per frame | yes |
+| roll-up | `/timecc608_CC1-eng-roll3` | types onto a scrolling window | yes |
+| pop-on | `/timecc608_CC1-eng-pop` | whole, exactly on its second | no |
+| pop-on | `/timecc608_CC1-eng-pop-sc` | whole, ~0.5 s late | yes |
+
+**Paint-on** is the default. Each second clears the screen and then writes the caption
+straight onto it, two characters at a time, so it takes ~0.5 s at 30 fps to arrive and
+stands complete for the rest of the second. Nothing a cue needs lives outside its own
+segment, so every segment decodes standalone: a client can start, seek or join anywhere
+and be correct from the first cue boundary it sees. The typing is also a useful liveness
+tell — a frozen caption is a stalled stream.
+
+**Roll-up** (`-roll2`, `-roll3`) types each line onto the base row of a scrolling window
+of that many rows, the way live broadcast captioning works. The caption lines sit on rows
+2 and 3, which makes row 3 the base row and caps the window at 3 rows — a 4-row window
+would need a row 0. With two lines per second, `-roll2` keeps no history and `-roll3`
+keeps the previous second's bottom line. The window is reset at the start of each segment,
+so the display owes nothing to the previous segment either.
+
+**Pop-on** (`-pop`) is the mode with a trade-off. A pop-on caption is two transmissions —
+a build written into the receiver's non-displayed memory, and an `EOC` that flips it on
+screen. The flip rides the first frame of its cue and the ~15-19 pair build is sent over
+the frames *before* it, so the caption is displayed over exactly the interval its text
+names. But that build has to live somewhere: for a segment's first cue it is in the
+**previous segment**, and each segment likewise carries the build for the first cue of the
+segment that follows it. Segments are still generated independently and on demand, since
+both sides derive that shared cue from the same wall-clock time and segment number.
+
+The cost is that captions are not self-contained per segment. A client that starts, seeks,
+or joins mid-stream gets a segment's leading `EOC` without the build that belongs to it,
+and what it shows for that first cue period depends on its decoder: a fresh 608 decoder has
+nothing loaded and shows **no caption**, while one that keeps 608 state across the
+discontinuity flips whatever was last preloaded and can show **one cue of a stale
+caption**. Either way it corrects at the next cue boundary, typically within a second.
+
+This is a receiver-side matter, not something the server can paper over: any pair sent
+ahead of the `EOC` to clear the state would erase the build that is about to be flipped.
+A player should reset its 608 decoder state on a seek or other discontinuity — which is
+what turns the stale case into the blank one — exactly as it resets any other decoder.
+
+Appending `-sc` to pop-on (`/timecc608_CC1-eng-pop-sc`) switches that trade the other way:
+a cue's build and its flip both ride the cue's own frames, so every caption stays inside
+the segment that carries it. The cost is latency — the flip can only follow its own build,
+so each caption appears ~0.5 s into the second its clock names and remains up into the next
+one. Use `-pop` for frame-accurate timing, `-pop-sc` to test a player against pop-on
+captions that are decodable segment by segment. `-sc` applies to pop-on only; paint-on and
+roll-up are self-contained by construction.
 
 The new `livesim2` software is written in Go instead of Python and designed to handle
 content in a more flexible and versatile way. It is intended to be very easy to install and deploy locally

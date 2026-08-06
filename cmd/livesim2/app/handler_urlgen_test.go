@@ -102,6 +102,21 @@ func TestCreateURLCC608(t *testing.T) {
 			wantInURL: []string{"/livesim2/timecc608_CC1-eng/testpic_2s/Manifest.mpd"},
 		},
 		{
+			desc:      "self-contained pop-on CC1-eng-pop-sc",
+			params:    map[string]string{"timecc608": "CC1-eng-pop-sc"},
+			wantInURL: []string{"/livesim2/timecc608_CC1-eng-pop-sc/testpic_2s/Manifest.mpd"},
+		},
+		{
+			desc:      "roll-up CC1-eng-roll3",
+			params:    map[string]string{"timecc608": "CC1-eng-roll3"},
+			wantInURL: []string{"/livesim2/timecc608_CC1-eng-roll3/testpic_2s/Manifest.mpd"},
+		},
+		{
+			desc:    "bare sc without a mode",
+			params:  map[string]string{"timecc608": "CC1-eng-sc"},
+			wantErr: "invalid timecc608",
+		},
+		{
 			desc:    "unsupported channel",
 			params:  map[string]string{"timecc608": "CC2-eng"},
 			wantErr: "invalid timecc608",
@@ -130,7 +145,7 @@ func TestCreateURLCC608(t *testing.T) {
 				return
 			}
 			require.Empty(t, data.Errors, "unexpected errors: %v", data.Errors)
-			require.Equal(t, "CC1-eng", data.TimeCC608)
+			require.Equal(t, c.params["timecc608"], data.TimeCC608, "the form field keeps what was entered")
 			for _, want := range c.wantInURL {
 				require.Contains(t, data.URL, want)
 			}
