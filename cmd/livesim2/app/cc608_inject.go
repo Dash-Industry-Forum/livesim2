@@ -14,14 +14,16 @@ import (
 	"github.com/Eyevinn/go-608/carriage"
 	"github.com/Eyevinn/go-608/cta608"
 	"github.com/Eyevinn/go-608/generate"
+	"github.com/Eyevinn/go-608/schedule"
 	"github.com/Eyevinn/mp4ff/avc"
 	"github.com/Eyevinn/mp4ff/hevc"
 	"github.com/Eyevinn/mp4ff/mp4"
 )
 
-// cc608TargetPeriodMS is the nominal caption update period; go-608 snaps it to an
-// even division of each segment (see generate.NumCues), so a 2.002s segment gets
-// two ~1.001s cues, a 1.92s segment two ~0.96s cues, etc.
+// cc608TargetPeriodMS is the minimum caption update period; go-608 snaps it to an even
+// division of each segment, never shorter than the period itself (generate.NumCues
+// divides down), so a 2s segment gets two 1s cues, a 2.002s segment two ~1.001s cues,
+// and a 1.92s segment a single 1.92s cue rather than two of 0.96s.
 const cc608TargetPeriodMS = 1000
 
 // cc608Line1Row and cc608Line2Row are the CEA-608 rows (1..15, 15 = bottom) that
@@ -44,42 +46,114 @@ func cc608CodecFor(codecs string) (carriage.Codec, bool) {
 	}
 }
 
-// cc608CueContent formats one cue for a segment: line 1 is the cue's UTC time
+// cc608CueContent formats one cue of a unit: line 1 is the cue's UTC time
 // (millisecond precision, so it stays accurate for non-integer-second segments),
-// line 2 is "SEG <nr>" held constant across the segment's cues. The caller closes
-// over segNr; keeping the content a pure function of (cueIdx, cueStartMS) makes a
-// segment's captions independent of any other segment.
-func cc608CueContent(segNr uint32) generate.CueContentFunc {
-	return func(cueIdx int, cueStartMS int64) generate.UnitCue {
-		ts := time.UnixMilli(cueStartMS).UTC().Format("15:04:05.000")
-		seg := fmt.Sprintf("SEG %d", segNr)
-		return generate.UnitCue{Lines: []cta608.Line{
-			{Row: cc608Line1Row, Align: cta608.AlignCenter, Runs: []cta608.Run{{Text: ts, Pen: cta608.Pen{Color: cta608.White}}}},
-			{Row: cc608Line2Row, Align: cta608.AlignCenter, Runs: []cta608.Run{{Text: seg, Pen: cta608.Pen{Color: cta608.Yellow}}}},
-		}}
+// line 2 is "SEG <nr>" held constant across the unit's cues. go-608 hands it the
+// unit the cue belongs to, so this one function serves every unit — including the
+// next unit's first cue, which flip-at-cue-start pop-on builds in this unit's tail —
+// and a unit's captions stay a pure function of (unit, cueIdx, cueStartMS) with no
+// shared state between units.
+func cc608CueContent(u generate.Unit, _ int, cueStartMS int64) generate.UnitCue {
+	ts := time.UnixMilli(cueStartMS).UTC().Format("15:04:05.000")
+	seg := fmt.Sprintf("SEG %d", u.Nr)
+	return generate.UnitCue{Lines: []cta608.Line{
+		{Row: cc608Line1Row, Align: cta608.AlignCenter, Runs: []cta608.Run{{Text: ts, Pen: cta608.Pen{Color: cta608.White}}}},
+		{Row: cc608Line2Row, Align: cta608.AlignCenter, Runs: []cta608.Run{{Text: seg, Pen: cta608.Pen{Color: cta608.Yellow}}}},
+	}}
+}
+
+// cc608UnitFrames builds the per-frame CTA-608 schedule for one unit (one fragment) of
+// video with the go-608 per-unit builder that cc.Mode names. All three slice the unit
+// into ~cc608TargetPeriodMS cues and call cc608CueContent for each cue's lines; they
+// differ in how a cue reaches the screen, and with it in what a receiver needs besides
+// this unit. unit carries the unit's number, wall-clock start and frame count as
+// independent facts, so a segment whose number does not match its media time (startnr_,
+// a non-zero availabilityStartTime) still gets the right clock.
+//
+// CC608PaintOn (generate.BuildUnitPaintCues, the default) clears the screen on each
+// cue's first frame and then writes the caption straight onto it, two characters per
+// frame. A cue's data never leaves its own slice, so every segment decodes standalone
+// and a client that starts, seeks or joins anywhere is correct from the first cue
+// boundary it sees. The cost is that the text is only complete for the tail of its cue —
+// at 30 fps the two lines take ~0.5 s of a ~1 s cue to type out — which is also the
+// mode's charm on a test stream: the typing is a visible liveness tell. next is unused.
+//
+// CC608RollUp (generate.BuildUnitRollUpCues) types each line onto the base row of a
+// cc.RollUpRows-row window, scrolling the earlier lines up. Its data is likewise
+// confined to the cue, and the window is reset on the unit's first frame so the display
+// owes nothing to the previous unit either. With two lines per cue a 2-row window keeps
+// no history and a 3-row one keeps the previous cue's bottom line. next is unused.
+//
+// CC608PopOn (generate.BuildUnitCues) builds a caption in non-displayed memory and
+// flips it on with an EOC. Both transmissions drain at one 608 pair per frame, so where
+// the build is placed decides when the caption appears:
+//
+//   - With cc.SelfContained — go-608's default placement — both ride the cue's own
+//     frames: the build drains from the cue's first frame and the flip follows it, which
+//     puts the flip ~build-pairs frames *into* the cue (0.6-0.75 s of a one-second cue at
+//     30 fps), so the caption is visible well after the time its text names. Nothing
+//     crosses a unit boundary. next is unused.
+//   - Otherwise (generate.WithFlipAtCueStart) each cue's EOC rides its cue's first frame
+//     and its build drains over the frames immediately before it, so the flip coincides
+//     with the cue boundary and the caption is shown exactly over the interval its text
+//     names. The consequence is that a cue's build lives in the preceding cue's frames:
+//     the first cue's build belongs to the *previous* unit, and this unit's tail carries
+//     the build for the first cue of next. Captions therefore span unit boundaries — a
+//     receiver that starts, seeks, or joins mid-stream gets the first EOC without the
+//     build that belongs to it. What it shows for that cue period depends on its decoder
+//     state: a fresh decoder has empty non-displayed memory and shows nothing, while one
+//     that keeps 608 state across the discontinuity flips whatever was last preloaded and
+//     can show a stale caption. Either way it is correct from the next cue on. Recovering
+//     faster is a receiver-side matter — a player resetting its 608 state on a seek turns
+//     the stale case into the blank one — and not something the server can paper over,
+//     since an ENM ahead of the EOC would erase the build about to be flipped.
+//
+// In that last case next.Nr and next.StartMS are what tie two consecutive calls
+// together: the build this unit carries in its tail and the flip the next call emits are
+// produced independently (units are generated on demand, one per request) and must
+// agree, and both are derived from those two fields plus cc608CueContent. next.StartMS
+// is given rather than assumed to be this unit's end, so a variable segment duration
+// needs no special case.
+func cc608UnitFrames(fps float64, unit, next generate.Unit, cc *CC608Config) ([]schedule.Frame, error) {
+	switch cc.Mode {
+	case CC608RollUp:
+		return generate.BuildUnitRollUpCues(fps, unit, cc608TargetPeriodMS, cc.RollUpRows, cc608CueContent)
+	case CC608PopOn:
+		if cc.SelfContained {
+			return generate.BuildUnitCues(fps, unit, cc608TargetPeriodMS, cc608CueContent)
+		}
+		return generate.BuildUnitCues(fps, unit, cc608TargetPeriodMS, cc608CueContent,
+			generate.WithFlipAtCueStart(next, cc608CueContent))
+	case CC608PaintOn, "":
+		return generate.BuildUnitPaintCues(fps, unit, cc608TargetPeriodMS, cc608CueContent)
+	default:
+		return nil, fmt.Errorf("cc608: unknown caption mode %q", cc.Mode)
 	}
 }
 
-// injectCC608 splices in-band CTA-608 caption SEI into a segment's video samples
-// in place. It builds one self-contained per-segment caption (a UTC clock + the
-// segment number, updated ~every second) via go-608 BuildUnitCues, then inserts
-// the resulting per-frame SEI NALU before the first VCL NALU of each sample,
-// updating Data and Size. samples are the video track's FullSamples in decode
-// order; fps and unitStartMS give the caption timing; segNr is the segment number.
+// injectCC608 splices in-band CTA-608 caption SEI into a unit's video samples in
+// place. It builds the per-frame caption schedule (a UTC clock + the segment number,
+// updated ~every second) with cc608UnitFrames, then inserts the resulting per-frame
+// SEI NALU before the first VCL NALU of each sample, updating Data and Size. samples
+// are the video track's FullSamples in decode order; fps and unit give the caption
+// timing (unit.Frames must be the sample count); next names the unit that follows, whose
+// first cue this unit preloads in pop-on mode; cc selects the caption mode (next is
+// unused for every mode but flip-at-cue-start pop-on).
 //
-// BuildUnitCues yields a presentation-ordered per-frame schedule, but samples
-// arrive in decode order. Since receivers reassemble cc_data by presentation time
-// (PTS) — dash.js, hls.js and Shaka all sort caption pairs by PTS — the k-th
-// caption frame must ride the k-th sample in *presentation* order. With B-frames
-// (decode order != presentation order) a naive frames[i]->samples[i] mapping
-// permutes the CEA-608 byte stream and garbles the caption.
-func injectCC608(samples []mp4.FullSample, fps float64, unitStartMS int64, segNr uint32, codec carriage.Codec) error {
+// The schedule is presentation-ordered but samples arrive in decode order. Since
+// receivers reassemble cc_data by presentation time (PTS) — dash.js, hls.js and
+// Shaka all sort caption pairs by PTS — the k-th caption frame must ride the k-th
+// sample in *presentation* order. With B-frames (decode order != presentation order)
+// a naive frames[i]->samples[i] mapping permutes the CEA-608 byte stream and garbles
+// the caption.
+func injectCC608(samples []mp4.FullSample, fps float64, unit, next generate.Unit,
+	codec carriage.Codec, cc *CC608Config) error {
 	if len(samples) == 0 {
 		return nil
 	}
-	// BuildUnitCues validates the frame rate and returns an error (never panics)
+	// cc608UnitFrames validates the frame rate and returns an error (never panics)
 	// if it is out of the CEA-608 range.
-	frames, err := generate.BuildUnitCues(fps, len(samples), unitStartMS, cc608TargetPeriodMS, cc608CueContent(segNr))
+	frames, err := cc608UnitFrames(fps, unit, next, cc)
 	if err != nil {
 		return fmt.Errorf("cc608 build cues: %w", err)
 	}
@@ -157,8 +231,19 @@ func isVCLNalu(nalu []byte, codec carriage.Codec) bool {
 // so there is no senc/saio to adjust; and since only per-sample size *values*
 // change, the moof size is unchanged and trun.DataOffset / mdat.StartPos stay
 // valid (mirroring the tfdt-shift bookkeeping in genLiveSegment).
+//
+// Each fragment is one caption unit. Every mode but flip-at-cue-start pop-on keeps a
+// cue's data inside its own unit; that one transmits a cue's build ahead of its flip (see
+// cc608UnitFrames), so a fragment also carries the build for the first cue of whatever
+// follows it: the next fragment of this segment, or — for the last fragment — the first
+// cue of the next segment, which is why that unit's number and start time are passed
+// down too.
 func applyCC608(seg *mp4.MediaSegment, meta segMeta, cfg *ResponseConfig) error {
 	rep := meta.rep
+	cc := cfg.CC608
+	if cc == nil {
+		return fmt.Errorf("cc608: called without a timecc608 configuration")
+	}
 	codec, ok := cc608CodecFor(rep.Codecs)
 	if !ok {
 		return fmt.Errorf("cc608: codec %q is not AVC or HEVC", rep.Codecs)
@@ -167,7 +252,11 @@ func applyCC608(seg *mp4.MediaSegment, meta segMeta, cfg *ResponseConfig) error 
 		return fmt.Errorf("cc608: missing init/trex for representation %q", rep.ID)
 	}
 	trex := rep.initSeg.Moov.Mvex.Trex
-	for _, frag := range seg.Fragments {
+	// mediaMS turns a media timeline position into the wall clock the captions show.
+	mediaMS := func(ticks uint64) int64 {
+		return int64(cfg.StartTimeS)*1000 + int64(ticks)*1000/int64(meta.timescale)
+	}
+	for i, frag := range seg.Fragments {
 		samples, err := frag.GetFullSamples(trex)
 		if err != nil {
 			return fmt.Errorf("cc608 getFullSamples: %w", err)
@@ -180,8 +269,20 @@ func applyCC608(seg *mp4.MediaSegment, meta segMeta, cfg *ResponseConfig) error 
 			return err
 		}
 		fragStart := frag.Moof.Traf.Tfdt.BaseMediaDecodeTime()
-		unitStartMS := int64(cfg.StartTimeS)*1000 + int64(fragStart)*1000/int64(meta.timescale)
-		if err := injectCC608(samples, fps, unitStartMS, meta.newNr, codec); err != nil {
+		var fragDur uint64
+		for _, s := range samples {
+			fragDur += uint64(s.Dur)
+		}
+		unit := generate.Unit{Nr: int64(meta.newNr), StartMS: mediaMS(fragStart), Frames: len(samples)}
+		// The unit after the last fragment is the next segment; earlier fragments are
+		// followed by another fragment of this segment, which keeps the same number.
+		// Either way it starts where this fragment ends, computed in media ticks like
+		// the fragment's own start so a non-integer frame duration cannot drift.
+		next := generate.Unit{Nr: unit.Nr, StartMS: mediaMS(fragStart + fragDur)}
+		if i == len(seg.Fragments)-1 {
+			next.Nr++
+		}
+		if err := injectCC608(samples, fps, unit, next, codec, cc); err != nil {
 			return err
 		}
 		if err := writeBackCC608Samples(frag, samples); err != nil {
