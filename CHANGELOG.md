@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Nothing yet
+
+## [1.13.0] - 2026-08-11
+
 ### Added
 
 - Optional mode field on `timecc608`, whose value is now `<channel>-<lang>[-<mode>[-<modifier>]]`, choosing
@@ -523,7 +527,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - features and URLs listed at livesim2 root page
 - configurable generated stpp subtitles with timing info
 
-[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.12.0...HEAD
+[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.13.0...HEAD
+[1.13.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.9.0...v1.10.0
