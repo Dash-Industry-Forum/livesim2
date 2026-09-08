@@ -323,6 +323,10 @@ templ urlgenPage(d urlGenData) {
 									the break the player may resolve the ad (default 60)
 								</li>
 								<li><it>ep=&lt;path&gt;</it> &mdash; ad-decisioning endpoint path (default /sgai/ads)</li>
+								<li>
+									<it>svta=&lt;0|1&gt;</it> &mdash; also describe every ad of the returned pod with
+									SVTA2053 ad-creative signaling in the List MPD (default 0)
+								</li>
 							</ul>
 							<p>
 								Example:
@@ -365,6 +369,66 @@ templ urlgenPage(d urlGenData) {
 								and the viewer sees the base ad (the AD&nbsp;BREAK slate). Watch ad decisions and
 								impression beacons live at
 								<a href={ d.Host + "/sgai/session_status" } target="_blank">/sgai/session_status</a>.
+							</p>
+						</fieldset>
+					</details>
+					<details>
+						<summary>SVTA2053 ad creative signaling...</summary>
+						<fieldset>
+							<legend>Ad creatives signaled with an SVTA2053 EventStream (v2 JSON payload)</legend>
+							<label for="svta">
+								Ad-break schedule and options
+								<input type="text" id="svta" name="svta" value={ d.Svta } placeholder="p60:20;ads=2"/>
+							</label>
+							<p>
+								Ad-creative windows of the live timeline are signaled with an
+								<code>EventStream</code> of scheme
+								<code>urn:svta:advertising-wg:ad-creative-signaling</code>, one
+								<code>Event</code> per creative carrying the SVTA2053 version&nbsp;2 JSON payload as
+								node data (identifiers, duration and tracking URLs). Grammar:
+								<pre>( &lt;off&gt;:&lt;dur&gt;[,&lt;off&gt;:&lt;dur&gt;...] | p&lt;period&gt;:&lt;dur&gt; )[;key=val;...]</pre>
+								the same break schedule as SGAI, where each <code>off:dur</code> is one break, both in
+								<em>seconds</em>:
+							</p>
+							<ul>
+								<li><it>off</it> &mdash; break start, seconds from the period (availabilityStartTime) start</li>
+								<li><it>dur</it> &mdash; break duration, split equally between the creatives</li>
+								<li>
+									<it>p&lt;period&gt;:&lt;dur&gt;</it> &mdash; recurring breaks instead: a break of
+									<it>dur</it> at every wall-clock multiple of <it>period</it> (e.g. <code>p60:20</code>
+									= 20&nbsp;s at every start of a UTC minute, forever)
+								</li>
+							</ul>
+							<p>Optional <code>;key=val</code> settings after the break list:</p>
+							<ul>
+								<li><it>ads=&lt;n&gt;</it> &mdash; creatives per break, 1&ndash;20 (default 1)</li>
+								<li><it>skip=&lt;s&gt;</it> &mdash; skipOffset in seconds on each creative (default: none)</li>
+								<li><it>click=&lt;0|1&gt;</it> &mdash; add clickThrough and clickTracking (default 0)</li>
+								<li><it>verif=&lt;0|1&gt;</it> &mdash; add an ad-verification resource (default 0)</li>
+								<li>
+									<it>pod=&lt;0|1&gt;</it> &mdash; also signal the whole break as a pod, with podStart and
+									podEnd tracking (default 0)
+								</li>
+								<li>
+									<it>ts=&lt;n&gt;</it> &mdash; EventStream timescale, a positive 32-bit integer
+									(default 90000)
+								</li>
+							</ul>
+							<p>
+								Example:
+								<pre>p60:20;ads=2</pre>
+								two 10&nbsp;s creatives every UTC minute. During each break the underlying (clear AVC)
+								video track serves the generated <em>AD&nbsp;BREAK</em> countdown slate, so the signaled
+								creative is visible.
+								<br/>
+								The tracking URLs (impression, start, quartiles, complete, plus pause and resume,
+								which fire on viewer interaction rather than at a point on the timeline) point back at this server's
+								beacon endpoint, so a player that supports the scheme &mdash; e.g. Shaka&nbsp;Player &mdash;
+								can be watched reporting the whole ad round trip live at
+								<a href={ d.Host + "/sgai/session_status" } target="_blank">/sgai/session_status</a>.
+								Set the <em>sessionId</em> in the SGAI section above to key those beacons to a viewer.
+								<br/>
+								<em>Cannot be combined with SGAI or the multi-period / xlink / insertad options.</em>
 							</p>
 						</fieldset>
 					</details>

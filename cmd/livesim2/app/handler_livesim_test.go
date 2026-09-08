@@ -71,6 +71,26 @@ func TestParamToMPD(t *testing.T) {
 			wantedInMPD:      []string{`<SupplementalProperty schemeIdUri="urn:mpeg:dash:period-continuity:2015" value="1"></SupplementalProperty>`},
 		},
 		{
+			desc:             "SVTA2053 ad creative signaling",
+			mpd:              "testpic_2s/Manifest.mpd",
+			params:           "svta_30:15;ads=2/",
+			wantedStatusCode: http.StatusOK,
+			//nolint:lll
+			wantedInMPD: []string{
+				`<EventStream schemeIdUri="urn:svta:advertising-wg:ad-creative-signaling" timescale="90000">`,
+				`<Event presentationTime="2700000" duration="675000" id="1001">`,
+				`&#34;version&#34;:2,&#34;type&#34;:&#34;slot&#34;`,
+				`&#34;type&#34;:&#34;linear&#34;,&#34;start&#34;:0,&#34;duration&#34;:7.5`,
+				`/sgai/beacon/svta-ad2/firstQuartile?evId=1`,
+			},
+		},
+		{
+			desc:             "SVTA2053 rejected together with sgai",
+			mpd:              "testpic_2s/Manifest.mpd",
+			params:           "svta_30:15/sgai_30:15/",
+			wantedStatusCode: http.StatusBadRequest,
+		},
+		{
 			desc:             "ECCP ClearKey CBCS",
 			mpd:              "testpic_2s/Manifest.mpd",
 			params:           "eccp_cbcs/",

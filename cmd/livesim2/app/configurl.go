@@ -144,6 +144,7 @@ type ResponseConfig struct {
 	SSRAS                        string            `json:"SSRAS,omitempty"`
 	ChunkDurSSR                  string            `json:"ChunkDurSSR,omitempty"`
 	SGAI                         *SGAIConfig       `json:"SGAI,omitempty"`
+	SVTA                         *SVTAConfig       `json:"SVTA,omitempty"`
 	Steer                        *SteeringConfig   `json:"Steer,omitempty"`
 	SteerLocation                string            `json:"-"` // service location of a steered segment request (cdn_ path token)
 	SteerSessionID               string            `json:"-"` // content-steering session id (sid_ path token or ?sessionId=)
@@ -462,6 +463,8 @@ cfgLoop:
 			cfg.ChunkDurSSR = val
 		case "sgai": // Ed.6 Alternative-MPD Replace ad breaks: <off>:<dur>[,...][;k=v...]
 			cfg.SGAI = sc.ParseSGAIConfig(key, val)
+		case "svta": // SVTA2053 ad creative signaling: <off>:<dur>[,...][;k=v...]
+			cfg.SVTA = sc.ParseSVTAConfig(key, val)
 		case "steer": // DASH Content Steering: <loc1>,<loc2>[,...][;ttl=s;mode=rotate|trigger;qbs=0|1;default=loc]
 			cfg.Steer = sc.ParseSteeringConfig(key, val)
 		case "cdn": // service location of a steered segment request (set in generated BaseURLs)
@@ -534,10 +537,22 @@ func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 	if cfg.ChunkDurSSR != "" && cfg.SSRAS == "" {
 		return fmt.Errorf("chunkDurSSR requires ssrAS to be configured")
 	}
-	if cfg.SGAI != nil {
+	if cfg.SGAI != nil || cfg.SVTA != nil {
+		// The ad-break EventStream lives in the first Period. splitPeriod clones that Period
+		// verbatim for every generated period, which would duplicate the events with
+		// presentation times that are no longer rebased, so the multi-period options are out.
+		opt := "sgai"
+		if cfg.SGAI == nil {
+			opt = "svta"
+		}
 		if cfg.PeriodsPerHour != nil || cfg.XlinkPeriodsPerHour != nil ||
 			cfg.EtpPeriodsPerHour != nil || cfg.InsertAdFlag {
-			return fmt.Errorf("sgai cannot be combined with periods/xlink/etp/insertad")
+			return fmt.Errorf("%s cannot be combined with periods/xlink/etp/insertad", opt)
+		}
+		if cfg.SGAI != nil && cfg.SVTA != nil {
+			// Both mark the same kind of ad break on the main timeline (and both drive the
+			// slate), so combining them would double-signal the same window.
+			return fmt.Errorf("svta cannot be combined with sgai")
 		}
 	}
 	if cfg.Steer != nil {

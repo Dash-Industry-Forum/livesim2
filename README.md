@@ -565,8 +565,9 @@ Enable it with the `sgai_` URL option, which schedules the breaks:
 - Periodic breaks: `sgai_p60:20` (a 20 s break at every full UTC minute, recurring forever;
   wall-clock anchored, so all sessions share the schedule and a late joiner lands mid-break).
 - Options are appended with `;key=val`: `skipafter=<s>`, `nojump=<0|1|2>`, `clip=<0|1>`,
-  `once=<0|1>`, `resolve=<s>` (earliest resolution offset), `ep=<path>` (ad endpoint). For
-  example `sgai_p60:20;skipafter=5`.
+  `once=<0|1>`, `resolve=<s>` (earliest resolution offset), `ep=<path>` (ad endpoint),
+  `svta=<0|1>` (add SVTA2053 ad-creative signaling to the returned ad pod, see
+  [below](#svta2053-ad-creative-signaling)). For example `sgai_p60:20;skipafter=5`.
 
 The `/urlgen/` page and the [URL wiki page][urlparams] document the `sgai_` option and its
 parameters.
@@ -616,7 +617,79 @@ The selection follows these rules (see `selectPod` in `sgai_ads.go`):
 Each ad fires impression and quartile callback beacons to `/sgai/beacon` (carrying the session and
 break id via Annex I). The per-session ad decisions and beacons are recorded and can be inspected
 live at `/sgai/session_status?sid=<sessionId>` or via the API at `/api/sgai/sessions[/{sid}]` and
-`/api/sgai/ads` (the ad catalog).
+`/api/sgai/ads` (the ad catalog). An identical beacon for the same ad, event and break occurrence
+is collapsed within a short window, so a player re-firing one is counted once — except for the
+interaction events below, which a viewer can legitimately trigger repeatedly.
+
+Adding `;svta=1` to the option (see [SVTA2053 ad creative signaling](#svta2053-ad-creative-signaling))
+puts an SVTA2053 `EventStream` in every ad Period of the returned List MPD, and that is what makes
+the fuller reporting possible. A DASH callback event says no more than "GET this URL when playback
+reaches this presentation time", so it can only express points on the timeline; the SVTA2053
+tracking events are typed instead, which adds two things the callback beacons cannot carry:
+
+- `start`, naming the first frame of the creative. As a callback event it would need a second event
+  at the same presentation time as the impression, so the callback set leaves it out.
+- `pause` and `resume`, which fire when the viewer interrupts the ad. Without them an interruption
+  is visible only indirectly, as quartiles arriving late and the tail of the creative going
+  unreported.
+
+Either way the beacon URL carries the creative's own catalog id, so a pod is reported per creative
+even though a player may model the whole pod as a single ad.
+
+## SVTA2053 ad creative signaling
+
+livesim2 can signal ad creatives with the SVTA's own scheme, **SVTA2053 Ad Creative Signaling**
+(payload version 2). Ad-creative windows of the live timeline are marked with an `EventStream` of
+scheme `urn:svta:advertising-wg:ad-creative-signaling` holding one `Event` per creative, whose
+node data is the v2 JSON payload: the creative's identifiers, its duration, and the tracking URLs
+the player should fire while it plays. This complements the Ed.6 SGAI mechanism above: SGAI
+*replaces* a break with personalized ads, whereas SVTA2053 *describes* the creatives that are in
+the presentation, which is what ad-measurement workflows consume.
+
+Enable it with the `svta_` URL option, which uses the same break schedule grammar as `sgai_`:
+
+- Fixed breaks: `svta_30:15`, or a comma-separated list `svta_30:15,90:15`.
+- Periodic breaks: `svta_p60:20` (a 20 s creative at every full UTC minute, wall-clock anchored).
+- Options are appended with `;key=val`:
+
+  | Option | Meaning | Default |
+  | ------ | ------- | ------- |
+  | `ads=<n>` | creatives the break is split into (1-20) | 1 |
+  | `skip=<s>` | `skipOffset` in seconds on each creative | none |
+  | `click=<0\|1>` | add `clickThrough` and a `clickTracking` beacon | 0 |
+  | `verif=<0\|1>` | add an ad-verification resource | 0 |
+  | `pod=<0\|1>` | also signal the whole break as a pod (`podStart`/`podEnd`) | 0 |
+  | `ts=<n>` | `EventStream@timescale` (a positive 32-bit integer) | 90000 |
+
+For example `svta_p60:20;ads=2` signals two 10 s creatives every UTC minute. As for `sgai_`, the
+video track serves the generated **AD BREAK** countdown slate inside each window, so the signaled
+creative is visible. `svta_` cannot be combined with `sgai_` or with the multi-period options.
+
+The tracking events are the VAST names: the timeline points (`impression`, `start`,
+`firstQuartile`, `midpoint`, `thirdQuartile`, `complete`), the interaction events `pause` and
+`resume`, and `clickTracking` with `click=1`. The interaction events carry no offset — per
+SVTA2053-1 §4.4.5 the timing of an offset-less event follows the semantics of its type — and they
+are what makes an interrupted ad playout visible as an interruption rather than merely as late
+quartiles and an unreported tail. Only this carriage can express them: a DASH Ed.6 callback event
+says no more than "GET this URL at this presentation time", so no interaction can trigger one.
+Their URLs point back at
+livesim2's own `/sgai/beacon` endpoint, with the session and break ids baked in — a player fires
+these URLs verbatim, so nothing can add them later. Add `?sessionId=<id>` to the MPD URL to key
+the beacons to a viewer and watch the whole round trip live at
+`/sgai/session_status?sid=<sessionId>`. Shaka Player supports the scheme out of the box, which
+makes an end-to-end ad-measurement test possible without any SSAI stack. Use 5.2.10 or later:
+5.2.9 fixed the signaling of an ad pod being dropped after the first break, and 5.2.10 stopped an
+ad's first playout being reported as a `resume`. One gap remains at the time of writing — the last
+creative of a pod never reports `complete`
+([shaka-player#10545](https://github.com/shaka-project/shaka-player/issues/10545)).
+
+The SGAI ad pods can carry the same signaling: `sgai_…;svta=1` adds an SVTA2053 `EventStream` to
+every ad Period of the returned List MPD, describing the creative that Period imports, with the
+same tracking set as above. That set is a superset of what the Period's callback `EventStream` can
+express: `start` is included, which the callback events leave out because it would need a second
+event at the same instant as the impression, and so are the interaction events, which no callback
+event can express. It is opt-in because a player acting on both signalings would report each
+timeline point twice.
 
 ## DASH Content Steering
 

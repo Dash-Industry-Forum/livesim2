@@ -35,39 +35,23 @@ const (
 	defaultSGAIResolveOffsetS = 60
 )
 
-// SGAIBreak is a single ad break expressed relative to the availabilityStartTime.
-type SGAIBreak struct {
-	// OffsetS is the break presentation time in seconds from the period (AST) start.
-	OffsetS int `json:"OffsetS"`
-	// DurationS is the active window and the maximum ad-pod duration in seconds.
-	DurationS int `json:"DurationS"`
-}
-
-// SGAIPeriodic describes recurring ad breaks: a break of DurationS starts at every
-// wall-clock multiple of PeriodS since the epoch (e.g. PeriodS=60 means every start of a
-// minute, UTC). The anchoring is wall-clock, not availabilityStartTime, so all sessions
-// share the same break schedule and a viewer may join in the middle of a break.
-type SGAIPeriodic struct {
-	PeriodS   int `json:"PeriodS"`
-	DurationS int `json:"DurationS"`
-}
-
 // SGAIConfig configures Alternative-MPD Replace ad breaks for a live stream.
 type SGAIConfig struct {
-	Breaks         []SGAIBreak   `json:"Breaks,omitempty"`   // fixed breaks (offset from AST)
-	Periodic       *SGAIPeriodic `json:"Periodic,omitempty"` // recurring breaks (mutually exclusive with Breaks)
-	AdEndpoint     string        `json:"AdEndpoint"`         // path to the ad-decisioning endpoint
-	ResolveOffsetS int           `json:"ResolveOffsetS"`     // earliestResolutionTimeOffset (seconds)
-	SkipAfterS     *int          `json:"SkipAfterS,omitempty"`
-	NoJump         int32         `json:"NoJump,omitempty"`
-	Clip           bool          `json:"Clip"`
-	ExecuteOnce    bool          `json:"ExecuteOnce"`
+	AdBreaks              // fixed breaks (offset from AST) or a periodic recurrence
+	AdEndpoint     string `json:"AdEndpoint"`     // path to the ad-decisioning endpoint
+	ResolveOffsetS int    `json:"ResolveOffsetS"` // earliestResolutionTimeOffset (seconds)
+	SkipAfterS     *int   `json:"SkipAfterS,omitempty"`
+	NoJump         int32  `json:"NoJump,omitempty"`
+	Clip           bool   `json:"Clip"`
+	ExecuteOnce    bool   `json:"ExecuteOnce"`
+	SVTA           bool   `json:"SVTA,omitempty"` // add SVTA2053 signaling to the List MPD
 }
 
 // CreateSGAIConfig parses the value of an "sgai" URL option.
 //
 // Grammar: ( <off>:<dur>[,<off>:<dur>...] | p<period>:<dur> )[;key=val;...]
-// keys: skipafter=<s>, nojump=<0|1|2>, clip=<0|1>, once=<0|1>, resolve=<s>, ep=<path>
+// keys: skipafter=<s>, nojump=<0|1|2>, clip=<0|1>, once=<0|1>, resolve=<s>, ep=<path>,
+// svta=<0|1>
 //
 // Examples: 30:15;skipafter=5;nojump=2  => one 15s break 30s in, skippable after 5s,
 // not skippable by seeking, latest such event wins.
@@ -86,44 +70,11 @@ func CreateSGAIConfig(val string) (*SGAIConfig, error) {
 		ExecuteOnce:    true,
 	}
 	parts := strings.Split(val, ";")
-	if spec, ok := strings.CutPrefix(parts[0], "p"); ok {
-		// Periodic: p<period>:<dur> — a break of <dur> at every wall-clock multiple of <period>.
-		if strings.Contains(spec, ",") {
-			return nil, fmt.Errorf("sgai periodic %q cannot be combined with more breaks", parts[0])
-		}
-		per, dur, ok := strings.Cut(spec, ":")
-		if !ok {
-			return nil, fmt.Errorf("sgai periodic %q must be p<period>:<dur>", parts[0])
-		}
-		perS, err := strconv.Atoi(per)
-		if err != nil || perS <= 0 {
-			return nil, fmt.Errorf("sgai periodic %q: bad period", parts[0])
-		}
-		durS, err := strconv.Atoi(dur)
-		if err != nil || durS <= 0 {
-			return nil, fmt.Errorf("sgai periodic %q: bad duration", parts[0])
-		}
-		if durS >= perS {
-			return nil, fmt.Errorf("sgai periodic %q: duration must be less than the period", parts[0])
-		}
-		cfg.Periodic = &SGAIPeriodic{PeriodS: perS, DurationS: durS}
-	} else {
-		for bs := range strings.SplitSeq(parts[0], ",") {
-			off, dur, ok := strings.Cut(bs, ":")
-			if !ok {
-				return nil, fmt.Errorf("sgai break %q must be <off>:<dur>", bs)
-			}
-			offS, err := strconv.Atoi(off)
-			if err != nil || offS < 0 {
-				return nil, fmt.Errorf("sgai break %q: bad offset", bs)
-			}
-			durS, err := strconv.Atoi(dur)
-			if err != nil || durS <= 0 {
-				return nil, fmt.Errorf("sgai break %q: bad duration", bs)
-			}
-			cfg.Breaks = append(cfg.Breaks, SGAIBreak{OffsetS: offS, DurationS: durS})
-		}
+	ab, err := parseAdBreaks("sgai", parts[0])
+	if err != nil {
+		return nil, err
 	}
+	cfg.AdBreaks = ab
 	for _, kv := range parts[1:] {
 		key, v, ok := strings.Cut(kv, "=")
 		if !ok {
@@ -153,6 +104,16 @@ func CreateSGAIConfig(val string) (*SGAIConfig, error) {
 			}
 		case "once":
 			cfg.ExecuteOnce = v == "1" || v == "true"
+		case "svta":
+			// Also describe each ad of the returned pod with SVTA2053 ad-creative signaling.
+			switch v {
+			case "1", "true":
+				cfg.SVTA = true
+			case "0", "false":
+				cfg.SVTA = false
+			default:
+				return nil, fmt.Errorf("sgai svta %q: must be 0 or 1", v)
+			}
 		case "resolve":
 			n, err := strconv.Atoi(v)
 			if err != nil || n < 0 {
@@ -168,7 +129,7 @@ func CreateSGAIConfig(val string) (*SGAIConfig, error) {
 			return nil, fmt.Errorf("unknown sgai param %q", key)
 		}
 	}
-	if len(cfg.Breaks) == 0 && cfg.Periodic == nil {
+	if cfg.empty() {
 		return nil, fmt.Errorf("sgai config %q has no breaks", val)
 	}
 	return cfg, nil
@@ -207,44 +168,13 @@ func (s *strConvAccErr) ParseSGAIConfig(key, val string) *SGAIConfig {
 // sgaiAdURI builds the absolute ReplacePresentation@uri pointing at the ad-decisioning endpoint.
 // The client appends Annex I parameters (session id via useMPDUrlQuery and the execution-delta).
 func sgaiAdURI(cfg *ResponseConfig, id uint64, durS int) string {
-	return fmt.Sprintf("%s%s?break=%d&dur=%d", cfg.Host, cfg.SGAI.AdEndpoint, id, durS)
-}
-
-// sgaiBreakInst is one concrete break occurrence to signal in the MPD.
-type sgaiBreakInst struct {
-	id      uint64
-	offsetS int64 // break start in seconds relative to the availabilityStartTime
-	durS    int
-}
-
-// breakInstances returns the break occurrences to signal at wall-clock time nowMS (ms since
-// epoch) for a stream with availabilityStartTime astS (s since epoch). Fixed breaks are all
-// signaled, unchanged across refreshes. For a periodic config the occurrences start at every
-// wall-clock multiple of PeriodS since the epoch (e.g. every start of a minute for p60) and
-// the list is windowed: breaks that have already ended are dropped (one in progress is kept,
-// so a late joiner lands mid-ad) and the look-ahead is one resolve offset plus one period.
-// The id is the occurrence number since the epoch, so it is stable across refreshes and
-// unique per break (it keys the @uri ?break= and the execution-delta state).
-func (c *SGAIConfig) breakInstances(nowMS int, astS int) []sgaiBreakInst {
-	if c.Periodic == nil {
-		out := make([]sgaiBreakInst, 0, len(c.Breaks))
-		for i, b := range c.Breaks {
-			out = append(out, sgaiBreakInst{id: uint64(i + 1), offsetS: int64(b.OffsetS), durS: b.DurationS})
-		}
-		return out
+	uri := fmt.Sprintf("%s%s?break=%d&dur=%d", cfg.Host, cfg.SGAI.AdEndpoint, id, durS)
+	if cfg.SGAI.SVTA {
+		// The ad-decisioning endpoint is stateless about the stream configuration, so the
+		// request for SVTA2053 signaling in the List MPD rides on the URI.
+		uri += "&svta=1"
 	}
-	p, d := c.Periodic.PeriodS, c.Periodic.DurationS
-	nowS := nowMS / 1000
-	horizonS := nowS + c.ResolveOffsetS + p
-	k := max((nowS-d)/p, 0) // candidate for the earliest occurrence that may still be in progress
-	var out []sgaiBreakInst
-	for t := k * p; t <= horizonS; t += p {
-		if t+d <= nowS || t < astS {
-			continue // already ended, or before the availability start
-		}
-		out = append(out, sgaiBreakInst{id: uint64(t/p) + 1, offsetS: int64(t - astS), durS: d})
-	}
-	return out
+	return uri
 }
 
 // addSGAIReplaceEvents injects an Alternative-MPD Replace EventStream (one Event per break
@@ -259,7 +189,7 @@ func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, now
 	if cfg.SGAI == nil {
 		return
 	}
-	insts := cfg.SGAI.breakInstances(nowMS, cfg.StartTimeS)
+	insts := cfg.SGAI.instances(nowMS, cfg.StartTimeS, cfg.SGAI.ResolveOffsetS, 0)
 	if len(insts) == 0 {
 		return
 	}

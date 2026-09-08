@@ -73,6 +73,33 @@ func TestSgaiSessionBeaconDedup(t *testing.T) {
 	assert.Equal(t, 3, s.BeaconCnt, "re-shown ad counts again outside the dedup window")
 }
 
+func TestSgaiSessionBeaconInteractionEventsNotDeduped(t *testing.T) {
+	m := NewSgaiSessionMgr()
+	now, adv := fixedClock(time.Date(2026, 6, 16, 10, 0, 0, 0, time.UTC))
+	m.now = now
+
+	// A viewer pausing twice inside one ad occurrence must show up twice: unlike the timeline
+	// points, an interaction event is not idempotent. Shaka also reports the ad's first play
+	// as a resume, so a paused-then-resumed ad yields two resumes for the same occurrence.
+	m.RecordBeacon("alice", "ad2", "resume", "", "100")
+	adv(2 * time.Second)
+	m.RecordBeacon("alice", "ad2", "pause", "", "100")
+	adv(3 * time.Second)
+	m.RecordBeacon("alice", "ad2", "resume", "", "100")
+	adv(2 * time.Second)
+	m.RecordBeacon("alice", "ad2", "pause", "", "100")
+
+	s, _ := m.Get("alice")
+	assert.Equal(t, 4, s.BeaconCnt, "pause/resume are recorded every time within the window")
+
+	// The timeline points in the same occurrence keep collapsing.
+	m.RecordBeacon("alice", "ad2", "impression", "", "100")
+	adv(time.Second)
+	m.RecordBeacon("alice", "ad2", "impression", "", "100")
+	s, _ = m.Get("alice")
+	assert.Equal(t, 5, s.BeaconCnt, "duplicate impression still collapsed")
+}
+
 func TestSgaiSessionBeaconDedupAcrossBreaks(t *testing.T) {
 	m := NewSgaiSessionMgr()
 	now, adv := fixedClock(time.Date(2026, 6, 16, 10, 0, 0, 0, time.UTC))

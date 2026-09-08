@@ -169,6 +169,7 @@ type urlGenData struct {
 	AnnexI                      string   // comma-separated list of Annex I parameters as key=value pairs
 	Traffic                     string   // comma-separated list of up/down/slow/hang intervals for one or more BaseURLs in MPD
 	Sgai                        string   // SGAI (Ed.6 Alternative-MPD Replace) ad-break schedule and options
+	Svta                        string   // SVTA2053 ad-creative-signaling ad-break schedule and options
 	SgaiSessionID               string   // SGAI personalization session id (added as MPD-URL query parameter)
 	SgaiInterests               string   // SGAI comma-separated interest tags (added as MPD-URL query parameter)
 	Steer                       string   // Content Steering service locations and options (steer_ option value)
@@ -424,6 +425,22 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 			fmt.Fprintf(&sb, "sgai_%s/", sgai)
 		}
 	}
+	svta := q.Get("svta")
+	if svta != "" {
+		data.Svta = svta
+		switch {
+		case sgai != "":
+			data.Errors = append(data.Errors, "svta cannot be combined with sgai")
+		case periods != "":
+			data.Errors = append(data.Errors, "svta cannot be combined with periods")
+		default:
+			if _, err := CreateSVTAConfig(svta); err != nil {
+				data.Errors = append(data.Errors, fmt.Sprintf("invalid svta: %s", err.Error()))
+			} else {
+				fmt.Fprintf(&sb, "svta_%s/", svta)
+			}
+		}
+	}
 	annexI := q.Get("annexI")
 	if annexI != "" {
 		data.AnnexI = annexI
@@ -506,6 +523,7 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 	}
 	// SGAI personalization: sessionId and interests are plain MPD-URL query parameters that
 	// are propagated to the ad-decisioning request via Annex I (see addSGAIReplaceEvents).
+	// The same sessionId keys the SVTA2053 tracking beacons (see addSVTAAdCreativeEvents).
 	if sessionID := q.Get("sgaiSessionId"); sessionID != "" {
 		data.SgaiSessionID = sessionID
 		appendQueryParam(&sb, "sessionId", sessionID)

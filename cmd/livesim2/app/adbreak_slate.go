@@ -17,12 +17,13 @@ import (
 	"github.com/Eyevinn/mp4ff/mp4"
 )
 
-// SGAI slate: during a Replace-event break window the main video track serves generated
-// "AD BREAK <countdown>" segments instead of the normal content, so the underlying stream
-// visibly is "the ad to be replaced". A player that executes the Alternative-MPD event
-// shows a personalized ad pod over this window; one that does not shows the slate. The
-// main MPD is untouched (single Period, continuous timeline) — per Ed.6 (example G.29-1)
-// the replaced interval is signaled by the event only and needs no Period of its own.
+// Ad-break slate: during an ad-break window (sgai_ or svta_) the main video track serves
+// generated "AD BREAK <countdown>" segments instead of the normal content, so the underlying
+// stream visibly is the ad. With sgai_, a player that executes the Alternative-MPD event shows
+// a personalized ad pod over this window and one that does not shows the slate; with svta_ the
+// slate is the signaled creative itself. The main MPD is untouched (single Period, continuous
+// timeline) — per Ed.6 (example G.29-1) the replaced interval is signaled by the event only and
+// needs no Period of its own.
 //
 // Each slate segment splices seamlessly into the existing avc1 track: the IDR and P_Skip
 // frames are encoded against the representation's own SPS/PPS (taken from its init
@@ -210,55 +211,21 @@ func slateGenFor(vodFS fs.FS, a *asset, rep *RepData) (*slateGen, error) {
 	return nil, fmt.Errorf("no slate generator for %s: %w", key, err)
 }
 
-// breakWindowAt returns the end (in ms since the epoch) and the occurrence/event id of the
-// break whose window contains the wall-clock time wallMS, or ok=false when wallMS is outside
-// every break. The id matches the Replace event id the live MPD signals for that break
-// (periodic: breakStart/period + 1; fixed: 1-based index — see breakInstances in sgai.go), so
-// the slate, the players' ad log and the beacons all show the same event id.
-// Unlike breakInstances (which windows the *signaled* events around the request time), this is
-// purely a function of the asked-for time: a segment inside a past break that is still in the
-// timeshift buffer must keep its slate no matter when it is requested.
-func (c *SGAIConfig) breakWindowAt(wallMS int64, astS int) (int64, uint64, bool) {
-	if c.Periodic != nil {
-		pMS := int64(c.Periodic.PeriodS) * 1000
-		dMS := int64(c.Periodic.DurationS) * 1000
-		if wallMS < int64(astS)*1000 {
-			return 0, 0, false
-		}
-		pos := wallMS % pMS
-		breakStartMS := wallMS - pos
-		// A periodic occurrence that starts before the availabilityStartTime is never
-		// signaled (breakInstances drops t < astS, since its Event@presentationTime would be
-		// negative), so it must not be slated either. Otherwise the first break straddling
-		// the AST would show an "AD BREAK" countdown carrying an event id the MPD never
-		// advertised, which no player could fill.
-		if pos < dMS && breakStartMS >= int64(astS)*1000 {
-			breakStartSec := breakStartMS / 1000
-			return breakStartMS + dMS, uint64(breakStartSec/int64(c.Periodic.PeriodS)) + 1, true
-		}
+// adBreakForSegment returns the end (in ms since the epoch) and the event id of the break
+// whose window contains the start of the segment described by meta, or ok=false when the
+// segment starts outside every break (or the stream has no ad breaks at all). Segment times
+// are media times relative to the availabilityStartTime (cfg.StartTimeS).
+func adBreakForSegment(cfg *ResponseConfig, meta segMeta) (int64, uint64, bool) {
+	sched := adBreaksFor(cfg)
+	if sched == nil {
 		return 0, 0, false
 	}
-	for i, b := range c.Breaks {
-		startMS := (int64(astS) + int64(b.OffsetS)) * 1000
-		endMS := startMS + int64(b.DurationS)*1000
-		if wallMS >= startMS && wallMS < endMS {
-			return endMS, uint64(i + 1), true
-		}
-	}
-	return 0, 0, false
-}
-
-// sgaiBreakForSegment returns the end (in ms since the epoch) and the event id of the break
-// whose window contains the start of the segment described by meta, or ok=false when the
-// segment starts outside every break. Segment times are media times relative to the
-// availabilityStartTime (cfg.StartTimeS).
-func sgaiBreakForSegment(cfg *ResponseConfig, meta segMeta) (int64, uint64, bool) {
 	segStartMS := int64(cfg.StartTimeS)*1000 + int64(meta.newTime)*1000/int64(meta.timescale)
-	return cfg.SGAI.breakWindowAt(segStartMS, cfg.StartTimeS)
+	return sched.windowAt(segStartMS, cfg.StartTimeS)
 }
 
-// applySGAISlate replaces the samples of a video segment with a generated
-// "AD BREAK <countdown>" slate when the segment starts inside an SGAI break window.
+// applyAdBreakSlate replaces the samples of a video segment with a generated
+// "AD BREAK <countdown>" slate when the segment starts inside an ad-break window.
 // The countdown shows the seconds left of the break, updated with an IDR at every
 // second change, counting down to zero when the live content returns. Returns the
 // replacement segment, or nil when the segment is outside every break (or the rep
@@ -267,10 +234,10 @@ func sgaiBreakForSegment(cfg *ResponseConfig, meta segMeta) (int64, uint64, bool
 // The slate keeps the original segment's exact sample timing: same sample count and
 // durations, same tfdt/sequence number (already rewritten by the caller), and a constant
 // composition offset equal to the original segment's reorder delay.
-func applySGAISlate(vodFS fs.FS, a *asset, cfg *ResponseConfig, meta segMeta,
+func applyAdBreakSlate(vodFS fs.FS, a *asset, cfg *ResponseConfig, meta segMeta,
 	seg *mp4.MediaSegment) (*mp4.MediaSegment, error) {
 
-	breakEndMS, breakID, ok := sgaiBreakForSegment(cfg, meta)
+	breakEndMS, breakID, ok := adBreakForSegment(cfg, meta)
 	if !ok {
 		return nil, nil
 	}

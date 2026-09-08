@@ -29,6 +29,75 @@ func testAssetsInfo() assetsInfo {
 	}
 }
 
+func TestCreateURLSVTA(t *testing.T) {
+	cases := []struct {
+		desc      string
+		params    map[string]string
+		wantInURL []string
+		wantErr   string
+	}{
+		{
+			desc:      "breaks only",
+			params:    map[string]string{"svta": "30:15,90:15"},
+			wantInURL: []string{"/livesim2/svta_30:15,90:15/testpic_2s/Manifest.mpd"},
+		},
+		{
+			desc: "periodic with options and a session id",
+			params: map[string]string{
+				"svta":          "p60:20;ads=2;click=1",
+				"sgaiSessionId": "alice",
+			},
+			wantInURL: []string{
+				"/livesim2/svta_p60:20;ads=2;click=1/testpic_2s/Manifest.mpd",
+				"?sessionId=alice",
+			},
+		},
+		{
+			desc:    "invalid break",
+			params:  map[string]string{"svta": "bad"},
+			wantErr: "invalid svta",
+		},
+		{
+			desc:    "unknown option",
+			params:  map[string]string{"svta": "30:15;foo=1"},
+			wantErr: `unknown svta param "foo"`,
+		},
+		{
+			desc:    "svta with periods is rejected",
+			params:  map[string]string{"svta": "30:15", "periods": "2"},
+			wantErr: "svta cannot be combined with periods",
+		},
+		{
+			desc:    "svta with sgai is rejected",
+			params:  map[string]string{"svta": "30:15", "sgai": "30:15"},
+			wantErr: "svta cannot be combined with sgai",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			q := url.Values{}
+			q.Set("asset", "testpic_2s")
+			q.Set("mpd", "Manifest.mpd")
+			q.Set("stl", "nr")
+			for k, v := range c.params {
+				q.Set(k, v)
+			}
+			r := httptest.NewRequest("GET", "/urlgen/create?"+q.Encode(), nil)
+			data := createURL(r, testAssetsInfo(), nil)
+			if c.wantErr != "" {
+				require.NotEmpty(t, data.Errors, "expected an error")
+				require.Contains(t, strings.Join(data.Errors, " | "), c.wantErr)
+				require.Empty(t, data.URL, "no URL should be produced on error")
+				return
+			}
+			require.Empty(t, data.Errors, "unexpected errors: %v", data.Errors)
+			for _, want := range c.wantInURL {
+				require.Contains(t, data.URL, want)
+			}
+		})
+	}
+}
+
 func TestCreateURLSGAI(t *testing.T) {
 	cases := []struct {
 		desc      string
@@ -243,6 +312,27 @@ func TestURLGenTemplateRendersSGAI(t *testing.T) {
 	require.Contains(t, out, `name="sgaiInterests"`)
 	require.Contains(t, out, `value="30:15"`)
 	require.Contains(t, out, `value="alice"`)
+}
+
+// TestURLGenTemplateRendersSVTA confirms the urlgenPage templ component renders
+// with the SVTA2053 ad-creative-signaling field populated.
+func TestURLGenTemplateRendersSVTA(t *testing.T) {
+	q := url.Values{}
+	q.Set("asset", "testpic_2s")
+	q.Set("mpd", "Manifest.mpd")
+	q.Set("stl", "nr")
+	q.Set("svta", "p60:20;ads=2")
+	q.Set("sgaiSessionId", "alice")
+	r := httptest.NewRequest("GET", "/urlgen/create?"+q.Encode(), nil)
+	data := createURL(r, testAssetsInfo(), nil)
+	require.Empty(t, data.Errors)
+	var buf bytes.Buffer
+	require.NoError(t, urlgenPage(data).Render(context.Background(), &buf))
+	out := buf.String()
+	require.Contains(t, out, `name="svta"`)
+	require.Contains(t, out, `value="p60:20;ads=2"`)
+	require.Contains(t, out, `value="alice"`)
+	require.Contains(t, out, "svta_p60:20;ads=2/testpic_2s/Manifest.mpd")
 }
 
 // TestURLGenAssetOptsOOB confirms that the "assetopts" template (served when the asset <select>
