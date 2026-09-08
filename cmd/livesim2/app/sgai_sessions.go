@@ -140,8 +140,10 @@ func (m *SgaiSessionMgr) RecordBeacon(sid, adID, event, cmcd, evID string) {
 	// Dedup the same (adId,event) beacon re-fired for one ad occurrence within the window.
 	// The break/avail id (evID) is part of the key, so the same ad shown again in a later
 	// break — a distinct occurrence with a new evID — is counted anew even when the breaks
-	// are closer together than the dedup window.
-	if m.recentDuplicateBeacon(s, adID, event, evID, ts) {
+	// are closer together than the dedup window. Interaction events are exempt: pause and
+	// resume can each happen repeatedly inside one creative, so collapsing them would hide
+	// every interaction after the first.
+	if !isRepeatableBeaconEvent(event) && m.recentDuplicateBeacon(s, adID, event, evID, ts) {
 		return
 	}
 	s.BeaconCnt++

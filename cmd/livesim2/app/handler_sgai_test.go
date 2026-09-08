@@ -6,6 +6,7 @@ package app
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -88,7 +89,7 @@ func TestBuildAdListMPD(t *testing.T) {
 	host := "http://localhost:8899"
 	pod := []string{"ads/ad2/Manifest.mpd", "ads/ad0/manifest.mpd"}
 	durMS := map[string]int{"ad2": 5000, "ad0": 8000}
-	mpd := buildAdListMPD(host, pod, durMS, "29689640")
+	mpd := buildAdListMPD(host, pod, durMS, "29689640", false, "")
 
 	require.NotNil(t, mpd.Type)
 	assert.Equal(t, "list", *mpd.Type)
@@ -188,4 +189,53 @@ func TestSgaiAdsHandlerRequiresPositiveDur(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, w.Code, "dur query %q must be rejected", q)
 		assert.Equal(t, "no-store", w.Header().Get("Cache-Control"), "error must not be cached for %q", q)
 	}
+}
+
+func TestBuildAdListMPDWithSVTA(t *testing.T) {
+	host := "http://localhost:8899"
+	pod := []string{"ads/ad2/Manifest.mpd", "ads/ad0/manifest.mpd"}
+	durMS := map[string]int{"ad2": 5000, "ad0": 8000}
+	mpd := buildAdListMPD(host, pod, durMS, "29689640", true, "alice")
+
+	require.Len(t, mpd.Periods, 2)
+	p0 := mpd.Periods[0]
+	require.Len(t, p0.EventStreams, 2, "callback beacons plus SVTA2053 signaling")
+	es := p0.EventStreams[1]
+	assert.Equal(t, SVTAAdCreativeScheme, string(es.SchemeIdUri))
+	require.NotNil(t, es.Timescale)
+	assert.Equal(t, uint32(1000), *es.Timescale)
+	require.Len(t, es.Events, 1, "one Event per creative")
+	assert.Equal(t, uint64(0), es.Events[0].PresentationTime)
+	assert.Equal(t, uint64(5000), es.Events[0].Duration)
+
+	var env svtaEnvelope
+	require.NoError(t, json.Unmarshal([]byte(es.Events[0].Value), &env))
+	assert.Equal(t, 2, env.Version)
+	assert.Equal(t, "slot", env.Type)
+	require.Len(t, env.Payload, 1)
+	slot := env.Payload[0]
+	assert.Equal(t, 5.0, slot.Duration, "the real catalog duration of ad2")
+	require.Len(t, slot.Identifiers, 1)
+	assert.Equal(t, svtaCatalogIDScheme, slot.Identifiers[0].Scheme)
+	assert.Equal(t, "ad2", slot.Identifiers[0].Value)
+	// The same tracking set as the main-timeline signaling, with the session and break ids
+	// baked in since a player fires these URLs verbatim. It is a superset of the callback
+	// beacons: "start" and the interaction events are not expressible as callback events.
+	require.Len(t, slot.Tracking, len(svtaTrackingPoints)+len(svtaInteractionEvents))
+	gotTypes := make([]string, 0, len(slot.Tracking))
+	for _, tr := range slot.Tracking {
+		gotTypes = append(gotTypes, tr.Type)
+	}
+	assert.Equal(t, []string{"impression", "start", "firstQuartile", "midpoint", "thirdQuartile",
+		"complete", "pause", "resume"}, gotTypes)
+	assert.Equal(t, "http://localhost:8899/sgai/beacon/ad2/start?evId=29689640&sid=alice",
+		slot.Tracking[1].URLs[0])
+	assert.Equal(t, "http://localhost:8899/sgai/beacon/ad2/pause?evId=29689640&sid=alice",
+		slot.Tracking[len(svtaTrackingPoints)].URLs[0])
+	assert.Equal(t, "http://localhost:8899/sgai/beacon/ad2/impression?evId=29689640&sid=alice",
+		slot.Tracking[0].URLs[0])
+
+	// Without the flag there is only the callback EventStream.
+	plain := buildAdListMPD(host, pod, durMS, "29689640", false, "alice")
+	assert.Len(t, plain.Periods[0].EventStreams, 1)
 }

@@ -239,7 +239,10 @@ func (s *Server) sgaiAdsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	// beacons for per-occurrence attribution (via the callback RequestParam, and optionally
 	// stamped as ?evId= — see sgaiBeaconURL).
 	breakID := r.URL.Query().Get("break")
-	mpd := buildAdListMPD(host, pod, durMS, breakID)
+	// svta=1 (from the ReplacePresentation @uri) additionally describes every ad of the pod
+	// with SVTA2053 ad-creative signaling.
+	withSVTA := r.URL.Query().Get("svta") == "1"
+	mpd := buildAdListMPD(host, pod, durMS, breakID, withSVTA, sid)
 
 	buf := bytes.NewBuffer(make([]byte, 0, 1024))
 	size, err := mpd.Write(buf, "  ", true)
@@ -293,11 +296,15 @@ const sgaiTrackingTimescale = uint32(1000)
 // that time quartiles from playback still report correctly). breakID is the break/avail event
 // id (from ?break=) carried for attribution (see sgaiBeaconURL / the callback RequestParam).
 //
+// With withSVTA, each Period additionally gets an SVTA2053 ad-creative EventStream describing
+// the same ad (see svtaListMPDEventStream). A player that acts on both signalings reports each
+// tracking point twice; that is why it is opt-in (sgai_...;svta=1).
+//
 // The beacon URLs are session-less (common per ad); the session is propagated to each beacon
 // by the Annex I callback RequestParam below (useMPDUrlQuery copies the List-MPD request
 // query — which already carries sessionId/interests and break — onto the beacon, DASH Ed.6
 // Annex I + §8.13.2.4). The MPD-level urlparam:2025 EssentialProperty declares Annex I is used.
-func buildAdListMPD(host string, pod []string, durMS map[string]int, breakID string) *m.MPD {
+func buildAdListMPD(host string, pod []string, durMS map[string]int, breakID string, withSVTA bool, sid string) *m.MPD {
 	mpd := m.NewMPD(m.LIST_TYPE)
 	mpd.Profiles = m.PROFILE_LIST
 	mpd.MinBufferTime = m.Seconds2DurPtr(1)
@@ -338,6 +345,10 @@ func buildAdListMPD(host string, pod []string, durMS map[string]int, breakID str
 			IncludeInRequests: "callback",
 		}}
 		p.EventStreams = []*m.EventStreamType{es}
+		if withSVTA {
+			p.EventStreams = append(p.EventStreams,
+				svtaListMPDEventStream(host, adID, breakID, sid, d, uint64(i+1)))
+		}
 		mpd.AppendPeriod(p)
 	}
 	// MPD-level marker that Annex I (2025) URL parameters are used.

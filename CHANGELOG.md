@@ -7,7 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Nothing yet
+### Added
+
+- New URL option `svta_` for SVTA2053 Ad Creative Signaling (payload version 2, issue #310). Ad-creative
+  windows of the live timeline are marked with an `EventStream` of scheme
+  `urn:svta:advertising-wg:ad-creative-signaling`, one `Event` per creative whose node data is the v2 JSON
+  payload: the creative's identifiers, its duration and the tracking URLs to fire while it plays. It uses
+  the same break-schedule grammar as `sgai_` (`svta_30:15,90:15` or `svta_p60:20`), with `;ads=<n>` to
+  split a break into several creatives, `;skip=`, `;click=`, `;verif=` and `;pod=` for the rest of the
+  payload, and `;ts=` for the `EventStream@timescale` — for example
+  `/livesim2/svta_p60:20;ads=2/testpic_2s/Manifest.mpd?sessionId=alice`. As for `sgai_`, the video track
+  serves the generated AD BREAK countdown slate inside each window, so the signaled creative is visible.
+  See the [README](README.md#svta2053-ad-creative-signaling).
+- Each signaled creative carries the VAST-named tracking events `impression`, `start`, `firstQuartile`,
+  `midpoint`, `thirdQuartile`, `complete`, `pause` and `resume`, plus `clickTracking` with `;click=1`. None
+  of them carry an offset, so per SVTA2053-1 §4.4.5 each fires according to the semantics of its type: the
+  timeline points where their names say, `pause` and `resume` when the viewer interrupts the ad. The URLs
+  point back at livesim2's own `/sgai/beacon` endpoint with the session and break ids baked in (a player
+  fires them verbatim), so the whole ad-measurement round trip can be watched live at
+  `/sgai/session_status`. An identical beacon for the same ad, event and break occurrence is collapsed
+  within a short window, the interaction events excepted, since a viewer can pause and resume repeatedly
+  inside one creative. Verified with stock Shaka Player 5.2.9, the first release that reports the signaling
+  of every break and treats an ad reaching its playout limit as complete.
+- New `svta=<0|1>` setting on the `sgai_` option. With `sgai_...;svta=1` every ad Period of the List MPD
+  returned by the ad-decisioning endpoint also gets an SVTA2053 `EventStream` describing the creative that
+  Period imports, with its real catalog id and duration and the same tracking set as above. That set is a
+  superset of what a DASH callback event can express, which is the reason to want it: `start` would need a
+  second callback event at the same presentation time as the impression, and an interaction has no
+  presentation time at all. Opt-in, since a player acting on both it and the existing callback beacons
+  reports each timeline point twice.
+
+### Changed
+
+- The ad-break schedule (fixed or periodic breaks, the break instances signaled in an MPD, and the AD BREAK
+  slate window) is now shared between `sgai_` and `svta_` in `AdBreaks`. The signaled set of a periodic
+  schedule additionally keeps breaks that ended but are still inside the timeshift buffer for `svta_`, so a
+  viewer seeking back still sees the ad-creative signaling.
 
 ## [1.13.0] - 2026-08-11
 

@@ -129,6 +129,14 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 			// into the generated per-CDN BaseURLs and the ContentSteering server URL.
 			cfg.SteerSessionID = steeringSessionID(r)
 		}
+		if cfg.SVTA != nil {
+			// The same session id is baked into the SVTA2053 tracking URLs (a player fires
+			// those verbatim, so nothing can add it later). A query value overrides the sid_
+			// path token; without either, the beacons are simply unattributed.
+			if sid := steeringSessionID(r); sid != "" {
+				cfg.SteerSessionID = sid
+			}
+		}
 		_, mpdName := path.Split(contentPart)
 		err := writeLiveMPD(log, w, cfg, s.Cfg.DrmCfg, a, mpdName, nowMS)
 		if err != nil {

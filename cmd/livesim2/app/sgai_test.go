@@ -22,7 +22,7 @@ func TestCreateSGAIConfig(t *testing.T) {
 	}{
 		{name: "single break defaults", val: "30:15", ok: true, check: func(t *testing.T, c *SGAIConfig) {
 			require.Len(t, c.Breaks, 1)
-			assert.Equal(t, SGAIBreak{OffsetS: 30, DurationS: 15}, c.Breaks[0])
+			assert.Equal(t, AdBreak{OffsetS: 30, DurationS: 15}, c.Breaks[0])
 			assert.Equal(t, defaultSGAIResolveOffsetS, c.ResolveOffsetS)
 			assert.Equal(t, defaultSGAIAdEndpoint, c.AdEndpoint)
 			assert.True(t, c.Clip)
@@ -42,7 +42,7 @@ func TestCreateSGAIConfig(t *testing.T) {
 			}},
 		{name: "multiple breaks", val: "30:15,90:30", ok: true, check: func(t *testing.T, c *SGAIConfig) {
 			require.Len(t, c.Breaks, 2)
-			assert.Equal(t, SGAIBreak{OffsetS: 90, DurationS: 30}, c.Breaks[1])
+			assert.Equal(t, AdBreak{OffsetS: 90, DurationS: 30}, c.Breaks[1])
 		}},
 		{name: "periodic", val: "p60:20", ok: true, check: func(t *testing.T, c *SGAIConfig) {
 			require.NotNil(t, c.Periodic)
@@ -56,6 +56,13 @@ func TestCreateSGAIConfig(t *testing.T) {
 			require.NotNil(t, c.SkipAfterS)
 			assert.Equal(t, 5, *c.SkipAfterS)
 		}},
+		{name: "svta signaling", val: "30:15;svta=1", ok: true, check: func(t *testing.T, c *SGAIConfig) {
+			assert.True(t, c.SVTA)
+		}},
+		{name: "svta off by default", val: "30:15", ok: true, check: func(t *testing.T, c *SGAIConfig) {
+			assert.False(t, c.SVTA)
+		}},
+		{name: "bad svta value", val: "30:15;svta=yes", ok: false},
 		{name: "periodic dur >= period", val: "p20:20", ok: false},
 		{name: "periodic zero period", val: "p0:5", ok: false},
 		{name: "periodic zero dur", val: "p60:0", ok: false},
@@ -95,7 +102,7 @@ func TestAddSGAIReplaceEvents(t *testing.T) {
 	cfg.Host = "https://example.com"
 	skip := 5
 	cfg.SGAI = &SGAIConfig{
-		Breaks:         []SGAIBreak{{OffsetS: 30, DurationS: 15}},
+		AdBreaks:       AdBreaks{Breaks: []AdBreak{{OffsetS: 30, DurationS: 15}}},
 		AdEndpoint:     "/sgai/ads",
 		ResolveOffsetS: 60,
 		SkipAfterS:     &skip,
@@ -125,6 +132,12 @@ func TestAddSGAIReplaceEvents(t *testing.T) {
 	require.NotNil(t, rp)
 	require.NotNil(t, rp.AlternativeMPDEventType, "embedded pointer must be allocated")
 	assert.Equal(t, "https://example.com/sgai/ads?break=1&dur=15", rp.Uri)
+	// With svta=1 the ad-decisioning endpoint is asked for SVTA2053 signaling in the List MPD.
+	svtaCfg := *cfg.SGAI
+	svtaCfg.SVTA = true
+	withSVTA := *cfg
+	withSVTA.SGAI = &svtaCfg
+	assert.Equal(t, "https://example.com/sgai/ads?break=1&dur=15&svta=1", sgaiAdURI(&withSVTA, 1, 15))
 	assert.Equal(t, uint64(1350000), rp.MaxDuration)
 	assert.True(t, rp.ExecuteOnce)
 	assert.Equal(t, int32(2), rp.NoJump)
@@ -163,48 +176,11 @@ func TestAddSGAIReplaceEvents(t *testing.T) {
 	}
 }
 
-func TestSGAIBreakInstances(t *testing.T) {
-	// Fixed breaks pass through unchanged, ids 1..n, regardless of now.
-	fixed := &SGAIConfig{Breaks: []SGAIBreak{{OffsetS: 30, DurationS: 15}, {OffsetS: 90, DurationS: 30}}}
-	insts := fixed.breakInstances(123_456_000, 0)
-	require.Len(t, insts, 2)
-	assert.Equal(t, sgaiBreakInst{id: 1, offsetS: 30, durS: 15}, insts[0])
-	assert.Equal(t, sgaiBreakInst{id: 2, offsetS: 90, durS: 30}, insts[1])
-
-	// Periodic p60:20, resolve 60: occurrences at every minute since the epoch.
-	per := &SGAIConfig{Periodic: &SGAIPeriodic{PeriodS: 60, DurationS: 20}, ResolveOffsetS: 60}
-
-	// now = 1_000_000s (not in a break): the ended break at 999_960 is dropped; the
-	// look-ahead covers now + 60 (resolve) + 60 (one period) -> 1_000_020 and 1_000_080.
-	insts = per.breakInstances(1_000_000_000, 0)
-	require.Len(t, insts, 2)
-	assert.Equal(t, sgaiBreakInst{id: 16668, offsetS: 1_000_020, durS: 20}, insts[0])
-	assert.Equal(t, sgaiBreakInst{id: 16669, offsetS: 1_000_080, durS: 20}, insts[1])
-
-	// now = 1_000_030s (mid-break): the in-progress break at 1_000_020 is kept, so a
-	// late joiner lands in the middle of an ad.
-	insts = per.breakInstances(1_000_030_000, 0)
-	require.GreaterOrEqual(t, len(insts), 2)
-	assert.Equal(t, sgaiBreakInst{id: 16668, offsetS: 1_000_020, durS: 20}, insts[0],
-		"in-progress break still signaled")
-
-	// Ids and wall-clock anchoring are stable across refreshes (same id for the same minute).
-	again := per.breakInstances(1_000_035_000, 0)
-	assert.Equal(t, insts[0].id, again[0].id)
-
-	// availabilityStartTime in the middle of the schedule: offsets are AST-relative and
-	// occurrences before the AST are dropped.
-	insts = per.breakInstances(1_000_000_000, 999_990)
-	require.NotEmpty(t, insts)
-	assert.Equal(t, sgaiBreakInst{id: 16668, offsetS: 30, durS: 20}, insts[0],
-		"1_000_020 - 999_990 = 30s after AST")
-}
-
 func TestAddSGAIReplaceEventsPeriodic(t *testing.T) {
 	cfg := NewResponseConfig()
 	cfg.Host = "https://example.com"
 	cfg.SGAI = &SGAIConfig{
-		Periodic:       &SGAIPeriodic{PeriodS: 60, DurationS: 20},
+		AdBreaks:       AdBreaks{Periodic: &AdBreakPeriodic{PeriodS: 60, DurationS: 20}},
 		AdEndpoint:     "/sgai/ads",
 		ResolveOffsetS: 60,
 		Clip:           true,

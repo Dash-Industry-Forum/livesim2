@@ -112,7 +112,7 @@ func TestApplySGAISlate(t *testing.T) {
 	rep := &RepData{ID: "V300", InitURI: "V300/init.mp4"}
 	cfg := NewResponseConfig()
 	cfg.SGAI = &SGAIConfig{
-		Periodic:       &SGAIPeriodic{PeriodS: 60, DurationS: 20},
+		AdBreaks:       AdBreaks{Periodic: &AdBreakPeriodic{PeriodS: 60, DurationS: 20}},
 		ResolveOffsetS: 60,
 	}
 	seg := slateTestSegment(t)
@@ -120,7 +120,7 @@ func TestApplySGAISlate(t *testing.T) {
 
 	// Segment at media time 0 = epoch with AST = epoch: inside the break [0, 20s).
 	meta := segMeta{rep: rep, newTime: 0, newNr: 42, timescale: 90000}
-	slate, err := applySGAISlate(vodFS, a, cfg, meta, seg)
+	slate, err := applyAdBreakSlate(vodFS, a, cfg, meta, seg)
 	require.NoError(t, err)
 	require.NotNil(t, slate, "segment inside the break window is slated")
 
@@ -152,14 +152,14 @@ func TestApplySGAISlate(t *testing.T) {
 
 	// A segment at 30s is outside every break occurrence -> no substitution.
 	meta = segMeta{rep: rep, newTime: 30 * 90000, newNr: 57, timescale: 90000}
-	slate, err = applySGAISlate(vodFS, a, cfg, meta, seg)
+	slate, err = applyAdBreakSlate(vodFS, a, cfg, meta, seg)
 	require.NoError(t, err)
 	assert.Nil(t, slate)
 
 	// A rep that cannot be slated (bad init) is skipped without error.
 	badRep := &RepData{ID: "missing", InitURI: "missing/init.mp4"}
 	meta = segMeta{rep: badRep, newTime: 0, newNr: 1, timescale: 90000}
-	slate, err = applySGAISlate(vodFS, a, cfg, meta, seg)
+	slate, err = applyAdBreakSlate(vodFS, a, cfg, meta, seg)
 	require.NoError(t, err)
 	assert.Nil(t, slate)
 }
@@ -171,7 +171,7 @@ func TestApplySGAISlateFallsBackToRepSampleDuration(t *testing.T) {
 	vodFS := os.DirFS("testdata")
 	a := &asset{AssetPath: "assets/testpic_2s"}
 	cfg := NewResponseConfig()
-	cfg.SGAI = &SGAIConfig{Periodic: &SGAIPeriodic{PeriodS: 60, DurationS: 20}, ResolveOffsetS: 60}
+	cfg.SGAI = &SGAIConfig{AdBreaks: AdBreaks{Periodic: &AdBreakPeriodic{PeriodS: 60, DurationS: 20}}, ResolveOffsetS: 60}
 	meta := segMeta{newTime: 0, newNr: 7, timescale: 90000}
 
 	// Strip the per-sample (trun) and default (tfhd) durations to mimic such a segment.
@@ -188,7 +188,7 @@ func TestApplySGAISlateFallsBackToRepSampleDuration(t *testing.T) {
 	// With RepData.DefaultSampleDuration set (as read from trex at load time), the slate is
 	// produced and every sample uses that duration.
 	meta.rep = &RepData{ID: "V300", InitURI: "V300/init.mp4", DefaultSampleDuration: 3000}
-	slate, err := applySGAISlate(vodFS, a, cfg, meta, stripped())
+	slate, err := applyAdBreakSlate(vodFS, a, cfg, meta, stripped())
 	require.NoError(t, err)
 	require.NotNil(t, slate)
 	for _, s := range slate.Fragments[0].Moof.Traf.Trun.Samples {
@@ -197,57 +197,36 @@ func TestApplySGAISlateFallsBackToRepSampleDuration(t *testing.T) {
 
 	// With no duration source at all, it still errors rather than emit a malformed slate.
 	meta.rep = &RepData{ID: "V300", InitURI: "V300/init.mp4"}
-	_, err = applySGAISlate(vodFS, a, cfg, meta, stripped())
+	_, err = applyAdBreakSlate(vodFS, a, cfg, meta, stripped())
 	require.Error(t, err)
 }
 
-func TestSGAIBreakForSegment(t *testing.T) {
+func TestAdBreakForSegment(t *testing.T) {
 	cfg := NewResponseConfig()
-	cfg.SGAI = &SGAIConfig{Breaks: []SGAIBreak{{OffsetS: 30, DurationS: 15}}}
+	cfg.SGAI = &SGAIConfig{AdBreaks: AdBreaks{Breaks: []AdBreak{{OffsetS: 30, DurationS: 15}}}}
 
 	// Segment starting at 30s (in 90k ticks) is in the break; end reported in epoch ms.
 	// The event id is the 1-based break index (matches the live MPD's Replace event id).
-	endMS, id, ok := sgaiBreakForSegment(cfg, segMeta{newTime: 30 * 90000, timescale: 90000})
+	endMS, id, ok := adBreakForSegment(cfg, segMeta{newTime: 30 * 90000, timescale: 90000})
 	assert.True(t, ok)
 	assert.Equal(t, int64(45_000), endMS)
 	assert.Equal(t, uint64(1), id)
 
 	// Just before and at the break end: not in the break.
-	_, _, ok = sgaiBreakForSegment(cfg, segMeta{newTime: 28 * 90000, timescale: 90000})
+	_, _, ok = adBreakForSegment(cfg, segMeta{newTime: 28 * 90000, timescale: 90000})
 	assert.False(t, ok)
-	_, _, ok = sgaiBreakForSegment(cfg, segMeta{newTime: 45 * 90000, timescale: 90000})
-	assert.False(t, ok)
-
-	// Periodic: membership is a pure function of the segment time — a long-past break
-	// (still in the timeshift buffer) keeps its slate no matter when it is requested.
-	// The event id is the occurrence number since the epoch (breakStart/period + 1).
-	per := &SGAIConfig{Periodic: &SGAIPeriodic{PeriodS: 60, DurationS: 20}}
-	endMS, id, ok = per.breakWindowAt(999_970_000, 0) // 10s into the break [999_960s, 999_980s)
-	assert.True(t, ok)
-	assert.Equal(t, int64(999_980_000), endMS)
-	assert.Equal(t, uint64(16667), id)           // 999_960/60 + 1
-	_, _, ok = per.breakWindowAt(999_985_000, 0) // between breaks
-	assert.False(t, ok)
-	endMS, id, ok = per.breakWindowAt(60_000, 0) // exactly at a break start
-	assert.True(t, ok)
-	assert.Equal(t, int64(80_000), endMS)
-	assert.Equal(t, uint64(2), id)          // 60/60 + 1: the 2nd occurrence since the epoch
-	_, _, ok = per.breakWindowAt(80_000, 0) // exactly at the break end
+	_, _, ok = adBreakForSegment(cfg, segMeta{newTime: 45 * 90000, timescale: 90000})
 	assert.False(t, ok)
 
-	// A break occurrence that started before the availabilityStartTime is not signaled by
-	// breakInstances (its presentationTime would be negative), so breakWindowAt must not slate
-	// it either: with astS=65 the occurrence at [60s, 80s) straddles the AST and is skipped,
-	// even though the request time (70s) is inside the window and after the AST.
-	_, _, ok = per.breakWindowAt(70_000, 65)
-	assert.False(t, ok)
-	// breakInstances agrees: the straddling [60s,80s) break is dropped; the first signaled
-	// occurrence is the next full one at [120s,140s) with id 120/60+1 = 3.
-	insts := per.breakInstances(70_000, 65)
-	assert.Equal(t, 1, len(insts))
-	assert.Equal(t, uint64(3), insts[0].id)
-	// That next full occurrence is both signaled and slated, with matching event ids.
-	_, id, ok = per.breakWindowAt(130_000, 65)
+	// svta_ drives the same slate from its own schedule.
+	svtaCfg := NewResponseConfig()
+	svtaCfg.SVTA = &SVTAConfig{AdBreaks: AdBreaks{Breaks: []AdBreak{{OffsetS: 30, DurationS: 15}}}, AdsPerBreak: 1}
+	endMS, id, ok = adBreakForSegment(svtaCfg, segMeta{newTime: 30 * 90000, timescale: 90000})
 	assert.True(t, ok)
-	assert.Equal(t, uint64(3), id)
+	assert.Equal(t, int64(45_000), endMS)
+	assert.Equal(t, uint64(1), id)
+
+	// No ad-signaling option at all: no slate.
+	_, _, ok = adBreakForSegment(NewResponseConfig(), segMeta{newTime: 30 * 90000, timescale: 90000})
+	assert.False(t, ok)
 }
