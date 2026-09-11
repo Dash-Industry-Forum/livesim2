@@ -64,8 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   schedule additionally keeps breaks that ended but are still inside the timeshift buffer for `svta_`, so a
   viewer seeking back still sees the ad-creative signaling.
 - Generated subtitle cues are no longer clipped to the fragment that carries them. A cue keeps the
-  `begin` time it really has, which ISO/IEC 14496-30 §5.9(1) permits and DVB-DASH (ETSI TS 103 285)
-  §11.7 says need not be truncated, and gets an `end` attribute only in the fragment where it ends.
+  `begin` time it really has, which ISO/IEC 14496-30 §5.9(1) permits, §5.9(2) names as the same element
+  recurring in adjacent samples, and DVB-DASH (ETSI TS 103 285) §11.7 says need not be truncated, and gets an `end` attribute only in the fragment where it ends.
   That is what makes an unchanged restatement byte-identical and the redundancy marking above usable.
   Output only changes where a cue actually crosses a fragment boundary, which for whole segments
   happens only when the segment duration is not a whole number of seconds.
