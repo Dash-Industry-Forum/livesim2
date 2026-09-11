@@ -287,7 +287,7 @@ func TestWriteChunkedSegment(t *testing.T) {
 		rr := httptest.NewRecorder()
 		segmentPart := strings.Replace(tc.media, "$NrOrTime$", "10", 1)
 		mediaTime := 80 * tc.mediaTimescale
-		err := writeChunkedSegment(context.Background(), log, rr, cfg, nil, vodFS, asset, segmentPart, nowMS, false /* isLast */)
+		err := writeChunkedSegment(context.Background(), log, rr, cfg, nil, vodFS, asset, segmentPart, nowMS, nil, false /* isLast */)
 		require.NoError(t, err)
 		seg := rr.Body.Bytes()
 		sr := bits.NewFixedSliceReader(seg)

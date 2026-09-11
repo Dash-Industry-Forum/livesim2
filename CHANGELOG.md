@@ -36,6 +36,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   second callback event at the same presentation time as the impression, and an interaction has no
   presentation time at all. Opt-in, since a player acting on both it and the existing callback beacons
   reports each timeline point twice.
+- The generated `timesubsstpp_`/`timesubswvtt_` subtitles are now chunked like the video: with
+  `chunkdur_<s>` a subtitle segment is delivered as a sequence of CMAF chunks of that same duration,
+  streamed as they become available, instead of returning 404. The subtitle `AdaptationSet` also gets the
+  same `availabilityTimeOffset` and `availabilityTimeComplete="false"` as the video and audio ones, so a
+  low-latency client fetches subtitles as early as it fetches video. The sub-segment (`chunkdurssr_`)
+  mode still covers video and audio only.
+- A chunk that restates an unchanged subtitle is marked as redundant: `sample_depends_on = 2` plus
+  `sample_has_redundancy = 1` in the `trun` sample flags (ISO/IEC 14496-12 §8.8.3.1), which for a
+  non-audiovisual track means the receiver may discard the sample and extend the preceding one
+  (§8.6.4) and so skip the XML parse. The first sample of a segment is never marked, since a client
+  tuning in at a segment boundary has to decode it. This uses only signalling that exists today; see
+  the [README](README.md#low-latency-subtitles) for what it costs and what it cannot express.
 
 ### Fixed
 
@@ -51,6 +63,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   slate window) is now shared between `sgai_` and `svta_` in `AdBreaks`. The signaled set of a periodic
   schedule additionally keeps breaks that ended but are still inside the timeshift buffer for `svta_`, so a
   viewer seeking back still sees the ad-creative signaling.
+- Generated subtitle cues are no longer clipped to the fragment that carries them. A cue keeps the
+  `begin` time it really has, which ISO/IEC 14496-30 §5.9(1) permits and DVB-DASH (ETSI TS 103 285)
+  §11.7 says need not be truncated, and gets an `end` attribute only in the fragment where it ends.
+  That is what makes an unchanged restatement byte-identical and the redundancy marking above usable.
+  Output only changes where a cue actually crosses a fragment boundary, which for whole segments
+  happens only when the segment duration is not a whole number of seconds.
+- `calcCueItvls` no longer emits a zero-length cue for a cue that ended before the requested interval,
+  and picks the cue period correctly when `timesubsdur_` is longer than a second.
 
 ## [1.13.0] - 2026-08-11
 
