@@ -879,8 +879,14 @@ func addTimeSubs(cfg *ResponseConfig, a *asset, period *m.Period, languages []st
 		return fmt.Errorf("no video adaptation set found")
 	}
 	segDurMS := a.SegmentDurMS
-	typicalStppSegSizeBits := 2000 * 8 // 2kB
-	typicalWvttSegSizeBits := 200 * 8
+	// In chunked (low-latency) mode every chunk carries its own complete document (stpp)
+	// or its own share of the cues (wvtt), so the segment grows with the number of chunks.
+	nrChunksPerSeg := 1
+	if !cfg.AvailabilityTimeCompleteFlag && cfg.ChunkDurS != nil && *cfg.ChunkDurS > 0 {
+		nrChunksPerSeg = int(math.Ceil(float64(segDurMS) / (*cfg.ChunkDurS * 1000)))
+	}
+	typicalStppSegSizeBits := nrChunksPerSeg * 2000 * 8 // 2kB per chunk
+	typicalWvttSegSizeBits := nrChunksPerSeg * 200 * 8
 	vST := vAS.SegmentTemplate
 	for i, lang := range languages {
 		rep := m.NewRepresentation()
@@ -924,6 +930,11 @@ func addTimeSubs(cfg *ResponseConfig, a *asset, period *m.Period, languages []st
 			&m.DescriptorType{SchemeIdUri: "urn:mpeg:dash:role:2011", Value: "subtitle"})
 		as.SegmentTemplate = st
 		as.AppendRepresentation(rep)
+		// The generated subtitles are chunked like the video, so they need the same
+		// availability signalling as the other AdaptationSets to be fetched early.
+		if _, err := setOffsetInAdaptationSet(cfg, as); err != nil {
+			return fmt.Errorf("setOffsetInAdaptationSet for %s subtitles: %w", kind, err)
+		}
 		period.AppendAdaptationSet(as)
 	}
 	return nil

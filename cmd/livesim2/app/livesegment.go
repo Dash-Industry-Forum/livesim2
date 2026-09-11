@@ -776,9 +776,14 @@ func setHeaders(w http.ResponseWriter, so segOut, segmentPart string) error {
 // nowMS serves as reference for the current time and can be set to any value. Media time will
 // be incremented with respect to nowMS.
 func writeChunkedSegment(ctx context.Context, log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
-	vodFS fs.FS, a *asset, segmentPart string, nowMS int, isLast bool) error {
+	vodFS fs.FS, a *asset, segmentPart string, nowMS int, tt *template.Template, isLast bool) error {
 
 	log.Debug("writeChunkedSegment", "segmentPart", segmentPart)
+
+	isTimeSubs, err := writeChunkedTimeSubsSegment(ctx, w, cfg, a, segmentPart, nowMS, tt, isLast)
+	if isTimeSubs {
+		return err
+	}
 
 	so, chunks, err := prepareChunks(log, vodFS, a, cfg, drmCfg, segmentPart, nowMS, isLast, nil)
 	if err != nil {
@@ -794,36 +799,55 @@ func writeChunkedSegment(ctx context.Context, log *slog.Logger, w http.ResponseW
 	}
 	rep := so.meta.rep
 
-	startUnixMS := unixMS()
 	newTimeInt, err := uint64ToInt(so.meta.newTime)
 	if err != nil {
 		return fmt.Errorf("newTime out of range: %w", err)
 	}
-	chunkAvailTime := newTimeInt + cfg.StartTimeS*int(rep.MediaTimescale)
+	return writeChunksPaced(ctx, w, chunks, newTimeInt, rep.MediaTimescale, cfg.StartTimeS, nowMS)
+}
+
+// writeChunkedTimeSubsSegment returns true and delivers a generated time subtitle segment
+// as chunks if the URL matches. The chunks have the same duration as the video chunks.
+func writeChunkedTimeSubsSegment(ctx context.Context, w http.ResponseWriter, cfg *ResponseConfig, a *asset,
+	segmentPart string, nowMS int, tt *template.Template, isLast bool) (bool, error) {
+	tss, isTimeSubs, err := matchTimeSubsMediaSegment(cfg, a, segmentPart, nowMS)
+	if !isTimeSubs {
+		return false, nil
+	}
+	if err != nil {
+		return true, err
+	}
+	chunks, err := genTimeSubsChunks(tss, cfg, tt, isLast)
+	if err != nil {
+		return true, fmt.Errorf("genTimeSubsChunks: %w", err)
+	}
+	// No Content-Length, since the chunks are sent as they become available.
+	w.Header().Set("Content-Type", "application/mp4")
+	return true, writeChunksPaced(ctx, w, chunks, tss.startMS, SUBS_TIME_TIMESCALE, cfg.StartTimeS, nowMS)
+}
+
+// writeChunksPaced writes the chunks of a segment as they become available timewise.
+// startMediaTime and timescale refer to the media timeline of the track in question.
+//
+// nowMS serves as reference for the current time and can be set to any value.
+func writeChunksPaced(ctx context.Context, w http.ResponseWriter, chunks []chunk,
+	startMediaTime, timescale, startTimeS, nowMS int) error {
+	startUnixMS := unixMS()
+	chunkAvailTime := startMediaTime + startTimeS*timescale
 	for _, chk := range chunks {
 		chunkAvailTime += int(chk.dur)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		chunkAvailMS := chunkAvailTime * 1000 / int(rep.MediaTimescale)
-		if chunkAvailMS < nowMS {
-			err = writeChunk(w, chk)
-			if err != nil {
-				return fmt.Errorf("writeChunk: %w", err)
+		chunkAvailMS := chunkAvailTime * 1000 / timescale
+		if chunkAvailMS >= nowMS {
+			nowUpdateMS := unixMS() - startUnixMS + nowMS
+			if chunkAvailMS >= nowUpdateMS {
+				sleepMS := chunkAvailMS - nowUpdateMS
+				time.Sleep(time.Duration(sleepMS * 1_000_000))
 			}
-			continue
 		}
-		nowUpdateMS := unixMS() - startUnixMS + nowMS
-		if chunkAvailMS < nowUpdateMS {
-			err = writeChunk(w, chk)
-			if err != nil {
-				return fmt.Errorf("writeChunk: %w", err)
-			}
-			continue
-		}
-		sleepMS := chunkAvailMS - nowUpdateMS
-		time.Sleep(time.Duration(sleepMS * 1_000_000))
-		err = writeChunk(w, chk)
+		err := writeChunk(w, chk)
 		if err != nil {
 			return fmt.Errorf("writeChunk: %w", err)
 		}

@@ -154,13 +154,14 @@ func TestCalcCueItvls(t *testing.T) {
 			},
 		},
 		{
+			// The cue started 100ms before the segment and keeps its true begin time.
 			desc:     "utc shifted. Starting 100ms into second",
 			startMS:  12000,
 			dur:      800,
 			utcMS:    12100,
 			cueDurMS: 900,
 			wanted: []cueItvl{
-				{startMS: 12000, endMS: 12800, utcS: 12},
+				{startMS: 11900, endMS: 12800, utcS: 12},
 			},
 		},
 		{
@@ -170,17 +171,37 @@ func TestCalcCueItvls(t *testing.T) {
 			utcMS:    12100,
 			cueDurMS: 900,
 			wanted: []cueItvl{
-				{startMS: 12000, endMS: 12800, utcS: 12},
+				{startMS: 11900, endMS: 12800, utcS: 12},
 			},
 		},
 		{
+			// The cue outlives the segment, and keeps its true end time. It is up to
+			// the caller to leave the end attribute out until the cue actually ends.
 			desc:     "utc shifted, somewhat short segment",
 			startMS:  12000,
 			dur:      799,
 			utcMS:    12100,
 			cueDurMS: 900,
 			wanted: []cueItvl{
-				{startMS: 12000, endMS: 12799, utcS: 12},
+				{startMS: 11900, endMS: 12800, utcS: 12},
+			},
+		},
+		{
+			desc:     "cue ending exactly at the interval start is not included",
+			startMS:  900,
+			dur:      100,
+			utcMS:    900,
+			cueDurMS: 900,
+			wanted:   []cueItvl{},
+		},
+		{
+			desc:     "chunk in the middle of a cue",
+			startMS:  200,
+			dur:      100,
+			utcMS:    200,
+			cueDurMS: 900,
+			wanted: []cueItvl{
+				{startMS: 0, endMS: 900, utcS: 0},
 			},
 		},
 	}

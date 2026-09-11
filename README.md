@@ -29,6 +29,7 @@ livesim2 has a new feature for generating subtitles for any number of languages.
 This is done by a URL parameter like `/timesubsstpp_en,sv` which will result in
 two `stpp` (segmented TTML) subtitle tracks with with language codes "en" and "sv", respectively.
 There is a corresponding setting for `wvtt` (segmented WebVTT) subtitles using `/timesubswvtt_en,sv`.
+Both are chunked like the video when `chunkdur_` is set; see [Low-latency subtitles](#low-latency-subtitles).
 
 For in-band closed captions, `/timecc608_CC1-eng` injects a CTA-608 (CEA-608) caption
 into the AVC/HEVC video itself, showing a ticking UTC clock and the segment number on
@@ -789,6 +790,96 @@ the steering manifest as `application/json`; the client appends `_DASH_pathway` 
 which are recorded for inspection. `mode=trigger` (the default) is best for scripted/monitor-driven
 switches; use `mode=rotate` for a hands-off "switches every TTL" demo.
 
+## Low-latency subtitles
+
+The generated `timesubsstpp_` and `timesubswvtt_` subtitle tracks are chunked like the
+video: when `chunkdur_<s>` is set, a subtitle segment is delivered as a sequence of CMAF
+chunks of that same duration, streamed in one response as the chunks become available.
+The last chunk of a segment is shorter if the segment duration is not a multiple of the
+chunk duration. The subtitle `AdaptationSet` gets the same `availabilityTimeOffset` and
+`availabilityTimeComplete="false"` as the video and audio ones, so a low-latency client
+starts fetching subtitles as early as it starts fetching video.
+
+Without `chunkdur_`, the behaviour is unchanged: one segment, one fragment.
+
+This is a **reference for what today's signalling can express**, since this is where
+subtitles get expensive. The live sources of subtitles — teletext, DVB subtitles,
+CTA-608/708, live captioning — are *paint-model*: a cue stays on screen until it is
+replaced or erased, and its end time is not known when it starts. ISOBMFF timed text is
+*interval-model*: a sample says exactly what is shown for exactly its own duration. Every
+chunk therefore has to restate what is on screen, and for `stpp` that restatement is a
+complete TTML document. There is no way in ISO/IEC 14496-30 today to say "nothing
+changed".
+
+What livesim2 does with what exists:
+
+- **A cue keeps its true `begin`.** ISO/IEC 14496-30 §5.9(1) allows a computed begin time
+  earlier than the composition time of the sample that carries it, and §5.9(2) allows the
+  same element in adjacent documents in adjacent samples to keep "the same computed
+  earliest and latest composition time in every document in which it appears" — which is
+  this restatement, named. DVB-DASH (ETSI TS 103 285) §11.7 adds that times need not be
+  truncated to the sample. livesim2 does not clip: a cue that started in an earlier chunk
+  is restated with the time it really started.
+- **No `end` until the cue ends.** A cue that is still on screen at the end of a chunk is
+  written as `<p begin="…">` with no `end` attribute. The `end` is written only in the
+  chunk where the cue actually ends. This is the closest an interval-model container gets
+  to the paint model without a spec change.
+- **Unchanged restatements are marked redundant.** The two rules above make consecutive
+  restatements of an unchanged cue *byte-identical*, which is what §5.9(3) needs in order
+  to be usable at all: such a sample carries `sample_depends_on = 2` and
+  `sample_has_redundancy = 1` in its `trun` sample flags (ISO/IEC 14496-12 §8.8.3.1). For
+  tracks that are neither video, audio nor hint, §8.6.4 lets a receiver discard such a
+  sample and add its duration to the preceding one — skip-and-extend in the base standard.
+  The first sample of a segment is never marked, since that is what a client tuning in at
+  a segment boundary has to decode.
+
+`wvtt` follows the same rules where it can. A `wvtt` sample carries no timing of its own,
+so a cue is always clipped to the chunk that carries it; but a continued cue is restated
+with a byte-identical `vttc`, and consecutive chunks with nothing on screen repeat the
+same empty `vtte`, so the redundancy marking applies just as it does for `stpp`.
+
+With `testpic_2s`, `timesubsstpp_en` and `chunkdur_0.2` — a 2 s segment, 200 ms chunks,
+one cue per second — a segment comes out as:
+
+| chunk | cue stated | redundant |
+|---|---|---|
+| 0 | `<p xml:id="0-0" begin="00:00:00.000">` | no |
+| 1–3 | the same document, byte for byte | **yes** |
+| 4 | `<p xml:id="0-0" begin="00:00:00.000" end="00:00:00.900">` | no |
+| 5 | `<p xml:id="0-1" begin="00:00:01.000">` | no |
+| 6–8 | the same document, byte for byte | **yes** |
+| 9 | `<p xml:id="0-1" begin="00:00:01.000" end="00:00:01.900">` | no |
+
+Eight of the ten chunks say nothing new, and each still costs a complete ~1.6 kB TTML
+document: ~16 kB per 2 s segment, ~64 kbps, and ten XML parses per second for content that
+changes once a second. The same stream unchunked is ~7 kbps and one parse per second, at
+the price of subtitles lagging video by up to a segment. `wvtt` is far cheaper — ~1.6 kB
+per segment for the same 200 ms cadence, since its header lives in the sample entry — but
+pays the same restatement in kind.
+
+That gap is the point of the reference: the redundancy flag lets a receiver skip the
+*parse*, but the bytes are still sent, because there is no way to signal "no change" in
+8 bytes instead of a document. Proposals for that signalling — a no-change box under a
+new sample entry, and a document that stays active until the next one supersedes it — are
+written up in [paint-model subtitles][paint-model]. Nothing of that is implemented here;
+what livesim2 serves today uses only signalling that is already standardised.
+
+One piece of that has arrived since: ISO/IEC 14496-12:2026 §8.8.18 adds the
+`RedundantSampleOriginalTimingBox` (`rsot`) in the `traf`, whose NOTE 1 describes exactly
+this case — "in adaptive streaming context where media segments of fixed duration are not
+aligned with variable frame rate media such as text, possible duplicated redundant samples
+may happen at segment boundaries". With `rsot_elapsed_duration` set, the first sample of
+the fragment **shall** carry `sample_depends_on = 2` and `sample_has_redundancy = 1`, the
+pair livesim2 already writes, and the receiver rule is to extend the previous sample by
+this sample's duration — or, at tune-in, to present it for the signalled
+`elapsed_duration`. `rsot_original_duration` likewise gives the untruncated duration of a
+fragment's last sample. That does not save any bytes, but it does say at the container
+level what `stpp` can only say inside the XML and `wvtt` cannot say at all. livesim2 does
+not write it yet: it is not in mp4ff.
+
+Not covered: the sub-segment (`chunkdurssr_`) low-latency mode, where each chunk is a
+separate request, still applies to video and audio only.
+
 ## Running tests
 
 The unit tests can be run from the top directory with the usual recursive Go test command
@@ -865,3 +956,4 @@ See [LICENSE.md](LICENSE.md).
 [l2-issues]: https://github.com/Dash-Industry-Forum/livesim2/issues
 [l2-status]: https://github.com/Dash-Industry-Forum/livesim2/wiki/Sponsored-transition-from-livesim1-to-livesim2
 [urlgen]: https://livesim2.dashif.org/urlgen/
+[paint-model]: https://github.com/Eyevinn/paint-model-subtitles

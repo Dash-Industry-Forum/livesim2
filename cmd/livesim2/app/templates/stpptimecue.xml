@@ -1,1 +1,1 @@
-<p xml:id="{{.Id}}" begin="{{.Begin}}" end="{{.End}}"><span style="s1">{{.Msg}}</span></p>
+<p xml:id="{{.Id}}" begin="{{.Begin}}"{{if .End}} end="{{.End}}"{{end}}><span style="s1">{{.Msg}}</span></p>
