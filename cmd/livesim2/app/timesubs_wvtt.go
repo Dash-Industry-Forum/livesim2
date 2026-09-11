@@ -1,4 +1,4 @@
-// Copyright 2023, DASH-Industry Forum. All rights reserved.
+// Copyright 2023, DASH-Industry-Forum. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE.md file.
 
@@ -11,6 +11,14 @@ import (
 	"github.com/Eyevinn/mp4ff/bits"
 	"github.com/Eyevinn/mp4ff/mp4"
 )
+
+// subsTrackID is the track ID of the generated subtitle tracks. There is only one
+// track per representation, and mp4.InitSegment.AddEmptyTrack numbers it from 1.
+const subsTrackID = 1
+
+// vtteBox is an empty WebVTT cue box, used to fill the intervals where nothing is shown.
+// It is never modified.
+var vtteBox = []byte{0, 0, 0, 8, 'v', 't', 't', 'e'}
 
 func createSubtitlesWvttInitSegment(lang string, timescale uint32) *mp4.InitSegment {
 	init := mp4.CreateEmptyInit()
@@ -58,32 +66,32 @@ func makeWvttCuePayload(lang string, region, utcMS, segNr int) []byte {
 	return sw.Bytes()
 }
 
-func createSubtitlesWvttMediaSegment(nr uint32, baseMediaDecodeTime uint64, dur uint32, lang string, utcTimeMS uint64,
-	timeSubsDurMS, region int) (*mp4.MediaSegment, error) {
-	seg := mp4.NewMediaSegment()
-	frag, err := mp4.CreateFragment(nr, 1)
-	if err != nil {
-		return nil, err
-	}
-	seg.AddFragment(frag)
-	cueItvls := calcCueItvls(int(baseMediaDecodeTime), int(dur), int(utcTimeMS), timeSubsDurMS)
-	currEnd := baseMediaDecodeTime
-	vtte := []byte{0, 0, 0, 8, 0x76, 0x74, 0x74, 0x65}
-	for _, ci := range cueItvls {
-		start := ci.startMS
-		end := ci.endMS
-		cuePL := makeWvttCuePayload(lang, region, ci.utcS*1000, int(nr))
-		if start > int(currEnd) {
-			frag.AddFullSample(fullSample(int(currEnd), start, vtte))
+// wvttTimeSamples returns the wvtt samples that tile [startMS, endMS) with no gaps.
+//
+// Unlike TTML, a wvtt sample carries no timing of its own, so a cue is always clipped to
+// the fragment that carries it. A cue that continues across a fragment boundary is
+// therefore restated, but with a byte-identical payload, which is what lets
+// genTimeSubsChunks mark the restatement as redundant. The same holds for consecutive
+// fragments with nothing on screen, which repeat the same empty vtte box.
+func wvttTimeSamples(cues []cueItvl, startMS, endMS int, lang string, nr uint32, region int) []mp4.FullSample {
+	samples := make([]mp4.FullSample, 0, 2*len(cues)+1)
+	currEnd := startMS
+	for _, ci := range cues {
+		if !ci.overlaps(startMS, endMS) {
+			continue
 		}
-		frag.AddFullSample(fullSample(start, end, cuePL))
-		currEnd = uint64(end)
+		cueStart := max(ci.startMS, startMS)
+		cueEnd := min(ci.endMS, endMS)
+		if cueStart > currEnd {
+			samples = append(samples, fullSample(currEnd, cueStart, vtteBox))
+		}
+		samples = append(samples, fullSample(cueStart, cueEnd, makeWvttCuePayload(lang, region, ci.utcS*1000, int(nr))))
+		currEnd = cueEnd
 	}
-	segEnd := int(baseMediaDecodeTime) + int(dur)
-	if int(currEnd) < segEnd {
-		frag.AddFullSample(fullSample(int(currEnd), segEnd, vtte))
+	if currEnd < endMS {
+		samples = append(samples, fullSample(currEnd, endMS, vtteBox))
 	}
-	return seg, nil
+	return samples
 }
 
 func fullSample(start int, end int, data []byte) mp4.FullSample {
