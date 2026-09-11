@@ -11,8 +11,6 @@ import (
 	"net/url"
 	"strings"
 	"time"
-
-	"github.com/Dash-Industry-Forum/livesim2/pkg/scte35"
 )
 
 type liveMPDType int
@@ -114,7 +112,7 @@ type ResponseConfig struct {
 	EtpPeriodsPerHour            *int              `json:"EtpPeriodsPerHour,omitempty"`
 	EtpDuration                  *int              `json:"EtpDuration,omitempty"`
 	PeriodOffset                 *int              `json:"PeriodOffset,omitempty"`
-	SCTE35PerMinute              *int              `json:"SCTE35PerMinute,omitempty"`
+	SCTE35                       *SCTE35Config     `json:"SCTE35,omitempty"`
 	StartNr                      *uint32           `json:"StartNr,omitempty"`
 	SuggestedPresentationDelayS  *int              `json:"SuggestedPresentationDelayS,omitempty"`
 	AvailabilityTimeOffsetS      float64           `json:"AvailabilityTimeOffsetS,omitempty"`
@@ -412,8 +410,8 @@ cfgLoop:
 			}
 		case "peroff": // Set the period offset
 			cfg.PeriodOffset = sc.AtoiPtr(key, val)
-		case "scte35": // Signal this many SCTE-35 ad periods inband (emsg messages) every minute
-			cfg.SCTE35PerMinute = sc.AtoiPtr(key, val)
+		case "scte35": // SCTE-35 ad-avail signaling: 1|2|3, or <off>:<dur>[,...][;k=v...]
+			cfg.SCTE35 = sc.ParseSCTE35Config(key, val)
 		case "utc": // Get hyphen-separated list of utc-timing methods and make into list
 			cfg.UTCTimingMethods = sc.SplitUTCTimings(key, val)
 		case "snr": // Segment startNumber. -1 means default implicit number which ==  1
@@ -518,12 +516,6 @@ func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 	if cfg.ContMultiPeriodFlag && cfg.PeriodsPerHour == nil {
 		return fmt.Errorf("period continuity set, but not multiple periods per hour")
 	}
-	if cfg.SCTE35PerMinute != nil {
-		err := scte35.IsValidSCTE35Interval(*cfg.SCTE35PerMinute)
-		if err != nil {
-			return err
-		}
-	}
 	// We do not check here that the drm is one that has been configured,
 	// since pre-encrypted content will influence what is valid.
 
@@ -537,23 +529,8 @@ func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 	if cfg.ChunkDurSSR != "" && cfg.SSRAS == "" {
 		return fmt.Errorf("chunkDurSSR requires ssrAS to be configured")
 	}
-	if cfg.SGAI != nil || cfg.SVTA != nil {
-		// The ad-break EventStream lives in the first Period. splitPeriod clones that Period
-		// verbatim for every generated period, which would duplicate the events with
-		// presentation times that are no longer rebased, so the multi-period options are out.
-		opt := "sgai"
-		if cfg.SGAI == nil {
-			opt = "svta"
-		}
-		if cfg.PeriodsPerHour != nil || cfg.XlinkPeriodsPerHour != nil ||
-			cfg.EtpPeriodsPerHour != nil || cfg.InsertAdFlag {
-			return fmt.Errorf("%s cannot be combined with periods/xlink/etp/insertad", opt)
-		}
-		if cfg.SGAI != nil && cfg.SVTA != nil {
-			// Both mark the same kind of ad break on the main timeline (and both drive the
-			// slate), so combining them would double-signal the same window.
-			return fmt.Errorf("svta cannot be combined with sgai")
-		}
+	if err := verifyAdSignaling(cfg); err != nil {
+		return err
 	}
 	if cfg.Steer != nil {
 		if len(cfg.Steer.CDNs) < 2 {

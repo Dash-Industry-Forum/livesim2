@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/drm"
-	"github.com/Dash-Industry-Forum/livesim2/pkg/scte35"
 	"github.com/Eyevinn/mp4ff/bits"
 	"github.com/Eyevinn/mp4ff/mp4"
 )
@@ -106,17 +105,13 @@ func genLiveSegment(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig
 			}
 		}
 
-		if cfg.SCTE35PerMinute != nil && contentType == "video" {
+		if cfg.SCTE35 != nil && contentType == "video" {
 			startTime := uint64(meta.newTime)
 			endTime := startTime + uint64(meta.newDur)
-			timescale := uint64(meta.timescale)
-			emsg, err := scte35.CreateEmsgAhead(startTime, endTime, timescale, *cfg.SCTE35PerMinute)
-			if err != nil {
-				return so, fmt.Errorf("insertSCTE35: %w", err)
-			}
-			if emsg != nil {
+			for _, emsg := range scte35EmsgsForSegment(cfg, startTime, endTime, uint64(meta.timescale)) {
 				seg.Fragments[0].AddEmsg(emsg)
-				log.Debug("added SCTE-35 emsg message", "asset", a.AssetPath, "segment", segmentPart)
+				log.Debug("added SCTE-35 emsg message", "asset", a.AssetPath, "segment", segmentPart,
+					"id", emsg.ID, "presentationTime", emsg.PresentationTime)
 			}
 		}
 
