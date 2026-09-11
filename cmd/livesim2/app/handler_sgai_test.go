@@ -206,7 +206,8 @@ func TestBuildAdListMPDWithSVTA(t *testing.T) {
 	assert.Equal(t, uint32(1000), *es.Timescale)
 	require.Len(t, es.Events, 1, "one Event per creative")
 	assert.Equal(t, uint64(0), es.Events[0].PresentationTime)
-	assert.Equal(t, uint64(5000), es.Events[0].Duration)
+	require.NotNil(t, es.Events[0].Duration)
+	assert.Equal(t, uint64(5000), *es.Events[0].Duration)
 
 	var env svtaEnvelope
 	require.NoError(t, json.Unmarshal([]byte(es.Events[0].Value), &env))

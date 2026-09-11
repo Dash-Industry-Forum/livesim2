@@ -354,7 +354,7 @@ func addSVTAAdCreativeEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, 
 			}
 			es.Events = append(es.Events, &m.EventType{
 				PresentationTime: offsetTicks + startTicks,
-				Duration:         endTicks - startTicks,
+				Duration:         m.Ptr(endTicks - startTicks),
 				Id:               m.Ptr(b.id*1000 + uint64(slot)),
 				Value:            svtaPayload("slot", s),
 			})
@@ -378,7 +378,7 @@ func svtaPodEvent(host string, b adBreakInst, breakID, sid string, offsetTicks, 
 	}
 	return &m.EventType{
 		PresentationTime: offsetTicks,
-		Duration:         totalTicks,
+		Duration:         m.Ptr(totalTicks),
 		Id:               m.Ptr(b.id * 1000),
 		Value:            svtaPayload("pod", pod),
 	}
@@ -438,7 +438,7 @@ func svtaListMPDEventStream(host, adID, breakID, sid string, durMS int, eventID 
 		Timescale:   m.Ptr(sgaiTrackingTimescale),
 		Events: []*m.EventType{{
 			PresentationTime: 0,
-			Duration:         uint64(durMS),
+			Duration:         m.Ptr(uint64(durMS)),
 			Id:               m.Ptr(eventID),
 			Value:            svtaPayload("slot", slot),
 		}},
