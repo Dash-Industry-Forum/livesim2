@@ -408,8 +408,9 @@ func calcCueItvls(startMS, durMS, utcStartMS, cueDurMS int) []cueItvl {
 // as one sample with that duration.
 //
 // Following the paint model, a cue keeps its true begin time even when that lies before
-// the start of the fragment (allowed by ISO/IEC 14496-30 Sec. 5.9(1)), and is given an
-// end time only in the fragment where it ends. An unchanged cue is therefore restated
+// the start of the fragment (allowed by ISO/IEC 14496-30 Sec. 5.9(1), and named as the same
+// element recurring in adjacent samples in Sec. 5.9(2)), and is given an end time only in the
+// fragment where it ends. An unchanged cue is therefore restated
 // byte for byte, which is what lets genTimeSubsChunks mark the restatement as redundant.
 func stppTimeSample(tt *template.Template, cues []cueItvl, startMS, endMS int, lang string, nr uint32,
 	region int) (mp4.FullSample, error) {

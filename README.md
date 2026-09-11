@@ -814,9 +814,12 @@ changed".
 What livesim2 does with what exists:
 
 - **A cue keeps its true `begin`.** ISO/IEC 14496-30 §5.9(1) allows a computed begin time
-  earlier than the composition time of the sample that carries it, and DVB-DASH (ETSI TS
-  103 285) §11.7 says times need not be truncated to the sample. livesim2 does not clip:
-  a cue that started in an earlier chunk is restated with the time it really started.
+  earlier than the composition time of the sample that carries it, and §5.9(2) allows the
+  same element in adjacent documents in adjacent samples to keep "the same computed
+  earliest and latest composition time in every document in which it appears" — which is
+  this restatement, named. DVB-DASH (ETSI TS 103 285) §11.7 adds that times need not be
+  truncated to the sample. livesim2 does not clip: a cue that started in an earlier chunk
+  is restated with the time it really started.
 - **No `end` until the cue ends.** A cue that is still on screen at the end of a chunk is
   written as `<p begin="…">` with no `end` attribute. The `end` is written only in the
   chunk where the cue actually ends. This is the closest an interval-model container gets
@@ -860,6 +863,19 @@ That gap is the point of the reference: the redundancy flag lets a receiver skip
 new sample entry, and a document that stays active until the next one supersedes it — are
 written up in [paint-model subtitles][paint-model]. Nothing of that is implemented here;
 what livesim2 serves today uses only signalling that is already standardised.
+
+One piece of that has arrived since: ISO/IEC 14496-12:2026 §8.8.18 adds the
+`RedundantSampleOriginalTimingBox` (`rsot`) in the `traf`, whose NOTE 1 describes exactly
+this case — "in adaptive streaming context where media segments of fixed duration are not
+aligned with variable frame rate media such as text, possible duplicated redundant samples
+may happen at segment boundaries". With `rsot_elapsed_duration` set, the first sample of
+the fragment **shall** carry `sample_depends_on = 2` and `sample_has_redundancy = 1`, the
+pair livesim2 already writes, and the receiver rule is to extend the previous sample by
+this sample's duration — or, at tune-in, to present it for the signalled
+`elapsed_duration`. `rsot_original_duration` likewise gives the untruncated duration of a
+fragment's last sample. That does not save any bytes, but it does say at the container
+level what `stpp` can only say inside the XML and `wvtt` cannot say at all. livesim2 does
+not write it yet: it is not in mp4ff.
 
 Not covered: the sub-segment (`chunkdurssr_`) low-latency mode, where each chunk is a
 separate request, still applies to video and audio only.
