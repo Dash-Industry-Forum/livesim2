@@ -208,6 +208,10 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		addSVTAAdCreativeEvents(mpd, period, cfg, endTimeMS)
 	}
 
+	if cfg.SCTE35 != nil {
+		addSCTE35Events(period, cfg, endTimeMS)
+	}
+
 	if cfg.Steer != nil {
 		addContentSteering(mpd, period, cfg)
 	}
@@ -324,12 +328,14 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 			as.EssentialProperties = append(as.EssentialProperties, ep)
 		}
 
-		if as.ContentType == "video" && cfg.SCTE35PerMinute != nil {
-			// Add SCTE35 signaling
+		if as.ContentType == "video" && cfg.SCTE35 != nil && cfg.SCTE35.Emsg {
+			// Declare the inband SCTE-35 events. SCTE 214-1 §6.7.3 item 7 requires this at
+			// AdaptationSet level (never at Representation level), with the same @value as
+			// the emsg boxes so a client can match them.
 			as.InbandEventStreams = append(as.InbandEventStreams,
 				&m.EventStreamType{
 					SchemeIdUri: scte35.SchemeIDURI,
-					Value:       "",
+					Value:       cfg.SCTE35.Value,
 				})
 		}
 
