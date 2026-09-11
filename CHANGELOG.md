@@ -71,8 +71,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- dash-mpd dependency bumped for the `EventType.Duration` pointer, which is what lets a zero
-  `Event@duration` reach the MPD.
+- dash-mpd dependency bumped to v0.18.0, whose `EventType.Duration` is a `*uint64`, which is what
+  lets a zero `Event@duration` reach the MPD, and mp4ff to v0.56.0.
 - The legacy `scte35_1|2|3` presets are now shorthands for `p60:20@10`, `p60:10@10,40` and
   `p60:10@10,36,46` in the new grammar. They emit the same `splice_insert` cues as before, but the
   schedule is anchored to the wall clock rather than to the availabilityStartTime, so a stream
