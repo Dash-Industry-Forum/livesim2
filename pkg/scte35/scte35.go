@@ -117,9 +117,14 @@ func CreateSpliceInsertPayload(p SpliceInsertParams) []byte {
 		cmd.SetIsAutoReturn(p.AutoReturn)
 	}
 	cmd.SetHasPTS(true)
-	cmd.SetPTS(gots.PTS(p.PtsTime))
 	cmd.SetIsOut(p.OutOfNetworkIndicator)
 	cmd.SetSpliceImmediate(p.SpliceImmediateFlag)
 	s.SetCommandInfo(cmd)
+	// Set the splice time on the section, not on the command: gots encodes
+	// pts_adjustment as the difference between the two (modify.go UpdateData), so
+	// setting only the command time yields pts_adjustment = 2^33 - pts_time, and a
+	// receiver adding them modulo 2^33 gets a splice time of 0. Setting it here sets
+	// both and leaves pts_adjustment at 0.
+	s.SetPTS(gots.PTS(p.PtsTime))
 	return s.UpdateData()
 }

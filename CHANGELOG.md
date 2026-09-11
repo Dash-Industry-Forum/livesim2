@@ -37,6 +37,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   presentation time at all. Opt-in, since a player acting on both it and the existing callback beacons
   reports each timeline point twice.
 
+### Fixed
+
+- The SCTE-35 messages generated for the `scte35_` URL option carried `pts_adjustment = 2^33 - pts_time`
+  instead of zero, so the splice time a receiver computes as `(pts_time + pts_adjustment) mod 2^33` was
+  always 0. The intended time was only visible in the `emsg` header. The splice time is now set on the
+  `splice_info_section` rather than on the `splice_insert()` command, which is what gots derives
+  `pts_adjustment` from, and a regression test decodes the generated payload to check both fields.
+
 ### Changed
 
 - The ad-break schedule (fixed or periodic breaks, the break instances signaled in an MPD, and the AD BREAK
