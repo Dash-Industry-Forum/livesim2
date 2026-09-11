@@ -591,8 +591,12 @@ func addSCTE35Events(period *m.Period, cfg *ResponseConfig, nowMS int) {
 			}
 			ev := &m.EventType{
 				PresentationTime: uint64(cp.atS) * uint64(sc.Timescale),
-				Duration:         uint64(cp.durS) * uint64(sc.Timescale),
-				Id:               m.Ptr(cp.id),
+				// Always set, so that a closing message is written with duration="0" rather
+				// than with no @duration at all, which DASH defines as an unknown duration.
+				// SCTE 214-1 §6.7.2.1 item 2: an event that closes another one "should have
+				// a duration of zero and shall not be infinite".
+				Duration: m.Ptr(uint64(cp.durS) * uint64(sc.Timescale)),
+				Id:       m.Ptr(cp.id),
 			}
 			if sc.MPDForm == "xml" {
 				ev.Signal = cp.cue.XMLSignal()

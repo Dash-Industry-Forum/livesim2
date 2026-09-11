@@ -52,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `<SpliceInfoSection>`. DASH-IF IOP-5 §5.5 makes MPD events the carriage an ad-insertion MPD
   manipulator is expected to read. The events appear one `lead` time before their splice point, the
   same moment the inband cue is delivered, and are kept while the segments they cover are available.
+  A message that closes a break carries `duration="0"`, as SCTE 214-1 §6.7.2.1 asks, rather than no
+  `@duration` at all, which DASH defines as an unknown duration.
 - The periodic ad-break schedule takes in-cycle offsets, `p<period>:<dur>[@<off>,...]`, for `sgai_`
   and `svta_` as well as `scte35_`: `p60:10@10,40` is a 10 s break 10 s and 40 s after every full
   UTC minute.
@@ -69,6 +71,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- dash-mpd dependency bumped for the `EventType.Duration` pointer, which is what lets a zero
+  `Event@duration` reach the MPD.
 - The legacy `scte35_1|2|3` presets are now shorthands for `p60:20@10`, `p60:10@10,40` and
   `p60:10@10,36,46` in the new grammar. They emit the same `splice_insert` cues as before, but the
   schedule is anchored to the wall clock rather than to the availabilityStartTime, so a stream

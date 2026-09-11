@@ -10,6 +10,7 @@ import (
 	gotsscte35 "github.com/Comcast/gots/v2/scte35"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/scte35"
 	m "github.com/Eyevinn/dash-mpd/mpd"
+	"github.com/Eyevinn/dash-mpd/xml"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -248,12 +249,37 @@ func TestAddSCTE35Events(t *testing.T) {
 			require.NotEmpty(t, es.Events)
 			ev := es.Events[0]
 			assert.Equal(t, uint64(30*90000), ev.PresentationTime)
-			assert.Equal(t, uint64(15*90000), ev.Duration)
+			require.NotNil(t, ev.Duration)
+			assert.Equal(t, uint64(15*90000), *ev.Duration)
 			require.NotNil(t, ev.Id)
 			assert.Equal(t, uint64(30), *ev.Id)
 			c.check(t, ev)
 		})
 	}
+}
+
+// TestSCTE35ClosingEventDuration checks that the message closing a break is written with
+// duration="0" rather than with no @duration at all. DASH gives an absent @duration the
+// meaning "unknown", while SCTE 214-1 §6.7.2.1 item 2 wants a closing event to say zero.
+func TestSCTE35ClosingEventDuration(t *testing.T) {
+	cfg := NewResponseConfig()
+	sc, err := CreateSCTE35Config("30:15;cmd=timesignal;seg=po;mpd=bin")
+	require.NoError(t, err)
+	cfg.SCTE35 = sc
+
+	period := &m.Period{Id: "P0"}
+	// 40 s in: the break at 30 s is open and its closing cue at 45 s is announced (lead 7 s).
+	addSCTE35Events(period, cfg, 40_000)
+	require.Len(t, period.EventStreams, 1)
+	events := period.EventStreams[0].Events
+	require.Len(t, events, 2, "the opening and the closing message")
+
+	require.NotNil(t, events[1].Duration)
+	assert.Equal(t, uint64(0), *events[1].Duration, "a closing event has a known, zero duration")
+
+	out, err := xml.Marshal(events[1])
+	require.NoError(t, err)
+	assert.Contains(t, string(out), ` duration="0"`, "the zero must reach the MPD")
 }
 
 // TestAddSCTE35EventsAnnounce checks that an MPD event appears one lead time before its
