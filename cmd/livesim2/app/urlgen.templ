@@ -196,7 +196,7 @@ templ urlgenPage(d urlGenData) {
 							<legend>SCTE-35 cue messages marking the ad breaks, inband and/or in the MPD</legend>
 							<label for="scte35">
 								Ad-break schedule and options
-								<input type="text" id="scte35" name="scte35" value={ d.Scte35Var } placeholder="p60:20@10;cmd=timesignal;seg=break,po"/>
+								<input type="text" id="scte35" name="scte35" value={ d.Scte35Var } placeholder="p60:20@10;cmd=timesignal;seg=break,po;pre=5"/>
 							</label>
 							<p>
 								The ad breaks are marked with SCTE-35 cue messages, carried inband as
@@ -226,6 +226,16 @@ templ urlgenPage(d urlGenData) {
 								<li><code>upid=&lt;type&gt;:&lt;value&gt;</code> &mdash; <code>segmentation_upid</code> (default a generated URI)</li>
 								<li><code>value=&lt;s&gt;</code> &mdash; <code>&#64;value</code> of the emsg and the EventStream (a PID or URI)</li>
 								<li><code>ts=&lt;n&gt;</code> &mdash; <code>EventStream@timescale</code> (default 90000)</li>
+								<li>
+									<code>slate=0|1</code> &mdash; serve the generated AD BREAK countdown slate inside the
+									breaks, so the avail is visible (default 1; the legacy presets <code>1</code>,
+									<code>2</code> and <code>3</code> keep the underlying content)
+								</li>
+								<li>
+									<code>pre=&lt;s&gt;</code> &mdash; also slate the given number of seconds before each
+									break with an AD BREAK IN countdown, which makes a cue delivered ahead of its splice
+									point visible on screen (default 0, needs <code>slate=1</code>)
+								</li>
 							</ul>
 							<p>
 								Example: <code>p60:20@10;cmd=timesignal;seg=break,po;mpd=bin</code> &mdash; a 20&nbsp;s

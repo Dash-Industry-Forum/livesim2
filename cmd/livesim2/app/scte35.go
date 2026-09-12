@@ -74,6 +74,8 @@ type SCTE35Config struct {
 	UPID        string   `json:"UPID,omitempty"`        // segmentation_upid value
 	Value       string   `json:"Value,omitempty"`       // @value of the emsg and the (Inband)EventStream
 	Timescale   uint32   `json:"Timescale"`             // EventStream@timescale
+	Slate       bool     `json:"Slate"`                 // AD BREAK countdown slate inside the breaks
+	PreS        int      `json:"PreS,omitempty"`        // pre-break countdown, seconds before the break
 }
 
 // scte35LegacyPresets are the pre-1.14 scte35_1|2|3 variants, expressed in the current
@@ -90,7 +92,8 @@ var scte35LegacyPresets = map[string]string{
 // CreateSCTE35Config parses the value of an "scte35" URL option.
 //
 // Grammar: ( 1 | 2 | 3 ) | ( <off>:<dur>[,...] | p<period>:<dur>[@<off>,...] )[;key=val;...]
-// keys: cmd=, seg=, ads=, adseg=, emsg=, mpd=, lead=, end=, repeat=, upid=, value=, ts=
+// keys: cmd=, seg=, ads=, adseg=, emsg=, mpd=, lead=, end=, repeat=, upid=, value=, ts=,
+// slate=, pre=
 //
 // Examples: p60:20@10;cmd=timesignal;seg=break,po => a 20s Provider Placement Opportunity
 // inside a Break, 10s after every full UTC minute. 30:15;mpd=xml => one splice_insert 30s
@@ -102,7 +105,8 @@ func CreateSCTE35Config(val string) (*SCTE35Config, error) {
 	if hasExtraSpaces(val) {
 		return nil, fmt.Errorf("scte35 config %q has extra spaces", val)
 	}
-	if preset, ok := scte35LegacyPresets[val]; ok {
+	preset, isLegacy := scte35LegacyPresets[val]
+	if isLegacy {
 		val = preset
 	}
 	cfg := &SCTE35Config{
@@ -114,6 +118,10 @@ func CreateSCTE35Config(val string) (*SCTE35Config, error) {
 		LeadS:     scte35DefaultLeadS,
 		UPIDType:  scte35DefaultUPIDType,
 		Timescale: scte35DefaultTimescale,
+		// The breaks of a new-grammar stream show the AD BREAK countdown slate, so that a
+		// signaled avail is visible rather than only announced. The legacy presets keep
+		// serving the underlying content, which is what those URLs have always done.
+		Slate: !isLegacy,
 	}
 	parts := strings.Split(val, ";")
 	ab, err := parseAdBreaks("scte35", parts[0])
@@ -176,6 +184,14 @@ func CreateSCTE35Config(val string) (*SCTE35Config, error) {
 				return nil, fmt.Errorf("scte35 upid %q: bad type", v)
 			}
 			cfg.UPIDType, cfg.UPID = uint8(n), value
+		case "slate":
+			cfg.Slate, err = parseFlag("scte35 slate", v)
+		case "pre":
+			n, err := strconv.Atoi(v)
+			if err != nil || n < 0 {
+				return nil, fmt.Errorf("scte35 pre %q: must be >= 0", v)
+			}
+			cfg.PreS = n
 		case "value":
 			cfg.Value = v
 		case "ts":
@@ -241,6 +257,18 @@ func parseFlag(what, v string) (bool, error) {
 func (c *SCTE35Config) validate() error {
 	if !c.Emsg && c.MPDForm == "off" {
 		return fmt.Errorf("scte35: emsg=0 needs mpd=bin or mpd=xml, or nothing is signaled")
+	}
+	if c.PreS > 0 {
+		if !c.Slate {
+			return fmt.Errorf("scte35 pre needs slate=1: the countdown is rendered on the video")
+		}
+		// The countdown must not reach back into the preceding break, which owns those
+		// seconds and renders its own countdown there.
+		if c.Periodic != nil {
+			if gap := c.Periodic.PeriodS - c.Periodic.DurationS; c.PreS > gap {
+				return fmt.Errorf("scte35 pre=%d does not fit in the %d s between breaks", c.PreS, gap)
+			}
+		}
 	}
 	if c.Cmd == "insert" {
 		if c.AdsPerBreak > 0 {

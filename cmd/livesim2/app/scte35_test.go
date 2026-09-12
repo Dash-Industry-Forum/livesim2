@@ -33,6 +33,7 @@ func TestCreateSCTE35Config(t *testing.T) {
 				assert.Equal(t, "off", c.MPDForm)
 				assert.Equal(t, scte35DefaultLeadS, c.LeadS)
 				assert.False(t, c.End, "a splice_insert with auto_return returns by itself")
+				assert.False(t, c.Slate, "the legacy presets keep serving the underlying content")
 			},
 		},
 		{
@@ -58,6 +59,22 @@ func TestCreateSCTE35Config(t *testing.T) {
 				assert.True(t, c.End, "a time_signal level is closed by its paired end descriptor")
 				assert.Equal(t, uint32(1000), c.Timescale)
 				assert.Equal(t, "1001", c.Value)
+				assert.True(t, c.Slate, "the new grammar slates its breaks by default")
+			},
+		},
+		{
+			desc: "slate and pre-break countdown",
+			val:  "p60:20@10;slate=1;pre=5",
+			check: func(t *testing.T, c *SCTE35Config) {
+				assert.True(t, c.Slate)
+				assert.Equal(t, 5, c.PreS)
+			},
+		},
+		{
+			desc: "slate off",
+			val:  "p60:20@10;slate=0",
+			check: func(t *testing.T, c *SCTE35Config) {
+				assert.False(t, c.Slate)
 			},
 		},
 		{
@@ -89,6 +106,11 @@ func TestCreateSCTE35Config(t *testing.T) {
 		{desc: "timesignal without levels", val: "30:15;cmd=timesignal;seg=",
 			err: `scte35 cmd=timesignal needs at least one seg level or ads>0`},
 		{desc: "bad upid", val: "30:15;upid=abc", err: `scte35 upid "abc": must be <type>:<value>`},
+		{desc: "negative pre", val: "30:15;pre=-1", err: `scte35 pre "-1": must be >= 0`},
+		{desc: "pre without slate", val: "30:15;pre=5;slate=0",
+			err: "scte35 pre needs slate=1: the countdown is rendered on the video"},
+		{desc: "pre longer than the gap", val: "p60:50@0;pre=15",
+			err: "scte35 pre=15 does not fit in the 10 s between breaks"},
 		{desc: "zero timescale", val: "30:15;ts=0", err: `scte35 ts "0": must be a positive 32-bit integer`},
 	}
 	for _, c := range cases {

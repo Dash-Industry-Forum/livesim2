@@ -91,9 +91,10 @@ func genLiveSegment(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig
 			}
 		}
 
-		// Inside an ad-break window (sgai_ or svta_) the video track serves a generated
-		// "AD BREAK <countdown>" slate — the visible ad. With sgai_, players that execute the
-		// Alternative-MPD event cover this window with the personalized pod instead.
+		// Inside an ad-break window (sgai_, svta_ or scte35_) the video track serves a
+		// generated "AD BREAK <countdown>" slate — the visible ad — and, with scte35_ pre=,
+		// an "AD BREAK IN <countdown>" one on the seconds leading up to it. With sgai_,
+		// players that execute the Alternative-MPD event cover the break with the pod instead.
 		if adBreaksFor(cfg) != nil && contentType == "video" && cfg.DRM == "" && !meta.rep.PreEncrypted {
 			slateSeg, err := applyAdBreakSlate(vodFS, a, cfg, meta, seg)
 			if err != nil {

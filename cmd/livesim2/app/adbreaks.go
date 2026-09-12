@@ -233,6 +233,42 @@ func (a *AdBreaks) windowAt(wallMS int64, astS int) (int64, uint64, bool) {
 	return 0, 0, false
 }
 
+// nextBreakWithin returns the start (in ms since the epoch) and the occurrence id of the
+// next break starting within withinS seconds after wallMS, or ok=false when none is that
+// close. It looks strictly forward, so a break that has already started is not reported —
+// that one is windowAt's business. Used for the pre-break countdown.
+func (a *AdBreaks) nextBreakWithin(wallMS int64, astS, withinS int) (int64, uint64, bool) {
+	if withinS <= 0 {
+		return 0, 0, false
+	}
+	horizonMS := wallMS + int64(withinS)*1000
+	astMS := int64(astS) * 1000
+	if a.Periodic != nil {
+		pMS := int64(a.Periodic.PeriodS) * 1000
+		offs := a.Periodic.offsets()
+		cycleStartMS := wallMS - wallMS%pMS
+		// A break never spans a cycle boundary, so the next one starts in this cycle or
+		// in the one after it.
+		for _, cycleMS := range []int64{cycleStartMS, cycleStartMS + pMS} {
+			for i, o := range offs {
+				startMS := cycleMS + int64(o)*1000
+				if startMS <= wallMS || startMS > horizonMS || startMS < astMS {
+					continue
+				}
+				return startMS, uint64(cycleMS/pMS)*uint64(len(offs)) + uint64(i) + 1, true
+			}
+		}
+		return 0, 0, false
+	}
+	for i, b := range a.Breaks {
+		startMS := astMS + int64(b.OffsetS)*1000
+		if startMS > wallMS && startMS <= horizonMS {
+			return startMS, uint64(i + 1), true
+		}
+	}
+	return 0, 0, false
+}
+
 // adBreaksFor returns the ad-break schedule in effect for a request, or nil when the stream
 // has no ad breaks. sgai_ and svta_ are mutually exclusive (see verifyAndFillConfig), so at
 // most one of them is set.
@@ -242,6 +278,8 @@ func adBreaksFor(cfg *ResponseConfig) *AdBreaks {
 		return &cfg.SGAI.AdBreaks
 	case cfg.SVTA != nil:
 		return &cfg.SVTA.AdBreaks
+	case cfg.SCTE35 != nil && cfg.SCTE35.Slate:
+		return &cfg.SCTE35.AdBreaks
 	default:
 		return nil
 	}
