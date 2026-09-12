@@ -723,6 +723,8 @@ Enable it with the `scte35_` URL option, which uses the same break-schedule gram
   | `upid=<type>:<value>` | `segmentation_upid` | a generated `urn:dashif:livesim2:break:<id>` URI |
   | `value=<s>` | `@value` of the `emsg` and the `(Inband)EventStream` (a PID or a URI) | empty |
   | `ts=<n>` | `EventStream@timescale` | 90000 |
+  | `slate=<0\|1>` | serve the AD BREAK countdown slate inside the breaks | 1 (0 for the legacy presets) |
+  | `pre=<s>` | also slate the seconds before each break with an AD BREAK IN countdown | 0 |
 
 The segmentation levels are `break` (0x22/0x23), `po` (Provider Placement Opportunity, 0x34/0x35),
 `dpo` (Distributor PO, 0x36/0x37), `ad` (Provider Advertisement, 0x30/0x31), `dad` (Distributor
@@ -745,6 +747,21 @@ messages:
 Each level carries its own `segmentation_event_id`, shared between its start and its end as
 SCTE 35 §10.3.3.5 requires, and derived from the break start second so it survives an MPD refresh
 unchanged. `Event@id` and `emsg.id` are the second of the splice point, so each message has its own.
+
+### Seeing the break
+
+By default a `scte35_` stream also *shows* its avails: inside each break the video track serves the
+generated **AD BREAK** countdown slate (the same one `sgai_` and `svta_` use), so the window the cue
+messages describe is visible rather than only announced. `slate=0` turns that off and keeps the
+underlying content, which is what the legacy `scte35_1|2|3` presets do — those have always been
+signaling-only, and stay that way.
+
+`pre=<s>` extends this backwards: the given number of seconds before each break are slated with an
+**AD BREAK IN** countdown. Since a cue is delivered `lead` seconds ahead of its splice point, a
+`pre=` at least as large as `lead` makes the announcement visible on screen at the moment it arrives
+in the stream — useful for checking by eye that a player or splicer acted on the cue in time. The
+countdown reaches zero exactly as the break starts, where the AD BREAK countdown takes over. The
+slate is video-only and needs an unencrypted AVC representation, like the other slates.
 
 ### Timing and combinations
 

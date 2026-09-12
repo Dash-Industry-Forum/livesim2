@@ -705,14 +705,14 @@ func urlgenPage(d urlGenData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "\" placeholder=\"p60:20@10;cmd=timesignal;seg=break,po\"></label><p>The ad breaks are marked with SCTE-35 cue messages, carried inband as <code>emsg</code> boxes (scheme <code>urn:scte:scte35:2013:bin</code>) and/or in the MPD as an <code>EventStream</code> (SCTE 214-1 &sect;6.7). The schedule uses the same grammar as <code>sgai</code> and <code>svta</code>:<pre>( 1 | 2 | 3 ) | ( &lt;off&gt;:&lt;dur&gt;[,...] | p&lt;period&gt;:&lt;dur&gt;[@&lt;off&gt;,...] )[;key=val;...]</pre><code>1</code>, <code>2</code> and <code>3</code> are the legacy presets: that many <code>splice_insert</code> breaks per minute (<code>p60:20@10</code>, <code>p60:10@10,40</code> and <code>p60:10@10,36,46</code>). The options are:</p><ul><li><code>cmd=insert|timesignal</code> &mdash; splice command (default <code>insert</code>)</li><li><code>seg=&lt;level&gt;[,&lt;level&gt;...]</code> &mdash; segmentation levels for <code>cmd=timesignal</code>, outermost first (default <code>po</code>): <code>break</code>, <code>po</code>, <code>dpo</code>, <code>ad</code>, <code>dad</code>, <code>promo</code>, <code>dpromo</code></li><li><code>ads=&lt;n&gt;</code> &mdash; split the break into <it>n</it> creative segments (0-20, default 0)</li><li><code>adseg=&lt;level&gt;</code> &mdash; level used for those segments (default <code>ad</code>)</li><li><code>emsg=0|1</code> &mdash; inband carriage (default 1)</li><li><code>mpd=off|bin|xml</code> &mdash; MPD EventStream: none, <code>xml+bin</code> or full XML (default off)</li><li><code>lead=&lt;s&gt;</code> &mdash; delivery ahead of the splice point (default 7)</li><li><code>end=0|1</code> &mdash; also emit the closing message (default 1 for <code>timesignal</code>)</li><li><code>repeat=0|1</code> &mdash; repeat the cue in every segment of the lead window (default 0)</li><li><code>upid=&lt;type&gt;:&lt;value&gt;</code> &mdash; <code>segmentation_upid</code> (default a generated URI)</li><li><code>value=&lt;s&gt;</code> &mdash; <code>&#64;value</code> of the emsg and the EventStream (a PID or URI)</li><li><code>ts=&lt;n&gt;</code> &mdash; <code>EventStream@timescale</code> (default 90000)</li></ul><p>Example: <code>p60:20@10;cmd=timesignal;seg=break,po;mpd=bin</code> &mdash; a 20&nbsp;s Provider Placement Opportunity inside a Break, 10&nbsp;s after every full UTC minute, signaled both inband and in the MPD.</p></fieldset></details> <details><summary>Start and stop...</summary> <label for=\"start\">timeline start (and availabilityStartTime) relative to Epoch (in seconds) <input type=\"text\" id=\"start\" name=\"start\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "\" placeholder=\"p60:20@10;cmd=timesignal;seg=break,po;pre=5\"></label><p>The ad breaks are marked with SCTE-35 cue messages, carried inband as <code>emsg</code> boxes (scheme <code>urn:scte:scte35:2013:bin</code>) and/or in the MPD as an <code>EventStream</code> (SCTE 214-1 &sect;6.7). The schedule uses the same grammar as <code>sgai</code> and <code>svta</code>:<pre>( 1 | 2 | 3 ) | ( &lt;off&gt;:&lt;dur&gt;[,...] | p&lt;period&gt;:&lt;dur&gt;[@&lt;off&gt;,...] )[;key=val;...]</pre><code>1</code>, <code>2</code> and <code>3</code> are the legacy presets: that many <code>splice_insert</code> breaks per minute (<code>p60:20@10</code>, <code>p60:10@10,40</code> and <code>p60:10@10,36,46</code>). The options are:</p><ul><li><code>cmd=insert|timesignal</code> &mdash; splice command (default <code>insert</code>)</li><li><code>seg=&lt;level&gt;[,&lt;level&gt;...]</code> &mdash; segmentation levels for <code>cmd=timesignal</code>, outermost first (default <code>po</code>): <code>break</code>, <code>po</code>, <code>dpo</code>, <code>ad</code>, <code>dad</code>, <code>promo</code>, <code>dpromo</code></li><li><code>ads=&lt;n&gt;</code> &mdash; split the break into <it>n</it> creative segments (0-20, default 0)</li><li><code>adseg=&lt;level&gt;</code> &mdash; level used for those segments (default <code>ad</code>)</li><li><code>emsg=0|1</code> &mdash; inband carriage (default 1)</li><li><code>mpd=off|bin|xml</code> &mdash; MPD EventStream: none, <code>xml+bin</code> or full XML (default off)</li><li><code>lead=&lt;s&gt;</code> &mdash; delivery ahead of the splice point (default 7)</li><li><code>end=0|1</code> &mdash; also emit the closing message (default 1 for <code>timesignal</code>)</li><li><code>repeat=0|1</code> &mdash; repeat the cue in every segment of the lead window (default 0)</li><li><code>upid=&lt;type&gt;:&lt;value&gt;</code> &mdash; <code>segmentation_upid</code> (default a generated URI)</li><li><code>value=&lt;s&gt;</code> &mdash; <code>&#64;value</code> of the emsg and the EventStream (a PID or URI)</li><li><code>ts=&lt;n&gt;</code> &mdash; <code>EventStream@timescale</code> (default 90000)</li><li><code>slate=0|1</code> &mdash; serve the generated AD BREAK countdown slate inside the breaks, so the avail is visible (default 1; the legacy presets <code>1</code>, <code>2</code> and <code>3</code> keep the underlying content)</li><li><code>pre=&lt;s&gt;</code> &mdash; also slate the given number of seconds before each break with an AD BREAK IN countdown, which makes a cue delivered ahead of its splice point visible on screen (default 0, needs <code>slate=1</code>)</li></ul><p>Example: <code>p60:20@10;cmd=timesignal;seg=break,po;mpd=bin</code> &mdash; a 20&nbsp;s Provider Placement Opportunity inside a Break, 10&nbsp;s after every full UTC minute, signaled both inband and in the MPD.</p></fieldset></details> <details><summary>Start and stop...</summary> <label for=\"start\">timeline start (and availabilityStartTime) relative to Epoch (in seconds) <input type=\"text\" id=\"start\" name=\"start\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var36 string
 		templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Start)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 241, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 251, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var36)
 		if templ_7745c5c3_Err != nil {
@@ -725,7 +725,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var37 string
 		templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Stop)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 245, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 255, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 		if templ_7745c5c3_Err != nil {
@@ -738,7 +738,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var38 string
 		templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.StartRel)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 249, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 259, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 		if templ_7745c5c3_Err != nil {
@@ -751,7 +751,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var39 string
 		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.StopRel)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 253, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 263, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
 		if templ_7745c5c3_Err != nil {
@@ -764,7 +764,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var40 string
 		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.TimeSubsStpp)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 260, Col: 86}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 270, Col: 86}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
 		if templ_7745c5c3_Err != nil {
@@ -777,7 +777,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var41 string
 		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.TimeSubsWvtt)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 264, Col: 86}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 274, Col: 86}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var41)
 		if templ_7745c5c3_Err != nil {
@@ -790,7 +790,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var42 string
 		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.TimeSubsDur)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 268, Col: 83}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 278, Col: 83}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var42)
 		if templ_7745c5c3_Err != nil {
@@ -823,7 +823,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var43 string
 		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.TimeCC608)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 286, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 296, Col: 77}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
 		if templ_7745c5c3_Err != nil {
@@ -844,7 +844,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var44 templ.SafeURL
 		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinURLErrs(d.Host + "/config")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 298, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 308, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 		if templ_7745c5c3_Err != nil {
@@ -857,7 +857,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var45 string
 		templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(" for what commercial DRMs are configured.")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 298, Col: 99}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 308, Col: 99}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 		if templ_7745c5c3_Err != nil {
@@ -870,7 +870,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var46 string
 		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.AnnexI)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 308, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 318, Col: 68}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var46)
 		if templ_7745c5c3_Err != nil {
@@ -883,7 +883,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var47 string
 		templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Sgai)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 317, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 327, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var47)
 		if templ_7745c5c3_Err != nil {
@@ -896,7 +896,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var48 string
 		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.SgaiSessionID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 376, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 386, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var48)
 		if templ_7745c5c3_Err != nil {
@@ -909,7 +909,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var49 templ.SafeURL
 		templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinURLErrs(d.Host + "/api/sgai/ads")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 384, Col: 96}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 394, Col: 96}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 		if templ_7745c5c3_Err != nil {
@@ -922,7 +922,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var50 string
 		templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.SgaiInterests)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 385, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 395, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var50)
 		if templ_7745c5c3_Err != nil {
@@ -935,7 +935,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var51 templ.SafeURL
 		templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinURLErrs(d.Host + "/sgai/session_status")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 393, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 403, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 		if templ_7745c5c3_Err != nil {
@@ -948,7 +948,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var52 string
 		templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Svta)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 403, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 413, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var52)
 		if templ_7745c5c3_Err != nil {
@@ -961,7 +961,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var53 templ.SafeURL
 		templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinURLErrs(d.Host + "/sgai/session_status")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 450, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 460, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 		if templ_7745c5c3_Err != nil {
@@ -974,7 +974,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var54 string
 		templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Steer)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 463, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 473, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var54)
 		if templ_7745c5c3_Err != nil {
@@ -987,7 +987,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var55 string
 		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.SteerSessionID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 496, Col: 93}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 506, Col: 93}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var55)
 		if templ_7745c5c3_Err != nil {
@@ -1000,7 +1000,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var56 string
 		templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.SteerCSID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 502, Col: 78}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 512, Col: 78}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var56)
 		if templ_7745c5c3_Err != nil {
@@ -1013,7 +1013,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var57 templ.SafeURL
 		templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinURLErrs(d.Host + "/steering/session_status")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 507, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 517, Col: 53}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
 		if templ_7745c5c3_Err != nil {
@@ -1026,7 +1026,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var58 string
 		templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.StatusCodes)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 520, Col: 81}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 530, Col: 81}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var58)
 		if templ_7745c5c3_Err != nil {
@@ -1039,7 +1039,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var59 string
 		templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.JoinStringErrs("[{code:404,cycle:30,rsq:0,rep:video},{code:403,cycle:60,rsq:1}]")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 523, Col: 80}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 533, Col: 80}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var59))
 		if templ_7745c5c3_Err != nil {
@@ -1052,7 +1052,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var60 string
 		templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Traffic)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 536, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 546, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var60)
 		if templ_7745c5c3_Err != nil {

@@ -60,6 +60,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scte35_` can be combined with `sgai_` and `svta_` when they use the same break schedule, so the
   SCTE-35 cue announces the avail that an Alternative-MPD event fills with a real ad pod and
   SVTA2053 describes for measurement.
+- The breaks of an `scte35_` stream show the generated AD BREAK countdown slate, the same one
+  `sgai_` and `svta_` use, so the signaled avail is visible and not only announced. `slate=0` keeps
+  the underlying content; the legacy `scte35_1|2|3` presets stay signaling-only as before.
+- New `pre=<s>` setting on `scte35_` slates the given number of seconds before each break with an
+  AD BREAK IN countdown that reaches zero as the break starts. With `pre=` at least as large as
+  `lead=`, the cue becomes visible on screen at the moment it is delivered in the stream, which is
+  what makes an early announcement checkable by eye.
 
 ### Fixed
 
