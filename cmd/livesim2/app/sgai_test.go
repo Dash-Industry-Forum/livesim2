@@ -124,7 +124,8 @@ func TestAddSGAIReplaceEvents(t *testing.T) {
 	require.Len(t, es.Events, 1)
 	ev := es.Events[0]
 	assert.Equal(t, uint64(2700000), ev.PresentationTime) // 30s * 90000
-	assert.Equal(t, uint64(1350000), ev.Duration)         // 15s * 90000
+	require.NotNil(t, ev.Duration)
+	assert.Equal(t, uint64(1350000), *ev.Duration) // 15s * 90000
 	require.NotNil(t, ev.Id)
 	assert.Equal(t, uint64(1), *ev.Id)
 
@@ -198,7 +199,8 @@ func TestAddSGAIReplaceEventsPeriodic(t *testing.T) {
 	require.Len(t, es.Events, 2)
 	ev := es.Events[0]
 	assert.Equal(t, uint64(120*90000), ev.PresentationTime)
-	assert.Equal(t, uint64(20*90000), ev.Duration)
+	require.NotNil(t, ev.Duration)
+	assert.Equal(t, uint64(20*90000), *ev.Duration)
 	require.NotNil(t, ev.Id)
 	assert.Equal(t, uint64(3), *ev.Id) // 120/60 + 1: occurrence number since the epoch
 	assert.Equal(t, "https://example.com/sgai/ads?break=3&dur=20", ev.ReplacePresentation.Uri)

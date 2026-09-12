@@ -17,13 +17,17 @@ import (
 	"github.com/Eyevinn/mp4ff/mp4"
 )
 
-// Ad-break slate: during an ad-break window (sgai_ or svta_) the main video track serves
+// Ad-break slate: during an ad-break window (sgai_, svta_ or scte35_) the main video track serves
 // generated "AD BREAK <countdown>" segments instead of the normal content, so the underlying
 // stream visibly is the ad. With sgai_, a player that executes the Alternative-MPD event shows
 // a personalized ad pod over this window and one that does not shows the slate; with svta_ the
-// slate is the signaled creative itself. The main MPD is untouched (single Period, continuous
-// timeline) — per Ed.6 (example G.29-1) the replaced interval is signaled by the event only and
-// needs no Period of its own.
+// slate is the signaled creative itself, and with scte35_ it is the avail the cue messages
+// announce. The main MPD is untouched (single Period, continuous timeline) — per Ed.6 (example
+// G.29-1) the replaced interval is signaled by the event only and needs no Period of its own.
+//
+// scte35_ can also put an "AD BREAK IN <countdown>" slate on the seconds before a break (its
+// pre= option), which is what makes a cue delivered ahead of its splice point visible on
+// screen rather than only in an event log.
 //
 // Each slate segment splices seamlessly into the existing avc1 track: the IDR and P_Skip
 // frames are encoded against the representation's own SPS/PPS (taken from its init
@@ -211,6 +215,13 @@ func slateGenFor(vodFS fs.FS, a *asset, rep *RepData) (*slateGen, error) {
 	return nil, fmt.Errorf("no slate generator for %s: %w", key, err)
 }
 
+// Slate headings. The rest of the label is the break occurrence id and the countdown, so
+// both windows read the same way: what is happening, which break, and how long is left.
+const (
+	slateHeadingBreak = "AD BREAK"    // inside the break, counting down to its end
+	slateHeadingPre   = "AD BREAK IN" // before the break, counting down to its start
+)
+
 // adBreakForSegment returns the end (in ms since the epoch) and the event id of the break
 // whose window contains the start of the segment described by meta, or ok=false when the
 // segment starts outside every break (or the stream has no ad breaks at all). Segment times
@@ -222,6 +233,36 @@ func adBreakForSegment(cfg *ResponseConfig, meta segMeta) (int64, uint64, bool) 
 	}
 	segStartMS := int64(cfg.StartTimeS)*1000 + int64(meta.newTime)*1000/int64(meta.timescale)
 	return sched.windowAt(segStartMS, cfg.StartTimeS)
+}
+
+// slatePreS is how many seconds before a break the pre-break countdown runs, 0 for none.
+// Only scte35_ offers it (with its pre= option), but it applies to whichever schedule is in
+// effect, so it also announces the breaks a combined sgai_ fills with real ads.
+func slatePreS(cfg *ResponseConfig) int {
+	if cfg.SCTE35 == nil || !cfg.SCTE35.Slate {
+		return 0
+	}
+	return cfg.SCTE35.PreS
+}
+
+// slateWindowForSegment returns what the slate should show for a segment: the countdown
+// target (ms since the epoch), the break occurrence id and the heading. A segment inside a
+// break counts down to the break end; one in the pre-break window counts down to the break
+// start. ok=false means the segment is served as normal content.
+func slateWindowForSegment(cfg *ResponseConfig, meta segMeta) (untilMS int64, id uint64, heading string, ok bool) {
+	if untilMS, id, ok = adBreakForSegment(cfg, meta); ok {
+		return untilMS, id, slateHeadingBreak, true
+	}
+	preS := slatePreS(cfg)
+	if preS == 0 {
+		return 0, 0, "", false
+	}
+	sched := adBreaksFor(cfg)
+	segStartMS := int64(cfg.StartTimeS)*1000 + int64(meta.newTime)*1000/int64(meta.timescale)
+	if startMS, id, ok := sched.nextBreakWithin(segStartMS, cfg.StartTimeS, preS); ok {
+		return startMS, id, slateHeadingPre, true
+	}
+	return 0, 0, "", false
 }
 
 // applyAdBreakSlate replaces the samples of a video segment with a generated
@@ -237,7 +278,7 @@ func adBreakForSegment(cfg *ResponseConfig, meta segMeta) (int64, uint64, bool) 
 func applyAdBreakSlate(vodFS fs.FS, a *asset, cfg *ResponseConfig, meta segMeta,
 	seg *mp4.MediaSegment) (*mp4.MediaSegment, error) {
 
-	breakEndMS, breakID, ok := adBreakForSegment(cfg, meta)
+	untilMS, breakID, heading, ok := slateWindowForSegment(cfg, meta)
 	if !ok {
 		return nil, nil
 	}
@@ -294,13 +335,13 @@ func applyAdBreakSlate(vodFS fs.FS, a *asset, cfg *ResponseConfig, meta segMeta,
 		}
 		ctoOffset = min(ctoOffset, dtsRel+cto)
 		frameWallMS := segStartMS + dtsRel*1000/int64(meta.timescale)
-		// Seconds left of the break at this frame: durS, ..., 2, 1 and 0 during the
-		// last second — the countdown reaches zero as the live content returns.
-		remainingS := max((breakEndMS-frameWallMS-1)/1000, 0)
-		// Three lines: "AD BREAK", "#<event id>" (the break occurrence id, same value as the
+		// Seconds left at this frame: n, ..., 2, 1 and 0 during the last second — the
+		// countdown reaches zero as the break (or, before it, the wait for it) ends.
+		remainingS := max((untilMS-frameWallMS-1)/1000, 0)
+		// Three lines: the heading, "#<event id>" (the break occurrence id, same value as the
 		// players' ad log and the beacons) and the seconds-left countdown suffixed with "S".
 		specs = append(specs, slateFrameSpec{dur: dur, size: size,
-			label: fmt.Sprintf("AD BREAK\n#%d\n%dS", breakID, remainingS)})
+			label: fmt.Sprintf("%s\n#%d\n%dS", heading, breakID, remainingS)})
 		dtsRel += int64(dur)
 	}
 

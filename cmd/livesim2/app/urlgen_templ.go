@@ -692,171 +692,144 @@ func urlgenPage(d urlGenData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "\"></label><p><em>Set a positive TTL in seconds</em></p></fieldset></details> <details><summary>SCTE-35...</summary><fieldset><legend>SCTE-35 emsg frequency</legend> <label for=\"scte35-none\"><input type=\"radio\" id=\"scte35-none\" name=\"scte35\" value=\"\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if d.Scte35Var == "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, " checked")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "> No SCTE-35 emsg boxes</label> <label for=\"scte35-1\"><input type=\"radio\" id=\"scte35-1\" name=\"scte35\" value=\"1\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if d.Scte35Var == "1" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, " checked")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "> 1 event per minute, duration 20s, start at hh:mm:10</label> <label for=\"scte35-2\"><input type=\"radio\" id=\"scte35-2\" name=\"scte35\" value=\"2\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if d.Scte35Var == "2" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, " checked")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "> 2 events per minute, duration 10s, start at hh:mm:10 and hh:mm:40</label> <label for=\"scte35-3\"><input type=\"radio\" id=\"scte35-3\" name=\"scte35\" value=\"3\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if d.Scte35Var == "3" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, " checked")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "> 3 events per minute, duration 10s, start at hh:mm:10, hh:mm:36, hh:mm:46</label></fieldset></details> <details><summary>Start and stop...</summary> <label for=\"start\">timeline start (and availabilityStartTime) relative to Epoch (in seconds) <input type=\"text\" id=\"start\" name=\"start\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "\"></label><p><em>Set a positive TTL in seconds</em></p></fieldset></details> <details><summary>SCTE-35 ad-avail signaling...</summary><fieldset><legend>SCTE-35 cue messages marking the ad breaks, inband and/or in the MPD</legend> <label for=\"scte35\">Ad-break schedule and options <input type=\"text\" id=\"scte35\" name=\"scte35\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var35 string
-		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Start)
+		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Scte35Var)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 219, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 199, Col: 72}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "\"></label> <label for=\"stop\">stop time for time-limited event (in seconds) <input type=\"text\" id=\"stop\" name=\"stop\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "\" placeholder=\"p60:20@10;cmd=timesignal;seg=break,po;pre=5\"></label><p>The ad breaks are marked with SCTE-35 cue messages, carried inband as <code>emsg</code> boxes (scheme <code>urn:scte:scte35:2013:bin</code>) and/or in the MPD as an <code>EventStream</code> (SCTE 214-1 &sect;6.7). The schedule uses the same grammar as <code>sgai</code> and <code>svta</code>:<pre>( 1 | 2 | 3 ) | ( &lt;off&gt;:&lt;dur&gt;[,...] | p&lt;period&gt;:&lt;dur&gt;[@&lt;off&gt;,...] )[;key=val;...]</pre><code>1</code>, <code>2</code> and <code>3</code> are the legacy presets: that many <code>splice_insert</code> breaks per minute (<code>p60:20@10</code>, <code>p60:10@10,40</code> and <code>p60:10@10,36,46</code>). The options are:</p><ul><li><code>cmd=insert|timesignal</code> &mdash; splice command (default <code>insert</code>)</li><li><code>seg=&lt;level&gt;[,&lt;level&gt;...]</code> &mdash; segmentation levels for <code>cmd=timesignal</code>, outermost first (default <code>po</code>): <code>break</code>, <code>po</code>, <code>dpo</code>, <code>ad</code>, <code>dad</code>, <code>promo</code>, <code>dpromo</code></li><li><code>ads=&lt;n&gt;</code> &mdash; split the break into <it>n</it> creative segments (0-20, default 0)</li><li><code>adseg=&lt;level&gt;</code> &mdash; level used for those segments (default <code>ad</code>)</li><li><code>emsg=0|1</code> &mdash; inband carriage (default 1)</li><li><code>mpd=off|bin|xml</code> &mdash; MPD EventStream: none, <code>xml+bin</code> or full XML (default off)</li><li><code>lead=&lt;s&gt;</code> &mdash; delivery ahead of the splice point (default 7)</li><li><code>end=0|1</code> &mdash; also emit the closing message (default 1 for <code>timesignal</code>)</li><li><code>repeat=0|1</code> &mdash; repeat the cue in every segment of the lead window (default 0)</li><li><code>upid=&lt;type&gt;:&lt;value&gt;</code> &mdash; <code>segmentation_upid</code> (default a generated URI)</li><li><code>value=&lt;s&gt;</code> &mdash; <code>&#64;value</code> of the emsg and the EventStream (a PID or URI)</li><li><code>ts=&lt;n&gt;</code> &mdash; <code>EventStream@timescale</code> (default 90000)</li><li><code>slate=0|1</code> &mdash; serve the generated AD BREAK countdown slate inside the breaks, so the avail is visible (default 1; the legacy presets <code>1</code>, <code>2</code> and <code>3</code> keep the underlying content)</li><li><code>pre=&lt;s&gt;</code> &mdash; also slate the given number of seconds before each break with an AD BREAK IN countdown, which makes a cue delivered ahead of its splice point visible on screen (default 0, needs <code>slate=1</code>)</li></ul><p>Example: <code>p60:20@10;cmd=timesignal;seg=break,po;mpd=bin</code> &mdash; a 20&nbsp;s Provider Placement Opportunity inside a Break, 10&nbsp;s after every full UTC minute, signaled both inband and in the MPD.</p></fieldset></details> <details><summary>Start and stop...</summary> <label for=\"start\">timeline start (and availabilityStartTime) relative to Epoch (in seconds) <input type=\"text\" id=\"start\" name=\"start\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var36 string
-		templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Stop)
+		templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Start)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 223, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 251, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var36)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "\"></label> <label for=\"relstart\">timeline start (and availabilityStartTime) relative to now (in seconds). Normally negative value. <input type=\"text\" id=\"startrel\" name=\"startrel\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "\"></label> <label for=\"stop\">stop time for time-limited event (in seconds) <input type=\"text\" id=\"stop\" name=\"stop\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var37 string
-		templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.StartRel)
+		templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Stop)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 227, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 255, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "\"></label> <label for=\"relstop\">stop time for time-limited event relative to now (in seconds) <input type=\"text\" id=\"stoprel\" name=\"stoprel\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, "\"></label> <label for=\"relstart\">timeline start (and availabilityStartTime) relative to now (in seconds). Normally negative value. <input type=\"text\" id=\"startrel\" name=\"startrel\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var38 string
-		templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.StopRel)
+		templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.StartRel)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 231, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 259, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "\"></label></details> <details><summary>Generate time subtitles...</summary> <label for=\"timesubsstpp\">languages for generated subtitles in stpp-format (comma-separated) <input type=\"text\" id=\"timesubsstpp\" name=\"timesubsstpp\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "\"></label> <label for=\"relstop\">stop time for time-limited event relative to now (in seconds) <input type=\"text\" id=\"stoprel\" name=\"stoprel\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var39 string
-		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.TimeSubsStpp)
+		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.StopRel)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 238, Col: 86}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 263, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "\"></label> <label for=\"timesubswvtt\">languages for generated subtitles in wvtt-format (comma-separated) <input type=\"text\" id=\"timesubswvtt\" name=\"timesubswvtt\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "\"></label></details> <details><summary>Generate time subtitles...</summary> <label for=\"timesubsstpp\">languages for generated subtitles in stpp-format (comma-separated) <input type=\"text\" id=\"timesubsstpp\" name=\"timesubsstpp\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var40 string
-		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.TimeSubsWvtt)
+		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.TimeSubsStpp)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 242, Col: 86}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 270, Col: 86}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "\"></label> <label for=\"timesubsdur\">Cue duration of generated time subtitles in ms (&lt;=1000) <input type=\"text\" id=\"timesubsdur\" name=\"timesubsdur\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "\"></label> <label for=\"timesubswvtt\">languages for generated subtitles in wvtt-format (comma-separated) <input type=\"text\" id=\"timesubswvtt\" name=\"timesubswvtt\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var41 string
-		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.TimeSubsDur)
+		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.TimeSubsWvtt)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 246, Col: 83}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 274, Col: 86}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var41)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "\"></label><fieldset><legend>Time subtitle region</legend> <label for=\"reg0\"><input type=\"radio\" id=\"reg0\" name=\"timesubsreg\" value=\"0\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if d.TimeSubsReg == "0" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, " checked")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "> Region 0 (bottom)</label> <label for=\"reg1\"><input type=\"radio\" id=\"reg1\" name=\"timesubsreg\" value=\"1\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if d.TimeSubsReg == "1" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, " checked")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "> Region 1 (top)</label></fieldset></details> <details><summary>Inject in-band CTA-608 captions...</summary> <label for=\"timecc608\">CEA-608 channel and language as &lt;channel&gt;-&lt;lang&gt;[-&lt;mode&gt;[-&lt;modifier&gt;]] (e.g. CC1-eng). Injected into the AVC/HEVC video as a ticking UTC clock plus segment number, and advertised with an Accessibility descriptor. Only CC1 is supported, and the language is a three-letter ISO 639-2 code (eng, swe), the form that descriptor's value takes. Rejected for encrypted or already-captioned assets. The mode decides how a caption reaches the screen: paint (the default) clears the screen each second and types the caption on two characters per frame, pop builds it hidden and flips it on whole, and roll2/roll3 type it onto the base row of a scrolling window of that many rows. Only pop makes a caption span the segment boundary, in exchange for being displayed over exactly the second it names; append -sc to it (CC1-eng-pop-sc) to keep it inside its own segment at the cost of ~0.5 s of delay. The other modes are self-contained per segment already. <input type=\"text\" id=\"timecc608\" name=\"timecc608\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "\"></label> <label for=\"timesubsdur\">Cue duration of generated time subtitles in ms (&lt;=1000) <input type=\"text\" id=\"timesubsdur\" name=\"timesubsdur\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var42 string
-		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.TimeCC608)
+		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.TimeSubsDur)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 264, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 278, Col: 83}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var42)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "\" placeholder=\"CC1-eng\"></label></details> <details><summary>Encryption and DRM</summary><fieldset><legend>Encryption on-the-fly with keys via ECCP or commercial DRM systems. Pre-encrypted assets cannot be changed.</legend><!-- This should be asset dependent, but not got the right htmx to do that yet --><div name=\"drms\" id=\"drms\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "\"></label><fieldset><legend>Time subtitle region</legend> <label for=\"reg0\"><input type=\"radio\" id=\"reg0\" name=\"timesubsreg\" value=\"0\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if d.TimeSubsReg == "0" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, " checked")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "> Region 0 (bottom)</label> <label for=\"reg1\"><input type=\"radio\" id=\"reg1\" name=\"timesubsreg\" value=\"1\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if d.TimeSubsReg == "1" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, " checked")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "> Region 1 (top)</label></fieldset></details> <details><summary>Inject in-band CTA-608 captions...</summary> <label for=\"timecc608\">CEA-608 channel and language as &lt;channel&gt;-&lt;lang&gt;[-&lt;mode&gt;[-&lt;modifier&gt;]] (e.g. CC1-eng). Injected into the AVC/HEVC video as a ticking UTC clock plus segment number, and advertised with an Accessibility descriptor. Only CC1 is supported, and the language is a three-letter ISO 639-2 code (eng, swe), the form that descriptor's value takes. Rejected for encrypted or already-captioned assets. The mode decides how a caption reaches the screen: paint (the default) clears the screen each second and types the caption on two characters per frame, pop builds it hidden and flips it on whole, and roll2/roll3 type it onto the base row of a scrolling window of that many rows. Only pop makes a caption span the segment boundary, in exchange for being displayed over exactly the second it names; append -sc to it (CC1-eng-pop-sc) to keep it inside its own segment at the cost of ~0.5 s of delay. The other modes are self-contained per segment already. <input type=\"text\" id=\"timecc608\" name=\"timecc608\" value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var43 string
+		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.TimeCC608)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 296, Col: 77}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "\" placeholder=\"CC1-eng\"></label></details> <details><summary>Encryption and DRM</summary><fieldset><legend>Encryption on-the-fly with keys via ECCP or commercial DRM systems. Pre-encrypted assets cannot be changed.</legend><!-- This should be asset dependent, but not got the right htmx to do that yet --><div name=\"drms\" id=\"drms\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -864,228 +837,228 @@ func urlgenPage(d urlGenData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "</div><div>See <a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "</div><div>See <a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var43 templ.SafeURL
-		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinURLErrs(d.Host + "/config")
+		var templ_7745c5c3_Var44 templ.SafeURL
+		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinURLErrs(d.Host + "/config")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 276, Col: 40}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 86, "\">/config</a>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var44 string
-		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(" for what commercial DRMs are configured.")
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 276, Col: 99}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 308, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "<br>For more about DASH-IF ECCP see <a href=\"https://dashif.org/docs/IOP-Guidelines/DASH-IF-IOP-Part6-v5.0.0.pdf\" target=\"_blank\">DASH-IF IOP Part 6</a></div></fieldset></details> <details><summary>Annex I URL Parameters...</summary> <label for=\"annexI\">query parameters in MPD to propagate to all video segment requests. Comma-separated key=value pairs. <input type=\"text\" id=\"annexI\" name=\"annexI\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "\">/config</a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var45 string
-		templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.AnnexI)
+		templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(" for what commercial DRMs are configured.")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 286, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 308, Col: 99}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var45)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 88, "\"></label></details> <details><summary>Server-Guided Ad Insertion (SGAI, DASH Ed.6)...</summary><fieldset><legend>Personalized live ad replacement via Alternative-MPD Replace events</legend> <label for=\"sgai\">Ad-break schedule and options <input type=\"text\" id=\"sgai\" name=\"sgai\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, "<br>For more about DASH-IF ECCP see <a href=\"https://dashif.org/docs/IOP-Guidelines/DASH-IF-IOP-Part6-v5.0.0.pdf\" target=\"_blank\">DASH-IF IOP Part 6</a></div></fieldset></details> <details><summary>Annex I URL Parameters...</summary> <label for=\"annexI\">query parameters in MPD to propagate to all video segment requests. Comma-separated key=value pairs. <input type=\"text\" id=\"annexI\" name=\"annexI\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var46 string
-		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Sgai)
+		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.AnnexI)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 295, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 318, Col: 68}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var46)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 89, "\" placeholder=\"30:15,90:15;skipafter=5\"></label><p>The live stream is annotated with DASH 6th-edition <em>Alternative-MPD Replace</em> events. At each break the player resolves an ad-decisioning endpoint (default <code>/sgai/ads</code>), plays the returned ad pod (a List MPD), then resumes the live stream. Grammar:<pre>( &lt;off&gt;:&lt;dur&gt;[,&lt;off&gt;:&lt;dur&gt;...] | p&lt;period&gt;:&lt;dur&gt; )[;key=val;...]</pre>where each <code>off:dur</code> is one break, both in <em>seconds</em>:</p><ul><li><it>off</it> &mdash; break start, seconds from the period (availabilityStartTime) start</li><li><it>dur</it> &mdash; break duration; also the maximum ad-pod duration (ads are trimmed to fit)</li><li><it>p&lt;period&gt;:&lt;dur&gt;</it> &mdash; recurring breaks instead: a break of <it>dur</it> at every wall-clock multiple of <it>period</it> (e.g. <code>p60:20</code> = 20&nbsp;s at every start of a UTC minute, forever). Anchored to the wall clock, not the session start, so all viewers share the schedule and a late joiner can land in the middle of a break.</li></ul><p>Optional <code>;key=val</code> settings after the break list:</p><ul><li><it>skipafter=&lt;s&gt;</it> &mdash; ads become skippable after s seconds (default: not skippable)</li><li><it>nojump=&lt;0|1|2&gt;</it> &mdash; restrict skipping the break by seeking (default 0)</li><li><it>clip=&lt;0|1&gt;</it> &mdash; clip the replaced main content (default 1)</li><li><it>once=&lt;0|1&gt;</it> &mdash; each event executes only once (default 1)</li><li><it>resolve=&lt;s&gt;</it> &mdash; earliestResolutionTimeOffset: how many seconds before the break the player may resolve the ad (default 60)</li><li><it>ep=&lt;path&gt;</it> &mdash; ad-decisioning endpoint path (default /sgai/ads)</li><li><it>svta=&lt;0|1&gt;</it> &mdash; also describe every ad of the returned pod with SVTA2053 ad-creative signaling in the List MPD (default 0)</li></ul><p>Example:<pre>30:15,90:15;skipafter=5;nojump=2</pre>two 15&nbsp;s breaks (at 30&nbsp;s and 90&nbsp;s), skippable after 5&nbsp;s, not skippable by seeking.<br>During each break the underlying (clear AVC) video track serves a generated <em>AD&nbsp;BREAK</em> slate with a per-second countdown to the end of the break &mdash; the visible \"ad to be replaced\", i.e. the base ad. Players that execute the Replace event cover it with the personalized pod; others show the slate. Audio is untouched.<br><strong>An ad pod is only returned for an interest-steered request</strong>: with no <em>interests</em> (or interests that match no creative) the decisioning answers 404, the Replace event is skipped, and every player keeps the AD&nbsp;BREAK slate (the base ad). This is the default when neither sessionId nor interests are given.<br><em>Cannot be combined with the multi-period / xlink / insertad options.</em></p><label for=\"sgaiSessionId\">sessionId &mdash; personalization &amp; reporting key (keys the impression beacons; with interests, rotates the pod per session for variety). On its own it does not produce a pod. There is a single <em>sessionId</em> per viewer, shared with Content Steering &mdash; this field and the steering one are kept in sync. <input type=\"text\" id=\"sgaiSessionId\" name=\"sgaiSessionId\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "\"></label></details> <details><summary>Server-Guided Ad Insertion (SGAI, DASH Ed.6)...</summary><fieldset><legend>Personalized live ad replacement via Alternative-MPD Replace events</legend> <label for=\"sgai\">Ad-break schedule and options <input type=\"text\" id=\"sgai\" name=\"sgai\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var47 string
-		templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.SgaiSessionID)
+		templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Sgai)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 354, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 327, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var47)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 90, "\" placeholder=\"alice\" oninput=\"document.getElementById('steerSessionId').value=this.value\"></label> <label for=\"sgaiInterests\">interests &mdash; comma-separated interest tags; matching ads (tagged in ads/ads.json) lead the pod. <strong>Required to get an ad pod</strong> &mdash; without interests the player keeps the AD&nbsp;BREAK slate (the base ad). The bundled demo ads are tagged <code>travel</code> (train, Namibia&nbsp;&times;2, of which one also <code>safari</code>) and <code>sailing</code>/<code>boats</code> (Gotland&nbsp;Runt, Sailing in Stockholm) &mdash; see <a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "\" placeholder=\"30:15,90:15;skipafter=5\"></label><p>The live stream is annotated with DASH 6th-edition <em>Alternative-MPD Replace</em> events. At each break the player resolves an ad-decisioning endpoint (default <code>/sgai/ads</code>), plays the returned ad pod (a List MPD), then resumes the live stream. Grammar:<pre>( &lt;off&gt;:&lt;dur&gt;[,&lt;off&gt;:&lt;dur&gt;...] | p&lt;period&gt;:&lt;dur&gt; )[;key=val;...]</pre>where each <code>off:dur</code> is one break, both in <em>seconds</em>:</p><ul><li><it>off</it> &mdash; break start, seconds from the period (availabilityStartTime) start</li><li><it>dur</it> &mdash; break duration; also the maximum ad-pod duration (ads are trimmed to fit)</li><li><it>p&lt;period&gt;:&lt;dur&gt;</it> &mdash; recurring breaks instead: a break of <it>dur</it> at every wall-clock multiple of <it>period</it> (e.g. <code>p60:20</code> = 20&nbsp;s at every start of a UTC minute, forever). Anchored to the wall clock, not the session start, so all viewers share the schedule and a late joiner can land in the middle of a break.</li></ul><p>Optional <code>;key=val</code> settings after the break list:</p><ul><li><it>skipafter=&lt;s&gt;</it> &mdash; ads become skippable after s seconds (default: not skippable)</li><li><it>nojump=&lt;0|1|2&gt;</it> &mdash; restrict skipping the break by seeking (default 0)</li><li><it>clip=&lt;0|1&gt;</it> &mdash; clip the replaced main content (default 1)</li><li><it>once=&lt;0|1&gt;</it> &mdash; each event executes only once (default 1)</li><li><it>resolve=&lt;s&gt;</it> &mdash; earliestResolutionTimeOffset: how many seconds before the break the player may resolve the ad (default 60)</li><li><it>ep=&lt;path&gt;</it> &mdash; ad-decisioning endpoint path (default /sgai/ads)</li><li><it>svta=&lt;0|1&gt;</it> &mdash; also describe every ad of the returned pod with SVTA2053 ad-creative signaling in the List MPD (default 0)</li></ul><p>Example:<pre>30:15,90:15;skipafter=5;nojump=2</pre>two 15&nbsp;s breaks (at 30&nbsp;s and 90&nbsp;s), skippable after 5&nbsp;s, not skippable by seeking.<br>During each break the underlying (clear AVC) video track serves a generated <em>AD&nbsp;BREAK</em> slate with a per-second countdown to the end of the break &mdash; the visible \"ad to be replaced\", i.e. the base ad. Players that execute the Replace event cover it with the personalized pod; others show the slate. Audio is untouched.<br><strong>An ad pod is only returned for an interest-steered request</strong>: with no <em>interests</em> (or interests that match no creative) the decisioning answers 404, the Replace event is skipped, and every player keeps the AD&nbsp;BREAK slate (the base ad). This is the default when neither sessionId nor interests are given.<br><em>Cannot be combined with the multi-period / xlink / insertad options.</em></p><label for=\"sgaiSessionId\">sessionId &mdash; personalization &amp; reporting key (keys the impression beacons; with interests, rotates the pod per session for variety). On its own it does not produce a pod. There is a single <em>sessionId</em> per viewer, shared with Content Steering &mdash; this field and the steering one are kept in sync. <input type=\"text\" id=\"sgaiSessionId\" name=\"sgaiSessionId\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var48 templ.SafeURL
-		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinURLErrs(d.Host + "/api/sgai/ads")
+		var templ_7745c5c3_Var48 string
+		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.SgaiSessionID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 362, Col: 96}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 386, Col: 90}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 91, "\" target=\"_blank\">/api/sgai/ads</a>. <input type=\"text\" id=\"sgaiInterests\" name=\"sgaiInterests\" value=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var48)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var49 string
-		templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.SgaiInterests)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 363, Col: 90}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var49)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "\" placeholder=\"alice\" oninput=\"document.getElementById('steerSessionId').value=this.value\"></label> <label for=\"sgaiInterests\">interests &mdash; comma-separated interest tags; matching ads (tagged in ads/ads.json) lead the pod. <strong>Required to get an ad pod</strong> &mdash; without interests the player keeps the AD&nbsp;BREAK slate (the base ad). The bundled demo ads are tagged <code>travel</code> (train, Namibia&nbsp;&times;2, of which one also <code>safari</code>) and <code>sailing</code>/<code>boats</code> (Gotland&nbsp;Runt, Sailing in Stockholm) &mdash; see <a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 92, "\" placeholder=\"travel\"></label><p><em>sessionId</em> and <em>interests</em> are added as MPD-URL query parameters and propagated to the ad-decisioning request via Annex I, so each viewer can receive a different, interest-steered ad pod. With no interests the decisioning returns no pod and the viewer sees the base ad (the AD&nbsp;BREAK slate). Watch ad decisions and impression beacons live at <a href=\"")
+		var templ_7745c5c3_Var49 templ.SafeURL
+		templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinURLErrs(d.Host + "/api/sgai/ads")
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 394, Col: 96}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var50 templ.SafeURL
-		templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinURLErrs(d.Host + "/sgai/session_status")
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 371, Col: 49}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "\" target=\"_blank\">/api/sgai/ads</a>. <input type=\"text\" id=\"sgaiInterests\" name=\"sgaiInterests\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 93, "\" target=\"_blank\">/sgai/session_status</a>.</p></fieldset></details> <details><summary>SVTA2053 ad creative signaling...</summary><fieldset><legend>Ad creatives signaled with an SVTA2053 EventStream (v2 JSON payload)</legend> <label for=\"svta\">Ad-break schedule and options <input type=\"text\" id=\"svta\" name=\"svta\" value=\"")
+		var templ_7745c5c3_Var50 string
+		templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.SgaiInterests)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 395, Col: 90}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var50)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var51 string
-		templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Svta)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 381, Col: 63}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var51)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "\" placeholder=\"travel\"></label><p><em>sessionId</em> and <em>interests</em> are added as MPD-URL query parameters and propagated to the ad-decisioning request via Annex I, so each viewer can receive a different, interest-steered ad pod. With no interests the decisioning returns no pod and the viewer sees the base ad (the AD&nbsp;BREAK slate). Watch ad decisions and impression beacons live at <a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 94, "\" placeholder=\"p60:20;ads=2\"></label><p>Ad-creative windows of the live timeline are signaled with an <code>EventStream</code> of scheme <code>urn:svta:advertising-wg:ad-creative-signaling</code>, one <code>Event</code> per creative carrying the SVTA2053 version&nbsp;2 JSON payload as node data (identifiers, duration and tracking URLs). Grammar:<pre>( &lt;off&gt;:&lt;dur&gt;[,&lt;off&gt;:&lt;dur&gt;...] | p&lt;period&gt;:&lt;dur&gt; )[;key=val;...]</pre>the same break schedule as SGAI, where each <code>off:dur</code> is one break, both in <em>seconds</em>:</p><ul><li><it>off</it> &mdash; break start, seconds from the period (availabilityStartTime) start</li><li><it>dur</it> &mdash; break duration, split equally between the creatives</li><li><it>p&lt;period&gt;:&lt;dur&gt;</it> &mdash; recurring breaks instead: a break of <it>dur</it> at every wall-clock multiple of <it>period</it> (e.g. <code>p60:20</code> = 20&nbsp;s at every start of a UTC minute, forever)</li></ul><p>Optional <code>;key=val</code> settings after the break list:</p><ul><li><it>ads=&lt;n&gt;</it> &mdash; creatives per break, 1&ndash;20 (default 1)</li><li><it>skip=&lt;s&gt;</it> &mdash; skipOffset in seconds on each creative (default: none)</li><li><it>click=&lt;0|1&gt;</it> &mdash; add clickThrough and clickTracking (default 0)</li><li><it>verif=&lt;0|1&gt;</it> &mdash; add an ad-verification resource (default 0)</li><li><it>pod=&lt;0|1&gt;</it> &mdash; also signal the whole break as a pod, with podStart and podEnd tracking (default 0)</li><li><it>ts=&lt;n&gt;</it> &mdash; EventStream timescale, a positive 32-bit integer (default 90000)</li></ul><p>Example:<pre>p60:20;ads=2</pre>two 10&nbsp;s creatives every UTC minute. During each break the underlying (clear AVC) video track serves the generated <em>AD&nbsp;BREAK</em> countdown slate, so the signaled creative is visible.<br>The tracking URLs (impression, start, quartiles, complete, plus pause and resume, which fire on viewer interaction rather than at a point on the timeline) point back at this server's beacon endpoint, so a player that supports the scheme &mdash; e.g. Shaka&nbsp;Player &mdash; can be watched reporting the whole ad round trip live at <a href=\"")
+		var templ_7745c5c3_Var51 templ.SafeURL
+		templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinURLErrs(d.Host + "/sgai/session_status")
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 403, Col: 49}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var52 templ.SafeURL
-		templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinURLErrs(d.Host + "/sgai/session_status")
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 428, Col: 49}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 86, "\" target=\"_blank\">/sgai/session_status</a>.</p></fieldset></details> <details><summary>SVTA2053 ad creative signaling...</summary><fieldset><legend>Ad creatives signaled with an SVTA2053 EventStream (v2 JSON payload)</legend> <label for=\"svta\">Ad-break schedule and options <input type=\"text\" id=\"svta\" name=\"svta\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 95, "\" target=\"_blank\">/sgai/session_status</a>. Set the <em>sessionId</em> in the SGAI section above to key those beacons to a viewer.<br><em>Cannot be combined with SGAI or the multi-period / xlink / insertad options.</em></p></fieldset></details> <details><summary>DASH Content Steering (ISO/IEC 23009-1 6th ed., ETSI TS 103 998)...</summary><fieldset><legend>Multi-CDN steering with a steering server on this same host</legend> <label for=\"steer\">Service locations and options <input type=\"text\" id=\"steer\" name=\"steer\" value=\"")
+		var templ_7745c5c3_Var52 string
+		templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Svta)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 413, Col: 63}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var52)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var53 string
-		templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Steer)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 441, Col: 66}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var53)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "\" placeholder=\"p60:20;ads=2\"></label><p>Ad-creative windows of the live timeline are signaled with an <code>EventStream</code> of scheme <code>urn:svta:advertising-wg:ad-creative-signaling</code>, one <code>Event</code> per creative carrying the SVTA2053 version&nbsp;2 JSON payload as node data (identifiers, duration and tracking URLs). Grammar:<pre>( &lt;off&gt;:&lt;dur&gt;[,&lt;off&gt;:&lt;dur&gt;...] | p&lt;period&gt;:&lt;dur&gt; )[;key=val;...]</pre>the same break schedule as SGAI, where each <code>off:dur</code> is one break, both in <em>seconds</em>:</p><ul><li><it>off</it> &mdash; break start, seconds from the period (availabilityStartTime) start</li><li><it>dur</it> &mdash; break duration, split equally between the creatives</li><li><it>p&lt;period&gt;:&lt;dur&gt;</it> &mdash; recurring breaks instead: a break of <it>dur</it> at every wall-clock multiple of <it>period</it> (e.g. <code>p60:20</code> = 20&nbsp;s at every start of a UTC minute, forever)</li></ul><p>Optional <code>;key=val</code> settings after the break list:</p><ul><li><it>ads=&lt;n&gt;</it> &mdash; creatives per break, 1&ndash;20 (default 1)</li><li><it>skip=&lt;s&gt;</it> &mdash; skipOffset in seconds on each creative (default: none)</li><li><it>click=&lt;0|1&gt;</it> &mdash; add clickThrough and clickTracking (default 0)</li><li><it>verif=&lt;0|1&gt;</it> &mdash; add an ad-verification resource (default 0)</li><li><it>pod=&lt;0|1&gt;</it> &mdash; also signal the whole break as a pod, with podStart and podEnd tracking (default 0)</li><li><it>ts=&lt;n&gt;</it> &mdash; EventStream timescale, a positive 32-bit integer (default 90000)</li></ul><p>Example:<pre>p60:20;ads=2</pre>two 10&nbsp;s creatives every UTC minute. During each break the underlying (clear AVC) video track serves the generated <em>AD&nbsp;BREAK</em> countdown slate, so the signaled creative is visible.<br>The tracking URLs (impression, start, quartiles, complete, plus pause and resume, which fire on viewer interaction rather than at a point on the timeline) point back at this server's beacon endpoint, so a player that supports the scheme &mdash; e.g. Shaka&nbsp;Player &mdash; can be watched reporting the whole ad round trip live at <a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 96, "\" placeholder=\"alpha,beta;ttl=20\"></label><p>The MPD advertises two or more <em>service locations</em> (\"CDNs\") &mdash; all pointing back to this server &mdash; plus a root <code>&lt;ContentSteering&gt;</code> element referencing a steering endpoint here. The player polls it, gets a <code>PATHWAY-PRIORITY</code> ordering with a TTL, and switches CDN accordingly. Grammar:<pre>&lt;loc1&gt;,&lt;loc2&gt;[,&lt;loc3&gt;...][;key=val;...]</pre>at least two comma-separated service-location names, then optional <code>;key=val</code> settings:</p><ul><li><it>ttl=&lt;s&gt;</it> &mdash; steering-manifest TTL in seconds; the client re-polls every TTL (default 300)</li><li><it>mode=rotate|trigger</it> &mdash; <code>trigger</code> (default) holds the priority at the default order until you trigger a switch via the API / monitor; <code>rotate</code> rotates the priority one step every TTL automatically (wall-clock based, all clients in lockstep)</li><li><it>qbs=&lt;0|1&gt;</it> &mdash; queryBeforeStart: resolve the steering server before playback starts (default 0)</li><li><it>default=&lt;name&gt;</it> &mdash; the initial top service location (default: the first one listed)</li></ul><p>Example:<pre>alpha,beta;ttl=20</pre>two CDNs, 20&nbsp;s TTL, priority held on alpha until you flip it (trigger is the default).<br><em>Cannot be combined with the traffic option (both generate BaseURLs).</em></p><label for=\"steerSessionId\">sessionId &mdash; per-viewer steering &amp; reporting key (baked into each BaseURL so segment requests are attributed per CDN; required to follow one session in the monitor). There is a single <em>sessionId</em> per viewer, shared with SGAI &mdash; this field and the SGAI one are kept in sync. <input type=\"text\" id=\"steerSessionId\" name=\"steerSessionId\" value=\"")
+		var templ_7745c5c3_Var53 templ.SafeURL
+		templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinURLErrs(d.Host + "/sgai/session_status")
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 460, Col: 49}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 88, "\" target=\"_blank\">/sgai/session_status</a>. Set the <em>sessionId</em> in the SGAI section above to key those beacons to a viewer.<br><em>Cannot be combined with SGAI or the multi-period / xlink / insertad options.</em></p></fieldset></details> <details><summary>DASH Content Steering (ISO/IEC 23009-1 6th ed., ETSI TS 103 998)...</summary><fieldset><legend>Multi-CDN steering with a steering server on this same host</legend> <label for=\"steer\">Service locations and options <input type=\"text\" id=\"steer\" name=\"steer\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var54 string
-		templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.SteerSessionID)
+		templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Steer)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 474, Col: 93}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 473, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var54)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 97, "\" placeholder=\"alice\" oninput=\"document.getElementById('sgaiSessionId').value=this.value\"></label> <label for=\"steerCsid\">csid &mdash; optional content-steering <em>group</em> id (path token). Give several viewers the same csid (with distinct sessionIds) and one switch moves the whole group together, while each viewer's per-CDN counts and verification stay individual. Leave empty for a standalone stream. <input type=\"text\" id=\"steerCsid\" name=\"steerCsid\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 89, "\" placeholder=\"alpha,beta;ttl=20\"></label><p>The MPD advertises two or more <em>service locations</em> (\"CDNs\") &mdash; all pointing back to this server &mdash; plus a root <code>&lt;ContentSteering&gt;</code> element referencing a steering endpoint here. The player polls it, gets a <code>PATHWAY-PRIORITY</code> ordering with a TTL, and switches CDN accordingly. Grammar:<pre>&lt;loc1&gt;,&lt;loc2&gt;[,&lt;loc3&gt;...][;key=val;...]</pre>at least two comma-separated service-location names, then optional <code>;key=val</code> settings:</p><ul><li><it>ttl=&lt;s&gt;</it> &mdash; steering-manifest TTL in seconds; the client re-polls every TTL (default 300)</li><li><it>mode=rotate|trigger</it> &mdash; <code>trigger</code> (default) holds the priority at the default order until you trigger a switch via the API / monitor; <code>rotate</code> rotates the priority one step every TTL automatically (wall-clock based, all clients in lockstep)</li><li><it>qbs=&lt;0|1&gt;</it> &mdash; queryBeforeStart: resolve the steering server before playback starts (default 0)</li><li><it>default=&lt;name&gt;</it> &mdash; the initial top service location (default: the first one listed)</li></ul><p>Example:<pre>alpha,beta;ttl=20</pre>two CDNs, 20&nbsp;s TTL, priority held on alpha until you flip it (trigger is the default).<br><em>Cannot be combined with the traffic option (both generate BaseURLs).</em></p><label for=\"steerSessionId\">sessionId &mdash; per-viewer steering &amp; reporting key (baked into each BaseURL so segment requests are attributed per CDN; required to follow one session in the monitor). There is a single <em>sessionId</em> per viewer, shared with SGAI &mdash; this field and the SGAI one are kept in sync. <input type=\"text\" id=\"steerSessionId\" name=\"steerSessionId\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var55 string
-		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.SteerCSID)
+		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.SteerSessionID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 480, Col: 78}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 506, Col: 93}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var55)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 98, "\" placeholder=\"groupA\"></label><p>Watch the per-CDN segment request distribution and the current priority live, and drive a change with the Switch CDN / make-top buttons, at <a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 90, "\" placeholder=\"alice\" oninput=\"document.getElementById('sgaiSessionId').value=this.value\"></label> <label for=\"steerCsid\">csid &mdash; optional content-steering <em>group</em> id (path token). Give several viewers the same csid (with distinct sessionIds) and one switch moves the whole group together, while each viewer's per-CDN counts and verification stay individual. Leave empty for a standalone stream. <input type=\"text\" id=\"steerCsid\" name=\"steerCsid\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var56 templ.SafeURL
-		templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinURLErrs(d.Host + "/steering/session_status")
+		var templ_7745c5c3_Var56 string
+		templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.SteerCSID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 485, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 512, Col: 78}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 99, "\" target=\"_blank\">/steering/session_status</a>, or via the API at <code>/api/steering/sessions[/&lt;sid&gt;]</code> and <code>POST /api/steering/sessions/&lt;sid&gt;/switch</code>. To move a whole group at once use <code>/api/steering/groups[/&lt;csid&gt;]</code> and <code>POST /api/steering/groups/&lt;csid&gt;/switch</code>, or open the monitor with <code>?csid=&lt;group&gt;</code>.</p></fieldset></details> <details><summary>Negative test cases...</summary> <label for=\"statuscode\"><p><em>Patterns of cyclic segment response codes</em></p><input type=\"text\" id=\"statuscode\" name=\"statuscode\" value=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var56)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var57 string
-		templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.StatusCodes)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 498, Col: 81}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var57)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 91, "\" placeholder=\"groupA\"></label><p>Watch the per-CDN segment request distribution and the current priority live, and drive a change with the Switch CDN / make-top buttons, at <a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 100, "\"><p>A square-bracket-surrounded list of comma-separated patterns, like<pre>")
+		var templ_7745c5c3_Var57 templ.SafeURL
+		templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinURLErrs(d.Host + "/steering/session_status")
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 517, Col: 53}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 92, "\" target=\"_blank\">/steering/session_status</a>, or via the API at <code>/api/steering/sessions[/&lt;sid&gt;]</code> and <code>POST /api/steering/sessions/&lt;sid&gt;/switch</code>. To move a whole group at once use <code>/api/steering/groups[/&lt;csid&gt;]</code> and <code>POST /api/steering/groups/&lt;csid&gt;/switch</code>, or open the monitor with <code>?csid=&lt;group&gt;</code>.</p></fieldset></details> <details><summary>Negative test cases...</summary> <label for=\"statuscode\"><p><em>Patterns of cyclic segment response codes</em></p><input type=\"text\" id=\"statuscode\" name=\"statuscode\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var58 string
-		templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs("[{code:404,cycle:30,rsq:0,rep:video},{code:403,cycle:60,rsq:1}]")
+		templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.StatusCodes)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 501, Col: 80}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 530, Col: 81}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var58)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 101, "</pre>where:<br></p><ul><li><it>code</it> is an HTTP response code in the range 400-599</li><li><it>cycle</it> is cycle in seconds</li><li><it>rsq</it> is the relative sequence number in the cycle</li><li><it>rep</it> is a comma-separated list of representation IDs to which the pattern applies (can be empty)</li></ul></label> <label for=\"traffic\"><p><em>Traffic Patterns for one or more BaseURLs</em></p><input type=\"text\" id=\"traffic\" name=\"traffic\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 93, "\"><p>A square-bracket-surrounded list of comma-separated patterns, like<pre>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var59 string
-		templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Traffic)
+		templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.JoinStringErrs("[{code:404,cycle:30,rsq:0,rep:video},{code:403,cycle:60,rsq:1}]")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 514, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 533, Col: 80}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var59)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var59))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 102, "\"><p>Specify time interval for loss patterns for one or more BaseURLs with \"up (u)\", \"down (d)\", \"slow (s)\", or \"hang (h)\" states, like<pre>u50d10,u10d50</pre>or<pre>d1,u1,u45s10h5</pre>where:<br></p><ul><li><it>u50d10,u10d50</it> is two pairs (two base URLS)</li><li><it>u50d10 means 50s up time and 10s downtime (60s cycle)</it></li><li><it>u10d50 means 10s up time and 50s downtime (60s cycle)</it></li><li><it>d1,u1,u45s10h5</it> means three base URLS where the first is always down, the second is always up, and the third is up 45s, slow 10s, and hanging 5s every minute</li></ul><ul><li>During a \"down (d)\" interval, all segment requests will result in a \"404 Not Found\" response.</li><li>During a \"slow (s)\" interval, all segment responses are delayed by 2s.</li><li>During a \"hang (s)\" interval, all segment responses hang for 10s before resulting in 503.</li></ul></label></details><div class=\"grid\"><button type=\"submit\">Submit</button> <input type=\"button\" onclick=\"window.location.href='/urlgen/';\" class=\"secondary\" value=\"Reset\"></div></form></main></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 94, "</pre>where:<br></p><ul><li><it>code</it> is an HTTP response code in the range 400-599</li><li><it>cycle</it> is cycle in seconds</li><li><it>rsq</it> is the relative sequence number in the cycle</li><li><it>rep</it> is a comma-separated list of representation IDs to which the pattern applies (can be empty)</li></ul></label> <label for=\"traffic\"><p><em>Traffic Patterns for one or more BaseURLs</em></p><input type=\"text\" id=\"traffic\" name=\"traffic\" value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var60 string
+		templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Traffic)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 546, Col: 71}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var60)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 95, "\"><p>Specify time interval for loss patterns for one or more BaseURLs with \"up (u)\", \"down (d)\", \"slow (s)\", or \"hang (h)\" states, like<pre>u50d10,u10d50</pre>or<pre>d1,u1,u45s10h5</pre>where:<br></p><ul><li><it>u50d10,u10d50</it> is two pairs (two base URLS)</li><li><it>u50d10 means 50s up time and 10s downtime (60s cycle)</it></li><li><it>u10d50 means 10s up time and 50s downtime (60s cycle)</it></li><li><it>d1,u1,u45s10h5</it> means three base URLS where the first is always down, the second is always up, and the third is up 45s, slow 10s, and hanging 5s every minute</li></ul><ul><li>During a \"down (d)\" interval, all segment requests will result in a \"404 Not Found\" response.</li><li>During a \"slow (s)\" interval, all segment responses are delayed by 2s.</li><li>During a \"hang (s)\" interval, all segment responses hang for 10s before resulting in 503.</li></ul></label></details><div class=\"grid\"><button type=\"submit\">Submit</button> <input type=\"button\" onclick=\"window.location.href='/urlgen/';\" class=\"secondary\" value=\"Reset\"></div></form></main></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

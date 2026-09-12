@@ -37,6 +37,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   presentation time at all. Opt-in, since a player acting on both it and the existing callback beacons
   reports each timeline point twice.
 
+- The `scte35_` URL option takes the same ad-break schedule grammar as `sgai_` and `svta_`, with
+  `;key=val` options for the rest: `scte35_p60:20@10;cmd=timesignal;seg=break,po;ads=2;mpd=bin`.
+  `cmd=` picks `splice_insert()` or `time_signal()`, `seg=` the segmentation levels (`break`, `po`,
+  `dpo`, `ad`, `dad`, `promo`, `dpromo`, outermost first) and `ads=` splits the break into that many
+  creative segments, so a Break holding a Placement Opportunity holding the individual ads is
+  signaled the way SCTE 35 Figure 5 describes it: every level that opens at the same instant travels
+  in one message, as consecutive segmentation descriptors, with the start and the end of each level
+  sharing its `segmentation_event_id`. The rest of the options are `emsg=`, `mpd=`, `lead=`, `end=`,
+  `repeat=`, `upid=`, `value=` and `ts=`. See the [README](README.md#scte-35-ad-avail-signaling).
+  The `time_signal` support and the provider/distributor placement-opportunity distinction were
+  proposed by @tru64master in PR #327 (issue #335).
+- SCTE-35 messages can now also be carried in the MPD, which livesim2 had no support for at all:
+  `mpd=bin` adds an `EventStream` of scheme `urn:scte:scte35:2014:xml+bin` with the message as
+  `<Signal><Binary>`, and `mpd=xml` one of scheme `urn:scte:scte35:2013:xml` with the full
+  `<SpliceInfoSection>`. DASH-IF IOP-5 §5.5 makes MPD events the carriage an ad-insertion MPD
+  manipulator is expected to read. The events appear one `lead` time before their splice point, the
+  same moment the inband cue is delivered, and are kept while the segments they cover are available.
+  A message that closes a break carries `duration="0"`, as SCTE 214-1 §6.7.2.1 asks, rather than no
+  `@duration` at all, which DASH defines as an unknown duration.
+- The periodic ad-break schedule takes in-cycle offsets, `p<period>:<dur>[@<off>,...]`, for `sgai_`
+  and `svta_` as well as `scte35_`: `p60:10@10,40` is a 10 s break 10 s and 40 s after every full
+  UTC minute.
+- `scte35_` can be combined with `sgai_` and `svta_` when they use the same break schedule, so the
+  SCTE-35 cue announces the avail that an Alternative-MPD event fills with a real ad pod and
+  SVTA2053 describes for measurement.
+- The breaks of an `scte35_` stream show the generated AD BREAK countdown slate, the same one
+  `sgai_` and `svta_` use, so the signaled avail is visible and not only announced. `slate=0` keeps
+  the underlying content; the legacy `scte35_1|2|3` presets stay signaling-only as before.
+- New `pre=<s>` setting on `scte35_` slates the given number of seconds before each break with an
+  AD BREAK IN countdown that reaches zero as the break starts. With `pre=` at least as large as
+  `lead=`, the cue becomes visible on screen at the moment it is delivered in the stream, which is
+  what makes an early announcement checkable by eye.
+
 ### Fixed
 
 - The SCTE-35 messages generated for the `scte35_` URL option carried `pts_adjustment = 2^33 - pts_time`
@@ -47,6 +80,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- dash-mpd dependency bumped to v0.18.0, whose `EventType.Duration` is a `*uint64`, which is what
+  lets a zero `Event@duration` reach the MPD, and mp4ff to v0.56.0.
+- The legacy `scte35_1|2|3` presets are now shorthands for `p60:20@10`, `p60:10@10,40` and
+  `p60:10@10,36,46` in the new grammar. They emit the same `splice_insert` cues as before, but the
+  schedule is anchored to the wall clock rather than to the availabilityStartTime, so a stream
+  shifted with `start_` or `startrel_` places its breaks at the same UTC seconds as every other
+  session (with the default `availabilityStartTime` at the epoch, nothing changes).
 - The ad-break schedule (fixed or periodic breaks, the break instances signaled in an MPD, and the AD BREAK
   slate window) is now shared between `sgai_` and `svta_` in `AdBreaks`. The signaled set of a periodic
   schedule additionally keeps breaks that ended but are still inside the timeshift buffer for `svta_`, so a

@@ -412,7 +412,16 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 	scte35 := q.Get("scte35")
 	if scte35 != "" {
 		data.Scte35Var = scte35
-		fmt.Fprintf(&sb, "scte35_%s/", scte35)
+		cfg, err := CreateSCTE35Config(scte35)
+		switch {
+		case err != nil:
+			data.Errors = append(data.Errors, fmt.Sprintf("invalid scte35: %s", err.Error()))
+		case periods != "" && cfg.MPDForm != "off":
+			// Inband-only signaling survives the period splitting; MPD events do not.
+			data.Errors = append(data.Errors, "scte35 with mpd events cannot be combined with periods")
+		default:
+			fmt.Fprintf(&sb, "scte35_%s/", scte35)
+		}
 	}
 	sgai := q.Get("sgai")
 	if sgai != "" {

@@ -111,9 +111,11 @@ func TestAddSVTAAdCreativeEvents(t *testing.T) {
 
 	// The 15 s break is split into two 7.5 s creatives, back to back from 30 s.
 	assert.Equal(t, uint64(30*90000), es.Events[0].PresentationTime)
-	assert.Equal(t, uint64(7500*90), es.Events[0].Duration)
+	require.NotNil(t, es.Events[0].Duration)
+	assert.Equal(t, uint64(7500*90), *es.Events[0].Duration)
 	assert.Equal(t, uint64(37500*90), es.Events[1].PresentationTime)
-	assert.Equal(t, uint64(7500*90), es.Events[1].Duration)
+	require.NotNil(t, es.Events[1].Duration)
+	assert.Equal(t, uint64(7500*90), *es.Events[1].Duration)
 	require.NotNil(t, es.Events[0].Id)
 	assert.Equal(t, uint64(1001), *es.Events[0].Id)
 	assert.Equal(t, uint64(1002), *es.Events[1].Id)
