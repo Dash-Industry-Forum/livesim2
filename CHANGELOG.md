@@ -46,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in one message, as consecutive segmentation descriptors, with the start and the end of each level
   sharing its `segmentation_event_id`. The rest of the options are `emsg=`, `mpd=`, `lead=`, `end=`,
   `repeat=`, `upid=`, `value=` and `ts=`. See the [README](README.md#scte-35-ad-avail-signaling).
+  The `time_signal` support and the provider/distributor placement-opportunity distinction were
+  proposed by @tru64master in PR #327 (issue #335).
 - SCTE-35 messages can now also be carried in the MPD, which livesim2 had no support for at all:
   `mpd=bin` adds an `EventStream` of scheme `urn:scte:scte35:2014:xml+bin` with the message as
   `<Signal><Binary>`, and `mpd=xml` one of scheme `urn:scte:scte35:2013:xml` with the full
