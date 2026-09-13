@@ -126,6 +126,40 @@ var chunkedSubEn = "" +
  <Representation id="timestpp-en" bandwidth="80000" startWithSAP="1"></Representation>
  </AdaptationSetType>`
 
+// TestTimeSubsAdaptationSetIDs checks that the generated subtitle AdaptationSets get
+// distinct ids. addTimeSubs is called once per format, so counting from a fixed base gave
+// the first stpp and the first wvtt AdaptationSet the same id.
+func TestTimeSubsAdaptationSetIDs(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	cfg := NewResponseConfig()
+	cfg.TimeSubsStpp = []string{"en", "sv"}
+	cfg.TimeSubsWvtt = []string{"en", "sv"}
+
+	liveMPD, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, 100_000)
+	require.NoError(t, err)
+
+	seen := make(map[uint32]string)
+	nrText := 0
+	for _, as := range liveMPD.Periods[0].AdaptationSets {
+		require.NotNil(t, as.Id, "AdaptationSet without id")
+		name := string(as.ContentType)
+		if as.ContentType == "text" {
+			nrText++
+			name = as.Representations[0].Id
+		}
+		if prev, dup := seen[*as.Id]; dup {
+			t.Errorf("AdaptationSet id %d used by both %s and %s", *as.Id, prev, name)
+		}
+		seen[*as.Id] = name
+	}
+	require.Equal(t, 4, nrText, "expected one AdaptationSet per language and format")
+}
+
 // decodeSubsFragments decodes a chunked subtitle segment response and checks the
 // number of chunks (one fragment each).
 func decodeSubsFragments(t *testing.T, body []byte, nrChunks int) []*mp4.Fragment {

@@ -51,6 +51,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The generated subtitle AdaptationSets could share an `id`. `addTimeSubs` is called once per
+  format and numbered from a fixed base each time, so `timesubsstpp_en` and `timesubswvtt_sv`
+  in the same stream both became `id="100"`, which DASH does not allow within a Period and
+  which MPD patching keys on. Ids are now taken from the lowest free value at or above 100,
+  which also avoids colliding with an id used by the source MPD.
 - The `UTCTiming` descriptor inside `ProducerReferenceTime` was hardcoded to the default
   `urn:mpeg:dash:utc:http-xsdate:2014` source and ignored the `utc_` option, so any other setting
   produced a timing anchor that appeared nowhere else in the MPD.
