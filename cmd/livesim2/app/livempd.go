@@ -882,6 +882,23 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 	return nil
 }
 
+// nextFreeAdaptationSetID returns the lowest AdaptationSet id that is at least minID and
+// is not already used in the period. addTimeSubs is called once per subtitle format, and
+// the source MPD may use ids of its own, so the ids cannot simply be counted from a base.
+func nextFreeAdaptationSetID(period *m.Period, minID uint32) uint32 {
+	used := make(map[uint32]bool, len(period.AdaptationSets))
+	for _, as := range period.AdaptationSets {
+		if as.Id != nil {
+			used[*as.Id] = true
+		}
+	}
+	id := minID
+	for used[id] {
+		id++
+	}
+	return id
+}
+
 func addTimeSubs(cfg *ResponseConfig, a *asset, period *m.Period, languages []string, kind string) error {
 	var vAS *m.AdaptationSetType
 	for _, as := range period.AdaptationSets {
@@ -903,7 +920,7 @@ func addTimeSubs(cfg *ResponseConfig, a *asset, period *m.Period, languages []st
 	typicalStppSegSizeBits := nrChunksPerSeg * 2000 * 8 // 2kB per chunk
 	typicalWvttSegSizeBits := nrChunksPerSeg * 200 * 8
 	vST := vAS.SegmentTemplate
-	for i, lang := range languages {
+	for _, lang := range languages {
 		rep := m.NewRepresentation()
 		rep.StartWithSAP = 1
 		st := m.NewSegmentTemplate()
@@ -926,7 +943,7 @@ func addTimeSubs(cfg *ResponseConfig, a *asset, period *m.Period, languages []st
 			st.SegmentTimeline = changeTimelineTimescale(vST.SegmentTimeline, int(*vST.Timescale), SUBS_TIME_TIMESCALE)
 		}
 		as := m.NewAdaptationSet()
-		as.Id = Ptr(uint32(100 + i))
+		as.Id = Ptr(nextFreeAdaptationSetID(period, 100))
 		as.Lang = lang
 		as.ContentType = "text"
 		as.MimeType = "application/mp4"
