@@ -39,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The `UTCTiming` descriptor inside `ProducerReferenceTime` was hardcoded to the default
+  `urn:mpeg:dash:utc:http-xsdate:2014` source and ignored the `utc_` option, so any other setting
+  produced a timing anchor that appeared nowhere else in the MPD.
 - The SCTE-35 messages generated for the `scte35_` URL option carried `pts_adjustment = 2^33 - pts_time`
   instead of zero, so the splice time a receiver computes as `(pts_time + pts_adjustment) mod 2^33` was
   always 0. The intended time was only visible in the `emsg` header. The splice time is now set on the

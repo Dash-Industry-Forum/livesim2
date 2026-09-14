@@ -377,7 +377,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 			}
 		}
 
-		atoMS, err := setOffsetInAdaptationSet(cfg, as)
+		atoMS, err := setOffsetInAdaptationSet(cfg, as, firstUTCTiming(mpd))
 		if err != nil {
 			return nil, err
 		}
@@ -716,19 +716,33 @@ func createServiceDescription(latencyTargetMS uint32) []*m.ServiceDescriptionTyp
 	}
 }
 
-func createProducerReferenceTimes(startTimeS int) []*m.ProducerReferenceTimeType {
-	return []*m.ProducerReferenceTimeType{
-		{
-			Id:               0,
-			PresentationTime: 0,
-			Type:             "encoder",
-			WallClockTime:    string(m.ConvertToDateTime(float64(startTimeS))),
-			UTCTiming: &m.DescriptorType{
-				SchemeIdUri: UtcTimingHttpXSDateScheme,
-				Value:       UtcTimingXSDateHttpServerMS,
-			},
-		},
+// createProducerReferenceTimes creates the ProducerReferenceTime for an AdaptationSet.
+//
+// utcTiming is the timing anchor that the wall-clock time is synchronized with. ISO/IEC
+// 23009-1 Table 51 requires the same UTC Timing descriptor to be present in the MPD as
+// well, so the caller passes the MPD's own descriptor rather than a fixed one. It is nil
+// when the MPD carries no UTCTiming at all, and the element is then left out.
+func createProducerReferenceTimes(startTimeS int, utcTiming *m.DescriptorType) []*m.ProducerReferenceTimeType {
+	prt := m.ProducerReferenceTimeType{
+		Id:               0,
+		PresentationTime: 0,
+		Type:             "encoder",
+		WallClockTime:    string(m.ConvertToDateTime(float64(startTimeS))),
 	}
+	if utcTiming != nil {
+		// Copy, so that a later change to one does not silently change the other.
+		utcCopy := *utcTiming
+		prt.UTCTiming = &utcCopy
+	}
+	return []*m.ProducerReferenceTimeType{&prt}
+}
+
+// firstUTCTiming returns the MPD's first UTCTiming descriptor, or nil if it has none.
+func firstUTCTiming(mpd *m.MPD) *m.DescriptorType {
+	if len(mpd.UTCTimings) == 0 {
+		return nil
+	}
+	return mpd.UTCTimings[0]
 }
 
 type segEntries struct {
@@ -761,7 +775,8 @@ func (s segEntries) lastTime() uint64 {
 
 // setOffsetInAdaptationSet sets the availabilityTimeOffset in the AdaptationSet.
 // Returns ErrAtoInfTimeline if infinite ato set with timeline.
-func setOffsetInAdaptationSet(cfg *ResponseConfig, as *m.AdaptationSetType) (atoMS int, err error) {
+func setOffsetInAdaptationSet(cfg *ResponseConfig, as *m.AdaptationSetType,
+	utcTiming *m.DescriptorType) (atoMS int, err error) {
 	if as.SegmentTemplate == nil {
 		return 0, fmt.Errorf("no SegmentTemplate in AdaptationSet")
 	}
@@ -778,7 +793,7 @@ func setOffsetInAdaptationSet(cfg *ResponseConfig, as *m.AdaptationSetType) (ato
 		as.SegmentTemplate.AvailabilityTimeComplete = Ptr(false)
 		if cfg.getAvailabilityTimeOffsetS() > 0 {
 			as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(cfg.getAvailabilityTimeOffsetS())
-			as.ProducerReferenceTimes = createProducerReferenceTimes(cfg.StartTimeS)
+			as.ProducerReferenceTimes = createProducerReferenceTimes(cfg.StartTimeS, utcTiming)
 		}
 	}
 	atoMS = int(1000 * ato)
