@@ -877,6 +877,37 @@ fragment's last sample. That does not save any bytes, but it does say at the con
 level what `stpp` can only say inside the XML and `wvtt` cannot say at all. livesim2 does
 not write it yet: it is not in mp4ff.
 
+### What players do with it
+
+Neither of the two open-source players checks anything before parsing. Both run a full XML
+parse of **every** `stpp` sample, and neither reads the sample flags at all, so
+`sample_has_redundancy` reaches no decision anywhere: dash.js's `getSamplesInfo` extracts
+only `cts`, `duration`, `offset`, `size` and `subSizes`, and shaka's TRUN parser has a line
+that says `// Skip "sample_flags" if present.` The saving the flag is meant to enable is
+therefore still theoretical — it is the parse rate, not the byte count, that it would cut.
+
+What both do instead is compare **cues**, after parsing:
+
+- **dash.js 5.2.1** — `streaming.text.extendSegmentedCues` (default on) looks for an
+  already-buffered cue that is adjacent to the new one and compares 13 properties including
+  the text and the whole ISD; a match is merged by extending the existing cue's end time.
+  It also gives its TTML parser the *sample's* start and end, so the clipping of §5.9(4) is
+  per sample. The result on this stream is one cue per real cue, of its true duration.
+- **shaka-player 5.2.0** — `shaka.text.Cue.equal` drops a cue that duplicates one already
+  held, but it requires start and end to match within 1 ms, so it removes exact repeats and
+  never merges adjacent fragments.
+
+Shaka has a further problem with chunked `stpp` that is worth knowing about before using
+these streams to test it. `Mp4TtmlParser` passes **one segment-level time context to every
+sample**, and `TtmlTextParser` then clips each cue with
+`Math.max(start, segmentStart)` / `Math.min(end, segmentEnd)`. With one sample per segment,
+as everyone packages today, clipping to the segment and clipping to the sample are the same
+thing. With several samples per segment they are not: a cue with no `end` becomes
+`Infinity` and is clipped to the end of the **segment** instead of the end of its chunk. On
+a 2 s segment with 0.5 s chunks that yields a 2 s cue sitting on top of the correctly ended
+0.9 s one — two captions on screen at once, the stale one lasting until the segment ends.
+Shaka's `Mp4VttParser` does track per-sample times, so `wvtt` is not affected the same way.
+
 Not covered: the sub-segment (`chunkdurssr_`) low-latency mode, where each chunk is a
 separate request, still applies to video and audio only.
 
