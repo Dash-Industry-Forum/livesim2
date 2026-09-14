@@ -402,7 +402,7 @@ func TestLastAvailableSegment(t *testing.T) {
 			mpd, err := asset.getVodMPD(tc.mpdName)
 			require.NoError(t, err)
 			for _, as := range mpd.Periods[0].AdaptationSets {
-				atoMS, err := setOffsetInAdaptationSet(cfg, as)
+				atoMS, err := setOffsetInAdaptationSet(cfg, as, firstUTCTiming(mpd))
 				if tc.wantedErr != "" {
 					require.EqualError(t, err, tc.wantedErr)
 				} else {
@@ -1629,7 +1629,7 @@ func TestEditListOffsetMPD(t *testing.T) {
 	}
 	require.NotNil(t, audioAS, "Audio AdaptationSet not found")
 
-	atoMS, err := setOffsetInAdaptationSet(cfg, audioAS)
+	atoMS, err := setOffsetInAdaptationSet(cfg, audioAS, nil)
 	require.NoError(t, err)
 
 	// Test Case 1: Early time (10s) - First segment time should stay 0 but duration should be shortened
@@ -2846,6 +2846,101 @@ func TestPECalculationWithSpecificNowMS(t *testing.T) {
 			// For now, just log the values to understand the pattern
 			// assert.Equal(t, tc.expectedPE, actualPE,
 			//	"PE value should match expected for nowMS=%d", tc.nowMS)
+		})
+	}
+}
+
+// TestProducerReferenceTimeFollowsUTCTiming checks that the UTCTiming descriptor inside
+// ProducerReferenceTime is the same one the MPD carries. ISO/IEC 23009-1 Table 51 says of
+// that element: "If present, then the wall-clock times provided in this context are
+// synchronized with the timing anchor provided in this descriptor. The same UTC Timing
+// descriptor shall also be present in the MPD." It used to be hardcoded to the default
+// http-xsdate source, so any other utc_ setting produced an anchor that was nowhere in the
+// MPD, and a client honouring it synced to a different clock than the one livesim2 uses.
+func TestProducerReferenceTimeFollowsUTCTiming(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	cases := []struct {
+		desc           string
+		methods        []UTCTimingMethod
+		wantedScheme   string
+		wantedValue    string
+		wantedNoUTCTim bool
+	}{
+		{
+			desc:         "default is the http-xsdate source",
+			methods:      nil,
+			wantedScheme: UtcTimingHttpXSDateScheme,
+			wantedValue:  UtcTimingXSDateHttpServerMS,
+		},
+		{
+			desc:         "utc_head anchors on livesim2 itself",
+			methods:      []UTCTimingMethod{UtcTimingHttpHead},
+			wantedScheme: UtcTimingHttpHeadScheme,
+			wantedValue:  "https://example.com" + UtcTimingHeadAsset,
+		},
+		{
+			desc:         "first method wins when several are given",
+			methods:      []UTCTimingMethod{UtcTimingHttpISOMs, UtcTimingHttpHead},
+			wantedScheme: UtcTimingHttpISOScheme,
+			wantedValue:  UtcTimingISOHttpServerMS,
+		},
+		{
+			desc:           "utc_none leaves the element out",
+			methods:        []UTCTimingMethod{UtcTimingNone},
+			wantedNoUTCTim: true,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			cfg := NewResponseConfig()
+			cfg.Host = "https://example.com"
+			cfg.UTCTimingMethods = c.methods
+			cfg.AvailabilityTimeCompleteFlag = false
+			cfg.AvailabilityTimeOffsetS = 1.5
+			cfg.LatencyTargetMS = Ptr(uint32(3000))
+
+			liveMPD, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, 100_000)
+			require.NoError(t, err)
+
+			var prt *m.ProducerReferenceTimeType
+			for _, as := range liveMPD.Periods[0].AdaptationSets {
+				if len(as.ProducerReferenceTimes) > 0 {
+					prt = as.ProducerReferenceTimes[0]
+					break
+				}
+			}
+			require.NotNil(t, prt, "no ProducerReferenceTime was created")
+
+			if c.wantedNoUTCTim {
+				require.Empty(t, liveMPD.UTCTimings)
+				require.Nil(t, prt.UTCTiming, "no MPD UTCTiming, so the element must be left out")
+				return
+			}
+
+			require.NotNil(t, prt.UTCTiming)
+			require.Equal(t, c.wantedScheme, string(prt.UTCTiming.SchemeIdUri))
+			require.Equal(t, c.wantedValue, prt.UTCTiming.Value)
+
+			// The descriptor shall also be present in the MPD.
+			found := false
+			for _, ut := range liveMPD.UTCTimings {
+				if ut.SchemeIdUri == prt.UTCTiming.SchemeIdUri && ut.Value == prt.UTCTiming.Value {
+					found = true
+					break
+				}
+			}
+			require.True(t, found, "the ProducerReferenceTime anchor is not among the MPD UTCTimings")
+
+			// They must not be the same object, so that changing one cannot change the other.
+			for _, ut := range liveMPD.UTCTimings {
+				require.False(t, ut == prt.UTCTiming, "descriptor is shared with the MPD")
+			}
 		})
 	}
 }
