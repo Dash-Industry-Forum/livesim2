@@ -1,0 +1,40 @@
+name: govulncheck
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekdays 08:00 UTC: re-scan unchanged code against the latest vuln
+    # database, so a newly-disclosed dependency or stdlib CVE surfaces
+    # even without a commit.
+    - cron: "0 8 * * 1-5"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Not pinned to the module go directive like the other workflows:
+      # govulncheck@latest tracks the current Go release and setup-go fixes
+      # GOTOOLCHAIN=local, so an older pinned toolchain cannot build the
+      # scanner (x/vuln v1.8.0 needs >= 1.26). Stdlib findings are therefore
+      # reported against the latest release, not against 1.25.
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "stable"
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      # Reachability-based scan: fails only on vulnerabilities this module
+      # actually calls (dependencies and the Go stdlib). Vulns present but
+      # unreachable are reported, not failed on.
+      - name: Run govulncheck
+        run: govulncheck ./...
