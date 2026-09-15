@@ -24,21 +24,31 @@ import (
 func TestStppTimeMessage(t *testing.T) {
 
 	testCases := []struct {
-		lang   string
-		utcMS  int
-		segNr  int
-		wanted string
+		lang      string
+		utcMS     int
+		segNr     int
+		withSegNr bool
+		wanted    string
 	}{
 		{
-			lang:   "en",
-			utcMS:  0,
-			segNr:  0,
-			wanted: "1970-01-01T00:00:00Z<br/>en # 0",
+			lang:      "en",
+			utcMS:     0,
+			segNr:     0,
+			withSegNr: true,
+			wanted:    "1970-01-01T00:00:00Z<br/>en # 0",
+		},
+		{
+			// timesubssegnr_0: the text no longer depends on which segment carries the cue.
+			lang:      "en",
+			utcMS:     0,
+			segNr:     7,
+			withSegNr: false,
+			wanted:    "1970-01-01T00:00:00Z<br/>en",
 		},
 	}
 
 	for _, tc := range testCases {
-		got := makeStppMessage(tc.lang, tc.utcMS, tc.segNr)
+		got := makeStppMessage(tc.lang, tc.utcMS, tc.segNr, tc.withSegNr)
 		require.Equal(t, tc.wanted, got)
 	}
 }
@@ -242,15 +252,17 @@ const outputStppPayload = `<?xml version="1.0" encoding="UTF-8"?>
   </head>
   <body style="s0">
 <div region="r1">
-<p xml:id="0-0" begin="00:00:00.000" end="00:00:00.600"><span style="s1">1970-01-01T00:00:00Z<br/>en # 0</span></p>
-<p xml:id="0-1" begin="00:00:01.000" end="00:00:01.600"><span style="s1">1970-01-01T00:00:01Z<br/>en # 0</span></p>
+<p xml:id="c0" begin="00:00:00.000" end="00:00:00.600"><span style="s1">1970-01-01T00:00:00Z<br/>en # 0</span></p>
+<p xml:id="c1" begin="00:00:01.000" end="00:00:01.600"><span style="s1">1970-01-01T00:00:01Z<br/>en # 0</span></p>
 </div>
   </body>
 </tt>
 `
 
 const wvttSamples = `Sample 0, pts=3600000, dur=600
-[vttc] size=60
+[vttc] size=72
+  [vsid] size=12
+   - sourceID: 3600
   [sttg] size=14
    - settings: line:2
   [payl] size=38
@@ -258,7 +270,9 @@ const wvttSamples = `Sample 0, pts=3600000, dur=600
 Sample 1, pts=3600600, dur=400
 [vtte] size=8
 Sample 2, pts=3601000, dur=600
-[vttc] size=60
+[vttc] size=72
+  [vsid] size=12
+   - sourceID: 3601
   [sttg] size=14
    - settings: line:2
   [payl] size=38

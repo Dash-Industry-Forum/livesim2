@@ -246,6 +246,17 @@ templ urlgenPage(d urlGenData) {
 							<input type="text" id="timesubsdur" name="timesubsdur" value={ d.TimeSubsDur }/>
 						</label>
 						<fieldset>
+							<legend>Segment number in the cue text</legend>
+							<label for="segnr1">
+								<input type="radio" id="segnr1" name="timesubssegnr" value="1" checked?={ d.TimeSubsSegNr != "0" }/>
+								Show it (default)
+							</label>
+							<label for="segnr0">
+								<input type="radio" id="segnr0" name="timesubssegnr" value="0" checked?={ d.TimeSubsSegNr == "0" }/>
+								Leave it out, so a cue restated in the next segment is byte-identical
+							</label>
+						</fieldset>
+						<fieldset>
 							<legend>Time subtitle region</legend>
 							<label for="reg0">
 								<input type="radio" id="reg0" name="timesubsreg" value="0" checked?={ d.TimeSubsReg == "0" }/>

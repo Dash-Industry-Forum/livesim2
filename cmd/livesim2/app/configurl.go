@@ -132,6 +132,7 @@ type ResponseConfig struct {
 	TimeSubsStpp                 []string          `json:"TimeSubsStppLanguages,omitempty"`
 	TimeSubsWvtt                 []string          `json:"TimeSubsWvttLanguages,omitempty"`
 	TimeSubsDurMS                int               `json:"TimeSubsDurMS,omitempty"`
+	TimeSubsSegNr                bool              `json:"TimeSubsSegNr,omitempty"`
 	TimeSubsRegion               int               `json:"TimeSubsRegion,omitempty"`
 	CC608                        *CC608Config      `json:"CC608,omitempty"`
 	Host                         string            `json:"Host,omitempty"`
@@ -284,6 +285,7 @@ func NewResponseConfig() *ResponseConfig {
 		TimeShiftBufferDepthS:        Ptr(defaultTimeShiftBufferDepthS),
 		StartNr:                      Ptr(defaultStartNr),
 		TimeSubsDurMS:                defaultTimeSubsDurMS,
+		TimeSubsSegNr:                true,
 	}
 	return &c
 }
@@ -437,6 +439,8 @@ cfgLoop:
 			cfg.TimeSubsWvtt = strings.Split(val, ",")
 		case "timesubsdur": // duration in milliseconds
 			cfg.TimeSubsDurMS = sc.Atoi(key, val)
+		case "timesubssegnr": // include the segment number in the cue text (0 or 1)
+			cfg.TimeSubsSegNr = sc.Atoi(key, val) != 0
 		case "timesubsreg": // region (0 or 1)
 			cfg.TimeSubsRegion = sc.Atoi(key, val)
 		case "timecc608": // in-band CTA-608 captions: <channel>-<lang> (e.g. CC1-eng)

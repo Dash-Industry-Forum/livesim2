@@ -160,6 +160,110 @@ func TestTimeSubsAdaptationSetIDs(t *testing.T) {
 	require.Equal(t, 4, nrText, "expected one AdaptationSet per language and format")
 }
 
+// TestCueIdentityAcrossSegments checks what the cue identifiers are for. A cue that is
+// still open at the end of a segment is restated in the next one, and that restatement is
+// byte for byte the same document only if nothing in it names the segment. The xml:id
+// identifies the cue rather than its position, and timesubssegnr_0 takes the segment
+// number out of the text, which is what closes the gap.
+//
+// timesubsdur_5000 gives cues every 5 s that last 5 s, so a cue spans the whole of the
+// second 2 s segment and is open in both of the first two.
+func TestCueIdentityAcrossSegments(t *testing.T) {
+	cfg := ServerConfig{
+		VodRoot:   "testdata/assets",
+		TimeoutS:  0,
+		LogFormat: logging.LogDiscard,
+	}
+	require.NoError(t, logging.InitSlog(cfg.LogLevel, cfg.LogFormat))
+	server, err := SetupServer(context.Background(), &cfg)
+	require.NoError(t, err)
+	ts := httptest.NewServer(server.Router)
+	defer ts.Close()
+
+	// The document of the last chunk of segment 0 and of the first chunk of segment 1.
+	// Both state the same cue, still open, so with the segment number gone they must match.
+	docFor := func(t *testing.T, opts string, segNr, chunkIdx int) string {
+		t.Helper()
+		url := fmt.Sprintf("/livesim2/chunkdur_0.5/ato_1.5/ltgt_3000/timesubsstpp_en/timesubsdur_5000%s"+
+			"/testpic_2s/timestpp-en/%d.m4s?nowMS=10000", opts, segNr)
+		resp, body := testFullRequest(t, ts, "GET", url, nil)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		frags := decodeSubsFragments(t, body, 4)
+		fss, err := frags[chunkIdx].GetFullSamples(nil)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(fss))
+		return string(fss[0].Data)
+	}
+
+	t.Run("the cue keeps its id in both segments", func(t *testing.T) {
+		last0 := docFor(t, "", 0, 3)
+		first1 := docFor(t, "", 1, 0)
+		// utcS 0 for a cue that starts at time zero.
+		require.Contains(t, last0, `xml:id="c0"`)
+		require.Contains(t, first1, `xml:id="c0"`,
+			"the same cue must keep its id in the next segment")
+		require.NotContains(t, first1, "end=",
+			"the cue is still open at the end of the second segment")
+	})
+
+	t.Run("the segment number is what breaks byte identity", func(t *testing.T) {
+		last0 := docFor(t, "", 0, 3)
+		first1 := docFor(t, "", 1, 0)
+		require.NotEqual(t, last0, first1,
+			"with the segment number in the text the restatement cannot be identical")
+		require.Contains(t, last0, "en # 0")
+		require.Contains(t, first1, "en # 1")
+	})
+
+	t.Run("timesubssegnr_0 makes the restatement byte-identical", func(t *testing.T) {
+		last0 := docFor(t, "/timesubssegnr_0", 0, 3)
+		first1 := docFor(t, "/timesubssegnr_0", 1, 0)
+		require.Equal(t, last0, first1,
+			"an unchanged cue restated in the next segment must be byte for byte the same")
+		require.NotContains(t, last0, " # ")
+	})
+}
+
+// TestWvttCueSourceID checks that every generated wvtt cue carries a vsid identifying the
+// cue, and that a cue restated in a later chunk keeps the same source ID.
+func TestWvttCueSourceID(t *testing.T) {
+	cfg := ServerConfig{
+		VodRoot:   "testdata/assets",
+		TimeoutS:  0,
+		LogFormat: logging.LogDiscard,
+	}
+	require.NoError(t, logging.InitSlog(cfg.LogLevel, cfg.LogFormat))
+	server, err := SetupServer(context.Background(), &cfg)
+	require.NoError(t, err)
+	ts := httptest.NewServer(server.Router)
+	defer ts.Close()
+
+	url := "/livesim2/chunkdur_0.2/ato_1.8/ltgt_2000/timesubswvtt_en/testpic_2s/timewvtt-en/0.m4s?nowMS=10000"
+	resp, body := testFullRequest(t, ts, "GET", url, nil)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	frags := decodeSubsFragments(t, body, 10)
+
+	sourceIDs := make([]uint32, 0, 12)
+	for i, f := range frags {
+		fss, err := f.GetFullSamples(nil)
+		require.NoError(t, err)
+		for j, fs := range fss {
+			box, err := mp4.DecodeBox(0, bytes.NewBuffer(fs.Data))
+			require.NoError(t, err)
+			vttc, ok := box.(*mp4.VttcBox)
+			if !ok {
+				continue // a vtte gap sample
+			}
+			require.NotNil(t, vttc.Vsid, "chunk %d sample %d has no vsid", i, j)
+			sourceIDs = append(sourceIDs, vttc.Vsid.SourceID)
+		}
+	}
+
+	// Two cues in a 2 s segment starting at time zero: the UTC seconds 0 and 1. Each is
+	// restated in every chunk it spans, always with its own source ID.
+	require.Equal(t, []uint32{0, 0, 0, 0, 0, 1, 1, 1, 1, 1}, sourceIDs)
+}
+
 // decodeSubsFragments decodes a chunked subtitle segment response and checks the
 // number of chunks (one fragment each).
 func decodeSubsFragments(t *testing.T, body []byte, nrChunks int) []*mp4.Fragment {
@@ -267,16 +371,16 @@ func requireChunksTileSegment(t *testing.T, frags []*mp4.Fragment, startMS, endM
 // time and gets no end until chunk 4, where it ends. The four restatements in between are
 // byte-identical and marked redundant.
 // nolint:lll
-const chunkedStppTrace = `chunk 0 pts=0 dur=200 redundancy=0: 0-0 begin=00:00:00.000
-chunk 1 pts=200 dur=200 redundancy=1: 0-0 begin=00:00:00.000
-chunk 2 pts=400 dur=200 redundancy=1: 0-0 begin=00:00:00.000
-chunk 3 pts=600 dur=200 redundancy=1: 0-0 begin=00:00:00.000
-chunk 4 pts=800 dur=200 redundancy=0: 0-0 begin=00:00:00.000 end=00:00:00.900
-chunk 5 pts=1000 dur=200 redundancy=0: 0-1 begin=00:00:01.000
-chunk 6 pts=1200 dur=200 redundancy=1: 0-1 begin=00:00:01.000
-chunk 7 pts=1400 dur=200 redundancy=1: 0-1 begin=00:00:01.000
-chunk 8 pts=1600 dur=200 redundancy=1: 0-1 begin=00:00:01.000
-chunk 9 pts=1800 dur=200 redundancy=0: 0-1 begin=00:00:01.000 end=00:00:01.900
+const chunkedStppTrace = `chunk 0 pts=0 dur=200 redundancy=0: c0 begin=00:00:00.000
+chunk 1 pts=200 dur=200 redundancy=1: c0 begin=00:00:00.000
+chunk 2 pts=400 dur=200 redundancy=1: c0 begin=00:00:00.000
+chunk 3 pts=600 dur=200 redundancy=1: c0 begin=00:00:00.000
+chunk 4 pts=800 dur=200 redundancy=0: c0 begin=00:00:00.000 end=00:00:00.900
+chunk 5 pts=1000 dur=200 redundancy=0: c1 begin=00:00:01.000
+chunk 6 pts=1200 dur=200 redundancy=1: c1 begin=00:00:01.000
+chunk 7 pts=1400 dur=200 redundancy=1: c1 begin=00:00:01.000
+chunk 8 pts=1600 dur=200 redundancy=1: c1 begin=00:00:01.000
+chunk 9 pts=1800 dur=200 redundancy=0: c1 begin=00:00:01.000 end=00:00:01.900
 `
 
 // chunkedWvttTrace shows the same in a wvtt track. A wvtt sample has no timing of its own,
@@ -300,7 +404,7 @@ chunk 9 pts=1900 dur=100 redundancy=0: vtte
 // chunkedStppUnevenTrace shows a chunk duration that does not divide the segment duration:
 // the last chunk is shorter, and chunk 1 both ends one cue and starts the next.
 // nolint:lll
-const chunkedStppUnevenTrace = `chunk 0 pts=0 dur=700 redundancy=0: 0-0 begin=00:00:00.000
-chunk 1 pts=700 dur=700 redundancy=0: 0-0 begin=00:00:00.000 end=00:00:00.900, 0-1 begin=00:00:01.000
-chunk 2 pts=1400 dur=600 redundancy=0: 0-1 begin=00:00:01.000 end=00:00:01.900
+const chunkedStppUnevenTrace = `chunk 0 pts=0 dur=700 redundancy=0: c0 begin=00:00:00.000
+chunk 1 pts=700 dur=700 redundancy=0: c0 begin=00:00:00.000 end=00:00:00.900, c1 begin=00:00:01.000
+chunk 2 pts=1400 dur=600 redundancy=0: c1 begin=00:00:01.000 end=00:00:01.900
 `

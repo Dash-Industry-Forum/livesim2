@@ -5,7 +5,6 @@
 package app
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/Eyevinn/mp4ff/bits"
@@ -43,14 +42,24 @@ type WvttTimeCue struct {
 	Vttc    []byte
 }
 
-// makeWvttMessage makes a message for an stpptime cue.
-func makeWvttCuePayload(lang string, region, utcMS, segNr int) []byte {
+// makeWvttCuePayload makes the vttc payload for a time subtitle cue.
+//
+// The cue carries a vsid (CueSourceIDBox) whose source ID is the UTC second the cue
+// announces, which is what identifies the cue. ISO/IEC 14496-30 Sec. 6.6 says a matching
+// source_ID is "diagnostic that the same cue is still active", so a cue restated in a
+// later chunk or segment is recognisable as the same one rather than a new cue that
+// happens to read the same. It matters more for wvtt than for stpp, since WebVTT cues are
+// objects with enter and exit behaviour that a receiver would otherwise re-create.
+func makeWvttCuePayload(lang string, region, utcMS, segNr int, withSegNr bool) []byte {
 	t := time.UnixMilli(int64(utcMS))
 	utc := t.UTC().Format(time.RFC3339)
 	pl := mp4.PaylBox{
-		CueText: fmt.Sprintf("%s\n%s # %d", utc, lang, segNr),
+		CueText: makeSubsCueText(utc, lang, segNr, withSegNr, "\n"),
 	}
 	vttc := mp4.VttcBox{}
+	// The box order of 14496-30 Sec. 6.6 is vsid, iden, ctim, sttg, payl.
+	vsid := mp4.VsidBox{SourceID: uint32(utcMS / 1000)}
+	vttc.AddChild(&vsid)
 	if region == 1 {
 		sttg := mp4.SttgBox{
 			Settings: "line:2",
@@ -73,7 +82,8 @@ func makeWvttCuePayload(lang string, region, utcMS, segNr int) []byte {
 // therefore restated, but with a byte-identical payload, which is what lets
 // genTimeSubsChunks mark the restatement as redundant. The same holds for consecutive
 // fragments with nothing on screen, which repeat the same empty vtte box.
-func wvttTimeSamples(cues []cueItvl, startMS, endMS int, lang string, nr uint32, region int) []mp4.FullSample {
+func wvttTimeSamples(cues []cueItvl, startMS, endMS int, lang string, nr uint32, region int,
+	withSegNr bool) []mp4.FullSample {
 	samples := make([]mp4.FullSample, 0, 2*len(cues)+1)
 	currEnd := startMS
 	for _, ci := range cues {
@@ -85,7 +95,8 @@ func wvttTimeSamples(cues []cueItvl, startMS, endMS int, lang string, nr uint32,
 		if cueStart > currEnd {
 			samples = append(samples, fullSample(currEnd, cueStart, vtteBox))
 		}
-		samples = append(samples, fullSample(cueStart, cueEnd, makeWvttCuePayload(lang, region, ci.utcS*1000, int(nr))))
+		samples = append(samples,
+			fullSample(cueStart, cueEnd, makeWvttCuePayload(lang, region, ci.utcS*1000, int(nr), withSegNr)))
 		currEnd = cueEnd
 	}
 	if currEnd < endMS {

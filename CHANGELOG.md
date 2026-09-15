@@ -42,6 +42,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same `availabilityTimeOffset` and `availabilityTimeComplete="false"` as the video and audio ones, so a
   low-latency client fetches subtitles as early as it fetches video. The sub-segment (`chunkdurssr_`)
   mode still covers video and audio only.
+- Generated subtitle cues now carry an identifier for the cue itself: an `xml:id` of
+  `c<utc-second>` on each `stpp` cue, and a `vsid` (`CueSourceIDBox`, ISO/IEC 14496-30 §6.6,
+  "diagnostic that the same cue is still active") with the same value on each `wvtt` cue. The
+  `stpp` id previously encoded the segment number and the cue's index within it, so a cue that
+  persisted across a segment boundary was given a new id at every boundary — the opposite of
+  what an id is for, and dash.js and shaka both compare it when matching cues.
+- New URL option `timesubssegnr_0` leaves the segment number out of the generated cue text.
+  The text otherwise names the segment that carries it, which is useful when watching a stream
+  but stops a cue restated in the next segment from being byte-identical. With
+  `timesubsdur_5000/timesubssegnr_0` a cue outlives a 2 s segment and restates byte for byte
+  across the boundary. Default unchanged.
 - A chunk that restates an unchanged subtitle is marked as redundant: `sample_depends_on = 2` plus
   `sample_has_redundancy = 1` in the `trun` sample flags (ISO/IEC 14496-12 §8.8.3.1), which for a
   non-audiovisual track means the receiver may discard the sample and extend the preceding one
