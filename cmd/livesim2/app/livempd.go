@@ -433,13 +433,13 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		}
 	}
 	if len(cfg.TimeSubsStpp) > 0 {
-		err = addTimeSubs(cfg, a, period, cfg.TimeSubsStpp, "stpp")
+		err = addTimeSubs(cfg, a, period, cfg.TimeSubsStpp, "stpp", firstUTCTiming(mpd))
 		if err != nil {
 			return nil, fmt.Errorf("addTimeSubs stpp: %w", err)
 		}
 	}
 	if len(cfg.TimeSubsWvtt) > 0 {
-		err = addTimeSubs(cfg, a, period, cfg.TimeSubsWvtt, "wvtt")
+		err = addTimeSubs(cfg, a, period, cfg.TimeSubsWvtt, "wvtt", firstUTCTiming(mpd))
 		if err != nil {
 			return nil, fmt.Errorf("addTimeSubs wvtt: %w", err)
 		}
@@ -899,7 +899,8 @@ func nextFreeAdaptationSetID(period *m.Period, minID uint32) uint32 {
 	return id
 }
 
-func addTimeSubs(cfg *ResponseConfig, a *asset, period *m.Period, languages []string, kind string) error {
+func addTimeSubs(cfg *ResponseConfig, a *asset, period *m.Period, languages []string, kind string,
+	utcTiming *m.DescriptorType) error {
 	var vAS *m.AdaptationSetType
 	for _, as := range period.AdaptationSets {
 		if as.ContentType == "video" {
@@ -964,7 +965,7 @@ func addTimeSubs(cfg *ResponseConfig, a *asset, period *m.Period, languages []st
 		as.AppendRepresentation(rep)
 		// The generated subtitles are chunked like the video, so they need the same
 		// availability signalling as the other AdaptationSets to be fetched early.
-		if _, err := setOffsetInAdaptationSet(cfg, as); err != nil {
+		if _, err := setOffsetInAdaptationSet(cfg, as, utcTiming); err != nil {
 			return fmt.Errorf("setOffsetInAdaptationSet for %s subtitles: %w", kind, err)
 		}
 		period.AppendAdaptationSet(as)
