@@ -691,6 +691,93 @@ event at the same instant as the impression, and so are the interaction events, 
 event can express. It is opt-in because a player acting on both signalings would report each
 timeline point twice.
 
+## SCTE-35 ad-avail signaling
+
+livesim2 marks the ad breaks of a live stream with **SCTE-35** cue messages, carried the two ways
+ANSI/SCTE 214-1 defines: inband as `emsg` boxes (scheme `urn:scte:scte35:2013:bin`, §6.7.3) and in
+the MPD as an `EventStream` (§6.7.2.1). A cue is either a legacy `splice_insert()` carrying the
+break duration, or a `time_signal()` carrying one or more `segmentation_descriptor()` levels.
+
+Enable it with the `scte35_` URL option, which uses the same break-schedule grammar as `sgai_` and
+`svta_`:
+
+- Legacy presets: `scte35_1`, `scte35_2` and `scte35_3` — one, two or three `splice_insert` breaks
+  per minute, unchanged from earlier versions (they are now shorthand for `p60:20@10`,
+  `p60:10@10,40` and `p60:10@10,36,46`).
+- Fixed breaks: `scte35_30:15`, or a comma-separated list `scte35_30:15,90:15`.
+- Periodic breaks: `scte35_p60:20@10` — a 20 s break 10 s after every full UTC minute. The `@`
+  offsets place the breaks inside the cycle and may list several per cycle.
+- Options are appended with `;key=val`:
+
+  | Option | Meaning | Default |
+  | ------ | ------- | ------- |
+  | `cmd=insert\|timesignal` | splice command | `insert` |
+  | `seg=<level>[,<level>...]` | segmentation levels, outermost first (see below) | `po` |
+  | `ads=<n>` | split the break into `n` creative segments (0-20) | 0 |
+  | `adseg=<level>` | level used for those creative segments | `ad` |
+  | `emsg=<0\|1>` | inband carriage | 1 |
+  | `mpd=off\|bin\|xml` | MPD `EventStream`: none, `2014:xml+bin`, or `2013:xml` | `off` |
+  | `lead=<s>` | how far ahead of the splice point the cue is delivered | 7 |
+  | `end=<0\|1>` | also emit the closing message | 1 for `timesignal`, 0 for `insert` |
+  | `repeat=<0\|1>` | repeat the cue in every segment of the lead window | 0 |
+  | `upid=<type>:<value>` | `segmentation_upid` | a generated `urn:dashif:livesim2:break:<id>` URI |
+  | `value=<s>` | `@value` of the `emsg` and the `(Inband)EventStream` (a PID or a URI) | empty |
+  | `ts=<n>` | `EventStream@timescale` | 90000 |
+  | `slate=<0\|1>` | serve the AD BREAK countdown slate inside the breaks | 1 (0 for the legacy presets) |
+  | `pre=<s>` | also slate the seconds before each break with an AD BREAK IN countdown | 0 |
+
+The segmentation levels are `break` (0x22/0x23), `po` (Provider Placement Opportunity, 0x34/0x35),
+`dpo` (Distributor PO, 0x36/0x37), `ad` (Provider Advertisement, 0x30/0x31), `dad` (Distributor
+Advertisement, 0x32/0x33), `promo` (0x3C/0x3D) and `dpromo` (0x3E/0x3F).
+
+### The segmentation hierarchy
+
+SCTE-35 nests, and every level that opens at the same instant travels in **one** message, as
+consecutive descriptors of its descriptor loop (SCTE 35 Figure 5). So `seg=` is a list, outermost
+first, and `ads=<n>` adds the innermost repeating level. With
+`scte35_p60:20@10;cmd=timesignal;seg=break,po;ads=2` each break produces three `time_signal`
+messages:
+
+| at | descriptors |
+| --- | --- |
+| break start | Break Start `0x22`, Provider PO Start `0x34` (both with a 20 s `segmentation_duration`), Provider Ad Start `0x30` (10 s, `segment_num=1`, `segments_expected=2`) |
+| +10 s | Provider Ad End `0x31` (num 1), Provider Ad Start `0x30` (num 2) |
+| break end | Provider Ad End `0x31` (num 2), Provider PO End `0x35`, Break End `0x23` |
+
+Each level carries its own `segmentation_event_id`, shared between its start and its end as
+SCTE 35 §10.3.3.5 requires, and derived from the break start second so it survives an MPD refresh
+unchanged. `Event@id` and `emsg.id` are the second of the splice point, so each message has its own.
+
+### Seeing the break
+
+By default a `scte35_` stream also *shows* its avails: inside each break the video track serves the
+generated **AD BREAK** countdown slate (the same one `sgai_` and `svta_` use), so the window the cue
+messages describe is visible rather than only announced. `slate=0` turns that off and keeps the
+underlying content, which is what the legacy `scte35_1|2|3` presets do — those have always been
+signaling-only, and stay that way.
+
+`pre=<s>` extends this backwards: the given number of seconds before each break are slated with an
+**AD BREAK IN** countdown. Since a cue is delivered `lead` seconds ahead of its splice point, a
+`pre=` at least as large as `lead` makes the announcement visible on screen at the moment it arrives
+in the stream — useful for checking by eye that a player or splicer acted on the cue in time. The
+countdown reaches zero exactly as the break starts, where the AD BREAK countdown takes over. The
+slate is video-only and needs an unencrypted AVC representation, like the other slates.
+
+### Timing and combinations
+
+A cue is delivered one `lead` (7 s by default) before its splice point — inband in the segment
+holding the announce point, and in the MPD at the same moment, so the two carriages agree. MPD
+events are kept for as long as the segments they cover are available (SCTE 214-1 §6.7.2.1 item 4).
+Media times are epoch-locked, so `Event@presentationTime` is an absolute offset from the
+availabilityStartTime and the payload's `splice_time()` is the same instant on the 90 kHz clock
+(modulo 2^33, as SCTE-35 prescribes).
+
+`scte35_` can be combined with `sgai_` or `svta_` as long as all of them use the **same** break
+schedule: SCTE-35 then announces the avail that the Alternative-MPD event fills with a real ad pod,
+or that SVTA2053 describes for measurement. Inband-only signaling (`mpd=off`, the default) also
+works with the multi-period options; MPD events do not, since the event stream lives in the first
+Period.
+
 ## DASH Content Steering
 
 livesim2 can be used to demonstrate and test client behavior for **DASH Content Steering**

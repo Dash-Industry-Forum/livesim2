@@ -191,25 +191,57 @@ templ urlgenPage(d urlGenData) {
 						</fieldset>
 					</details>
 					<details>
-						<summary>SCTE-35...</summary>
+						<summary>SCTE-35 ad-avail signaling...</summary>
 						<fieldset>
-							<legend>SCTE-35 emsg frequency</legend>
-							<label for="scte35-none">
-								<input type="radio" id="scte35-none" name="scte35" value="" checked?={ d.Scte35Var == "" }/>
-								No SCTE-35 emsg boxes
+							<legend>SCTE-35 cue messages marking the ad breaks, inband and/or in the MPD</legend>
+							<label for="scte35">
+								Ad-break schedule and options
+								<input type="text" id="scte35" name="scte35" value={ d.Scte35Var } placeholder="p60:20@10;cmd=timesignal;seg=break,po;pre=5"/>
 							</label>
-							<label for="scte35-1">
-								<input type="radio" id="scte35-1" name="scte35" value="1" checked?={ d.Scte35Var == "1" }/>
-								1 event per minute, duration 20s, start at hh:mm:10
-							</label>
-							<label for="scte35-2">
-								<input type="radio" id="scte35-2" name="scte35" value="2" checked?={ d.Scte35Var == "2" }/>
-								2 events per minute, duration 10s, start at hh:mm:10 and hh:mm:40
-							</label>
-							<label for="scte35-3">
-								<input type="radio" id="scte35-3" name="scte35" value="3" checked?={ d.Scte35Var == "3" }/>
-								3 events per minute, duration 10s, start at hh:mm:10, hh:mm:36, hh:mm:46
-							</label>
+							<p>
+								The ad breaks are marked with SCTE-35 cue messages, carried inband as
+								<code>emsg</code> boxes (scheme <code>urn:scte:scte35:2013:bin</code>) and/or in the
+								MPD as an <code>EventStream</code> (SCTE 214-1 &sect;6.7). The schedule uses the same
+								grammar as <code>sgai</code> and <code>svta</code>:
+								<pre>( 1 | 2 | 3 ) | ( &lt;off&gt;:&lt;dur&gt;[,...] | p&lt;period&gt;:&lt;dur&gt;[@&lt;off&gt;,...] )[;key=val;...]</pre>
+								<code>1</code>, <code>2</code> and <code>3</code> are the legacy presets: that many
+								<code>splice_insert</code> breaks per minute (<code>p60:20@10</code>,
+								<code>p60:10@10,40</code> and <code>p60:10@10,36,46</code>). The options are:
+							</p>
+							<ul>
+								<li><code>cmd=insert|timesignal</code> &mdash; splice command (default <code>insert</code>)</li>
+								<li>
+									<code>seg=&lt;level&gt;[,&lt;level&gt;...]</code> &mdash; segmentation levels for
+									<code>cmd=timesignal</code>, outermost first (default <code>po</code>):
+									<code>break</code>, <code>po</code>, <code>dpo</code>, <code>ad</code>,
+									<code>dad</code>, <code>promo</code>, <code>dpromo</code>
+								</li>
+								<li><code>ads=&lt;n&gt;</code> &mdash; split the break into <it>n</it> creative segments (0-20, default 0)</li>
+								<li><code>adseg=&lt;level&gt;</code> &mdash; level used for those segments (default <code>ad</code>)</li>
+								<li><code>emsg=0|1</code> &mdash; inband carriage (default 1)</li>
+								<li><code>mpd=off|bin|xml</code> &mdash; MPD EventStream: none, <code>xml+bin</code> or full XML (default off)</li>
+								<li><code>lead=&lt;s&gt;</code> &mdash; delivery ahead of the splice point (default 7)</li>
+								<li><code>end=0|1</code> &mdash; also emit the closing message (default 1 for <code>timesignal</code>)</li>
+								<li><code>repeat=0|1</code> &mdash; repeat the cue in every segment of the lead window (default 0)</li>
+								<li><code>upid=&lt;type&gt;:&lt;value&gt;</code> &mdash; <code>segmentation_upid</code> (default a generated URI)</li>
+								<li><code>value=&lt;s&gt;</code> &mdash; <code>&#64;value</code> of the emsg and the EventStream (a PID or URI)</li>
+								<li><code>ts=&lt;n&gt;</code> &mdash; <code>EventStream@timescale</code> (default 90000)</li>
+								<li>
+									<code>slate=0|1</code> &mdash; serve the generated AD BREAK countdown slate inside the
+									breaks, so the avail is visible (default 1; the legacy presets <code>1</code>,
+									<code>2</code> and <code>3</code> keep the underlying content)
+								</li>
+								<li>
+									<code>pre=&lt;s&gt;</code> &mdash; also slate the given number of seconds before each
+									break with an AD BREAK IN countdown, which makes a cue delivered ahead of its splice
+									point visible on screen (default 0, needs <code>slate=1</code>)
+								</li>
+							</ul>
+							<p>
+								Example: <code>p60:20@10;cmd=timesignal;seg=break,po;mpd=bin</code> &mdash; a 20&nbsp;s
+								Provider Placement Opportunity inside a Break, 10&nbsp;s after every full UTC minute,
+								signaled both inband and in the MPD.
+							</p>
 						</fieldset>
 					</details>
 					<details>

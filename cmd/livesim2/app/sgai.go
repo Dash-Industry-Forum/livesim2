@@ -211,7 +211,7 @@ func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, now
 		}
 		es.Events = append(es.Events, &m.EventType{
 			PresentationTime: uint64(b.offsetS) * uint64(ts),
-			Duration:         uint64(b.durS) * uint64(ts),
+			Duration:         m.Ptr(uint64(b.durS) * uint64(ts)),
 			Id:               m.Ptr(b.id),
 			ReplacePresentation: &m.AlternativeMPDReplaceEventType{
 				Clip:                    m.Ptr(cfg.SGAI.Clip),
