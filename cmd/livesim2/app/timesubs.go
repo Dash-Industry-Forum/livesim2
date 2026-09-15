@@ -328,21 +328,45 @@ func timeSubsSamples(tss timeSubsSeg, cues []cueItvl, startMS, endMS int, cfg *R
 	tt *template.Template) ([]mp4.FullSample, error) {
 	switch tss.prefix {
 	case SUBS_STPP_PREFIX:
-		s, err := stppTimeSample(tt, cues, startMS, endMS, tss.lang, tss.nr, cfg.TimeSubsRegion)
+		s, err := stppTimeSample(tt, cues, startMS, endMS, tss.lang, tss.nr, cfg.TimeSubsRegion,
+			cfg.TimeSubsSegNr)
 		if err != nil {
 			return nil, err
 		}
 		return []mp4.FullSample{s}, nil
 	default: // SUBS_WVTT_PREFIX
-		return wvttTimeSamples(cues, startMS, endMS, tss.lang, tss.nr, cfg.TimeSubsRegion), nil
+		return wvttTimeSamples(cues, startMS, endMS, tss.lang, tss.nr, cfg.TimeSubsRegion,
+			cfg.TimeSubsSegNr), nil
 	}
 }
 
-// makeSttpMessage makes a message for an stpptime cue.
-func makeStppMessage(lang string, utcMS, segNr int) string {
+// makeStppMessage makes a message for an stpptime cue.
+func makeStppMessage(lang string, utcMS, segNr int, withSegNr bool) string {
 	t := time.UnixMilli(int64(utcMS))
 	utc := t.UTC().Format(time.RFC3339)
-	return fmt.Sprintf("%s<br/>%s # %d", utc, lang, segNr)
+	return makeSubsCueText(utc, lang, segNr, withSegNr, "<br/>")
+}
+
+// makeSubsCueText renders the text of a generated subtitle cue.
+//
+// The segment number is useful when watching a stream, but it makes the cue text depend on
+// which segment carries it, so a cue restated in the next segment is no longer byte for
+// byte the same. timesubssegnr_0 leaves it out, which is what makes a cue that spans a
+// segment boundary restate identically.
+func makeSubsCueText(utc, lang string, segNr int, withSegNr bool, br string) string {
+	if !withSegNr {
+		return fmt.Sprintf("%s%s%s", utc, br, lang)
+	}
+	return fmt.Sprintf("%s%s%s # %d", utc, br, lang, segNr)
+}
+
+// stppCueID returns the xml:id of a cue. It identifies the cue itself - the UTC second it
+// announces - and not its position in a segment, so that the same cue keeps the same id
+// wherever it is restated. An id derived from the segment number would change at every
+// segment boundary and tell a receiver that a persisting cue is a new one; dash.js and
+// shaka both compare the id when deciding whether two cues are the same.
+func stppCueID(utcS int) string {
+	return fmt.Sprintf("c%d", utcS) // xml:id is an NCName, so it cannot start with a digit
 }
 
 // msToTTMLTime returns a time that can be used in TTML.
@@ -413,20 +437,20 @@ func calcCueItvls(startMS, durMS, utcStartMS, cueDurMS int) []cueItvl {
 // fragment where it ends. An unchanged cue is therefore restated
 // byte for byte, which is what lets genTimeSubsChunks mark the restatement as redundant.
 func stppTimeSample(tt *template.Template, cues []cueItvl, startMS, endMS int, lang string, nr uint32,
-	region int) (mp4.FullSample, error) {
+	region int, withSegNr bool) (mp4.FullSample, error) {
 	stppd := StppTimeData{
 		Lang:   lang,
 		Region: region,
 		Cues:   make([]StppTimeCue, 0, len(cues)),
 	}
-	for i, ci := range cues {
+	for _, ci := range cues {
 		if !ci.overlaps(startMS, endMS) {
 			continue
 		}
 		cue := StppTimeCue{
-			Id:    fmt.Sprintf("%d-%d", nr, i),
+			Id:    stppCueID(ci.utcS),
 			Begin: msToTTMLTime(ci.startMS),
-			Msg:   makeStppMessage(lang, ci.utcS*1000, int(nr)),
+			Msg:   makeStppMessage(lang, ci.utcS*1000, int(nr), withSegNr),
 		}
 		if ci.endMS <= endMS {
 			cue.End = msToTTMLTime(ci.endMS)

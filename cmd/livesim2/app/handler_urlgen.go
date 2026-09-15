@@ -127,8 +127,9 @@ func drmsFromAssetInfo(a *assetInfo, drmCfg *drm.DrmConfig, selected string) []n
 }
 
 const (
-	defaultTimeSubsDur = "900"
-	defaultTimeSubsReg = "0"
+	defaultTimeSubsDur   = "900"
+	defaultTimeSubsReg   = "0"
+	defaultTimeSubsSegNr = "1"
 )
 
 //nolint:lll
@@ -152,6 +153,7 @@ type urlGenData struct {
 	TimeSubsWvtt                string // languages for generated subtitles in wvtt-format (comma-separated)
 	TimeSubsDur                 string // cue duration of generated subtitles (in milliseconds)
 	TimeSubsReg                 string // 0 for bottom and 1 for top
+	TimeSubsSegNr               string // 1 to show the segment number in the cue text, 0 to leave it out
 	TimeCC608                   string // in-band CTA-608 caption channel and language (e.g. CC1-eng)
 	Drm                         string // empty means no DRM setup
 	UTCTiming                   string
@@ -189,6 +191,7 @@ func init() {
 	initData.LlTarget = defaultLatencyTargetMS
 	initData.TimeSubsDur = defaultTimeSubsDur
 	initData.TimeSubsReg = defaultTimeSubsReg
+	initData.TimeSubsSegNr = defaultTimeSubsSegNr
 }
 
 type assetWithSelect struct {
@@ -391,6 +394,11 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 	if timeSubsReg != "" && timeSubsReg != defaultTimeSubsReg {
 		data.TimeSubsReg = timeSubsReg
 		fmt.Fprintf(&sb, "timesubsreg_%s/", timeSubsReg)
+	}
+	timeSubsSegNr := q.Get("timesubssegnr")
+	if timeSubsSegNr != "" && timeSubsSegNr != defaultTimeSubsSegNr {
+		data.TimeSubsSegNr = timeSubsSegNr
+		fmt.Fprintf(&sb, "timesubssegnr_%s/", timeSubsSegNr)
 	}
 	timeCC608 := q.Get("timecc608")
 	if timeCC608 != "" {

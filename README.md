@@ -838,6 +838,34 @@ so a cue is always clipped to the chunk that carries it; but a continued cue is 
 with a byte-identical `vttc`, and consecutive chunks with nothing on screen repeat the
 same empty `vtte`, so the redundancy marking applies just as it does for `stpp`.
 
+### Saying that a cue is the same cue
+
+Byte equality is how a receiver recognises a restatement, but it is a proxy for cue
+identity, and both formats can say it outright — so livesim2 does.
+
+- Each `stpp` cue carries an `xml:id` naming **the cue**, `c<utc-second>`, not its position
+  in a segment. An id derived from the segment number would change at every segment
+  boundary and tell a receiver that a persisting cue is a new one, which matters because
+  dash.js and shaka both compare the id when deciding whether two cues are the same.
+- Each `wvtt` cue carries a `vsid` (`CueSourceIDBox`) with the same value. ISO/IEC 14496-30
+  §6.6 calls a matching `source_ID` "diagnostic that the same cue is still active". It
+  earns its place more here than in `stpp`, since WebVTT cues are objects with enter and
+  exit behaviour that a receiver would otherwise tear down and re-create.
+
+One thing still breaks byte equality across a segment boundary: the cue text names the
+segment it came from — `1970-01-01T00:00:00Z / en # 0`. That is useful when watching a
+stream and harmless within a segment, but it means a cue restated in the **next** segment
+is never byte-identical. `timesubssegnr_0` leaves the number out, which is what makes an
+unchanged cue restate byte for byte across a boundary:
+
+```
+/livesim2/chunkdur_0.5/ato_1.5/ltgt_3000/timesubsstpp_en/timesubsdur_5000/timesubssegnr_0/testpic_2s/Manifest.mpd
+```
+
+`timesubsdur_5000` gives cues that outlive a 2 s segment, so the case actually arises.
+Note that the first sample of each segment is still never marked redundant even when it is
+identical — a client tuning in at a segment boundary has to decode it.
+
 With `testpic_2s`, `timesubsstpp_en` and `chunkdur_0.2` — a 2 s segment, 200 ms chunks,
 one cue per second — a segment comes out as:
 
