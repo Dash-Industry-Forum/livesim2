@@ -29,7 +29,8 @@ livesim2 has a new feature for generating subtitles for any number of languages.
 This is done by a URL parameter like `/timesubsstpp_en,sv` which will result in
 two `stpp` (segmented TTML) subtitle tracks with with language codes "en" and "sv", respectively.
 There is a corresponding setting for `wvtt` (segmented WebVTT) subtitles using `/timesubswvtt_en,sv`.
-Both are chunked like the video when `chunkdur_` is set; see [Low-latency subtitles](#low-latency-subtitles).
+Both are chunked like the video when `chunkdur_` is set; see [Low-latency subtitles](#low-latency-subtitles),
+which also describes the experimental `/timesubsstpc_` and `/timesubswvtc_` paint-model variants.
 
 For in-band closed captions, `/timecc608_CC1-eng` injects a CTA-608 (CEA-608) caption
 into the AVC/HEVC video itself, showing a ticking UTC clock and the segment number on
@@ -889,8 +890,66 @@ That gap is the point of the reference: the redundancy flag lets a receiver skip
 *parse*, but the bytes are still sent, because there is no way to signal "no change" in
 8 bytes instead of a document. Proposals for that signalling — a no-change box under a
 new sample entry, and a document that stays active until the next one supersedes it — are
-written up in [paint-model subtitles][paint-model]. Nothing of that is implemented here;
-what livesim2 serves today uses only signalling that is already standardised.
+written up in [paint-model subtitles][paint-model]. Everything above uses only signalling
+that is already standardised; the experimental variants below close the gap and are
+clearly separated from it.
+
+### Experimental: paint-model tracks (`timesubsstpc_`, `timesubswvtc_`)
+
+> **Not standardised.** The four-character codes `stpc`, `wvtc`, `ttmn`, `ttmb` and `vttn`
+> are placeholders taken from the design and are **not registered with MP4RA**. They may
+> change or disappear. Use them to measure and to test receivers, not in production.
+
+`timesubsstpc_<langs>` and `timesubswvtc_<langs>` generate the same cues on the same
+timeline as `timesubsstpp_` and `timesubswvtt_`, but a chunk that restates what the
+previous chunk already said is sent as an **8-byte no-change box** — `ttmn` for TTML,
+`vttn` for WebVTT — instead of the restatement. `vttn` is the peer of `vtte`: where `vtte`
+clears the screen, `vttn` says the cues continue.
+
+These are separate sample entries, not a relabelling. Under them a sample is no longer
+always a self-contained document, which ISO/IEC 14496-30 §5.6 requires of `stpp`, so a
+receiver that does not know them must not select the track — and a new 4CC reaches exactly
+the selection machinery that already exists, the RFC 6381 `codecs` parameter. The
+no-change and body-only samples are accordingly **non-sync samples that depend on an
+earlier sample of the same segment** (`sample_is_non_sync_sample = 1`,
+`sample_depends_on = 1`), which is what a sync-sample-only format cannot express.
+
+| parameter | default | meaning |
+|---|---|---|
+| `;nochange=0\|1` | `1` | send the no-change box. `nochange=0` is a control: it differs from the `stpp`/`wvtt` track only in the 4CC |
+| `;body=0\|1` | `0` | **stpc only.** Send only the `<body>` of a changed document, in a `ttmb` box; the `<head>` is spliced from the first chunk of the segment |
+
+The first chunk of every segment always carries a complete document, so segment-level
+random access is untouched: the dependency never reaches across a segment boundary.
+
+Listing an old and a new option together gives two `AdaptationSet`s with the same language
+and the same timeline, so the bytes compare directly:
+
+```
+/livesim2/chunkdur_0.2/ato_1.8/ltgt_2000/timesubsstpp_en/timesubsstpc_en/testpic_2s/Manifest.mpd
+```
+
+With `testpic_2s`, `chunkdur_0.2` and one cue per second, the same segment that costs ten
+documents above comes out as:
+
+| chunk | `timesubsstpp_en` | `timesubsstpc_en` | `timesubsstpc_en;body=1` |
+|---|---|---|---|
+| 0 | 1477 B document | 1477 B document | 1477 B document |
+| 1–3 | 1477 B each, redundant | **8 B `ttmn`** | **8 B `ttmn`** |
+| 4 | 1496 B (cue ends) | 1496 B | **178 B `ttmb`** |
+| 5 | 1477 B (next cue) | 1477 B | **159 B `ttmb`** |
+| 6–8 | 1477 B each, redundant | **8 B `ttmn`** | **8 B `ttmn`** |
+| 9 | 1496 B (cue ends) | 1496 B | **178 B `ttmb`** |
+
+~14.8 kB per segment becomes ~6.0 kB, or ~2.0 kB with `body=1` — against ~1.5 kB for the
+same content unchunked, which is the floor. `wvtc` moves less in absolute terms because a
+`wvtt` cue is already small (55 B here), but the shape is the same, and it is the cheaper
+design vehicle precisely because its header already lives in the `vttC` box of the sample
+entry, which is what `body=1` has to reconstruct for TTML.
+
+The `ttmn`, `ttmb` and `vttn` boxes and the `stpc`/`wvtc` sample entries are implemented in
+[mp4ff](https://github.com/Eyevinn/mp4ff); `mp4ff-subslister` renders them, which is the
+quickest way to look at what is actually sent.
 
 One piece of that has arrived since: ISO/IEC 14496-12:2026 §8.8.18 adds the
 `RedundantSampleOriginalTimingBox` (`rsot`) in the `traf`, whose NOTE 1 describes exactly

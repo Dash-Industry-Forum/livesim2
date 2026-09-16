@@ -97,59 +97,61 @@ const (
 )
 
 type ResponseConfig struct {
-	URLParts                     []string          `json:"-"`
-	URLContentIdx                int               `json:"-"`
-	UTCTimingMethods             []UTCTimingMethod `json:"UTCTimingMethods,omitempty"`
-	PeriodDurations              []int             `json:"PeriodDurations,omitempty"`
-	StartTimeS                   int               `json:"StartTimeS"`
-	StopTimeS                    *int              `json:"StopTimeS,omitempty"`
-	TimeOffsetS                  *float64          `json:"TimeOffsetS,omitempty"`
-	InitSegAvailOffsetS          *int              `json:"InitSegAvailOffsetS,omitempty"`
-	TimeShiftBufferDepthS        *int              `json:"TimeShiftBufferDepthS,omitempty"`
-	MinimumUpdatePeriodS         *int              `json:"MinimumUpdatePeriodS,omitempty"`
-	PeriodsPerHour               *int              `json:"PeriodsPerHour,omitempty"`
-	XlinkPeriods                 bool              `json:"XlinkPeriods,omitempty"`
-	XlinkPeriodsPerHour          *int              `json:"XlinkPeriodsPerHour,omitempty"`
-	PeriodId                     string            `json:"PeriodId,omitempty"`
-	EtpPeriodsPerHour            *int              `json:"EtpPeriodsPerHour,omitempty"`
-	EtpDuration                  *int              `json:"EtpDuration,omitempty"`
-	PeriodOffset                 *int              `json:"PeriodOffset,omitempty"`
-	SCTE35PerMinute              *int              `json:"SCTE35PerMinute,omitempty"`
-	StartNr                      *uint32           `json:"StartNr,omitempty"`
-	SuggestedPresentationDelayS  *int              `json:"SuggestedPresentationDelayS,omitempty"`
-	AvailabilityTimeOffsetS      float64           `json:"AvailabilityTimeOffsetS,omitempty"`
-	ChunkDurS                    *float64          `json:"ChunkDurS,omitempty"`
-	LatencyTargetMS              *uint32           `json:"LatencyTargetMS,omitempty"`
-	AddLocationFlag              bool              `json:"AddLocationFlag,omitempty"`
-	Tfdt32Flag                   bool              `json:"Tfdt32Flag,omitempty"`
-	ContUpdateFlag               bool              `json:"ContUpdateFlag,omitempty"`
-	InsertAdFlag                 bool              `json:"InsertAdFlag,omitempty"`
-	ContMultiPeriodFlag          bool              `json:"ContMultiPeriodFlag,omitempty"`
-	SegTimelineMode              SegTimelineMode   `json:"SegTimelineMode,omitempty"`
-	SidxFlag                     bool              `json:"SidxFlag,omitempty"`
-	SegTimelineLossFlag          bool              `json:"SegTimelineLossFlag,omitempty"`
-	AvailabilityTimeCompleteFlag bool              `json:"AvailabilityTimeCompleteFlag,omitempty"`
-	TimeSubsStpp                 []string          `json:"TimeSubsStppLanguages,omitempty"`
-	TimeSubsWvtt                 []string          `json:"TimeSubsWvttLanguages,omitempty"`
-	TimeSubsDurMS                int               `json:"TimeSubsDurMS,omitempty"`
-	TimeSubsSegNr                bool              `json:"TimeSubsSegNr,omitempty"`
-	TimeSubsRegion               int               `json:"TimeSubsRegion,omitempty"`
-	CC608                        *CC608Config      `json:"CC608,omitempty"`
-	Host                         string            `json:"Host,omitempty"`
-	PatchTTL                     int               `json:"Patch,omitempty"`
-	DRM                          string            `json:"DRM,omitempty"` // Includes ECCP as eccp-cbcs or eccp-cenc
-	SegStatusCodes               []SegStatusCodes  `json:"SegStatus,omitempty"`
-	Traffic                      []LossItvls       `json:"Traffic,omitempty"`
-	Query                        *Query            `json:"Query,omitempty"`
-	SSRFlag                      bool              `json:"SSRFlag,omitempty"`
-	SSRAS                        string            `json:"SSRAS,omitempty"`
-	ChunkDurSSR                  string            `json:"ChunkDurSSR,omitempty"`
-	SGAI                         *SGAIConfig       `json:"SGAI,omitempty"`
-	SVTA                         *SVTAConfig       `json:"SVTA,omitempty"`
-	Steer                        *SteeringConfig   `json:"Steer,omitempty"`
-	SteerLocation                string            `json:"-"` // service location of a steered segment request (cdn_ path token)
-	SteerSessionID               string            `json:"-"` // content-steering session id (sid_ path token or ?sessionId=)
-	SteerCSID                    string            `json:"-"` // content-steering group id (csid_ path token); shared group decision
+	URLParts                     []string             `json:"-"`
+	URLContentIdx                int                  `json:"-"`
+	UTCTimingMethods             []UTCTimingMethod    `json:"UTCTimingMethods,omitempty"`
+	PeriodDurations              []int                `json:"PeriodDurations,omitempty"`
+	StartTimeS                   int                  `json:"StartTimeS"`
+	StopTimeS                    *int                 `json:"StopTimeS,omitempty"`
+	TimeOffsetS                  *float64             `json:"TimeOffsetS,omitempty"`
+	InitSegAvailOffsetS          *int                 `json:"InitSegAvailOffsetS,omitempty"`
+	TimeShiftBufferDepthS        *int                 `json:"TimeShiftBufferDepthS,omitempty"`
+	MinimumUpdatePeriodS         *int                 `json:"MinimumUpdatePeriodS,omitempty"`
+	PeriodsPerHour               *int                 `json:"PeriodsPerHour,omitempty"`
+	XlinkPeriods                 bool                 `json:"XlinkPeriods,omitempty"`
+	XlinkPeriodsPerHour          *int                 `json:"XlinkPeriodsPerHour,omitempty"`
+	PeriodId                     string               `json:"PeriodId,omitempty"`
+	EtpPeriodsPerHour            *int                 `json:"EtpPeriodsPerHour,omitempty"`
+	EtpDuration                  *int                 `json:"EtpDuration,omitempty"`
+	PeriodOffset                 *int                 `json:"PeriodOffset,omitempty"`
+	SCTE35PerMinute              *int                 `json:"SCTE35PerMinute,omitempty"`
+	StartNr                      *uint32              `json:"StartNr,omitempty"`
+	SuggestedPresentationDelayS  *int                 `json:"SuggestedPresentationDelayS,omitempty"`
+	AvailabilityTimeOffsetS      float64              `json:"AvailabilityTimeOffsetS,omitempty"`
+	ChunkDurS                    *float64             `json:"ChunkDurS,omitempty"`
+	LatencyTargetMS              *uint32              `json:"LatencyTargetMS,omitempty"`
+	AddLocationFlag              bool                 `json:"AddLocationFlag,omitempty"`
+	Tfdt32Flag                   bool                 `json:"Tfdt32Flag,omitempty"`
+	ContUpdateFlag               bool                 `json:"ContUpdateFlag,omitempty"`
+	InsertAdFlag                 bool                 `json:"InsertAdFlag,omitempty"`
+	ContMultiPeriodFlag          bool                 `json:"ContMultiPeriodFlag,omitempty"`
+	SegTimelineMode              SegTimelineMode      `json:"SegTimelineMode,omitempty"`
+	SidxFlag                     bool                 `json:"SidxFlag,omitempty"`
+	SegTimelineLossFlag          bool                 `json:"SegTimelineLossFlag,omitempty"`
+	AvailabilityTimeCompleteFlag bool                 `json:"AvailabilityTimeCompleteFlag,omitempty"`
+	TimeSubsStpp                 []string             `json:"TimeSubsStppLanguages,omitempty"`
+	TimeSubsWvtt                 []string             `json:"TimeSubsWvttLanguages,omitempty"`
+	TimeSubsStpc                 *TimeSubsPaintConfig `json:"TimeSubsStpc,omitempty"`
+	TimeSubsWvtc                 *TimeSubsPaintConfig `json:"TimeSubsWvtc,omitempty"`
+	TimeSubsDurMS                int                  `json:"TimeSubsDurMS,omitempty"`
+	TimeSubsSegNr                bool                 `json:"TimeSubsSegNr,omitempty"`
+	TimeSubsRegion               int                  `json:"TimeSubsRegion,omitempty"`
+	CC608                        *CC608Config         `json:"CC608,omitempty"`
+	Host                         string               `json:"Host,omitempty"`
+	PatchTTL                     int                  `json:"Patch,omitempty"`
+	DRM                          string               `json:"DRM,omitempty"` // Includes ECCP as eccp-cbcs or eccp-cenc
+	SegStatusCodes               []SegStatusCodes     `json:"SegStatus,omitempty"`
+	Traffic                      []LossItvls          `json:"Traffic,omitempty"`
+	Query                        *Query               `json:"Query,omitempty"`
+	SSRFlag                      bool                 `json:"SSRFlag,omitempty"`
+	SSRAS                        string               `json:"SSRAS,omitempty"`
+	ChunkDurSSR                  string               `json:"ChunkDurSSR,omitempty"`
+	SGAI                         *SGAIConfig          `json:"SGAI,omitempty"`
+	SVTA                         *SVTAConfig          `json:"SVTA,omitempty"`
+	Steer                        *SteeringConfig      `json:"Steer,omitempty"`
+	SteerLocation                string               `json:"-"` // service location of a steered segment request (cdn_ path token)
+	SteerSessionID               string               `json:"-"` // content-steering session id (sid_ path token or ?sessionId=)
+	SteerCSID                    string               `json:"-"` // content-steering group id (csid_ path token); shared group decision
 }
 
 // SegStatusCodes configures regular extraordinary segment response codes
@@ -437,6 +439,10 @@ cfgLoop:
 			cfg.TimeSubsStpp = strings.Split(val, ",")
 		case "timesubswvtt": // comma-separated list of languages
 			cfg.TimeSubsWvtt = strings.Split(val, ",")
+		case "timesubsstpc": // experimental paint-model TTML: <langs>[;nochange=0|1][;body=0|1]
+			cfg.TimeSubsStpc = sc.ParseTimeSubsPaintConfig(key, "stpc", val)
+		case "timesubswvtc": // experimental paint-model WebVTT: <langs>[;nochange=0|1]
+			cfg.TimeSubsWvtc = sc.ParseTimeSubsPaintConfig(key, "wvtc", val)
 		case "timesubsdur": // duration in milliseconds
 			cfg.TimeSubsDurMS = sc.Atoi(key, val)
 		case "timesubssegnr": // include the segment number in the cue text (0 or 1)

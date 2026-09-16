@@ -241,6 +241,16 @@ templ urlgenPage(d urlGenData) {
 							languages for generated subtitles in wvtt-format (comma-separated)
 							<input type="text" id="timesubswvtt" name="timesubswvtt" value={ d.TimeSubsWvtt }/>
 						</label>
+						<label for="timesubsstpc">
+							languages for experimental paint-model stpc subtitles (comma-separated,
+							optionally followed by ;nochange=0 or ;body=1)
+							<input type="text" id="timesubsstpc" name="timesubsstpc" value={ d.TimeSubsStpc }/>
+						</label>
+						<label for="timesubswvtc">
+							languages for experimental paint-model wvtc subtitles (comma-separated,
+							optionally followed by ;nochange=0)
+							<input type="text" id="timesubswvtc" name="timesubswvtc" value={ d.TimeSubsWvtc }/>
+						</label>
 						<label for="timesubsdur">
 							Cue duration of generated time subtitles in ms (&lt;=1000)
 							<input type="text" id="timesubsdur" name="timesubsdur" value={ d.TimeSubsDur }/>

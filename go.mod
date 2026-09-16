@@ -7,7 +7,7 @@ require (
 	github.com/Eyevinn/dash-mpd v0.16.0
 	github.com/Eyevinn/go-608 v0.9.0
 	github.com/Eyevinn/hi264 v0.10.0
-	github.com/Eyevinn/mp4ff v0.55.0
+	github.com/Eyevinn/mp4ff v0.56.1-0.20260915205655-7ee6494d3f82
 	github.com/a-h/templ v0.3.1020
 	github.com/beevik/etree v1.7.0
 	github.com/caddyserver/certmagic v0.25.4
