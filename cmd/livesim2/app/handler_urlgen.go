@@ -151,6 +151,8 @@ type urlGenData struct {
 	ChunkDurSSR                 string // low delay chunk duration (float in seconds)
 	TimeSubsStpp                string // languages for generated subtitles in stpp-format (comma-separated)
 	TimeSubsWvtt                string // languages for generated subtitles in wvtt-format (comma-separated)
+	TimeSubsStpc                string // languages for experimental paint-model stpc subtitles, plus optional ;params
+	TimeSubsWvtc                string // languages for experimental paint-model wvtc subtitles, plus optional ;params
 	TimeSubsDur                 string // cue duration of generated subtitles (in milliseconds)
 	TimeSubsReg                 string // 0 for bottom and 1 for top
 	TimeSubsSegNr               string // 1 to show the segment number in the cue text, 0 to leave it out
@@ -384,6 +386,16 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 	if timeSubsWvtt != "" {
 		data.TimeSubsWvtt = timeSubsWvtt
 		fmt.Fprintf(&sb, "timesubswvtt_%s/", timeSubsWvtt)
+	}
+	timeSubsStpc := q.Get("timesubsstpc")
+	if timeSubsStpc != "" {
+		data.TimeSubsStpc = timeSubsStpc
+		fmt.Fprintf(&sb, "timesubsstpc_%s/", timeSubsStpc)
+	}
+	timeSubsWvtc := q.Get("timesubswvtc")
+	if timeSubsWvtc != "" {
+		data.TimeSubsWvtc = timeSubsWvtc
+		fmt.Fprintf(&sb, "timesubswvtc_%s/", timeSubsWvtc)
 	}
 	timeSubsDur := q.Get("timesubsdur")
 	if timeSubsDur != "" && timeSubsDur != defaultTimeSubsDur {

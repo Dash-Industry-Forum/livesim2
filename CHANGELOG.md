@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Experimental URL options `timesubsstpc_` and `timesubswvtc_` for paint-model subtitles: unchanged chunks are
+  sent as 8-byte no-change samples (unregistered 4CCs; see [paint-model subtitles](https://github.com/Eyevinn/paint-model-subtitles)).
 - New URL option `svta_` for SVTA2053 Ad Creative Signaling (payload version 2, issue #310). Ad-creative
   windows of the live timeline are marked with an `EventStream` of scheme
   `urn:svta:advertising-wg:ad-creative-signaling`, one `Event` per creative whose node data is the v2 JSON
@@ -121,6 +123,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- mp4ff dependency bumped to v0.57.0, the first release with the paint-model sample entries and boxes.
 - dash-mpd dependency bumped to v0.18.0, whose `EventType.Duration` is a `*uint64`, which is what
   lets a zero `Event@duration` reach the MPD, and mp4ff to v0.56.0.
 - The legacy `scte35_1|2|3` presets are now shorthands for `p60:20@10`, `p60:10@10,40` and
