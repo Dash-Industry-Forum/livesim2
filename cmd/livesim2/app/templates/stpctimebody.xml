@@ -1,0 +1,7 @@
+  <body style="s0">
+<div region="r{{.Region}}">
+{{- range .Cues}}
+{{template "stpptimecue.xml" .}}
+{{- end}}
+</div>
+  </body>

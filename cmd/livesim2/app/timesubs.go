@@ -34,6 +34,64 @@ const (
 // and add its duration to the preceding one, which is exactly "nothing changed here".
 const redundantSampleFlags uint32 = mp4.SyncSampleFlags | 1<<20
 
+// timeSubsTrack describes one flavour of generated time subtitle track.
+type timeSubsTrack struct {
+	prefix string // representation id prefix
+	codec  string // sample entry 4CC, also the RFC 6381 codecs value
+	wvtt   bool   // WebVTT samples (boxes) rather than TTML documents
+	paint  bool   // experimental paint-model variant (see timesubs_paint.go)
+}
+
+// timeSubsTracks is the set of generated subtitle track flavours, in the order the
+// AdaptationSets are added to the MPD.
+var timeSubsTracks = []timeSubsTrack{
+	{prefix: SUBS_STPP_PREFIX, codec: "stpp"},
+	{prefix: SUBS_WVTT_PREFIX, codec: "wvtt", wvtt: true},
+	{prefix: SUBS_STPC_PREFIX, codec: "stpc", paint: true},
+	{prefix: SUBS_WVTC_PREFIX, codec: "wvtc", wvtt: true, paint: true},
+}
+
+func timeSubsTrackByPrefix(prefix string) (timeSubsTrack, bool) {
+	for _, t := range timeSubsTracks {
+		if t.prefix == prefix {
+			return t, true
+		}
+	}
+	return timeSubsTrack{}, false
+}
+
+// timeSubsLangs returns the languages configured for one track flavour, or nil if that
+// flavour was not requested.
+func (c *ResponseConfig) timeSubsLangs(prefix string) []string {
+	switch prefix {
+	case SUBS_STPP_PREFIX:
+		return c.TimeSubsStpp
+	case SUBS_WVTT_PREFIX:
+		return c.TimeSubsWvtt
+	case SUBS_STPC_PREFIX:
+		if c.TimeSubsStpc != nil {
+			return c.TimeSubsStpc.Languages
+		}
+	case SUBS_WVTC_PREFIX:
+		if c.TimeSubsWvtc != nil {
+			return c.TimeSubsWvtc.Languages
+		}
+	}
+	return nil
+}
+
+// timeSubsPaint returns the paint-model configuration for one track flavour, or nil for
+// the plain stpp and wvtt ones.
+func (c *ResponseConfig) timeSubsPaint(prefix string) *TimeSubsPaintConfig {
+	switch prefix {
+	case SUBS_STPC_PREFIX:
+		return c.TimeSubsStpc
+	case SUBS_WVTC_PREFIX:
+		return c.TimeSubsWvtc
+	}
+	return nil
+}
+
 func timeSubsSegmentParts(prefix, segmentPart string) (lang string, segment string, ok bool) {
 	rep, seg, ok := strings.Cut(segmentPart, "/")
 	if !ok {
@@ -61,29 +119,17 @@ func isTimeSubsInitSegment(prefix, segmentPart string) (lang string, ok bool) {
 }
 
 func matchTimeSubsInitLang(cfg *ResponseConfig, segmentPart string) (prefix, lang string, ok bool, err error) {
-	lang, ok = isTimeSubsInitSegment(SUBS_STPP_PREFIX, segmentPart)
-	var langs []string
-	if ok {
-		prefix = SUBS_STPP_PREFIX
-		langs = cfg.TimeSubsStpp
-	}
-	if !ok {
-		lang, ok = isTimeSubsInitSegment(SUBS_WVTT_PREFIX, segmentPart)
-		if ok {
-			prefix = SUBS_WVTT_PREFIX
-			langs = cfg.TimeSubsWvtt
+	for _, t := range timeSubsTracks {
+		lang, ok = isTimeSubsInitSegment(t.prefix, segmentPart)
+		if !ok {
+			continue
 		}
+		if !slices.Contains(cfg.timeSubsLangs(t.prefix), lang) {
+			return "", lang, true, fmt.Errorf("time subs language %q does not match config: %w", lang, errNotFound)
+		}
+		return t.prefix, lang, true, nil
 	}
-
-	if !ok {
-		return "", "", false, nil
-	}
-
-	matchingLang := slices.Contains(langs, lang)
-	if !matchingLang {
-		return "", lang, true, fmt.Errorf("time subs language %q does not match config: %w", lang, errNotFound)
-	}
-	return prefix, lang, true, nil
+	return "", "", false, nil
 }
 
 func writeTimeSubsInitSegment(w http.ResponseWriter, cfg *ResponseConfig, segmentPart string) (bool, error) {
@@ -107,10 +153,14 @@ func writeTimeSubsInitSegment(w http.ResponseWriter, cfg *ResponseConfig, segmen
 
 func createTimeSubsInitSegment(prefix, lang string, timescale uint32) *mp4.InitSegment {
 	switch prefix {
-	case SUBS_STPP_PREFIX:
-		return createSubtitlesStppInitSegment(lang, timescale)
-	default: //SUBS_WVTT_PREFIX:
+	case SUBS_STPC_PREFIX:
+		return createSubtitlesStpcInitSegment(lang, timescale)
+	case SUBS_WVTC_PREFIX:
+		return createSubtitlesWvtcInitSegment(lang, timescale)
+	case SUBS_WVTT_PREFIX:
 		return createSubtitlesWvttInitSegment(lang, timescale)
+	default: // SUBS_STPP_PREFIX
+		return createSubtitlesStppInitSegment(lang, timescale)
 	}
 }
 
@@ -164,24 +214,20 @@ func (t timeSubsSeg) endMS() int {
 func matchTimeSubsMediaSegment(cfg *ResponseConfig, a *asset, segmentPart string, nowMS int) (
 	tss timeSubsSeg, isTimeSubs bool, err error) {
 	prefix := ""
-	var langs []string
-	lang, seg, ok := timeSubsSegmentParts(SUBS_STPP_PREFIX, segmentPart)
-	if ok {
-		prefix = SUBS_STPP_PREFIX
-		langs = cfg.TimeSubsStpp
-	} else {
-		lang, seg, ok = timeSubsSegmentParts(SUBS_WVTT_PREFIX, segmentPart)
+	var lang, seg string
+	for _, t := range timeSubsTracks {
+		var ok bool
+		lang, seg, ok = timeSubsSegmentParts(t.prefix, segmentPart)
 		if ok {
-			prefix = SUBS_WVTT_PREFIX
-			langs = cfg.TimeSubsWvtt
+			prefix = t.prefix
+			break
 		}
 	}
 
 	if prefix == "" {
 		return tss, false, nil
 	}
-	matchingLang := slices.Contains(langs, lang)
-	if !matchingLang {
+	if !slices.Contains(cfg.timeSubsLangs(prefix), lang) {
 		return tss, true, fmt.Errorf("time subs language %q does not match config: %w", lang, errNotFound)
 	}
 	nrStr, ext, ok := strings.Cut(seg, ".")
@@ -279,6 +325,13 @@ func createTimeSubsMediaSegment(tss timeSubsSeg, cfg *ResponseConfig, tt *templa
 // timeSubsSamples) and are marked with redundantSampleFlags. The first sample of the
 // segment is never marked, since it is what a client tuning in at the segment boundary
 // has to decode.
+//
+// On a paint-model track (stpc or wvtc) such a restatement is not sent at all: it becomes
+// an 8-byte no-change box, and with body=1 a changed stpc chunk after the first sends only
+// its body. Both are non-sync samples that depend on an earlier sample of the segment,
+// which is why they need their own sample entry. Comparison is always between the
+// documents that were generated, never between what was sent, so a chunk that follows a
+// substituted one is still compared with the content it stands for.
 func genTimeSubsChunks(tss timeSubsSeg, cfg *ResponseConfig, tt *template.Template, isLast bool) ([]chunk, error) {
 	if cfg.ChunkDurS == nil || *cfg.ChunkDurS <= 0 {
 		return nil, fmt.Errorf("chunking requested but no chunk duration configured")
@@ -293,6 +346,7 @@ func genTimeSubsChunks(tss timeSubsSeg, cfg *ResponseConfig, tt *template.Templa
 	cues := calcCueItvls(tss.startMS, tss.durMS, tss.utcStartMS, cfg.TimeSubsDurMS)
 	nrChunks := (tss.durMS + chunkDurMS - 1) / chunkDurMS
 	chunks := make([]chunk, 0, nrChunks)
+	paint := cfg.timeSubsPaint(tss.prefix)
 	var prevData []byte
 	for i := range nrChunks {
 		start := tss.startMS + i*chunkDurMS
@@ -310,10 +364,22 @@ func genTimeSubsChunks(tss timeSubsSeg, cfg *ResponseConfig, tt *template.Templa
 			return nil, err
 		}
 		for _, s := range samples {
-			if bytes.Equal(prevData, s.Data) {
-				s.Flags = redundantSampleFlags
+			generated := s.Data
+			switch {
+			case bytes.Equal(prevData, generated):
+				if paint != nil && paint.NoChange {
+					s = paintNoChangeSample(s, tss.prefix)
+				} else {
+					s.Flags = redundantSampleFlags
+				}
+			case paint != nil && paint.Body && i > 0:
+				// Layer 2: the head is already in the first chunk of this segment.
+				s, err = stpcBodySample(tt, cues, start, end, tss, cfg)
+				if err != nil {
+					return nil, err
+				}
 			}
-			prevData = s.Data
+			prevData = generated
 			chk.frag.AddFullSample(s)
 		}
 		chk.dur = uint64(end - start)
@@ -326,18 +392,20 @@ func genTimeSubsChunks(tss timeSubsSeg, cfg *ResponseConfig, tt *template.Templa
 // by tss. The interval is either the whole segment or one chunk of it.
 func timeSubsSamples(tss timeSubsSeg, cues []cueItvl, startMS, endMS int, cfg *ResponseConfig,
 	tt *template.Template) ([]mp4.FullSample, error) {
-	switch tss.prefix {
-	case SUBS_STPP_PREFIX:
-		s, err := stppTimeSample(tt, cues, startMS, endMS, tss.lang, tss.nr, cfg.TimeSubsRegion,
-			cfg.TimeSubsSegNr)
-		if err != nil {
-			return nil, err
-		}
-		return []mp4.FullSample{s}, nil
-	default: // SUBS_WVTT_PREFIX
+	t, ok := timeSubsTrackByPrefix(tss.prefix)
+	if !ok {
+		return nil, fmt.Errorf("unknown time subs prefix %q", tss.prefix)
+	}
+	if t.wvtt {
 		return wvttTimeSamples(cues, startMS, endMS, tss.lang, tss.nr, cfg.TimeSubsRegion,
 			cfg.TimeSubsSegNr), nil
 	}
+	s, err := stppTimeSample(tt, cues, startMS, endMS, tss.lang, tss.nr, cfg.TimeSubsRegion,
+		cfg.TimeSubsSegNr)
+	if err != nil {
+		return nil, err
+	}
+	return []mp4.FullSample{s}, nil
 }
 
 // makeStppMessage makes a message for an stpptime cue.
@@ -438,6 +506,14 @@ func calcCueItvls(startMS, durMS, utcStartMS, cueDurMS int) []cueItvl {
 // byte for byte, which is what lets genTimeSubsChunks mark the restatement as redundant.
 func stppTimeSample(tt *template.Template, cues []cueItvl, startMS, endMS int, lang string, nr uint32,
 	region int, withSegNr bool) (mp4.FullSample, error) {
+	return stppTimeSampleTmpl(tt, "stpptime.xml", cues, startMS, endMS, lang, nr, region, withSegNr)
+}
+
+// stppTimeSampleTmpl renders tmplName over the cues that overlap [startMS, endMS) and
+// returns the result as one sample with that duration. tmplName is stpptime.xml for a
+// complete document, or stpctimebody.xml for the body alone (see stpcBodySample).
+func stppTimeSampleTmpl(tt *template.Template, tmplName string, cues []cueItvl, startMS, endMS int,
+	lang string, nr uint32, region int, withSegNr bool) (mp4.FullSample, error) {
 	stppd := StppTimeData{
 		Lang:   lang,
 		Region: region,
@@ -459,9 +535,9 @@ func stppTimeSample(tt *template.Template, cues []cueItvl, startMS, endMS int, l
 	}
 	data := make([]byte, 0, 1024)
 	buf := bytes.NewBuffer(data)
-	err := tt.ExecuteTemplate(buf, "stpptime.xml", stppd)
+	err := tt.ExecuteTemplate(buf, tmplName, stppd)
 	if err != nil {
-		return mp4.FullSample{}, fmt.Errorf("execute stpp template: %w", err)
+		return mp4.FullSample{}, fmt.Errorf("execute %s template: %w", tmplName, err)
 	}
 	sampleData := buf.Bytes()
 	return mp4.FullSample{
