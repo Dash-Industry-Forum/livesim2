@@ -242,3 +242,65 @@ func TestCmafSourceChunkedReceiverGone(t *testing.T) {
 	}
 	<-sendDone
 }
+
+// TestCmafIngesterSegmentAfterAvailability checks that a chunked segment sent
+// after its availability time is paced against the current time, so that
+// it is completed when it ends, rather than late by the time it was started late.
+func TestCmafIngesterSegmentAfterAvailability(t *testing.T) {
+	cfg := ServerConfig{
+		VodRoot:   "testdata/assets",
+		TimeoutS:  0,
+		LogFormat: logging.LogText,
+		LogLevel:  "info",
+	}
+	err := logging.InitSlog(cfg.LogLevel, cfg.LogFormat)
+	require.NoError(t, err)
+	server, err := SetupServer(context.Background(), &cfg)
+	require.NoError(t, err)
+	cm := NewCmafIngesterMgr(server)
+	cm.Start()
+
+	var mu sync.Mutex
+	completedMS := make(map[string]int)
+	recServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		mu.Lock()
+		completedMS[r.URL.Path] = unixMS()
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer recServer.Close()
+
+	// 2s segments with 0.5s chunks. With ato 1.5s, a segment is available after its first chunk.
+	setup := CmafIngesterSetup{
+		DestRoot: recServer.URL,
+		DestName: "testpic_ingest",
+		URL:      "/livesim2/ato_1.5/chunkdur_0.5/testpic_2s/Manifest.mpd",
+	}
+	cId, err := cm.NewCmafIngester(setup)
+	require.NoError(t, err)
+	c := cm.ingesters[cId]
+
+	// Pick the segment in progress, and start sending it at least minLateMS after its availability time
+	const minLateMS = 500
+	segNr := findLastSegNr(c.cfg, c.asset, unixMS(), c.asset.refRep) + 1
+	availMS, err := calcSegmentAvailabilityTime(c.asset, c.asset.refRep, uint32(segNr), c.cfg)
+	require.NoError(t, err)
+	if wait := int(availMS) + minLateMS - unixMS(); wait > 0 {
+		time.Sleep(time.Duration(wait) * time.Millisecond)
+	}
+	lateMS := unixMS() - int(availMS)
+	segEndMS := int(availMS) + 1500
+
+	err = c.sendMediaSegments(context.Background(), segNr, int(availMS), false)
+	require.NoError(t, err)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, completedMS, len(c.repsData))
+	for path, doneMS := range completedMS {
+		delayMS := doneMS - segEndMS
+		require.Less(t, delayMS, lateMS/2, "segment %s completed %dms after its end, started %dms late",
+			path, delayMS, lateMS)
+	}
+}
