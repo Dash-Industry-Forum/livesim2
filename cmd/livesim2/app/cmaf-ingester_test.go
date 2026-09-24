@@ -159,3 +159,86 @@ func (s *cmafReceiverTestServer) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusInternalServerError)
 	slog.Error("Failed to parse MP4 chunk", "err", err)
 }
+
+// TestCmafSourceChunkedNoHoldBack checks that all bytes of a Write reach the
+// receiver before the next Write is made, so that no part of a CMAF chunk
+// is delayed until the next chunk is produced.
+func TestCmafSourceChunkedNoHoldBack(t *testing.T) {
+	received := make(chan int, 100)
+	recServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		buf := make([]byte, 16*1024)
+		for {
+			n, err := r.Body.Read(buf)
+			if n > 0 {
+				received <- n
+			}
+			if err != nil {
+				break
+			}
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer recServer.Close()
+
+	cs := newCmafSource(slog.Default(), recServer.URL+"/seg.m4s", "video", "", "", true)
+	sendDone := make(chan struct{})
+	go func() {
+		defer close(sendDone)
+		cs.sendChunked(context.Background())
+	}()
+
+	waitForBytes := func(want int) {
+		t.Helper()
+		got := 0
+		timeout := time.After(2 * time.Second)
+		for got < want {
+			select {
+			case n := <-received:
+				got += n
+			case <-timeout:
+				t.Fatalf("received %d of %d bytes before next write", got, want)
+			}
+		}
+		require.Equal(t, want, got)
+	}
+
+	// Sizes below, at, and above the 32KB io.Copy buffer size of the HTTP client
+	for _, size := range []int{100, 32 * 1024, 60_000, 100_000} {
+		n, err := cs.Write(make([]byte, size))
+		require.NoError(t, err)
+		require.Equal(t, size, n)
+		waitForBytes(size)
+	}
+	require.NoError(t, cs.pw.Close())
+	<-sendDone
+}
+
+// TestCmafSourceChunkedReceiverGone checks that a writer is not blocked
+// forever if the request fails.
+func TestCmafSourceChunkedReceiverGone(t *testing.T) {
+	recServer := httptest.NewServer(http.NotFoundHandler())
+	url := recServer.URL + "/seg.m4s"
+	recServer.Close()
+
+	cs := newCmafSource(slog.Default(), url, "video", "", "", true)
+	sendDone := make(chan struct{})
+	go func() {
+		defer close(sendDone)
+		cs.sendChunked(context.Background())
+	}()
+	writeErr := make(chan error, 1)
+	go func() {
+		var err error
+		for err == nil {
+			_, err = cs.Write(make([]byte, 1000))
+		}
+		writeErr <- err
+	}()
+	select {
+	case err := <-writeErr:
+		require.Error(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("writer blocked after failed request")
+	}
+	<-sendDone
+}
