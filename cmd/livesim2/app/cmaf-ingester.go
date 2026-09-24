@@ -579,22 +579,29 @@ func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup,
 	u := fmt.Sprintf("%s/%s", c.dest(), segPath)
 	c.log.Info("send media segment", "path", segPath, "segNr", segNr, "nowMS", nowMS, "url", u, "chunked", c.useChunked)
 
-	nrBytesCh := make(chan int)
-	defer close(nrBytesCh)
-	writeMoreCh := make(chan struct{})
-	defer close(writeMoreCh)
-	finishedSendCh := make(chan struct{})
-	defer close(finishedSendCh)
-
-	src := newCmafSource(nrBytesCh, writeMoreCh, c.log, u, contentType, c.user, c.passWord, c.useChunked)
+	src := newCmafSource(c.log, u, contentType, c.user, c.passWord, c.useChunked)
 
 	// Create media segment based on number and send it to segPath
+	var sendDone chan struct{}
 	if c.useChunked {
-		go src.startReadAndSendChunked(ctx, finishedSendCh)
+		sendDone = make(chan struct{})
+		go func() {
+			defer close(sendDone)
+			src.sendChunked(ctx)
+		}()
 	}
 	code, err := writeSegment(ctx, src, c.log, c.cfg, c.mgr.s.Cfg.DrmCfg, c.mgr.s.assetMgr.vodFS,
 		c.asset, segPart, nowMS, c.mgr.s.textTemplates, isLast)
 	c.log.Info("writeSegment", "code", code, "err", err)
+	if c.useChunked {
+		// Closing the pipe ends the request body. On error, the request is aborted.
+		if err != nil {
+			src.pw.CloseWithError(err)
+		} else {
+			src.pw.Close()
+		}
+		<-sendDone
+	}
 	if err != nil {
 		c.log.Error("writeSegment", "code", code, "err", err)
 		var tooEarly errTooEarly
@@ -614,11 +621,7 @@ func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup,
 			return
 		}
 	}
-	if c.useChunked {
-		<-writeMoreCh   // Capture final message
-		nrBytesCh <- -1 // Signal that we are done to Read (that reads and pushes to remote)
-		<-finishedSendCh
-	} else {
+	if !c.useChunked {
 		// Write should have written everything to a c.buffer
 		req, err := http.NewRequestWithContext(ctx, "PUT", u, src.buffer)
 		if err != nil {
@@ -637,62 +640,62 @@ func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup,
 	}
 }
 
-// cmafSource intermediates HTTP response writer and client push writer
-// It provides a Read method that the client can use to read the data.
-// If useChunked, the data is sent in chunks, otherwise as a whole using Content-Length.
+// cmafSource intermediates HTTP response writer and client push writer.
+// If useChunked, everything written is streamed through a pipe as the body
+// of a chunked PUT request, otherwise it is collected and sent as a whole
+// using Content-Length.
 type cmafSource struct {
-	ctx         context.Context
-	req         *http.Request
 	contentType string
-	nrBytesCh   chan int // Used to signal how many bytes have been written to local buffer.
-	writeMoreCh chan struct{}
 	url         string
 	h           http.Header
 	status      int
 	log         *slog.Logger
-	buf         []byte
+	pr          *io.PipeReader
+	pw          *io.PipeWriter
 	buffer      *bytes.Buffer
-	bufLevel    int // Keeping track of local buffer
-	offset      int // Offset in local buffer
 	user        string
 	password    string
 	useChunked  bool
 }
 
-func newCmafSource(nrBytesCh chan int, writeMoreCh chan struct{}, log *slog.Logger, url string, contentType, user, password string,
+func newCmafSource(log *slog.Logger, url string, contentType, user, password string,
 	useChunked bool) *cmafSource {
 	cs := cmafSource{
 		url:         url,
 		contentType: contentType,
 		h:           make(http.Header),
 		log:         log,
-		nrBytesCh:   nrBytesCh,
-		writeMoreCh: writeMoreCh,
 		user:        user,
 		password:    password,
 		useChunked:  useChunked,
 	}
 	if useChunked {
-		cs.buf = make([]byte, 64*1024)
+		cs.pr, cs.pw = io.Pipe()
 	}
 	return &cs
 }
 
-func (cs *cmafSource) startReadAndSendChunked(ctx context.Context, finishedCh chan struct{}) {
-	cs.writeMoreCh <- struct{}{} // Get the writer going
-	cs.ctx = ctx
-	req, err := http.NewRequestWithContext(ctx, "PUT", cs.url, cs)
+// sendChunked sends a PUT request with the pipe as body.
+// Since the body has no known length, it is sent with chunked transfer encoding,
+// and the HTTP client flushes every chunk it reads from the pipe.
+// The pipe is closed on return, so that a writer is never left blocked.
+func (cs *cmafSource) sendChunked(ctx context.Context) {
+	defer cs.pr.Close()
+	req, err := http.NewRequestWithContext(ctx, "PUT", cs.url, cs.pr)
 	if err != nil {
 		cs.log.Error("creating request", "err", err)
 		return
 	}
 	setReqHeaders(req, cs.contentType, cs.user, cs.password)
-	cs.req = req
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		cs.log.Error("creating request", "err", err)
+		cs.log.Error("sending request", "url", cs.url, "err", err)
 		return
 	}
+	defer func() {
+		cs.log.Debug("Closing body", "url", cs.url)
+		resp.Body.Close()
+	}()
 	if resp.StatusCode >= 300 {
 		cs.log.Warn("Bad status code", "code", resp.StatusCode)
 		return
@@ -701,94 +704,51 @@ func (cs *cmafSource) startReadAndSendChunked(ctx context.Context, finishedCh ch
 	if err != nil {
 		cs.log.Warn("Error reading response body", "err", err)
 	}
-	defer func() {
-		cs.log.Debug("Closing body", "url", cs.url)
-		resp.Body.Close()
-	}()
-	finishedCh <- struct{}{}
 }
 
 func (cs *cmafSource) Header() http.Header {
 	return cs.h
 }
 
+// Flush is a no-op, since every Write in chunked mode returns only after
+// the HTTP client has read all of it.
 func (cs *cmafSource) Flush() {
 	cs.log.Debug("Flush")
 }
 
 func (cs *cmafSource) Write(b []byte) (int, error) {
-	if !cs.useChunked {
-		contentLength := -1 // Set to -1 to signal that we have checked once
-		if cl, ok := cs.h["Content-Length"]; ok {
-			cl, err := strconv.Atoi(cl[0])
-			if err != nil {
-				cs.log.Error("Content-Length", "err", err)
-			}
-			contentLength = cl
-		}
-		if contentLength <= 0 {
-			return 0, fmt.Errorf("bad content length: %d", contentLength)
-		}
-		if len(b) != contentLength {
-			cs.log.Warn("Content-Length mismatch", "length", len(b), "contentLength", contentLength)
-		}
-		if cs.buffer == nil {
-			cs.buffer = bytes.NewBuffer(make([]byte, 0, contentLength))
-		} else {
-			cs.buffer.Reset()
-		}
-		n, err := cs.buffer.Write(b)
+	if cs.useChunked {
+		return cs.pw.Write(b)
+	}
+	contentLength := -1 // Set to -1 to signal that we have checked once
+	if cl, ok := cs.h["Content-Length"]; ok {
+		cl, err := strconv.Atoi(cl[0])
 		if err != nil {
-			cs.log.Error("Write", "err", err)
+			cs.log.Error("Content-Length", "err", err)
 		}
-		return n, err
+		contentLength = cl
 	}
-	<-cs.writeMoreCh
-	if cs.offset != 0 || cs.bufLevel != 0 {
-		cs.log.Warn("bad write levels", "url", cs.url, "offset", cs.offset, "bufLevel", cs.bufLevel)
+	if contentLength <= 0 {
+		return 0, fmt.Errorf("bad content length: %d", contentLength)
 	}
-	nrWritten := 0
-	for {
-		n := copy(cs.buf, b[nrWritten:])
-		cs.nrBytesCh <- n
-		nrWritten += n
-		if nrWritten == len(b) {
-			break
-		}
-		<-cs.writeMoreCh // Wait for OK from reader
+	if len(b) != contentLength {
+		cs.log.Warn("Content-Length mismatch", "length", len(b), "contentLength", contentLength)
 	}
-	return len(b), nil
+	if cs.buffer == nil {
+		cs.buffer = bytes.NewBuffer(make([]byte, 0, contentLength))
+	} else {
+		cs.buffer.Reset()
+	}
+	n, err := cs.buffer.Write(b)
+	if err != nil {
+		cs.log.Error("Write", "err", err)
+	}
+	return n, err
 }
 
 func (cs *cmafSource) WriteHeader(status int) {
 	cs.log.Debug("Writer status", "status", status)
 	cs.status = status
-}
-
-// Read reads data from the intermediate buffer.
-// It is triggered by receiving a message on nrBytesCh
-// with how many bytes are available.
-// The receiver never returns 0 bytes, except together
-// with io.EOF.
-func (cs *cmafSource) Read(p []byte) (int, error) {
-	if cs.offset >= cs.bufLevel {
-		nrAvailable := <-cs.nrBytesCh // wait for more bytes
-		cs.bufLevel = nrAvailable
-		if cs.bufLevel < 0 {
-			return 0, io.EOF
-		}
-		if cs.offset != 0 {
-			cs.log.Warn("Read", "url", cs.url, "offset is not zero", cs.offset)
-		}
-	}
-	n := copy(p, cs.buf[cs.offset:cs.bufLevel])
-	cs.offset += n
-	if cs.offset == cs.bufLevel {
-		cs.offset = 0
-		cs.bufLevel = 0
-		cs.writeMoreCh <- struct{}{}
-	}
-	return n, nil
 }
 
 type parentBox interface {

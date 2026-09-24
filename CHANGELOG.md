@@ -75,6 +75,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   always 0. The intended time was only visible in the `emsg` header. The splice time is now set on the
   `splice_info_section` rather than on the `splice_insert()` command, which is what gots derives
   `pts_adjustment` from, and a regression test decodes the generated payload to check both fields.
+- CMAF ingest with chunked transfer encoding held back the last bytes of every CMAF chunk except
+  the last one in a segment until the next chunk was written, adding one chunk duration of latency
+  (issue #341). The request body is now streamed through an `io.Pipe`, so each write goes on the
+  wire as soon as it is made, and a failed request no longer leaves the segment writer blocked.
 
 ### Changed
 
