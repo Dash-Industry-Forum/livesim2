@@ -79,6 +79,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the last one in a segment until the next chunk was written, adding one chunk duration of latency
   (issue #341). The request body is now streamed through an `io.Pipe`, so each write goes on the
   wire as soon as it is made, and a failed request no longer leaves the segment writer blocked.
+- CMAF ingest with `ato` > 0 could start on a segment whose availability time had already passed, and
+  then paced its chunks against that availability time instead of the current time. Every chunk was
+  pushed late by up to `ato`, and since later segments were sent with the same reference, the session
+  took tens of seconds to catch up (issue #342). Chunks are now paced against the current time, so a
+  segment sent late pushes its completed chunks at once and the rest as they end. The availability
+  time is still used to select the segment.
 
 ### Changed
 

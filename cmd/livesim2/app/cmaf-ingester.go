@@ -512,9 +512,18 @@ func setReqHeaders(req *http.Request, contentType, user, password string) {
 }
 
 // sendMediaSegments sends all media segments for all representations. isLast triggers lmsg insertion.
-func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, nowMS int, isLast bool) error {
-	c.log.Debug("Start media segment", "nr", nextSegNr, "nowMS", nowMS, "useChunked", c.useChunked)
-	wTimes := calcWrapTimes(c.asset, c.cfg, nowMS+50, m.Duration(100*time.Millisecond))
+// sendMediaSegments sends media segment nextSegNr for all representations.
+// availMS is the availability time of the segment, and is used to select the segment.
+// The segments are generated and paced relative to the current time,
+// so that a segment sent after its availability time is not late
+// by that difference for all of its chunks.
+func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, availMS int, isLast bool) error {
+	nowMS := availMS
+	if c.testNowMS == nil {
+		nowMS = max(availMS, unixMS())
+	}
+	c.log.Debug("Start media segment", "nr", nextSegNr, "availMS", availMS, "nowMS", nowMS, "useChunked", c.useChunked)
+	wTimes := calcWrapTimes(c.asset, c.cfg, availMS+50, m.Duration(100*time.Millisecond))
 	wg := sync.WaitGroup{}
 	if c.cfg.HasSegmentTimelineTime() {
 		var segPart string
