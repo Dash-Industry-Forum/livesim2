@@ -444,6 +444,18 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 			return nil, fmt.Errorf("addTimeSubs wvtt: %w", err)
 		}
 	}
+	if cfg.TimeSubsStpc != nil {
+		err = addTimeSubs(cfg, a, period, cfg.TimeSubsStpc.Languages, "stpc", firstUTCTiming(mpd))
+		if err != nil {
+			return nil, fmt.Errorf("addTimeSubs stpc: %w", err)
+		}
+	}
+	if cfg.TimeSubsWvtc != nil {
+		err = addTimeSubs(cfg, a, period, cfg.TimeSubsWvtc.Languages, "wvtc", firstUTCTiming(mpd))
+		if err != nil {
+			return nil, fmt.Errorf("addTimeSubs wvtc: %w", err)
+		}
+	}
 	if cfg.CC608 != nil {
 		if cc608AlreadyCaptioned(a, period) {
 			return nil, errCC608AlreadyCaptioned
@@ -958,6 +970,17 @@ func addTimeSubs(cfg *ResponseConfig, a *asset, period *m.Period, languages []st
 			rep.Id = SUBS_WVTT_PREFIX + "-" + lang
 			rep.Bandwidth = uint32(typicalWvttSegSizeBits*1000) / uint32(segDurMS)
 			as.Codecs = "wvtt"
+		case "stpc":
+			// Only the first chunk of a segment carries a document when nothing changes,
+			// so the paint-model track is nearer one document per segment than one per
+			// chunk. See the README section on low-latency subtitles.
+			rep.Id = SUBS_STPC_PREFIX + "-" + lang
+			rep.Bandwidth = uint32(2000*8*1000) / uint32(segDurMS)
+			as.Codecs = "stpc"
+		case "wvtc":
+			rep.Id = SUBS_WVTC_PREFIX + "-" + lang
+			rep.Bandwidth = uint32(200*8*1000) / uint32(segDurMS)
+			as.Codecs = "wvtc"
 		}
 		as.Roles = append(as.Roles,
 			&m.DescriptorType{SchemeIdUri: "urn:mpeg:dash:role:2011", Value: "subtitle"})

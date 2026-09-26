@@ -25,11 +25,4 @@
       <region xml:id="r1" tts:origin="15% 20%" tts:extent="70% 20%" tts:overflow="visible"/>
     </layout>
   </head>
-  <body style="s0">
-<div region="r{{.Region}}">
-{{- range .Cues}}
-{{template "stpptimecue.xml" .}}
-{{- end}}
-</div>
-  </body>
-</tt>
+{{template "stpctimebody.xml" .}}</tt>

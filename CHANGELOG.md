@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- New experimental URL options `timesubsstpc_` and `timesubswvtc_` generating paint-model subtitle
+  tracks: a chunk that restates what the previous chunk already said is sent as an 8-byte no-change
+  box (`ttmn` for TTML, `vttn` for WebVTT) instead of the restatement itself. With `testpic_2s` and
+  `chunkdur_0.2`, six of the ten chunks of a segment drop from a 1477-byte TTML document to 8 bytes.
+  The tracks use new sample entries, `stpc` and `wvtc`, so that a client that does not know them
+  cannot select them through the RFC 6381 `codecs` parameter — necessary because a sample is no
+  longer always a self-contained document. The syntax is
+  `timesubsstpc_<langs>[;nochange=0|1][;body=0|1]` and `timesubswvtc_<langs>[;nochange=0|1]`:
+  `nochange` defaults to 1 and `nochange=0` gives a control track that differs from the `stpp` or
+  `wvtt` one only in its 4CC, while `body=1` (stpc only, off by default) additionally sends only the
+  `<body>` of a changed document in a `ttmb` box, splicing the `<head>` from the first chunk of the
+  segment. Listing an old and a new option together gives two AdaptationSets with the same language
+  and timeline, so the bytes compare directly. **None of `stpc`, `wvtc`, `ttmn`, `ttmb` or `vttn` is
+  registered with MP4RA, and none of this is standardised**; see
+  [paint-model subtitles](https://github.com/Eyevinn/paint-model-subtitles)
 - New URL option `svta_` for SVTA2053 Ad Creative Signaling (payload version 2, issue #310). Ad-creative
   windows of the live timeline are marked with an `EventStream` of scheme
   `urn:svta:advertising-wg:ad-creative-signaling`, one `Event` per creative whose node data is the v2 JSON
