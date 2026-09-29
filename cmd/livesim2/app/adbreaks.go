@@ -128,10 +128,14 @@ func parseAdBreaks(opt, spec string) (AdBreaks, error) {
 	return ab, nil
 }
 
-// parseAdBreakSeconds parses a number of seconds of a break schedule. The 32-bit bound
-// (136 years) keeps the millisecond arithmetic of the schedule clear of int64 overflow.
+// parseAdBreakSeconds parses a number of seconds of a break schedule, from 0 to 2^31-1
+// (68 years). The bound keeps the millisecond arithmetic of the schedule clear of int64
+// overflow, and fits an int on every platform.
 func parseAdBreakSeconds(s string) (int, error) {
-	n, err := strconv.ParseUint(s, 10, 32)
+	n, err := strconv.ParseInt(s, 10, 32)
+	if err == nil && n < 0 {
+		err = fmt.Errorf("negative seconds %d", n)
+	}
 	return int(n), err
 }
 

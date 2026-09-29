@@ -53,9 +53,11 @@ func TestParseAdBreaks(t *testing.T) {
 			err: `svta break "30:15": breaks must be in time order and must not overlap`},
 		{desc: "overlapping fixed breaks", spec: "30:15,40:10",
 			err: `svta break "40:10": breaks must be in time order and must not overlap`},
-		{desc: "period beyond 32 bits", spec: "p2305843009213693952:1",
+		{desc: "period beyond int32", spec: "p2305843009213693952:1",
 			err: `svta periodic "p2305843009213693952:1": bad period`},
-		{desc: "offset beyond 32 bits", spec: "4294967296:10", err: `svta break "4294967296:10": bad offset`},
+		{desc: "offset beyond int32", spec: "2147483648:10", err: `svta break "2147483648:10": bad offset`},
+		{desc: "largest offset", spec: "2147483647:10",
+			want: AdBreaks{Breaks: []AdBreak{{OffsetS: 2147483647, DurationS: 10}}}},
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
