@@ -18,6 +18,7 @@ const (
 	poEnd    = 0x35        // Provider Placement Opportunity End
 	brkStart = 0x22        // Break Start
 	adStart  = 0x30        // Provider Advertisement Start
+	adEnd    = 0x31        // Provider Advertisement End
 )
 
 // TestSpliceInsertBinary guards the pts_adjustment encoding. gots derives pts_adjustment from
@@ -58,8 +59,8 @@ func TestTimeSignalLevels(t *testing.T) {
 		Levels: []scte35.Level{
 			{TypeID: brkStart, EventID: 7001, DurationPTS: breakDur, UPIDType: 0x0F, UPID: []byte("urn:test:1")},
 			{TypeID: poStart, EventID: 7002, DurationPTS: breakDur, UPIDType: 0x0F, UPID: []byte("urn:test:1")},
-			{TypeID: adStart, EventID: 7003, DurationPTS: adDur, Num: 1, Expected: 2,
-				UPIDType: 0x0F, UPID: []byte("urn:test:1")},
+			{TypeID: adStart, EventID: 7003, DurationPTS: adDur, UPIDType: 0x0F, UPID: []byte("urn:test:1"),
+				HasSubSegments: true, SubNum: 1, SubExpected: 2},
 		},
 	}
 	sis := decodeSpliceInfoSection(t, cue.Binary())
@@ -82,8 +83,39 @@ func TestTimeSignalLevels(t *testing.T) {
 		assert.Equal(t, want.dur, uint64(descs[i].Duration()), "segmentation_duration %d", i)
 		assert.Equal(t, "urn:test:1", string(descs[i].UPID()), "segmentation_upid %d", i)
 	}
-	assert.Equal(t, uint8(1), descs[2].SegmentNumber(), "segment_num")
-	assert.Equal(t, uint8(2), descs[2].SegmentsExpected(), "segments_expected")
+	assert.Equal(t, uint8(0), descs[2].SegmentNumber(), "segment_num numbers Breaks, not ads")
+	assert.Equal(t, uint8(0), descs[2].SegmentsExpected(), "segments_expected")
+}
+
+// TestSubSegmentFields checks that sub_segment_num and sub_segments_expected are written on an
+// Advertisement Start, which SCTE 35 2023r1 Table 23 allows but gots only does for the
+// Placement Opportunity Starts, and that they are left out where the syntax has no room for
+// them (an Advertisement End).
+func TestSubSegmentFields(t *testing.T) {
+	cue := scte35.Cue{
+		Cmd:  scte35.TimeSignal,
+		PTS:  ptsTime,
+		Tier: scte35.DefaultTier,
+		Levels: []scte35.Level{
+			{TypeID: adEnd, EventID: 7003, UPIDType: 0x0F, UPID: []byte("urn:test:1"),
+				HasSubSegments: true, SubNum: 1, SubExpected: 2},
+			{TypeID: adStart, EventID: 7004, DurationPTS: adDur, UPIDType: 0x0F, UPID: []byte("urn:test:2"),
+				HasSubSegments: true, SubNum: 2, SubExpected: 2},
+		},
+	}
+	payload := cue.Binary()
+	// gots checks the CRC_32 and the lengths, so this also covers the rewritten descriptor loop.
+	sis := decodeSpliceInfoSection(t, payload)
+	require.Len(t, sis.Descriptors(), 2)
+	assert.Equal(t, uint64(ptsTime), uint64(sis.PTS()))
+
+	descs := descriptorLoop(t, payload)
+	require.Len(t, descs, 2)
+	end, start := descs[0], descs[1]
+	assert.Equal(t, []byte{adEnd, 0, 0}, end[len(end)-3:],
+		"an End has no sub-segment fields: it closes with type, segment_num, segments_expected")
+	assert.Equal(t, []byte{adStart, 0, 0, 2, 2}, start[len(start)-5:],
+		"sub_segment_num=2, sub_segments_expected=2 follow segment_num and segments_expected")
 }
 
 // TestEndLevelSharesEventID checks the pairing rule of SCTE 35 §10.3.3.5: the start and the
@@ -161,6 +193,25 @@ func ptsAdjustment(t *testing.T, sis []byte) uint64 {
 	require.Greater(t, len(sis), 9, "splice_info_section too short")
 	return uint64(sis[4]&0x01)<<32 | uint64(sis[5])<<24 | uint64(sis[6])<<16 |
 		uint64(sis[7])<<8 | uint64(sis[8])
+}
+
+// descriptorLoop splits the descriptor loop of a splice_info_section into its descriptors,
+// each from splice_descriptor_tag through its last byte.
+func descriptorLoop(t *testing.T, sis []byte) [][]byte {
+	t.Helper()
+	cmdLen := int(sis[11]&0x0F)<<8 | int(sis[12])
+	pos := 14 + cmdLen // header, splice_command_type and the command
+	loopLen := int(sis[pos])<<8 | int(sis[pos+1])
+	loop := sis[pos+2 : pos+2+loopLen]
+	require.Equal(t, len(sis)-4, pos+2+loopLen, "the CRC_32 follows the descriptor loop")
+	var out [][]byte
+	for len(loop) > 0 {
+		n := 2 + int(loop[1])
+		require.LessOrEqual(t, n, len(loop), "descriptor_length within the loop")
+		out = append(out, loop[:n])
+		loop = loop[n:]
+	}
+	return out
 }
 
 // decodeSpliceInfoSection parses a raw splice_info_section (as carried in an emsg).

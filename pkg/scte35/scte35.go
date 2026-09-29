@@ -59,6 +59,26 @@ type Level struct {
 	Expected    uint8  // segments_expected
 	UPIDType    uint8  // segmentation_upid_type, see SCTE 35 Table 22
 	UPID        []byte // segmentation_upid, empty for none
+
+	// HasSubSegments adds sub_segment_num and sub_segments_expected, which number the
+	// advertisements (or placement opportunities) of a break. They are only written for the
+	// segmentation types that have them, see [CarriesSubSegments].
+	HasSubSegments bool
+	SubNum         uint8 // sub_segment_num
+	SubExpected    uint8 // sub_segments_expected
+}
+
+// CarriesSubSegments reports whether a segmentation_type_id has the optional
+// sub_segment_num and sub_segments_expected fields: the Advertisement, Placement
+// Opportunity, Overlay Placement Opportunity and Ad Block Starts (SCTE 35 2023r1 §10.3.3.1
+// and Table 23).
+func CarriesSubSegments(typeID uint8) bool {
+	switch typeID {
+	case 0x30, 0x32, 0x34, 0x36, 0x38, 0x3A, 0x44, 0x46:
+		return true
+	default:
+		return false
+	}
 }
 
 // Cue is one SCTE-35 splice_info_section.
@@ -86,12 +106,8 @@ func (c Cue) Binary() []byte {
 	s.SetTier(c.Tier)
 	switch c.Cmd {
 	case TimeSignal:
+		// The descriptors are added by setDescriptorLoop below.
 		s.SetCommandInfo(gsc.CreateTimeSignalCommand())
-		descs := make([]gsc.SegmentationDescriptor, 0, len(c.Levels))
-		for _, l := range c.Levels {
-			descs = append(descs, l.descriptor())
-		}
-		s.SetDescriptors(descs)
 	default:
 		cmd := gsc.CreateSpliceInsertCommand()
 		cmd.SetEventID(c.EventID)
@@ -112,7 +128,32 @@ func (c Cue) Binary() []byte {
 		s.SetHasPTS(true)
 		s.SetPTS(gots.PTS(c.PTS))
 	}
+	if c.Cmd == TimeSignal {
+		return c.setDescriptorLoop(s.UpdateData())
+	}
 	return s.UpdateData()
+}
+
+// setDescriptorLoop replaces the empty descriptor loop at the end of a gots-encoded
+// splice_info_section with the segmentation descriptors of the cue, and recomputes
+// section_length and the CRC_32. gots writes sub_segment_num and sub_segments_expected only
+// for the Placement Opportunity Starts (the SCTE 35 2016 set), while 2023r1 also has them on
+// the Advertisement Starts, so the loop is assembled here from gots' descriptor bytes with
+// those two fields appended where they belong.
+func (c Cue) setDescriptorLoop(section []byte) []byte {
+	const emptyLoopAndCRC = 2 + 4 // descriptor_loop_length and CRC_32
+	var loop []byte
+	for _, l := range c.Levels {
+		loop = append(loop, l.bytes()...)
+	}
+	n := len(section) - emptyLoopAndCRC
+	out := append(section[:n:n], byte(len(loop)>>8), byte(len(loop)))
+	out = append(out, loop...)
+	// section_length counts the bytes after itself, up to and including the CRC_32.
+	sectionLength := len(out) + 4 - 3
+	out[1] = out[1]&0xF0 | byte(sectionLength>>8)&0x0F
+	out[2] = byte(sectionLength)
+	return append(out, gots.ComputeCRC(out)...)
 }
 
 // Base64 returns the binary message base64-encoded, the form the <Binary> element takes.
@@ -171,7 +212,19 @@ func (c Cue) XMLSignal() *m.SignalType {
 	return sig
 }
 
-// descriptor builds the gots segmentation_descriptor for the binary form.
+// bytes returns the segmentation_descriptor() of the binary form, from splice_descriptor_tag
+// on, with the sub-segment fields appended when the level has them.
+func (l Level) bytes() []byte {
+	b := l.descriptor().Data()
+	if l.HasSubSegments && CarriesSubSegments(l.TypeID) {
+		b = append(b, l.SubNum, l.SubExpected)
+		b[1] = byte(len(b) - 2) // descriptor_length
+	}
+	return b
+}
+
+// descriptor builds the gots segmentation_descriptor for the binary form, without the
+// sub-segment fields (see [Level.bytes]).
 func (l Level) descriptor() gsc.SegmentationDescriptor {
 	d := gsc.CreateSegmentationDescriptor()
 	d.SetEventID(l.EventID)
@@ -204,6 +257,10 @@ func (l Level) xmlDescriptor() *m.SegmentationDescriptorType {
 	d.SegmentationTypeId = m.Ptr(l.TypeID)
 	d.SegmentNum = m.Ptr(l.Num)
 	d.SegmentsExpected = m.Ptr(l.Expected)
+	if l.HasSubSegments && CarriesSubSegments(l.TypeID) {
+		d.SubSegmentNum = m.Ptr(l.SubNum)
+		d.SubSegmentsExpected = m.Ptr(l.SubExpected)
+	}
 	if l.DurationPTS != 0 {
 		d.SegmentationDuration = m.Ptr(l.DurationPTS)
 	}
