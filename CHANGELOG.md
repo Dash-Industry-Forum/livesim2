@@ -97,6 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A livesim2 built from a Windows checkout served its XML templates, such as TTML subtitles, with CRLF line endings.
 - The generated subtitle AdaptationSets could share an `id`. `addTimeSubs` is called once per
   format and numbered from a fixed base each time, so `timesubsstpp_en` and `timesubswvtt_sv`
   in the same stream both became `id="100"`, which DASH does not allow within a Period and
