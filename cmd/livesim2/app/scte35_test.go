@@ -5,6 +5,8 @@
 package app
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	gotsscte35 "github.com/Comcast/gots/v2/scte35"
@@ -14,6 +16,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestCreateSCTE35ConfigLongUPID(t *testing.T) {
+	long := strings.Repeat("x", scte35MaxUPIDLen)
+	_, err := CreateSCTE35Config("30:15;cmd=timesignal;upid=0x0F:" + long)
+	require.NoError(t, err, "the longest UPID that fits the descriptor")
+	_, err = CreateSCTE35Config("30:15;cmd=timesignal;upid=0x0F:" + long + "x")
+	require.EqualError(t, err, fmt.Sprintf(`scte35 upid "0x0F:%sx": longer than %d bytes`, long, scte35MaxUPIDLen))
+}
 
 func TestCreateSCTE35Config(t *testing.T) {
 	cases := []struct {
@@ -111,7 +121,31 @@ func TestCreateSCTE35Config(t *testing.T) {
 			err: "scte35 pre needs slate=1: the countdown is rendered on the video"},
 		{desc: "pre longer than the gap", val: "p60:50@0;pre=15",
 			err: "scte35 pre=15 does not fit in the 10 s between breaks"},
+		{desc: "pre longer than the gap between offsets", val: "p60:10@10,25;pre=10",
+			err: "scte35 pre=10 does not fit in the 5 s between breaks"},
+		{desc: "pre across the cycle boundary", val: "p60:10@0,50;pre=5",
+			err: "scte35 pre=5 does not fit in the 0 s between breaks"},
+		{desc: "pre longer than the gap between fixed breaks", val: "30:10,45:10;pre=6",
+			err: "scte35 pre=6 does not fit in the 5 s between breaks"},
+		{desc: "ads nested in an ad level", val: "30:15;cmd=timesignal;seg=break,po,ad;ads=2",
+			err: "scte35 ads=2: the ad creatives would be nested in the ad level"},
+		{desc: "promos nested in an ad level", val: "30:15;cmd=timesignal;seg=ad;ads=2;adseg=promo",
+			err: "scte35 ads=2: the promo creatives would be nested in the ad level"},
+		{desc: "upid type 0 with a value", val: "30:15;cmd=timesignal;upid=0:abc",
+			err: `scte35 upid "0:abc": type 0 means no UPID and takes no value`},
+		{desc: "upid without a value", val: "30:15;cmd=timesignal;upid=0x0F:",
+			err: `scte35 upid "0x0F:": needs a value, or use type 0 for no UPID`},
+		{desc: "MID upid", val: "30:15;cmd=timesignal;upid=0x0D:abc",
+			err: `scte35 upid "0x0D:abc": MID (0x0D) is not supported`},
 		{desc: "zero timescale", val: "30:15;ts=0", err: `scte35 ts "0": must be a positive 32-bit integer`},
+		{
+			desc: "no upid",
+			val:  "30:15;cmd=timesignal;upid=0:",
+			check: func(t *testing.T, c *SCTE35Config) {
+				assert.Equal(t, uint8(0), c.UPIDType)
+				assert.Nil(t, c.upid(1, "po", 0), "type 0 means no segmentation_upid at all")
+			},
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
@@ -171,8 +205,8 @@ func TestSCTE35CuePointHierarchy(t *testing.T) {
 	assert.Equal(t, int64(10), cps[0].atS)
 	assert.Equal(t, int64(20), cps[1].atS)
 	assert.Equal(t, int64(30), cps[2].atS)
-	assert.Equal(t, []uint64{10, 20, 30}, []uint64{cps[0].id, cps[1].id, cps[2].id},
-		"one id per message, the second of its splice point")
+	assert.Equal(t, []uint64{10, 20, 30 + 1<<31}, []uint64{cps[0].id, cps[1].id, cps[2].id},
+		"one id per message: the second of its splice point, moved by 2^31 for the closing one")
 	assert.Equal(t, 20, cps[0].durS, "the opening message advertises the break duration")
 	assert.Equal(t, 0, cps[2].durS, "a closing message has no duration (SCTE 214-1 §6.7.2.1)")
 
@@ -182,13 +216,24 @@ func TestSCTE35CuePointHierarchy(t *testing.T) {
 		m.SegTypeProviderAdvertisementStart}, levelTypes(open.Levels))
 	assert.Equal(t, uint64(20*scte35.TimescaleHz), open.Levels[0].DurationPTS, "break duration")
 	assert.Equal(t, uint64(10*scte35.TimescaleHz), open.Levels[2].DurationPTS, "creative duration")
-	assert.Equal(t, uint8(1), open.Levels[2].Num)
-	assert.Equal(t, uint8(2), open.Levels[2].Expected)
+	// SCTE 35 2023r1 §10.3.3.14: segment_num numbers Breaks, sub_segment_num the ads in one.
+	assert.Equal(t, uint8(0), open.Levels[2].Num)
+	assert.Equal(t, uint8(0), open.Levels[2].Expected)
+	assert.True(t, open.Levels[2].HasSubSegments)
+	assert.Equal(t, uint8(1), open.Levels[2].SubNum)
+	assert.Equal(t, uint8(2), open.Levels[2].SubExpected)
+	assert.False(t, open.Levels[1].HasSubSegments, "the PO is not numbered")
+	assert.Equal(t, []string{"urn:dashif:livesim2:break:7", "urn:dashif:livesim2:break:7:po",
+		"urn:dashif:livesim2:break:7:ad:1"}, levelUPIDs(open.Levels), "each level identifiable by its UPID")
 
 	mid := cps[1].cue
 	assert.Equal(t, []uint8{m.SegTypeProviderAdvertisementEnd, m.SegTypeProviderAdvertisementStart},
 		levelTypes(mid.Levels), "the first creative ends where the second starts")
 	assert.Equal(t, open.Levels[2].EventID, mid.Levels[0].EventID, "the pair shares its event id")
+	assert.False(t, mid.Levels[0].HasSubSegments, "an End has no sub-segment fields")
+	assert.Equal(t, uint8(2), mid.Levels[1].SubNum)
+	assert.Equal(t, []string{"urn:dashif:livesim2:break:7:ad:1", "urn:dashif:livesim2:break:7:ad:2"},
+		levelUPIDs(mid.Levels), "an End carries the UPID of its Start")
 
 	closing := cps[2].cue
 	assert.Equal(t, []uint8{m.SegTypeProviderAdvertisementEnd, m.SegTypeProviderPlacementOpportunityEnd,
@@ -201,23 +246,114 @@ func TestSCTE35CuePointHierarchy(t *testing.T) {
 	}
 }
 
-// TestSCTE35EmsgRepeat checks that repeat=1 puts the cue in every segment of the lead window,
-// with the same emsg id, which SCTE 214-1 §6.7.3 item 6 lets a client discard after the first.
+// TestSCTE35EmsgRepeat checks that repeat=1 puts the cue in the segment repeat=0 uses and in
+// every later one before the splice point, with the same emsg id, which SCTE 214-1 §6.7.3
+// item 6 lets a client discard after the first.
 func TestSCTE35EmsgRepeat(t *testing.T) {
+	const ts = 90000
+	// deliveries returns the start seconds of the 2 s segments carrying the cue at 10 s.
+	deliveries := func(val string) []uint64 {
+		cfg := NewResponseConfig()
+		sc, err := CreateSCTE35Config(val)
+		require.NoError(t, err)
+		cfg.SCTE35 = sc
+		var starts []uint64
+		for segStart := uint64(0); segStart < 12*ts; segStart += 2 * ts {
+			for _, e := range scte35EmsgsForSegment(cfg, segStart, segStart+2*ts, ts) {
+				assert.Equal(t, uint32(10), e.ID)
+				assert.Equal(t, uint64(10*ts), e.PresentationTime)
+				starts = append(starts, segStart/ts)
+			}
+		}
+		return starts
+	}
+	// Announced at 3 s, in the segment [2 s, 4 s).
+	assert.Equal(t, []uint64{2}, deliveries("p60:20@10;lead=7"))
+	assert.Equal(t, []uint64{2, 4, 6, 8}, deliveries("p60:20@10;lead=7;repeat=1"))
+	// Announced at 4 s, a segment boundary: the segment ending there holds it.
+	assert.Equal(t, []uint64{2}, deliveries("p60:20@10;lead=6"))
+	assert.Equal(t, []uint64{2, 4, 6, 8}, deliveries("p60:20@10;lead=6;repeat=1"))
+	// No lead: the segment ending at the splice point, with or without repeat.
+	assert.Equal(t, []uint64{8}, deliveries("p60:20@10;lead=0"))
+	assert.Equal(t, []uint64{8}, deliveries("p60:20@10;lead=0;repeat=1"))
+}
+
+// TestSCTE35EmsgAtStreamStart checks that a splice point no more than one lead after the
+// availabilityStartTime is announced in the first segment rather than never.
+func TestSCTE35EmsgAtStreamStart(t *testing.T) {
+	const ts = 90000
+	for _, c := range []struct {
+		val    string
+		wantID uint32
+	}{
+		{val: "0:10;lead=7", wantID: 0},
+		{val: "5:10;lead=7", wantID: 5},
+		{val: "7:10;lead=7", wantID: 7},
+	} {
+		t.Run(c.val, func(t *testing.T) {
+			cfg := NewResponseConfig()
+			sc, err := CreateSCTE35Config(c.val)
+			require.NoError(t, err)
+			cfg.SCTE35 = sc
+			emsgs := scte35EmsgsForSegment(cfg, 0, 2*ts, ts)
+			require.Len(t, emsgs, 1, "delivered in the first segment")
+			assert.Equal(t, c.wantID, emsgs[0].ID)
+			for segStart := uint64(2 * ts); segStart < 12*ts; segStart += 2 * ts {
+				assert.Empty(t, scte35EmsgsForSegment(cfg, segStart, segStart+2*ts, ts), "and only there")
+			}
+		})
+	}
+}
+
+// TestSCTE35EmsgHighTimescale checks the legacy scte35_1 cue on a 10 MHz video track at a
+// 2026 wall clock, where the media time in milliseconds used to overflow int64.
+func TestSCTE35EmsgHighTimescale(t *testing.T) {
 	cfg := NewResponseConfig()
-	sc, err := CreateSCTE35Config("p60:20@10;lead=6;repeat=1")
+	sc, err := CreateSCTE35Config("1")
 	require.NoError(t, err)
 	cfg.SCTE35 = sc
 
-	const ts = 90000
-	var ids []uint32
-	for segStart := uint64(0); segStart < 12*ts; segStart += 2 * ts {
-		for _, e := range scte35EmsgsForSegment(cfg, segStart, segStart+2*ts, ts) {
-			ids = append(ids, e.ID)
-			assert.Equal(t, uint64(10*ts), e.PresentationTime)
-		}
+	const ts = 10_000_000
+	minuteS := uint64(1_790_683_440)
+	emsgs := scte35EmsgsForSegment(cfg, (minuteS+2)*ts, (minuteS+4)*ts, ts)
+	require.Len(t, emsgs, 1, "the cue announced at :03")
+	assert.Equal(t, (minuteS+10)*ts, emsgs[0].PresentationTime)
+	assert.Equal(t, uint32(20*ts), emsgs[0].EventDuration)
+}
+
+// TestSCTE35AdjacentBreakIDs checks that when one break ends where the next starts, the
+// closing message of the first and the opening message of the second, which share their
+// splice point, still have different ids. With one id a client would drop the second as a
+// repeat (SCTE 214-1 §6.7.2.1 item 5), losing the start of the next break.
+func TestSCTE35AdjacentBreakIDs(t *testing.T) {
+	for _, val := range []string{
+		"p60:10@10,20;cmd=timesignal;mpd=bin",
+		"p60:10@10,36,46;cmd=timesignal;mpd=bin",
+		"p60:10@0,50;cmd=timesignal;mpd=bin",
+		"30:10,40:10;cmd=timesignal;mpd=bin",
+		"p60:10@10,20;end=1;mpd=bin",
+	} {
+		t.Run(val, func(t *testing.T) {
+			cfg := NewResponseConfig()
+			sc, err := CreateSCTE35Config(val)
+			require.NoError(t, err)
+			cfg.SCTE35 = sc
+			tsbd := 300
+			cfg.TimeShiftBufferDepthS = &tsbd
+
+			period := &m.Period{Id: "P0"}
+			addSCTE35Events(period, cfg, 180_000)
+			require.Len(t, period.EventStreams, 1)
+			seen := map[uint64]uint64{}
+			for _, ev := range period.EventStreams[0].Events {
+				if pt, ok := seen[*ev.Id]; ok {
+					t.Fatalf("Event@id %d used at %d and at %d", *ev.Id, pt, ev.PresentationTime)
+				}
+				seen[*ev.Id] = ev.PresentationTime
+			}
+			assert.GreaterOrEqual(t, len(seen), 4, "the opening and closing messages of at least two breaks")
+		})
 	}
-	assert.Equal(t, []uint32{10, 10, 10}, ids, "the segments starting at 4, 6 and 8 s")
 }
 
 func TestAddSCTE35Events(t *testing.T) {
@@ -351,6 +487,14 @@ func TestVerifyAdSignaling(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+func levelUPIDs(levels []scte35.Level) []string {
+	out := make([]string, 0, len(levels))
+	for _, l := range levels {
+		out = append(out, string(l.UPID))
+	}
+	return out
 }
 
 func levelTypes(levels []scte35.Level) []uint8 {
