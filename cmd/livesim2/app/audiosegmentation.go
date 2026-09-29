@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+	"slices"
 
 	"github.com/Eyevinn/mp4ff/bits"
 	"github.com/Eyevinn/mp4ff/mp4"
@@ -138,6 +139,9 @@ func createAudioSeg(vodFS fs.FS, a *asset, rec audioRecipe) (*mp4.MediaSegment, 
 	outputFullSamples := make([]mp4.FullSample, 0, nrOutSamples)
 
 	var seg *mp4.MediaSegment
+	// fss holds the samples of one input segment at a time. The samples are copied to
+	// outputFullSamples, so the next segment can reuse its storage.
+	var fss []mp4.FullSample
 
 	for _, itvl := range sampleItvls {
 		s := rep.Segments[itvl.segIdx]
@@ -169,13 +173,12 @@ func createAudioSeg(vodFS fs.FS, a *asset, rec audioRecipe) (*mp4.MediaSegment, 
 			return nil, fmt.Errorf("file has %d segments, expected 1", len(rep.Segments))
 		}
 		seg = fSeg.Segments[0]
-		fss := make([]mp4.FullSample, 0, (s.dur() / sampleDur))
+		fss = slices.Grow(fss[:0], int(s.dur()/sampleDur))
 		for _, frag := range seg.Fragments {
-			fs, err := frag.GetFullSamples(trex)
+			fss, err = frag.AppendFullSamples(fss, trex)
 			if err != nil {
-				return nil, fmt.Errorf("getFullSamples: %w", err)
+				return nil, fmt.Errorf("appendFullSamples: %w", err)
 			}
-			fss = append(fss, fs...)
 		}
 		outputFullSamples = append(outputFullSamples, fss[itvl.startIdx:itvl.endIdx]...)
 		if itvl.nrFillSamples > 0 { // Repeat last sample to fill up

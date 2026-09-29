@@ -5,6 +5,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"net/http"
 	"path"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"text/template"
@@ -928,9 +930,8 @@ func createChunk(styp *mp4.StypBox, trackID, seqNr uint32) chunk {
 
 // chunkSegment splits a segment into chunks of specified duration.
 // The first chunk gets an styp box if one is available in the incoming segment.
-// If chunkIndex is non-nil, returns only the chunk at that specific index (0-based).
-// Note: This processes all chunks up to the requested index, which is inefficient
-// for large segments when only the last chunk is needed.
+// If chunkIndex is non-nil, returns only the chunk at that specific index (0-based),
+// and only that chunk is built.
 //
 // CTA-608 captions (timecc608) need no handling here: prepareChunks calls
 // genLiveSegment first, which injects the per-frame SEI into the whole segment's
@@ -940,48 +941,48 @@ func createChunk(styp *mp4.StypBox, trackID, seqNr uint32) chunk {
 // presentation order across the chunks). Re-injecting here would duplicate the SEI.
 func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta, chunkDur int, chunkIndex *int) ([]chunk, error) {
 	trex := init.Moov.Mvex.Trex
-	fs := make([]mp4.FullSample, 0, 32)
+	nrSamples := 0
 	for _, f := range seg.Fragments {
-		ff, err := f.GetFullSamples(trex)
+		for _, trun := range f.Moof.Traf.Truns {
+			nrSamples += int(trun.SampleCount())
+		}
+	}
+	fs := make([]mp4.FullSample, 0, nrSamples)
+	for _, f := range seg.Fragments {
+		var err error
+		fs, err = f.AppendFullSamples(fs, trex)
 		if err != nil {
 			return nil, err
 		}
-		fs = append(fs, ff...)
 	}
 	chunks := make([]chunk, 0, segMeta.newDur/uint32(chunkDur))
 	trackID := init.Moov.Trak.Tkhd.TrackID
-	ch := createChunk(seg.Styp, trackID, segMeta.newNr)
 	chunkNr := 1
+	chunkStart := 0 // index in fs of the first sample of chunk chunkNr
 	var totalDur = 0
 	sampleDecodeTime := segMeta.newTime
-	var thisChunkDur uint32 = 0
 	for i := range fs {
 		fs[i].DecodeTime = sampleDecodeTime
-		ch.frag.AddFullSample(fs[i])
-		dur := fs[i].Dur
-		sampleDecodeTime += uint64(dur)
-		thisChunkDur += dur
-		totalDur += int(dur)
-		if totalDur >= chunkDur*chunkNr {
-			ch.dur = uint64(thisChunkDur)
-			if chunkIndex == nil {
-				chunks = append(chunks, ch)
-			} else if (chunkNr - 1) == *chunkIndex {
-				chunks = append(chunks, ch)
+		sampleDecodeTime += uint64(fs[i].Dur)
+		totalDur += int(fs[i].Dur)
+		if totalDur < chunkDur*chunkNr && i < len(fs)-1 {
+			continue
+		}
+		if chunkIndex == nil || (chunkNr-1) == *chunkIndex {
+			var styp *mp4.StypBox
+			if chunkNr == 1 {
+				styp = seg.Styp
+			}
+			ch := createChunk(styp, trackID, segMeta.newNr)
+			addChunkSamples(ch.frag, fs[chunkStart:i+1])
+			ch.dur = sampleDecodeTime - fs[chunkStart].DecodeTime
+			chunks = append(chunks, ch)
+			if chunkIndex != nil {
 				return chunks, nil
 			}
-			ch = createChunk(nil, trackID, segMeta.newNr)
-			thisChunkDur = 0
-			chunkNr++
 		}
-	}
-	if thisChunkDur > 0 {
-		ch.dur = uint64(thisChunkDur)
-		if chunkIndex == nil {
-			chunks = append(chunks, ch)
-		} else if (chunkNr - 1) == *chunkIndex {
-			chunks = append(chunks, ch)
-		}
+		chunkStart = i + 1
+		chunkNr++
 	}
 
 	if chunkIndex != nil && len(chunks) == 0 {
@@ -989,6 +990,25 @@ func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta,
 	}
 
 	return chunks, nil
+}
+
+// addChunkSamples adds samples to the chunk fragment frag without copying their data.
+// The samples of a chunk are adjacent in the segment's mdat unless they come from
+// several fragments, so AddFullSamples normally adds them as a single data part. That
+// part becomes the mdat Data, which is what the encryptor and GetFullSamples read.
+// The segment data is read for each request, so the chunk may share it and encryption
+// may change it in place, as it does for an unchunked segment. Clipping the capacity
+// keeps a later AddSampleData from writing into the rest of the segment.
+func addChunkSamples(frag *mp4.Fragment, samples []mp4.FullSample) {
+	frag.AddFullSamples(samples)
+	mdat := frag.Mdat
+	switch len(mdat.DataParts) {
+	case 0:
+	case 1:
+		mdat.SetData(slices.Clip(mdat.DataParts[0]))
+	default:
+		mdat.SetData(bytes.Join(mdat.DataParts, nil))
+	}
 }
 
 func writeChunk(w http.ResponseWriter, chk chunk) error {

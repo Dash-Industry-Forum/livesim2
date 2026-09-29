@@ -47,12 +47,11 @@ func detectCC608InSegment(initSeg *mp4.InitSegment, segData []byte, codecs strin
 	trex := initSeg.Moov.Mvex.Trex
 	for _, seg := range file.Segments {
 		for _, frag := range seg.Fragments {
-			fss, err := frag.GetFullSamples(trex)
-			if err != nil {
-				return false, fmt.Errorf("cc608 detect getFullSamples: %w", err)
-			}
-			for i := range fss {
-				nalus, err := avc.GetNalusFromSample(fss[i].Data)
+			for s, err := range frag.Samples(trex) {
+				if err != nil {
+					return false, fmt.Errorf("cc608 detect samples: %w", err)
+				}
+				nalus, err := avc.GetNalusFromSample(s.Data)
 				if err != nil {
 					return false, fmt.Errorf("cc608 detect nalus: %w", err)
 				}

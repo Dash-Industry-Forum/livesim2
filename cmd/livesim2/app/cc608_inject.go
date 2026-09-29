@@ -256,10 +256,12 @@ func applyCC608(seg *mp4.MediaSegment, meta segMeta, cfg *ResponseConfig) error 
 	mediaMS := func(ticks uint64) int64 {
 		return int64(cfg.StartTimeS)*1000 + int64(ticks)*1000/int64(meta.timescale)
 	}
+	var samples []mp4.FullSample // reused for all fragments
 	for i, frag := range seg.Fragments {
-		samples, err := frag.GetFullSamples(trex)
+		var err error
+		samples, err = frag.AppendFullSamples(samples[:0], trex)
 		if err != nil {
-			return fmt.Errorf("cc608 getFullSamples: %w", err)
+			return fmt.Errorf("cc608 appendFullSamples: %w", err)
 		}
 		if len(samples) == 0 {
 			continue
