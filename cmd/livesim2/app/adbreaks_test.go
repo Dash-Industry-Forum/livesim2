@@ -47,6 +47,15 @@ func TestParseAdBreaks(t *testing.T) {
 		{desc: "break without duration", spec: "30", err: `svta break "30" must be <off>:<dur>`},
 		{desc: "break bad offset", spec: "-1:15", err: `svta break "-1:15": bad offset`},
 		{desc: "break bad duration", spec: "30:x", err: `svta break "30:x": bad duration`},
+		{desc: "adjacent fixed breaks", spec: "30:10,40:10",
+			want: AdBreaks{Breaks: []AdBreak{{OffsetS: 30, DurationS: 10}, {OffsetS: 40, DurationS: 10}}}},
+		{desc: "fixed breaks out of order", spec: "90:15,30:15",
+			err: `svta break "30:15": breaks must be in time order and must not overlap`},
+		{desc: "overlapping fixed breaks", spec: "30:15,40:10",
+			err: `svta break "40:10": breaks must be in time order and must not overlap`},
+		{desc: "period beyond 32 bits", spec: "p2305843009213693952:1",
+			err: `svta periodic "p2305843009213693952:1": bad period`},
+		{desc: "offset beyond 32 bits", spec: "4294967296:10", err: `svta break "4294967296:10": bad offset`},
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
@@ -140,4 +149,35 @@ func TestAdBreakWindowAt(t *testing.T) {
 	_, id, ok = per.windowAt(130_000, 65)
 	assert.True(t, ok)
 	assert.Equal(t, uint64(3), id)
+}
+
+func TestAdBreakMinGap(t *testing.T) {
+	cases := []struct {
+		desc   string
+		spec   string
+		wantS  int
+		wantOK bool
+	}{
+		{desc: "one break per cycle", spec: "p60:20", wantS: 40, wantOK: true},
+		{desc: "offsets inside the cycle", spec: "p60:10@10,25", wantS: 5, wantOK: true},
+		{desc: "across the cycle boundary", spec: "p60:10@0,40", wantS: 10, wantOK: true},
+		{desc: "adjacent across the boundary", spec: "p60:10@0,50", wantS: 0, wantOK: true},
+		{desc: "fixed breaks", spec: "30:10,50:10,100:5", wantS: 10, wantOK: true},
+		{desc: "a single fixed break", spec: "30:10", wantOK: false},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			ab, err := parseAdBreaks("scte35", c.spec)
+			require.NoError(t, err)
+			gapS, ok := ab.minGapS()
+			assert.Equal(t, c.wantOK, ok)
+			assert.Equal(t, c.wantS, gapS)
+		})
+	}
+}
+
+func TestMediaTimeMS(t *testing.T) {
+	assert.Equal(t, int64(1_500), mediaTimeMS(135_000, 90_000))
+	// 2026 at 10 MHz: t*1000 is above 2^63.
+	assert.Equal(t, int64(1_790_683_450_123), mediaTimeMS(1_790_683_450_123*10_000, 10_000_000))
 }

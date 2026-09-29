@@ -37,6 +37,19 @@ const (
 	// from the break start second, so two levels collide only for breaks 2^20 s (12 days)
 	// apart — far outside any live signaling window.
 	scte35EventIDSpacing = 1 << 20
+	// scte35ClosingIDOffset sets the message ids of the closing messages apart from the
+	// others, which are the second of their splice point. A break that ends where the next
+	// one starts has its closing message and the next opening message at the same second
+	// (SCTE 35 §10.3.3.14 lets an End and the next Start reference the same splice point),
+	// and with one id a client would drop the second message as a repeat (SCTE 214-1
+	// §6.7.2.1 item 5).
+	scte35ClosingIDOffset = uint32(1 << 31)
+	// scte35MaxUPIDLen keeps a segmentation_descriptor() within its 8-bit descriptor_length:
+	// the other fields livesim2 writes take 22 of the 255 bytes.
+	scte35MaxUPIDLen = 233
+	// scte35UPIDTypeMID is the MID segmentation_upid_type, a list of UPIDs rather than a
+	// value, which the upid= option cannot express.
+	scte35UPIDTypeMID = 0x0D
 )
 
 // scte35Level is a named segmentation level: the segmentation_type_id pair that opens and
@@ -180,8 +193,17 @@ func CreateSCTE35Config(val string) (*SCTE35Config, error) {
 				return nil, fmt.Errorf("scte35 upid %q: must be <type>:<value>", v)
 			}
 			n, err := strconv.ParseUint(t, 0, 8)
-			if err != nil {
+			switch {
+			case err != nil:
 				return nil, fmt.Errorf("scte35 upid %q: bad type", v)
+			case n == 0 && value != "":
+				return nil, fmt.Errorf("scte35 upid %q: type 0 means no UPID and takes no value", v)
+			case n != 0 && value == "":
+				return nil, fmt.Errorf("scte35 upid %q: needs a value, or use type 0 for no UPID", v)
+			case n == scte35UPIDTypeMID:
+				return nil, fmt.Errorf("scte35 upid %q: MID (0x0D) is not supported", v)
+			case len(value) > scte35MaxUPIDLen:
+				return nil, fmt.Errorf("scte35 upid %q: longer than %d bytes", v, scte35MaxUPIDLen)
 			}
 			cfg.UPIDType, cfg.UPID = uint8(n), value
 		case "slate":
@@ -264,10 +286,8 @@ func (c *SCTE35Config) validate() error {
 		}
 		// The countdown must not reach back into the preceding break, which owns those
 		// seconds and renders its own countdown there.
-		if c.Periodic != nil {
-			if gap := c.Periodic.PeriodS - c.Periodic.DurationS; c.PreS > gap {
-				return fmt.Errorf("scte35 pre=%d does not fit in the %d s between breaks", c.PreS, gap)
-			}
+		if gap, ok := c.minGapS(); ok && c.PreS > gap {
+			return fmt.Errorf("scte35 pre=%d does not fit in the %d s between breaks", c.PreS, gap)
 		}
 	}
 	if c.Cmd == "insert" {
@@ -278,6 +298,17 @@ func (c *SCTE35Config) validate() error {
 	}
 	if len(c.Levels) == 0 && c.AdsPerBreak == 0 {
 		return fmt.Errorf("scte35 cmd=timesignal needs at least one seg level or ads>0")
+	}
+	if c.AdsPerBreak > 0 {
+		// The creatives are the innermost level. An Advertisement must not contain nested
+		// Advertisements, nor a Promo nested Promos (SCTE 35 §10.3.3.14).
+		ad := scte35Levels[c.AdLevel]
+		for _, name := range c.Levels {
+			if scte35Levels[name].rank >= ad.rank {
+				return fmt.Errorf("scte35 ads=%d: the %s creatives would be nested in the %s level",
+					c.AdsPerBreak, c.AdLevel, name)
+			}
+		}
 	}
 	// Cue messages are identified by the second of their splice point, so two splice points
 	// of one break must be at least a second apart.
@@ -321,8 +352,20 @@ func (s *strConvAccErr) ParseSCTE35Config(key, val string) *SCTE35Config {
 type scte35CuePoint struct {
 	atS  int64      // splice point, in seconds from the availabilityStartTime
 	durS int        // the duration to advertise for this message, 0 when it only closes
-	id   uint64     // emsg.id and Event@id: unique per message
+	id   uint64     // emsg.id and Event@id: unique per message (see scte35MsgID)
 	cue  scte35.Cue // the message itself
+}
+
+// scte35MsgID is the emsg.id and Event@id of a message with its splice point at second
+// atS since the epoch: that second, moved by scte35ClosingIDOffset for a closing message.
+// Within a break the messages are at least a second apart (see validate), and the only
+// other message that can share a closing message's second opens the next break.
+func scte35MsgID(atS int64, closing bool) uint64 {
+	id := uint32(atS)
+	if closing {
+		id += scte35ClosingIDOffset
+	}
+	return uint64(id)
 }
 
 // eventID derives a splice_event_id / segmentation_event_id for one level of a break. It is
@@ -338,7 +381,7 @@ func scte35EventID(breakStartS int64, slot int) uint32 {
 // relative to it, as all media times in a livesim2 stream are.
 func (c *SCTE35Config) cuePoints(b adBreakInst, astS int) []scte35CuePoint {
 	breakStartS := int64(astS) + b.offsetS
-	msgID := func(atS int64) uint64 { return uint64(uint32(int64(astS) + atS)) }
+	msgID := func(atS int64, closing bool) uint64 { return scte35MsgID(int64(astS)+atS, closing) }
 	pts := func(atS int64) uint64 { return uint64(atS) * scte35.TimescaleHz % (1 << 33) }
 	durPTS := uint64(b.durS) * scte35.TimescaleHz
 
@@ -346,7 +389,7 @@ func (c *SCTE35Config) cuePoints(b adBreakInst, astS int) []scte35CuePoint {
 		out := []scte35CuePoint{{
 			atS:  b.offsetS,
 			durS: b.durS,
-			id:   msgID(b.offsetS),
+			id:   msgID(b.offsetS, false),
 			cue: scte35.Cue{
 				Cmd:          scte35.SpliceInsert,
 				PTS:          pts(b.offsetS),
@@ -363,7 +406,7 @@ func (c *SCTE35Config) cuePoints(b adBreakInst, astS int) []scte35CuePoint {
 			endS := b.offsetS + int64(b.durS)
 			out = append(out, scte35CuePoint{
 				atS: endS,
-				id:  msgID(endS),
+				id:  msgID(endS, true),
 				cue: scte35.Cue{
 					Cmd:     scte35.SpliceInsert,
 					PTS:     pts(endS),
@@ -381,14 +424,10 @@ func (c *SCTE35Config) cuePoints(b adBreakInst, astS int) []scte35CuePoint {
 // carrying the start descriptor of every level, one message at each boundary between
 // creatives, and the closing message carrying the end descriptors in reverse order.
 func (c *SCTE35Config) timeSignalCuePoints(b adBreakInst, breakStartS int64,
-	msgID func(int64) uint64, pts func(int64) uint64) []scte35CuePoint {
+	msgID func(int64, bool) uint64, pts func(int64) uint64) []scte35CuePoint {
 
 	durPTS := uint64(b.durS) * scte35.TimescaleHz
-	upid := []byte(c.UPID)
-	if len(upid) == 0 {
-		upid = []byte(fmt.Sprintf("urn:dashif:livesim2:break:%d", b.id))
-	}
-	level := func(name string, slot int, open bool, durPTS uint64, num, expected uint8) scte35.Level {
+	level := func(name string, slot int, open bool, durPTS uint64, upid []byte) scte35.Level {
 		l := scte35Levels[name]
 		typeID := l.start
 		if !open {
@@ -399,8 +438,6 @@ func (c *SCTE35Config) timeSignalCuePoints(b adBreakInst, breakStartS int64,
 			TypeID:      typeID,
 			EventID:     scte35EventID(breakStartS, slot),
 			DurationPTS: durPTS,
-			Num:         num,
-			Expected:    expected,
 			UPIDType:    c.UPIDType,
 			UPID:        upid,
 		}
@@ -413,32 +450,38 @@ func (c *SCTE35Config) timeSignalCuePoints(b adBreakInst, breakStartS int64,
 	adDurPTS := func(i int) uint64 {
 		return uint64(adStartS(i+1)-adStartS(i)) * scte35.TimescaleHz
 	}
+	// creative is the descriptor of creative i (1-based). SCTE 35 2023r1 §10.3.3.14.4 numbers
+	// the advertisements of a break with sub_segment_num and sub_segments_expected on their
+	// Starts, where the segmentation type has them. segment_num and segments_expected number
+	// the Breaks of a Program, which livesim2 does not do (§10.3.3.14.2), so they stay 0.
+	creative := func(i int, open bool) scte35.Level {
+		l := level(c.AdLevel, adSlot(i), open, adDurPTS(i-1), c.upid(b.id, c.AdLevel, i))
+		if open && scte35.CarriesSubSegments(l.TypeID) {
+			l.HasSubSegments, l.SubNum, l.SubExpected = true, uint8(i), uint8(c.AdsPerBreak)
+		}
+		return l
+	}
 
 	// Opening message: every level starts, plus the first creative.
-	open := scte35CuePoint{atS: b.offsetS, durS: b.durS, id: msgID(b.offsetS)}
+	open := scte35CuePoint{atS: b.offsetS, durS: b.durS, id: msgID(b.offsetS, false)}
 	open.cue = scte35.Cue{Cmd: scte35.TimeSignal, PTS: pts(b.offsetS), Tier: scte35.DefaultTier}
 	for j, name := range c.Levels {
-		open.cue.Levels = append(open.cue.Levels, level(name, j, true, durPTS, 0, 0))
+		open.cue.Levels = append(open.cue.Levels, level(name, j, true, durPTS, c.upid(b.id, name, 0)))
 	}
 	if c.AdsPerBreak > 0 {
-		n := uint8(c.AdsPerBreak)
-		open.cue.Levels = append(open.cue.Levels, level(c.AdLevel, adSlot(1), true, adDurPTS(0), 1, n))
+		open.cue.Levels = append(open.cue.Levels, creative(1, true))
 	}
 	out := []scte35CuePoint{open}
 
 	// One message at each boundary between creatives: the previous one ends, the next starts.
 	for i := 1; i < c.AdsPerBreak; i++ {
-		atS := adStartS(int64ToInt(int64(i)))
-		n := uint8(c.AdsPerBreak)
-		cp := scte35CuePoint{atS: atS, durS: int(adDurPTS(i) / scte35.TimescaleHz), id: msgID(atS)}
+		atS := adStartS(i)
+		cp := scte35CuePoint{atS: atS, durS: int(adDurPTS(i) / scte35.TimescaleHz), id: msgID(atS, false)}
 		cp.cue = scte35.Cue{
-			Cmd:  scte35.TimeSignal,
-			PTS:  pts(atS),
-			Tier: scte35.DefaultTier,
-			Levels: []scte35.Level{
-				level(c.AdLevel, adSlot(i), false, 0, uint8(i), n),
-				level(c.AdLevel, adSlot(i+1), true, adDurPTS(i), uint8(i+1), n),
-			},
+			Cmd:    scte35.TimeSignal,
+			PTS:    pts(atS),
+			Tier:   scte35.DefaultTier,
+			Levels: []scte35.Level{creative(i, false), creative(i+1, true)},
 		}
 		out = append(out, cp)
 	}
@@ -448,21 +491,38 @@ func (c *SCTE35Config) timeSignalCuePoints(b adBreakInst, breakStartS int64,
 	}
 	// Closing message: the last creative ends, then the levels close innermost first.
 	endS := b.offsetS + int64(b.durS)
-	closing := scte35CuePoint{atS: endS, id: msgID(endS)}
+	closing := scte35CuePoint{atS: endS, id: msgID(endS, true)}
 	closing.cue = scte35.Cue{Cmd: scte35.TimeSignal, PTS: pts(endS), Tier: scte35.DefaultTier}
 	if c.AdsPerBreak > 0 {
-		n := uint8(c.AdsPerBreak)
-		closing.cue.Levels = append(closing.cue.Levels,
-			level(c.AdLevel, adSlot(c.AdsPerBreak), false, 0, n, n))
+		closing.cue.Levels = append(closing.cue.Levels, creative(c.AdsPerBreak, false))
 	}
 	for j := len(c.Levels) - 1; j >= 0; j-- {
-		closing.cue.Levels = append(closing.cue.Levels, level(c.Levels[j], j, false, 0, 0, 0))
+		closing.cue.Levels = append(closing.cue.Levels, level(c.Levels[j], j, false, 0, c.upid(b.id, c.Levels[j], 0)))
 	}
 	return append(out, closing)
 }
 
-// int64ToInt is a readability helper for the creative index arithmetic.
-func int64ToInt(v int64) int { return int(v) }
+// upid returns the segmentation_upid of one level of break breakID, and of creative n (1-based)
+// when n > 0. The one given with upid= is used for all of them, type 0 meaning none. Otherwise
+// each level and creative gets its own URI, since every Start and End is to be uniquely
+// identifiable by its UPID (SCTE 35 §10.3.3.13.1 and §10.3.3.14.1): the break itself
+// urn:dashif:livesim2:break:<id>, and a level inside it that URI with :<level>[:<n>] appended.
+func (c *SCTE35Config) upid(breakID uint64, level string, n int) []byte {
+	switch {
+	case c.UPIDType == 0:
+		return nil
+	case c.UPID != "":
+		return []byte(c.UPID)
+	}
+	u := fmt.Appendf(nil, "urn:dashif:livesim2:break:%d", breakID)
+	if level != "break" {
+		u = fmt.Appendf(u, ":%s", level)
+	}
+	if n > 0 {
+		u = fmt.Appendf(u, ":%d", n)
+	}
+	return u
+}
 
 // adSignaling is one active ad-signaling option and the break schedule it uses.
 type adSignaling struct {
@@ -535,30 +595,32 @@ func (c *SCTE35Config) signalWindowS() int {
 // relative to the availabilityStartTime).
 //
 // A cue is delivered in the segment holding its announce point, LeadS seconds before the
-// splice point. With Repeat it is delivered in every segment of the lead window instead,
-// which is legal (SCTE 214-1 §6.7.3 item 6 lets a client discard an emsg id it has already
-// seen) and makes that discarding testable.
+// splice point: the one with segStart < announce <= segEnd, as the pre-1.14 splice_insert
+// scheduling had it. A splice point less than LeadS after the availabilityStartTime is
+// announced at the stream start, in the first segment. With Repeat the cue is also delivered
+// in every later segment starting before the splice point, which is legal (SCTE 214-1
+// §6.7.3 item 6 lets a client discard an emsg id it has already seen) and makes that
+// discarding testable.
 func scte35EmsgsForSegment(cfg *ResponseConfig, segStart, segEnd, timescale uint64) []*mp4.EmsgBox {
 	sc := cfg.SCTE35
 	if sc == nil || !sc.Emsg {
 		return nil
 	}
-	segStartMS := (int64(cfg.StartTimeS)*int64(timescale) + int64(segStart)) * 1000 / int64(timescale)
+	segStartMS := int64(cfg.StartTimeS)*1000 + mediaTimeMS(segStart, timescale)
 	w := sc.signalWindowS()
 	insts := sc.instances(int(segStartMS), cfg.StartTimeS, w, w)
 	var emsgs []*mp4.EmsgBox
 	for _, b := range insts {
 		for _, cp := range sc.cuePoints(b, cfg.StartTimeS) {
 			spliceTicks := uint64(cp.atS) * timescale
-			announceTicks := spliceTicks - uint64(sc.LeadS)*timescale
-			if cp.atS < int64(sc.LeadS) {
-				announceTicks = 0
+			announceTicks := uint64(0)
+			if cp.atS > int64(sc.LeadS) {
+				announceTicks = spliceTicks - uint64(sc.LeadS)*timescale
 			}
-			var deliver bool
+			deliver := segStart < announceTicks && announceTicks <= segEnd ||
+				announceTicks == 0 && segStart == 0
 			if sc.Repeat {
-				deliver = announceTicks <= segStart && segStart < spliceTicks
-			} else {
-				deliver = segStart < announceTicks && announceTicks <= segEnd
+				deliver = deliver || announceTicks <= segEnd && segStart < spliceTicks
 			}
 			if !deliver {
 				continue

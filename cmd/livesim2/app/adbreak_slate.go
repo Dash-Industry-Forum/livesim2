@@ -231,7 +231,7 @@ func adBreakForSegment(cfg *ResponseConfig, meta segMeta) (int64, uint64, bool) 
 	if sched == nil {
 		return 0, 0, false
 	}
-	segStartMS := int64(cfg.StartTimeS)*1000 + int64(meta.newTime)*1000/int64(meta.timescale)
+	segStartMS := int64(cfg.StartTimeS)*1000 + mediaTimeMS(meta.newTime, uint64(meta.timescale))
 	return sched.windowAt(segStartMS, cfg.StartTimeS)
 }
 
@@ -258,7 +258,7 @@ func slateWindowForSegment(cfg *ResponseConfig, meta segMeta) (untilMS int64, id
 		return 0, 0, "", false
 	}
 	sched := adBreaksFor(cfg)
-	segStartMS := int64(cfg.StartTimeS)*1000 + int64(meta.newTime)*1000/int64(meta.timescale)
+	segStartMS := int64(cfg.StartTimeS)*1000 + mediaTimeMS(meta.newTime, uint64(meta.timescale))
 	if startMS, id, ok := sched.nextBreakWithin(segStartMS, cfg.StartTimeS, preS); ok {
 		return startMS, id, slateHeadingPre, true
 	}
@@ -269,8 +269,9 @@ func slateWindowForSegment(cfg *ResponseConfig, meta segMeta) (untilMS int64, id
 // "AD BREAK <countdown>" slate when the segment starts inside an ad-break window.
 // The countdown shows the seconds left of the break, updated with an IDR at every
 // second change, counting down to zero when the live content returns. Returns the
-// replacement segment, or nil when the segment is outside every break (or the rep
-// cannot be slated, e.g. non-AVC) — the caller then serves the normal content.
+// replacement segment, or nil when the segment is outside every break (or cannot be slated,
+// e.g. a non-AVC rep or a segment of several fragments) — the caller then serves the normal
+// content.
 //
 // The slate keeps the original segment's exact sample timing: same sample count and
 // durations, same tfdt/sequence number (already rewritten by the caller), and a constant
@@ -287,7 +288,9 @@ func applyAdBreakSlate(vodFS fs.FS, a *asset, cfg *ResponseConfig, meta segMeta,
 		return nil, nil // not an error: rep cannot be slated, serve normal content
 	}
 	if len(seg.Fragments) != 1 {
-		return nil, fmt.Errorf("slate needs exactly 1 fragment, got %d", len(seg.Fragments))
+		// Nor is a segment of several fragments (a chunked VoD packaging), which the slate
+		// does not rebuild: it keeps its content rather than failing the request.
+		return nil, nil
 	}
 	frag := seg.Fragments[0]
 	trun := frag.Moof.Traf.Trun
@@ -311,7 +314,7 @@ func applyAdBreakSlate(vodFS fs.FS, a *asset, cfg *ResponseConfig, meta segMeta,
 	// Mirror the original sample timing and sizes (frame rate and bitrate of the
 	// replaced content), and find the track's constant reorder delay: the smallest
 	// composition time (relative decode time + cto) over the segment.
-	segStartMS := int64(cfg.StartTimeS)*1000 + int64(meta.newTime)*1000/int64(meta.timescale)
+	segStartMS := int64(cfg.StartTimeS)*1000 + mediaTimeMS(meta.newTime, uint64(meta.timescale))
 	nrSamples := int(trun.SampleCount())
 	specs := make([]slateFrameSpec, 0, nrSamples)
 	dtsRel := int64(0)

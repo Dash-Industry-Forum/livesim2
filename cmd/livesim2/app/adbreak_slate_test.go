@@ -162,6 +162,13 @@ func TestApplySGAISlate(t *testing.T) {
 	slate, err = applyAdBreakSlate(vodFS, a, cfg, meta, seg)
 	require.NoError(t, err)
 	assert.Nil(t, slate)
+	// So is a segment of several fragments, which the slate does not rebuild.
+	multi := slateTestSegment(t)
+	multi.Fragments = append(multi.Fragments, multi.Fragments[0])
+	meta = segMeta{rep: rep, newTime: 0, newNr: 1, timescale: 90000}
+	slate, err = applyAdBreakSlate(vodFS, a, cfg, meta, multi)
+	require.NoError(t, err)
+	assert.Nil(t, slate, "the segment keeps its content")
 }
 
 // TestApplySGAISlateFallsBackToRepSampleDuration covers low-delay packagings whose segments
@@ -229,6 +236,14 @@ func TestAdBreakForSegment(t *testing.T) {
 	// No ad-signaling option at all: no slate.
 	_, _, ok = adBreakForSegment(NewResponseConfig(), segMeta{newTime: 30 * 90000, timescale: 90000})
 	assert.False(t, ok)
+	// A 10 MHz track at today's wall clock: newTime*1000 would overflow int64.
+	per := NewResponseConfig()
+	per.SGAI = &SGAIConfig{AdBreaks: AdBreaks{Periodic: &AdBreakPeriodic{PeriodS: 60, DurationS: 20}}}
+	const ts = 10_000_000
+	minuteS := uint64(1_790_683_440) // a full minute in 2026
+	endMS, _, ok = adBreakForSegment(per, segMeta{newTime: (minuteS + 4) * ts, timescale: ts})
+	assert.True(t, ok, "4 s into the break")
+	assert.Equal(t, int64(minuteS+20)*1000, endMS)
 }
 
 // TestSlateWindowForSegment covers the two windows the slate renders: the break itself,

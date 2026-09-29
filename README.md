@@ -563,7 +563,7 @@ not support the event keep playing the underlying content, so it is always a gra
 Enable it with the `sgai_` URL option, which schedules the breaks:
 
 - Fixed breaks: `sgai_30:15` (one 15 s break 30 s after the availabilityStartTime), or a
-  comma-separated list `sgai_18:20,48:20,78:20`.
+  comma-separated list `sgai_18:20,48:20,78:20` in time order, without overlaps.
 - Periodic breaks: `sgai_p60:20` (a 20 s break at every full UTC minute, recurring forever;
   wall-clock anchored, so all sessions share the schedule and a late joiner lands mid-break).
 - Options are appended with `;key=val`: `skipafter=<s>`, `nojump=<0|1|2>`, `clip=<0|1>`,
@@ -650,7 +650,8 @@ the presentation, which is what ad-measurement workflows consume.
 
 Enable it with the `svta_` URL option, which uses the same break schedule grammar as `sgai_`:
 
-- Fixed breaks: `svta_30:15`, or a comma-separated list `svta_30:15,90:15`.
+- Fixed breaks: `svta_30:15`, or a comma-separated list `svta_30:15,90:15` in time order, without
+  overlaps.
 - Periodic breaks: `svta_p60:20` (a 20 s creative at every full UTC minute, wall-clock anchored).
 - Options are appended with `;key=val`:
 
@@ -706,7 +707,8 @@ Enable it with the `scte35_` URL option, which uses the same break-schedule gram
 - Legacy presets: `scte35_1`, `scte35_2` and `scte35_3` — one, two or three `splice_insert` breaks
   per minute, unchanged from earlier versions (they are now shorthand for `p60:20@10`,
   `p60:10@10,40` and `p60:10@10,36,46`).
-- Fixed breaks: `scte35_30:15`, or a comma-separated list `scte35_30:15,90:15`.
+- Fixed breaks: `scte35_30:15`, or a comma-separated list `scte35_30:15,90:15` in time order,
+  without overlaps.
 - Periodic breaks: `scte35_p60:20@10` — a 20 s break 10 s after every full UTC minute. The `@`
   offsets place the breaks inside the cycle and may list several per cycle.
 - Options are appended with `;key=val`:
@@ -722,7 +724,7 @@ Enable it with the `scte35_` URL option, which uses the same break-schedule gram
   | `lead=<s>` | how far ahead of the splice point the cue is delivered | 7 |
   | `end=<0\|1>` | also emit the closing message | 1 for `timesignal`, 0 for `insert` |
   | `repeat=<0\|1>` | repeat the cue in every segment of the lead window | 0 |
-  | `upid=<type>:<value>` | `segmentation_upid` | a generated `urn:dashif:livesim2:break:<id>` URI |
+  | `upid=<type>:<value>` | `segmentation_upid` for every level; `upid=0:` for none (MID is not supported) | one URI per level (see below) |
   | `value=<s>` | `@value` of the `emsg` and the `(Inband)EventStream` (a PID or a URI) | empty |
   | `ts=<n>` | `EventStream@timescale` | 90000 |
   | `slate=<0\|1>` | serve the AD BREAK countdown slate inside the breaks | 1 (0 for the legacy presets) |
@@ -742,13 +744,25 @@ messages:
 
 | at | descriptors |
 | --- | --- |
-| break start | Break Start `0x22`, Provider PO Start `0x34` (both with a 20 s `segmentation_duration`), Provider Ad Start `0x30` (10 s, `segment_num=1`, `segments_expected=2`) |
-| +10 s | Provider Ad End `0x31` (num 1), Provider Ad Start `0x30` (num 2) |
-| break end | Provider Ad End `0x31` (num 2), Provider PO End `0x35`, Break End `0x23` |
+| break start | Break Start `0x22`, Provider PO Start `0x34` (both with a 20 s `segmentation_duration`), Provider Ad Start `0x30` (10 s, `sub_segment_num=1`, `sub_segments_expected=2`) |
+| +10 s | Provider Ad End `0x31` (ad 1), Provider Ad Start `0x30` (ad 2, `sub_segment_num=2`) |
+| break end | Provider Ad End `0x31` (ad 2), Provider PO End `0x35`, Break End `0x23` |
+
+The creatives are numbered as SCTE 35 2023r1 §10.3.3.14 asks: `sub_segment_num` and
+`sub_segments_expected` on their Starts, where the segmentation type has those fields (`ad`, `dad`,
+`po` and `dpo`, not `promo` or `break`). `segment_num` and `segments_expected` number the Breaks of a
+Program, which livesim2 does not do, so they are 0. The `seg=` levels must all be outer to the
+`adseg=` level, since an Advertisement may not contain nested Advertisements.
 
 Each level carries its own `segmentation_event_id`, shared between its start and its end as
 SCTE 35 §10.3.3.5 requires, and derived from the break start second so it survives an MPD refresh
-unchanged. `Event@id` and `emsg.id` are the second of the splice point, so each message has its own.
+unchanged. It also has its own `segmentation_upid`, so every Start and End is identifiable by it:
+`urn:dashif:livesim2:break:<id>` for the Break, with `:<level>` appended for a level inside it and
+`:<n>` for creative `n`, as in `urn:dashif:livesim2:break:<id>:ad:2`.
+
+`Event@id` and `emsg.id` are the second of the splice point, plus 2^31 for a closing message. So
+when a break ends where the next one starts, its closing message and the next opening message have
+different ids, and a client does not drop the second as a repeat.
 
 ### Seeing the break
 
@@ -763,19 +777,22 @@ signaling-only, and stay that way.
 `pre=` at least as large as `lead` makes the announcement visible on screen at the moment it arrives
 in the stream — useful for checking by eye that a player or splicer acted on the cue in time. The
 countdown reaches zero exactly as the break starts, where the AD BREAK countdown takes over. The
-slate is video-only and needs an unencrypted AVC representation, like the other slates.
+slate is video-only and needs an unencrypted AVC representation with one fragment per segment, like
+the other slates; other segments keep their content.
 
 ### Timing and combinations
 
 A cue is delivered one `lead` (7 s by default) before its splice point — inband in the segment
-holding the announce point, and in the MPD at the same moment, so the two carriages agree. MPD
+holding the announce point, and in the MPD at the same moment, so the two carriages agree. A splice
+point less than one `lead` after the availabilityStartTime is announced in the first segment. With
+`repeat=1` the cue is also delivered in every later segment that starts before the splice point. MPD
 events are kept for as long as the segments they cover are available (SCTE 214-1 §6.7.2.1 item 4).
 Media times are epoch-locked, so `Event@presentationTime` is an absolute offset from the
 availabilityStartTime and the payload's `splice_time()` is the same instant on the 90 kHz clock
 (modulo 2^33, as SCTE-35 prescribes).
 
 `scte35_` can be combined with `sgai_` or `svta_` as long as all of them use the **same** break
-schedule: SCTE-35 then announces the avail that the Alternative-MPD event fills with a real ad pod,
+schedule (the legacy presets count as their `p60` schedules, so `scte35_1` goes with `sgai_p60:20@10`): SCTE-35 then announces the avail that the Alternative-MPD event fills with a real ad pod,
 or that SVTA2053 describes for measurement. Inband-only signaling (`mpd=off`, the default) also
 works with the multi-period options; MPD events do not, since the event stream lives in the first
 Period.

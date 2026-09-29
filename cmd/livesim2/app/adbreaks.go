@@ -6,6 +6,7 @@ package app
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -57,10 +58,12 @@ type AdBreaks struct {
 
 // parseAdBreaks parses the break part of an ad-signaling URL option value.
 //
-// Grammar: <off>:<dur>[,<off>:<dur>...] | p<period>:<dur>
+// Grammar: <off>:<dur>[,<off>:<dur>...] | p<period>:<dur>[@<off>,...]
 //
 // Examples: "30:15,90:15" => two 15 s breaks, 30 s and 90 s into the stream.
 // "p60:20" => a 20 s break at every start of a (UTC) minute, recurring forever.
+// Fixed breaks are listed in time order and must not overlap, as the offsets of a periodic
+// schedule; a break may start where the previous one ends.
 func parseAdBreaks(opt, spec string) (AdBreaks, error) {
 	var ab AdBreaks
 	if pSpec, ok := strings.CutPrefix(spec, "p"); ok {
@@ -71,11 +74,11 @@ func parseAdBreaks(opt, spec string) (AdBreaks, error) {
 		if !ok {
 			return ab, fmt.Errorf("%s periodic %q must be p<period>:<dur>[@<off>,...]", opt, spec)
 		}
-		perS, err := strconv.Atoi(per)
+		perS, err := parseAdBreakSeconds(per)
 		if err != nil || perS <= 0 {
 			return ab, fmt.Errorf("%s periodic %q: bad period", opt, spec)
 		}
-		durS, err := strconv.Atoi(dur)
+		durS, err := parseAdBreakSeconds(dur)
 		if err != nil || durS <= 0 {
 			return ab, fmt.Errorf("%s periodic %q: bad duration", opt, spec)
 		}
@@ -85,8 +88,8 @@ func parseAdBreaks(opt, spec string) (AdBreaks, error) {
 		var offsets []int
 		if hasOffsets {
 			for os := range strings.SplitSeq(offSpec, ",") {
-				off, err := strconv.Atoi(os)
-				if err != nil || off < 0 {
+				off, err := parseAdBreakSeconds(os)
+				if err != nil {
 					return ab, fmt.Errorf("%s periodic %q: bad offset %q", opt, spec, os)
 				}
 				if len(offsets) > 0 && off < offsets[len(offsets)-1]+durS {
@@ -109,17 +112,27 @@ func parseAdBreaks(opt, spec string) (AdBreaks, error) {
 		if !ok {
 			return ab, fmt.Errorf("%s break %q must be <off>:<dur>", opt, bs)
 		}
-		offS, err := strconv.Atoi(off)
-		if err != nil || offS < 0 {
+		offS, err := parseAdBreakSeconds(off)
+		if err != nil {
 			return ab, fmt.Errorf("%s break %q: bad offset", opt, bs)
 		}
-		durS, err := strconv.Atoi(dur)
+		durS, err := parseAdBreakSeconds(dur)
 		if err != nil || durS <= 0 {
 			return ab, fmt.Errorf("%s break %q: bad duration", opt, bs)
+		}
+		if n := len(ab.Breaks); n > 0 && offS < ab.Breaks[n-1].OffsetS+ab.Breaks[n-1].DurationS {
+			return ab, fmt.Errorf("%s break %q: breaks must be in time order and must not overlap", opt, bs)
 		}
 		ab.Breaks = append(ab.Breaks, AdBreak{OffsetS: offS, DurationS: durS})
 	}
 	return ab, nil
+}
+
+// parseAdBreakSeconds parses a number of seconds of a break schedule. The 32-bit bound
+// (136 years) keeps the millisecond arithmetic of the schedule clear of int64 overflow.
+func parseAdBreakSeconds(s string) (int, error) {
+	n, err := strconv.ParseUint(s, 10, 32)
+	return int(n), err
 }
 
 // empty reports whether the schedule has no breaks at all.
@@ -141,6 +154,35 @@ func (a *AdBreaks) equal(b *AdBreaks) bool {
 		}
 	}
 	return slices.Equal(a.Breaks, b.Breaks)
+}
+
+// minGapS returns the shortest time between the end of a break and the start of the next
+// one, or ok=false when the schedule has no next break to measure against (a single fixed
+// break). For a periodic schedule the gap across the cycle boundary counts as well.
+func (a *AdBreaks) minGapS() (gapS int, ok bool) {
+	if p := a.Periodic; p != nil {
+		offs := p.offsets()
+		gapS = p.PeriodS - offs[len(offs)-1] - p.DurationS + offs[0]
+		for i := 1; i < len(offs); i++ {
+			gapS = min(gapS, offs[i]-offs[i-1]-p.DurationS)
+		}
+		return gapS, true
+	}
+	if len(a.Breaks) < 2 {
+		return 0, false
+	}
+	gapS = math.MaxInt
+	for i := 1; i < len(a.Breaks); i++ {
+		gapS = min(gapS, a.Breaks[i].OffsetS-a.Breaks[i-1].OffsetS-a.Breaks[i-1].DurationS)
+	}
+	return gapS, true
+}
+
+// mediaTimeMS converts a media time in timescale ticks to milliseconds. It divides before it
+// scales, since t*1000 overflows for a media time counted from the epoch once the timescale
+// is above about 5 MHz (a 10 MHz video track, say).
+func mediaTimeMS(t, timescale uint64) int64 {
+	return int64(t/timescale*1000 + t%timescale*1000/timescale)
 }
 
 // adBreakInst is one concrete break occurrence to signal in the MPD.
