@@ -5,6 +5,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
@@ -297,6 +298,58 @@ func TestWriteChunkedSegment(t *testing.T) {
 		require.Equal(t, mediaTime, int(bdt))
 		require.Equal(t, 8, len(mp4d.Segments[0].Fragments))
 	}
+}
+
+// TestChunkSegmentAcrossFragments checks that a chunk with samples from two fragments of
+// a segment gets their data as one contiguous mdat payload, which the encryptor needs.
+func TestChunkSegmentAcrossFragments(t *testing.T) {
+	init := mp4.CreateEmptyInit()
+	init.AddEmptyTrack(1000, "video", "und")
+	trackID := init.Moov.Trak.Tkhd.TrackID
+	// Two fragments with three 100ms samples each. The data of sample n is {n, n}.
+	var buf bytes.Buffer
+	for nr := range uint32(2) {
+		frag, err := mp4.CreateFragment(nr+1, trackID)
+		require.NoError(t, err)
+		for i := range uint32(3) {
+			n := byte(3*nr + i + 1)
+			frag.AddFullSample(mp4.FullSample{
+				Sample:     mp4.Sample{Flags: mp4.SyncSampleFlags, Dur: 100, Size: 2},
+				DecodeTime: uint64(100 * (3*nr + i)),
+				Data:       []byte{n, n},
+			})
+		}
+		require.NoError(t, frag.Encode(&buf))
+	}
+	f, err := mp4.DecodeFileSR(bits.NewFixedSliceReader(buf.Bytes()))
+	require.NoError(t, err)
+	seg := f.Segments[0]
+	require.Len(t, seg.Fragments, 2)
+
+	meta := segMeta{newTime: 5000, newNr: 7, newDur: 600}
+	chunks, err := chunkSegment(init, seg, meta, 400, nil)
+	require.NoError(t, err)
+	require.Len(t, chunks, 2)
+	wantData := [][]byte{{1, 1, 2, 2, 3, 3, 4, 4}, {5, 5, 6, 6}}
+	wantDur := []uint64{400, 200}
+	wantTime := []uint64{5000, 5400}
+	for i, chk := range chunks {
+		mdat := chk.frag.Mdat
+		require.Empty(t, mdat.DataParts, "chunk %d", i)
+		require.Equal(t, wantData[i], mdat.Data, "chunk %d", i)
+		require.Equal(t, wantDur[i], chk.dur, "chunk %d", i)
+		require.Equal(t, wantTime[i], chk.frag.Moof.Traf.Tfdt.BaseMediaDecodeTime(), "chunk %d", i)
+		fss, err := chk.frag.GetFullSamples(init.Moov.Mvex.Trex)
+		require.NoError(t, err)
+		require.Len(t, fss, len(wantData[i])/2)
+	}
+
+	// Only the requested chunk is returned.
+	chunks, err = chunkSegment(init, seg, meta, 400, Ptr(1))
+	require.NoError(t, err)
+	require.Len(t, chunks, 1)
+	require.Nil(t, chunks[0].styp)
+	require.Equal(t, wantData[1], chunks[0].frag.Mdat.Data)
 }
 
 func TestAvailabilityTime(t *testing.T) {

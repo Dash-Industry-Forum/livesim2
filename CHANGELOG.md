@@ -117,6 +117,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   happens only when the segment duration is not a whole number of seconds.
 - `calcCueItvls` no longer emits a zero-length cue for a cue that ended before the requested interval,
   and picks the cue period correctly when `timesubsdur_` is longer than a second.
+- Chunked (`chunkdur_`) segments share the segment's sample data instead of copying it, cutting their
+  allocated bytes by about 70%.
 
 ## [1.13.0] - 2026-08-11
 
