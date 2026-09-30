@@ -66,7 +66,8 @@ The main keys available are:
 
 1. language: The language of the representation
 2. role: The role of the representation
-3. displayName: The display name of the representation
+3. displayName: The display name of the representation. If not set, the labl boxes
+   of the track (DASH-IF Ingest) provide the Label and GroupLabel elements.
 4. bitrate: The bitrate of the representation
 `
 

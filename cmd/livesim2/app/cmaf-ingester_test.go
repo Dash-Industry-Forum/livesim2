@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"sync"
 	"testing"
@@ -14,6 +15,8 @@ import (
 	"github.com/Dash-Industry-Forum/livesim2/pkg/chunkparser"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
 	"github.com/Eyevinn/dash-mpd/mpd"
+	"github.com/Eyevinn/mp4ff/bits"
+	"github.com/Eyevinn/mp4ff/mp4"
 	"github.com/stretchr/testify/require"
 )
 
@@ -303,4 +306,104 @@ func TestCmafIngesterSegmentAfterAvailability(t *testing.T) {
 		require.Less(t, delayMS, lateMS/2, "segment %s completed %dms after its end, started %dms late",
 			path, delayMS, lateMS)
 	}
+}
+
+func TestRepLabels(t *testing.T) {
+	const mpdStr = `<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period>
+    <GroupLabel id="2">Audio</GroupLabel>
+    <AdaptationSet>
+      <GroupLabel id="1" lang="en">Main video</GroupLabel>
+      <Label id="1" lang="sv-SE">Huvudvideo</Label>
+      <Representation id="V300"/>
+      <Representation id="V600">
+        <Label id="1" lang="en">Main video 600kbps</Label>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`
+	mpdIn, err := mpd.ReadFromString(mpdStr)
+	require.NoError(t, err)
+	reps := mpdIn.Periods[0].AdaptationSets[0].Representations
+
+	labels, groupLabels := repLabels(reps[0])
+	require.Len(t, labels, 1)
+	require.Equal(t, "Huvudvideo", labels[0].Value, "labels of the Adaptation Set")
+	require.Len(t, groupLabels, 2)
+	require.Equal(t, "Main video", groupLabels[0].Value)
+	require.Equal(t, "Audio", groupLabels[1].Value)
+
+	labels, _ = repLabels(reps[1])
+	require.Len(t, labels, 1)
+	require.Equal(t, "Main video 600kbps", labels[0].Value, "labels of the Representation")
+}
+
+func TestLablBoxes(t *testing.T) {
+	labels := []*mpd.LabelType{
+		{Id: 1, Lang: "sv-SE", Value: "Huvudvideo"},
+		{Value: "No group"},
+		{Id: 70000, Value: "Too large id"},
+	}
+	groupLabels := []*mpd.LabelType{
+		{Id: 1, Lang: "en", Value: "Main video"},
+		{Value: "Group label with id 0"},
+		{Id: 2, Value: "Group without labels"},
+	}
+	boxes := lablBoxes(labels, groupLabels)
+	require.Equal(t, []*mp4.LablBox{
+		{LabelID: 1, Language: "sv-SE", Label: "Huvudvideo"},
+		{Label: "No group"},
+		{Flags: mp4.LablIsGroupLabelFlag, LabelID: 1, Language: "en", Label: "Main video"},
+	}, boxes)
+}
+
+func TestSetRawInitPropsLabels(t *testing.T) {
+	rawInit, err := os.ReadFile("testdata/assets/testpic_2s/V300/init.mp4")
+	require.NoError(t, err)
+	rd := cmafRepData{
+		bandWidth: 300000,
+		roles:     []*mpd.DescriptorType{{SchemeIdUri: "urn:mpeg:dash:role:2011", Value: "main"}},
+		labels:    []*mpd.LabelType{{Id: 1, Lang: "sv-SE", Value: "Huvudvideo"}},
+		groupLabels: []*mpd.LabelType{
+			{Id: 1, Lang: "en", Value: "Main video"},
+		},
+	}
+	outInit, err := setRawInitProps(rawInit, rd, 0)
+	require.NoError(t, err)
+	trak := decodeInit(t, outInit).Moov.Trak
+	require.NotNil(t, trak.Udta)
+	require.Len(t, trak.Udta.Children, 3, "one kind and two labl boxes")
+	kind, ok := trak.Udta.Children[0].(*mp4.KindBox)
+	require.True(t, ok)
+	require.Equal(t, "main", kind.Value)
+	require.Len(t, trak.Udta.Labls, 2)
+	require.Equal(t, "Huvudvideo", trak.Udta.Labls[0].Label)
+	group := trak.Udta.GroupLabl(1)
+	require.NotNil(t, group)
+	require.Equal(t, "Main video", group.Label)
+
+	// Labels from the MPD replace those already in the init segment, in its only udta box.
+	rd = cmafRepData{bandWidth: 300000, labels: []*mpd.LabelType{{Lang: "en", Value: "Video"}}}
+	outInit, err = setRawInitProps(outInit, rd, 0)
+	require.NoError(t, err)
+	trak = decodeInit(t, outInit).Moov.Trak
+	nrUdta := 0
+	for _, c := range trak.Children {
+		if _, ok := c.(*mp4.UdtaBox); ok {
+			nrUdta++
+		}
+	}
+	require.Equal(t, 1, nrUdta)
+	require.Len(t, trak.Udta.Children, 2, "kind box kept, labl boxes replaced")
+	require.Len(t, trak.Udta.Labls, 1)
+	require.Equal(t, "Video", trak.Udta.Labls[0].Label)
+	require.False(t, trak.Udta.Labls[0].IsGroupLabel())
+}
+
+func decodeInit(t *testing.T, rawInit []byte) *mp4.InitSegment {
+	t.Helper()
+	f, err := mp4.DecodeFileSR(bits.NewFixedSliceReader(rawInit))
+	require.NoError(t, err)
+	require.NotNil(t, f.Init)
+	return f.Init
 }

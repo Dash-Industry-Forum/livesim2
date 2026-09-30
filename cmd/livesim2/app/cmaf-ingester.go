@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"path"
+	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -148,6 +150,7 @@ func (cm *cmafIngesterMgr) NewCmafIngester(req CmafIngesterSetup) (nr uint64, er
 			if err != nil {
 				return 0, fmt.Errorf("error getting CMAF extension: %w", err)
 			}
+			labels, groupLabels := repLabels(r)
 			rd := cmafRepData{
 				repID:        r.Id,
 				contentType:  string(contentType),
@@ -157,6 +160,8 @@ func (cm *cmafIngesterMgr) NewCmafIngester(req CmafIngesterSetup) (nr uint64, er
 				mediaPattern: replaceIdentifiers(r, segTmpl.Media),
 				bandWidth:    r.Bandwidth,
 				roles:        r.Parent().Roles,
+				labels:       labels,
+				groupLabels:  groupLabels,
 			}
 			repsData = append(repsData, rd)
 		}
@@ -209,6 +214,8 @@ type cmafRepData struct {
 	extension    string
 	bandWidth    uint32
 	roles        []*m.DescriptorType
+	labels       []*m.LabelType
+	groupLabels  []*m.LabelType
 }
 
 // start starts the main ingest loop for sending init and media packets.
@@ -781,16 +788,77 @@ func setInitProps(initSeg *mp4.InitSegment, rd cmafRepData, startTimeS int64) {
 			sampleEntry.AddChild(&mp4.BtrtBox{BufferSizeDB: 0, MaxBitrate: rd.bandWidth, AvgBitrate: rd.bandWidth})
 		}
 	}
-	if len(rd.roles) > 0 {
-		udta := mp4.UdtaBox{}
-		for _, role := range rd.roles {
-			kind := mp4.KindBox{}
-			kind.SchemeURI = "urn:mpeg:dash:role:2011"
-			kind.Value = role.Value
-			udta.AddChild(&kind)
-		}
-		trak.AddChild(&udta)
+	labls := lablBoxes(rd.labels, rd.groupLabels)
+	if len(rd.roles) == 0 && len(labls) == 0 {
+		return
 	}
+	udta := trak.Udta
+	if udta == nil {
+		udta = &mp4.UdtaBox{}
+		trak.AddChild(udta)
+	}
+	for _, role := range rd.roles {
+		kind := mp4.KindBox{}
+		kind.SchemeURI = "urn:mpeg:dash:role:2011"
+		kind.Value = role.Value
+		udta.AddChild(&kind)
+	}
+	if len(labls) > 0 {
+		// The MPD labels replace any labels already in the VoD init segment.
+		udta.Children = slices.DeleteFunc(udta.Children, func(b mp4.Box) bool {
+			_, isLabl := b.(*mp4.LablBox)
+			return isLabl
+		})
+		udta.Labls = nil
+		for _, labl := range labls {
+			udta.AddChild(labl)
+		}
+	}
+}
+
+// repLabels returns the Labels of a Representation, or those of its Adaptation Set
+// if it has none, and the GroupLabels of the Representation, Adaptation Set and Period.
+func repLabels(r *m.RepresentationType) (labels, groupLabels []*m.LabelType) {
+	labels = r.Labels
+	groupLabels = slices.Clone(r.GroupLabels)
+	a := r.Parent()
+	if len(labels) == 0 {
+		labels = a.Labels
+	}
+	groupLabels = append(groupLabels, a.GroupLabels...)
+	if p := a.Parent(); p != nil {
+		groupLabels = append(groupLabels, p.GroupLabels...)
+	}
+	return labels, groupLabels
+}
+
+// lablBoxes returns the labl boxes that signal the labels of a track in DASH-IF ingest.
+// Every Label becomes a labl box, and a GroupLabel becomes a labl box with the
+// is_group_label flag if one of the Labels belongs to its label group.
+// label_id has 16 bits, so a Label with a larger @id is left out, and label_id zero
+// means no label group, so a GroupLabel with @id zero is left out.
+func lablBoxes(labels, groupLabels []*m.LabelType) []*mp4.LablBox {
+	var boxes []*mp4.LablBox
+	labelIDs := make(map[uint32]bool)
+	for _, l := range labels {
+		if l.Id > math.MaxUint16 {
+			continue
+		}
+		labelIDs[l.Id] = true
+		boxes = append(boxes, &mp4.LablBox{LabelID: uint16(l.Id), Language: l.Lang, Label: l.Value})
+	}
+	for _, gl := range groupLabels {
+		if gl.Id == 0 || !labelIDs[gl.Id] {
+			continue
+		}
+		boxes = append(boxes, &mp4.LablBox{
+			Flags:    mp4.LablIsGroupLabelFlag,
+			LabelID:  uint16(gl.Id),
+			Language: gl.Lang,
+			Label:    gl.Value,
+		})
+	}
+	return boxes
 }
 
 func setRawInitProps(rawInit []byte, rd cmafRepData, startTimeS int64) (newRawInit []byte, err error) {
