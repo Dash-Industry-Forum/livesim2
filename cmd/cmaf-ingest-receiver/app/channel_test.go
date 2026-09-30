@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	m "github.com/Eyevinn/dash-mpd/mpd"
@@ -119,4 +120,97 @@ func TestGetLang(t *testing.T) {
 		gotLang := getLang(&mdia)
 		assert.Equal(t, c.expected, gotLang)
 	}
+}
+
+func TestLabelsFromInit(t *testing.T) {
+	videoData, err := os.ReadFile("testdata/video/init.cmfv")
+	assert.NoError(t, err)
+	labeledInit := func() *mp4.InitSegment {
+		decFile, err := mp4.DecodeFileSR(bits.NewFixedSliceReader(videoData))
+		assert.NoError(t, err)
+		udta := &mp4.UdtaBox{}
+		udta.AddChild(&mp4.LablBox{Flags: mp4.LablIsGroupLabelFlag, LabelID: 1, Language: "en", Label: "Main video"})
+		udta.AddChild(&mp4.LablBox{LabelID: 1, Language: "sv-SE", Label: "Huvudvideo"})
+		decFile.Init.Moov.Trak.AddChild(udta)
+		return decFile.Init
+	}
+	chName, chDir := "testpic", "testdir/testpic"
+
+	chCfg := ChannelConfig{Name: chName, TimeShiftBufferDepthS: 60}
+	ch := newChannel(context.TODO(), chCfg, chDir)
+	for _, trName := range []string{"video", "video2"} {
+		strm := stream{chName: chName, chDir: chDir, trName: trName, ext: "cmfv", mediaType: "video"}
+		err = ch.addInitDataAndUpdateTimescale(strm, labeledInit())
+		assert.NoError(t, err)
+	}
+	asSet := ch.mpd.Periods[0].AdaptationSets[0]
+	assert.Equal(t, 2, len(asSet.Representations))
+	assert.Equal(t, []*m.LabelType{{Id: 1, Lang: "en", Value: "Main video"}}, asSet.GroupLabels,
+		"one group label for both representations")
+	for _, rep := range asSet.Representations {
+		assert.Equal(t, []*m.LabelType{{Id: 1, Lang: "sv-SE", Value: "Huvudvideo"}}, rep.Labels)
+	}
+	mpdOut, err := ch.mpd.WriteToString("", false)
+	assert.NoError(t, err)
+	assert.Contains(t, mpdOut, `<GroupLabel id="1" lang="en">Main video</GroupLabel>`)
+	assert.Contains(t, mpdOut, `<Label id="1" lang="sv-SE">Huvudvideo</Label>`)
+
+	// A configured displayName replaces the labels of the track.
+	chCfg.Reps = []RepresentationConfig{{Name: "video", DisplayName: "Configured name"}}
+	ch = newChannel(context.TODO(), chCfg, chDir)
+	strm := stream{chName: chName, chDir: chDir, trName: "video", ext: "cmfv", mediaType: "video"}
+	err = ch.addInitDataAndUpdateTimescale(strm, labeledInit())
+	assert.NoError(t, err)
+	asSet = ch.mpd.Periods[0].AdaptationSets[0]
+	assert.Nil(t, asSet.GroupLabels)
+	assert.Equal(t, []*m.LabelType{{Value: "Configured name"}}, asSet.Representations[0].Labels)
+}
+
+func TestGroupLabelPlacement(t *testing.T) {
+	videoData, err := os.ReadFile("testdata/video/init.cmfv")
+	assert.NoError(t, err)
+	chName, chDir := "testpic", "testdir/testpic"
+	chCfg := ChannelConfig{
+		Name:                  chName,
+		TimeShiftBufferDepthS: 60,
+		// Different languages put the tracks in different Adaptation Sets.
+		Reps: []RepresentationConfig{{Name: "en", Language: "en"}, {Name: "sv", Language: "sv"}, {Name: "sv2", Language: "sv"}},
+	}
+	ch := newChannel(context.TODO(), chCfg, chDir)
+	addTrack := func(trName string, labls ...*mp4.LablBox) {
+		t.Helper()
+		decFile, err := mp4.DecodeFileSR(bits.NewFixedSliceReader(videoData))
+		assert.NoError(t, err)
+		udta := &mp4.UdtaBox{}
+		for _, labl := range labls {
+			udta.AddChild(labl)
+		}
+		decFile.Init.Moov.Trak.AddChild(udta)
+		strm := stream{chName: chName, chDir: chDir, trName: trName, ext: "cmfv", mediaType: "video"}
+		assert.NoError(t, ch.addInitDataAndUpdateTimescale(strm, decFile.Init))
+	}
+	langGroup := func() *mp4.LablBox {
+		return &mp4.LablBox{Flags: mp4.LablIsGroupLabelFlag, LabelID: 1, Label: "Language"}
+	}
+	p := ch.mpd.Periods[0]
+
+	addTrack("en", langGroup(), &mp4.LablBox{LabelID: 1, Language: "en", Label: "English"},
+		&mp4.LablBox{Flags: mp4.LablIsGroupLabelFlag, LabelID: 2, Language: "en", Label: "Main video"},
+		&mp4.LablBox{LabelID: 2, Language: "sv", Label: "Huvudvideo"})
+	assert.Empty(t, p.GroupLabels)
+	assert.Equal(t, []*m.LabelType{{Id: 1, Value: "Language"}, {Id: 2, Lang: "en", Value: "Main video"}},
+		p.AdaptationSets[0].GroupLabels, "all labels in one Adaptation Set")
+
+	addTrack("sv", langGroup(), &mp4.LablBox{LabelID: 1, Language: "sv", Label: "Svenska"})
+	addTrack("sv2", langGroup(), &mp4.LablBox{LabelID: 1, Language: "sv", Label: "Svenska HD"})
+	assert.Equal(t, 2, len(p.AdaptationSets))
+	assert.Equal(t, []*m.LabelType{{Id: 1, Value: "Language"}}, p.GroupLabels,
+		"group 1 spans two Adaptation Sets")
+	assert.Equal(t, []*m.LabelType{{Id: 2, Lang: "en", Value: "Main video"}}, p.AdaptationSets[0].GroupLabels)
+	assert.Empty(t, p.AdaptationSets[1].GroupLabels)
+
+	mpdOut, err := ch.mpd.WriteToString("", false)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(mpdOut, `<GroupLabel id="1">Language</GroupLabel>`))
+	assert.Equal(t, 1, strings.Count(mpdOut, `<GroupLabel id="2" lang="en">Main video</GroupLabel>`))
 }

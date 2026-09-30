@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -266,6 +267,8 @@ func (ch *channel) addInitDataAndUpdateTimescale(stream stream, init *mp4.InitSe
 
 	if displayName != "" {
 		rep.Labels = append(rep.Labels, &m.LabelType{Value: displayName})
+	} else if trak.Udta != nil {
+		addLabels(p, currAsSet, rep, trak.Udta.Labls)
 	}
 
 	switch stream.mediaType {
@@ -572,6 +575,90 @@ func (ch *channel) deriveAndSetFrameRates(log *slog.Logger) {
 
 func (ch *channel) isShifted() bool {
 	return ch.masterSeqNrShift != 0 || ch.masterTimeShift != 0
+}
+
+// addLabels maps the labl boxes of a track to Label elements of its Representation.
+// A group label summarizes all labels with its label_id, so it becomes a GroupLabel
+// one level up, see placeGroupLabels. label_id 0 means no label group, so a group
+// label with label_id 0 is left out.
+func addLabels(p *m.Period, asSet *m.AdaptationSetType, rep *m.RepresentationType, labls []*mp4.LablBox) {
+	var ids []uint32
+	var groupLabels []*m.LabelType
+	for _, labl := range labls {
+		label := &m.LabelType{Id: uint32(labl.LabelID), Lang: labl.Language, Value: labl.Label}
+		if labl.LabelID != 0 && !slices.Contains(ids, label.Id) {
+			ids = append(ids, label.Id)
+		}
+		switch {
+		case !labl.IsGroupLabel():
+			rep.Labels = append(rep.Labels, label)
+		case labl.LabelID != 0:
+			groupLabels = append(groupLabels, label)
+		}
+	}
+	for _, id := range ids {
+		placeGroupLabels(p, asSet, id, groupLabels)
+	}
+}
+
+// placeGroupLabels puts the GroupLabels of label group id, those already in the Period
+// and the added ones, on the Adaptation Set that holds the Labels of the group,
+// or on the Period if the Labels are spread over more than one Adaptation Set.
+// Without any Labels of the group, they go to asSet.
+// Tracks are only added, so a group that has moved to the Period stays there.
+func placeGroupLabels(p *m.Period, asSet *m.AdaptationSetType, id uint32, added []*m.LabelType) {
+	var groupLabels []*m.LabelType
+	inGroup := func(l *m.LabelType) bool { return l.Id == id }
+	collect := func(labels []*m.LabelType) []*m.LabelType {
+		for _, l := range labels {
+			if inGroup(l) {
+				groupLabels = appendNewLabel(groupLabels, l)
+			}
+		}
+		return slices.DeleteFunc(labels, inGroup)
+	}
+	p.GroupLabels = collect(p.GroupLabels)
+	var withLabels []*m.AdaptationSetType
+	for _, as := range p.AdaptationSets {
+		as.GroupLabels = collect(as.GroupLabels)
+		if hasLabel(as, id) {
+			withLabels = append(withLabels, as)
+		}
+	}
+	for _, l := range added {
+		if inGroup(l) {
+			groupLabels = appendNewLabel(groupLabels, l)
+		}
+	}
+	switch len(withLabels) {
+	case 0:
+		asSet.GroupLabels = append(asSet.GroupLabels, groupLabels...)
+	case 1:
+		withLabels[0].GroupLabels = append(withLabels[0].GroupLabels, groupLabels...)
+	default:
+		p.GroupLabels = append(p.GroupLabels, groupLabels...)
+	}
+}
+
+// hasLabel returns true if the Adaptation Set or one of its Representations has a Label with id.
+func hasLabel(as *m.AdaptationSetType, id uint32) bool {
+	isID := func(l *m.LabelType) bool { return l.Id == id }
+	if slices.ContainsFunc(as.Labels, isID) {
+		return true
+	}
+	return slices.ContainsFunc(as.Representations, func(r *m.RepresentationType) bool {
+		return slices.ContainsFunc(r.Labels, isID)
+	})
+}
+
+// appendNewLabel appends label unless labels already has one with the same id, language and text.
+func appendNewLabel(labels []*m.LabelType, label *m.LabelType) []*m.LabelType {
+	if slices.ContainsFunc(labels, func(l *m.LabelType) bool {
+		return l.Id == label.Id && l.Lang == label.Lang && l.Value == label.Value
+	}) {
+		return labels
+	}
+	return append(labels, label)
 }
 
 func getLang(mdia *mp4.MdiaBox) string {

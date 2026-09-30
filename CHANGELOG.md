@@ -68,9 +68,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The periodic break schedule of `sgai_`, `svta_` and `scte35_` takes in-cycle offsets: `p60:10@10,40`.
 - `scte35_` can be combined with `sgai_` and `svta_` when they use the same break schedule.
 - `scte35_` breaks show the AD BREAK slate (`slate=0` turns it off), and `pre=<s>` counts down to each break.
+- CMAF ingest carries track labels in `labl` boxes: the livesim2 ingester writes the MPD `Label` and `GroupLabel`,
+  and `cmaf-ingest-receiver` maps them back unless `displayName` is configured.
 
 ### Fixed
 
+- The livesim2 CMAF ingester no longer adds a second `udta` box to an init segment that already has one.
 - A livesim2 built from a Windows checkout served its XML templates, such as TTML subtitles, with CRLF line endings.
 - The generated subtitle AdaptationSets could share an `id`. `addTimeSubs` is called once per
   format and numbered from a fixed base each time, so `timesubsstpp_en` and `timesubswvtt_sv`
@@ -101,7 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - mp4ff dependency bumped to v0.57.0, the first release with the paint-model sample entries and boxes.
-- dash-mpd dependency bumped to v0.18.0.
+- dash-mpd dependency bumped to v0.18.1, which reads and writes `GroupLabel` elements correctly.
 - `scte35_1|2|3` are now shorthands for `p60:20@10`, `p60:10@10,40` and `p60:10@10,36,46`, anchored to the
   wall clock instead of the availabilityStartTime. With `sgai_` or `svta_` they need that same schedule.
 - The fixed breaks of `sgai_`, `svta_` and `scte35_` must be listed in time order and must not overlap.
