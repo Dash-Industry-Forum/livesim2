@@ -57,7 +57,7 @@ func parseOptions() *app.Options {
 
 	flag.Parse()
 	if o.Version {
-		fmt.Printf("dashfetcher: %s\n", internal.GetVersion())
+		fmt.Printf("dashfetcher: %s\n", internal.Version())
 		os.Exit(0)
 	}
 
@@ -97,7 +97,7 @@ func main() {
 		slog.Info("automatic output dir for MPD", "output dir", o.OutDir)
 	}
 
-	slog.Info("starting", "version", internal.GetVersion())
+	slog.Info("starting", "version", internal.Version())
 	err = app.Fetch(o)
 	if err != nil {
 		slog.Error(err.Error())

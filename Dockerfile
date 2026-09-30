@@ -13,11 +13,9 @@ RUN apk add git
 WORKDIR /work
 COPY . .
 RUN go mod download
-ARG COMMIT_DATE
-RUN COMMIT_DATE=$(git log -1 --format=%ct)
-ARG VERSION
-RUN VERSION=$(git describe --tags HEAD)
-RUN go build  -ldflags "-X github.com/Dash-Industry-Forum/livesim2/internal.commitVersion=$VERSION -X github.com/Dash-Industry-Forum/livesim2/internal.commitDate=$COMMIT_DATE" -o ./out/livesim2 ./cmd/livesim2/main.go
+# .git is part of the build context, and git is installed, so Go embeds the
+# version from the git tag and commit (see internal/buildinfo.go).
+RUN go build -o ./out/livesim2 ./cmd/livesim2
 # Deploy Stage
 FROM alpine:latest
 WORKDIR /

@@ -130,7 +130,7 @@ func ParseOptions() (*Options, error) {
 
 func Run(opts *Options) error {
 	if opts.version {
-		internal.PrintVersion()
+		fmt.Println(internal.Version())
 		return nil
 	}
 	err := logging.InitSlog(opts.logLevel, opts.logFormat)

@@ -116,7 +116,7 @@ func SetupServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 		cfg.DrmCfg = drmCfg
 	}
 
-	logger.Info("livesim2 starting", "version", internal.GetVersion(), "port", cfg.Port)
+	logger.Info("livesim2 starting", "version", internal.Version(), "port", cfg.Port)
 	server.cmafMgr.Start()
 	return &server, nil
 }

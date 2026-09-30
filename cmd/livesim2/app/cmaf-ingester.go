@@ -515,7 +515,7 @@ func setReqHeaders(req *http.Request, contentType, user, password string) {
 		slog.Warn("unknown content type", "type", contentType)
 	}
 	req.Header.Set("DASH-IF-Ingest", CMAFIngestVersion)
-	req.Header.Set("DASH-IF-livesim2", internal.GetVersion())
+	req.Header.Set("DASH-IF-livesim2", internal.Version())
 }
 
 // sendMediaSegments sends all media segments for all representations. isLast triggers lmsg insertion.
