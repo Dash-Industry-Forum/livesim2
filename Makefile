@@ -23,12 +23,15 @@ templ-check:
 prepare:
 	go mod tidy
 
+# Binaries are built as packages, not as main.go files, so that they carry
+# the version Go embeds from the git tag and commit (see internal/buildinfo.go).
+.PHONY: livesim2 dashfetcher cmaf-ingest-receiver
 livesim2 dashfetcher cmaf-ingest-receiver:
-	go build -ldflags "-X github.com/Dash-Industry-Forum/livesim2/internal.commitVersion=$$(git describe --tags HEAD) -X github.com/Dash-Industry-Forum/livesim2/internal.commitDate=$$(git log -1 --format=%ct)" -o out/$@ ./cmd/$@/main.go
+	go build -o out/$@ ./cmd/$@
 
 forlinux: prepare
-	GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/Dash-Industry-Forum/livesim2/internal.commitVersion=$$(git describe --tags HEAD) -X github.com/Dash-Industry-Forum/livesim2/internal.commitDate=$$(git log -1 --format=%ct)" -o out-linux/livesim2 ./cmd/livesim2/main.go
-	GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/Dash-Industry-Forum/livesim2/internal.commitVersion=$$(git describe --tags HEAD) -X github.com/Dash-Industry-Forum/livesim2/internal.commitDate=$$(git log -1 --format=%ct)" -o out-linux/dashfetcher ./cmd/dashfetcher/main.go
+	GOOS=linux GOARCH=amd64 go build -o out-linux/livesim2 ./cmd/livesim2
+	GOOS=linux GOARCH=amd64 go build -o out-linux/dashfetcher ./cmd/dashfetcher
 
 .PHONY: test
 test: prepare templ

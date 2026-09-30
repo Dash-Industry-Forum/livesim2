@@ -103,6 +103,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The version shown by `--version`, `/version` and the `DASH-IF-livesim2` header is the one Go embeds from the git tag
+  and commit, also in the Docker image; `internal/version.go` and the Makefile `-ldflags` are gone.
 - mp4ff dependency bumped to v0.57.0, the first release with the paint-model sample entries and boxes.
 - dash-mpd dependency bumped to v0.18.1, which reads and writes `GroupLabel` elements correctly.
 - `scte35_1|2|3` are now shorthands for `p60:20@10`, `p60:10@10,40` and `p60:10@10,36,46`, anchored to the

@@ -20,7 +20,7 @@ type welcomeInfo struct {
 // indexHandlerFunc handles access to /.
 func (s *Server) indexHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
-	wi := welcomeInfo{Host: fullHost(s.Cfg.Host, r), Version: internal.GetVersion()}
+	wi := welcomeInfo{Host: fullHost(s.Cfg.Host, r), Version: internal.Version()}
 	if err := welcomePage(wi).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -44,5 +44,5 @@ func (s *Server) optionsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) versionHandlerFunc(w http.ResponseWriter, r *http.Request) {
-	s.jsonResponse(w, struct{ Version string }{Version: internal.GetVersion()}, http.StatusOK)
+	s.jsonResponse(w, struct{ Version string }{Version: internal.Version()}, http.StatusOK)
 }

@@ -56,5 +56,5 @@ func TestIndexPageWithoutHostAndVersion(t *testing.T) {
 	resp, body = testFullRequest(t, ts, "GET", "/version", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	bodyStr := string(body)
-	require.Equal(t, fmt.Sprintf("{\"Version\":\"%s\"}", internal.GetVersion()), bodyStr)
+	require.Equal(t, fmt.Sprintf("{\"Version\":\"%s\"}", internal.Version()), bodyStr)
 }
