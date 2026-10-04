@@ -5,7 +5,6 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -15,7 +14,6 @@ import (
 	"net/http"
 	"path"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"text/template"
@@ -457,7 +455,6 @@ func writeLiveSegment(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConf
 	if err != nil {
 		return fmt.Errorf("convertToLive: %w", err)
 	}
-	var data []byte
 	if outSeg.seg != nil {
 		if cfg.DRM != "" {
 			frags := outSeg.seg.Fragments
@@ -466,31 +463,22 @@ func writeLiveSegment(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConf
 				return fmt.Errorf("encryptFrags: %w", err)
 			}
 		}
-		sw := bits.NewFixedSliceWriter(int(outSeg.seg.Size()))
-		err = outSeg.seg.EncodeSW(sw)
-		if err != nil {
+		w.Header().Set("Content-Length", strconv.FormatUint(outSeg.seg.Size(), 10))
+		w.Header().Set("Content-Type", outSeg.meta.rep.SegmentType())
+		// Encode writes the sample data straight from the segment buffer, without copying it.
+		if err := outSeg.seg.Encode(w); err != nil {
 			log.Error("write live segment response", "error", err)
 			return err
 		}
-		data = sw.Bytes()
-	} else {
-		data = outSeg.data
+		return nil
 	}
+	data := outSeg.data
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 	w.Header().Set("Content-Type", outSeg.meta.rep.SegmentType())
-	nrWritten := 0
-	for {
-		n, err := w.Write(data[nrWritten:])
-		if err != nil {
-			log.Error("write live segment response", "error", err)
-			return err
-		}
-		nrWritten += n
-		if nrWritten == len(data) {
-			break
-		}
+	if _, err := w.Write(data); err != nil {
+		log.Error("write live segment response", "error", err)
+		return err
 	}
-
 	return nil
 }
 
@@ -993,22 +981,10 @@ func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta,
 }
 
 // addChunkSamples adds samples to the chunk fragment frag without copying their data.
-// The samples of a chunk are adjacent in the segment's mdat unless they come from
-// several fragments, so AddFullSamples normally adds them as a single data part. That
-// part becomes the mdat Data, which is what the encryptor and GetFullSamples read.
 // The segment data is read for each request, so the chunk may share it and encryption
-// may change it in place, as it does for an unchunked segment. Clipping the capacity
-// keeps a later AddSampleData from writing into the rest of the segment.
+// may change it in place, as it does for an unchunked segment.
 func addChunkSamples(frag *mp4.Fragment, samples []mp4.FullSample) {
 	frag.AddFullSamples(samples)
-	mdat := frag.Mdat
-	switch len(mdat.DataParts) {
-	case 0:
-	case 1:
-		mdat.SetData(slices.Clip(mdat.DataParts[0]))
-	default:
-		mdat.SetData(bytes.Join(mdat.DataParts, nil))
-	}
 }
 
 func writeChunk(w http.ResponseWriter, chk chunk) error {

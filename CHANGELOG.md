@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Nothing yet
+### Changed
+
+- mp4ff dependency bumped to v0.58.0, which encrypts (most of all cbcs) and decodes segments with far fewer allocations.
+- Live segments are written straight to the response, and audio, chunked and `timecc608_` segments share or
+  build their sample data without extra copies, cutting allocated bytes per segment by 20-67% and time by up to 40%.
 
 ## [1.14.0] - 2026-09-30
 

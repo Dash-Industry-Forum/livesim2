@@ -301,7 +301,7 @@ func TestWriteChunkedSegment(t *testing.T) {
 }
 
 // TestChunkSegmentAcrossFragments checks that a chunk with samples from two fragments of
-// a segment gets their data as one contiguous mdat payload, which the encryptor needs.
+// a segment gets their data in order, both as samples and as the encoded mdat payload.
 func TestChunkSegmentAcrossFragments(t *testing.T) {
 	init := mp4.CreateEmptyInit()
 	init.AddEmptyTrack(1000, "video", "und")
@@ -334,14 +334,18 @@ func TestChunkSegmentAcrossFragments(t *testing.T) {
 	wantDur := []uint64{400, 200}
 	wantTime := []uint64{5000, 5400}
 	for i, chk := range chunks {
-		mdat := chk.frag.Mdat
-		require.Empty(t, mdat.DataParts, "chunk %d", i)
-		require.Equal(t, wantData[i], mdat.Data, "chunk %d", i)
+		require.Equal(t, wantData[i], chk.frag.Mdat.Payload(), "chunk %d", i)
+		var out bytes.Buffer
+		require.NoError(t, chk.frag.Encode(&out))
+		require.Equal(t, wantData[i], out.Bytes()[out.Len()-len(wantData[i]):], "chunk %d", i)
 		require.Equal(t, wantDur[i], chk.dur, "chunk %d", i)
 		require.Equal(t, wantTime[i], chk.frag.Moof.Traf.Tfdt.BaseMediaDecodeTime(), "chunk %d", i)
 		fss, err := chk.frag.GetFullSamples(init.Moov.Mvex.Trex)
 		require.NoError(t, err)
 		require.Len(t, fss, len(wantData[i])/2)
+		for j, fs := range fss {
+			require.Equal(t, wantData[i][2*j:2*j+2], fs.Data, "chunk %d sample %d", i, j)
+		}
 	}
 
 	// Only the requested chunk is returned.
@@ -349,7 +353,7 @@ func TestChunkSegmentAcrossFragments(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, chunks, 1)
 	require.Nil(t, chunks[0].styp)
-	require.Equal(t, wantData[1], chunks[0].frag.Mdat.Data)
+	require.Equal(t, wantData[1], chunks[0].frag.Mdat.Payload())
 }
 
 func TestAvailabilityTime(t *testing.T) {

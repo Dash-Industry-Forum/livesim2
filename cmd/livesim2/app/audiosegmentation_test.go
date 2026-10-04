@@ -3,7 +3,9 @@ package app
 import (
 	"testing"
 
+	"github.com/Eyevinn/mp4ff/mp4"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCalculateAudioSegRecipe(t *testing.T) {
@@ -59,4 +61,19 @@ func TestCalculateAudioSegRecipe(t *testing.T) {
 		gotRecipe := calcAudioSegRecipe(c.refNr, c.refStart, c.refEnd, c.refTotDur, c.refTimescale, &c.audioRep)
 		assert.Equal(t, c.wantedAudioRecipe, gotRecipe, "recipeMismatch %s", c.desc)
 	}
+}
+
+// TestAppendFillSamples checks that each fill sample has its own copy of the data, so
+// that in-place encryption does not encrypt the same bytes twice.
+func TestAppendFillSamples(t *testing.T) {
+	last := mp4.FullSample{Sample: mp4.Sample{Dur: 1024, Size: 2}, Data: []byte{1, 2}}
+	fss := appendFillSamples([]mp4.FullSample{last}, last, 2)
+	require.Len(t, fss, 3)
+	for i := range fss {
+		require.Equal(t, last.Sample, fss[i].Sample)
+		require.Equal(t, []byte{1, 2}, fss[i].Data)
+	}
+	fss[1].Data[0] = 9
+	fss[2].Data[0] = 8
+	require.Equal(t, []byte{1, 2}, last.Data, "the fills do not share the data of the sample")
 }
