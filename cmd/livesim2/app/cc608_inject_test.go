@@ -150,24 +150,31 @@ func TestCC608CodecFor(t *testing.T) {
 	}
 }
 
-// TestSpliceSEIBeforeVCL checks the SEI lands just before the first VCL NALU,
-// after any SPS/PPS.
-func TestSpliceSEIBeforeVCL(t *testing.T) {
-	sps := []byte{0x67, 0x42, 0x00}       // AVC SPS (type 7)
-	pps := []byte{0x68, 0xce, 0x3c}       // AVC PPS (type 8)
-	idr := []byte{0x65, 0x88, 0x80, 0x00} // AVC IDR slice (type 5, VCL)
-	sample := avccSample(sps, pps, idr)
+// TestAppendSEIBeforeVCL checks the SEI lands just before the first VCL NALU,
+// after any SPS/PPS, or at the end without a VCL NALU, and that the sample is
+// appended to what dst already holds.
+func TestAppendSEIBeforeVCL(t *testing.T) {
+	sps := []byte{0x67, 0x42, 0x00}             // AVC SPS (type 7)
+	pps := []byte{0x68, 0xce, 0x3c}             // AVC PPS (type 8)
+	idr := []byte{0x65, 0x88, 0x80, 0x00}       // AVC IDR slice (type 5, VCL)
 	sei := []byte{0x06, 0x04, 0x02, 0xb5, 0x00} // fake SEI NALU (type 6)
 
-	out, err := spliceSEIBeforeVCL(sample, sei, carriage.CodecAVC)
+	prefix := []byte{0xaa, 0xbb}
+	out, err := appendSEIBeforeVCL(prefix, avccSample(sps, pps, idr), sei, carriage.CodecAVC)
 	require.NoError(t, err)
-	nalus, err := avc.GetNalusFromSample(out)
+	require.Equal(t, prefix, out[:len(prefix)])
+	require.Equal(t, avccSample(sps, pps, sei, idr), out[len(prefix):])
+
+	out, err = appendSEIBeforeVCL(nil, avccSample(sps, pps), sei, carriage.CodecAVC)
 	require.NoError(t, err)
-	require.Len(t, nalus, 4)
-	require.Equal(t, avc.NALU_SPS, avc.GetNaluType(nalus[0][0]))
-	require.Equal(t, avc.NALU_PPS, avc.GetNaluType(nalus[1][0]))
-	require.Equal(t, avc.NALU_SEI, avc.GetNaluType(nalus[2][0]))
-	require.True(t, avc.IsVideoNaluType(avc.GetNaluType(nalus[3][0])))
+	require.Equal(t, avccSample(sps, pps, sei), out, "no VCL NALU: SEI at the end")
+
+	bad := avccSample(sps)
+	bad[3]++ // length field one byte past the end
+	_, err = appendSEIBeforeVCL(nil, bad, sei, carriage.CodecAVC)
+	require.Error(t, err)
+	_, err = appendSEIBeforeVCL(nil, []byte{0, 0}, sei, carriage.CodecAVC)
+	require.Error(t, err)
 }
 
 func TestInjectCC608AVC(t *testing.T) {
@@ -212,8 +219,22 @@ func testInjectCC608(t *testing.T, codec carriage.Codec, vclNalu []byte) {
 	uA := generate.Unit{Nr: 42, StartMS: unitAStart, Frames: nFrames}
 	uB := generate.Unit{Nr: 43, StartMS: unitBStart, Frames: nFrames}
 	uC := generate.Unit{Nr: 44, StartMS: unitBStart + 2000, Frames: nFrames}
-	require.NoError(t, injectCC608(unitA, fps, uA, uB, codec, cc608Cfg(t, "CC1-eng-pop")))
-	require.NoError(t, injectCC608(unitB, fps, uB, uC, codec, cc608Cfg(t, "CC1-eng-pop")))
+	payloadA, err := injectCC608(unitA, fps, uA, uB, codec, cc608Cfg(t, "CC1-eng-pop"))
+	require.NoError(t, err)
+	payloadB, err := injectCC608(unitB, fps, uB, uC, codec, cc608Cfg(t, "CC1-eng-pop"))
+	require.NoError(t, err)
+
+	// The payload is the new sample data in decode order.
+	for _, u := range []struct {
+		samples []mp4.FullSample
+		payload []byte
+	}{{unitA, payloadA}, {unitB, payloadB}} {
+		var joined []byte
+		for i := range u.samples {
+			joined = append(joined, u.samples[i].Data...)
+		}
+		require.Equal(t, joined, u.payload)
+	}
 
 	// Every sample gained an SEI NALU placed before the VCL, and Size was updated.
 	for _, samples := range [][]mp4.FullSample{unitA, unitB} {
@@ -269,7 +290,8 @@ func TestInjectCC608SelfContained(t *testing.T) {
 
 	unit := generate.Unit{Nr: 42, StartMS: unitStart, Frames: nFrames}
 	next := generate.Unit{Nr: 43, StartMS: unitStart + 2000}
-	require.NoError(t, injectCC608(samples, fps, unit, next, carriage.CodecAVC, cc608Cfg(t, "CC1-eng-pop-sc")))
+	_, err := injectCC608(samples, fps, unit, next, carriage.CodecAVC, cc608Cfg(t, "CC1-eng-pop-sc"))
+	require.NoError(t, err)
 
 	flips := decodeSamples(t, samples, carriage.CodecAVC)
 	require.Len(t, flips, 2, "both cues are visible from this unit alone")
@@ -309,7 +331,8 @@ func TestInjectCC608FirstCueUnbuilt(t *testing.T) {
 
 	unit := generate.Unit{Nr: 42, StartMS: unitStart, Frames: nFrames}
 	next := generate.Unit{Nr: 43, StartMS: unitStart + 2000}
-	require.NoError(t, injectCC608(samples, fps, unit, next, carriage.CodecAVC, cc608Cfg(t, "CC1-eng-pop")))
+	_, err := injectCC608(samples, fps, unit, next, carriage.CodecAVC, cc608Cfg(t, "CC1-eng-pop"))
+	require.NoError(t, err)
 
 	flips := decodeSamples(t, samples, carriage.CodecAVC)
 	require.Equal(t, []cc608Flip{

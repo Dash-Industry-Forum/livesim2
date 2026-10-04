@@ -5,9 +5,10 @@
 package app
 
 import (
+	"cmp"
 	"encoding/binary"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -134,7 +135,9 @@ func cc608UnitFrames(fps float64, unit, next generate.Unit, cc *CC608Config) ([]
 // injectCC608 splices in-band CTA-608 caption SEI into a unit's video samples in
 // place. It builds the per-frame caption schedule (a UTC clock + the segment number,
 // updated ~every second) with cc608UnitFrames, then inserts the resulting per-frame
-// SEI NALU before the first VCL NALU of each sample, updating Data and Size. samples
+// SEI NALU before the first VCL NALU of each sample, updating Data and Size. The new
+// sample data are written in decode order into one buffer, which is returned as the
+// new mdat payload; each sample's Data is a view into it. samples
 // are the video track's FullSamples in decode order; fps and unit give the caption
 // timing (unit.Frames must be the sample count); next names the unit that follows, whose
 // first cue this unit preloads in pop-on mode; cc selects the caption mode (next is
@@ -147,73 +150,74 @@ func cc608UnitFrames(fps float64, unit, next generate.Unit, cc *CC608Config) ([]
 // a naive frames[i]->samples[i] mapping permutes the CEA-608 byte stream and garbles
 // the caption.
 func injectCC608(samples []mp4.FullSample, fps float64, unit, next generate.Unit,
-	codec carriage.Codec, cc *CC608Config) error {
+	codec carriage.Codec, cc *CC608Config) ([]byte, error) {
 	if len(samples) == 0 {
-		return nil
+		return nil, nil
 	}
 	// cc608UnitFrames validates the frame rate and returns an error (never panics)
 	// if it is out of the CEA-608 range.
 	frames, err := cc608UnitFrames(fps, unit, next, cc)
 	if err != nil {
-		return fmt.Errorf("cc608 build cues: %w", err)
+		return nil, fmt.Errorf("cc608 build cues: %w", err)
 	}
 	if len(frames) != len(samples) {
-		return fmt.Errorf("cc608: got %d frames for %d samples", len(frames), len(samples))
+		return nil, fmt.Errorf("cc608: got %d frames for %d samples", len(frames), len(samples))
 	}
 	// order[k] = decode-order index of the k-th sample in presentation order.
 	order := make([]int, len(samples))
 	for i := range order {
 		order[i] = i
 	}
-	sort.SliceStable(order, func(a, b int) bool {
-		return samples[order[a]].PresentationTime() < samples[order[b]].PresentationTime()
+	slices.SortStableFunc(order, func(a, b int) int {
+		return cmp.Compare(samples[a].PresentationTime(), samples[b].PresentationTime())
 	})
+	seis := make([][]byte, len(samples)) // SEI NALU per sample in decode order
+	size := 0
 	for k, idx := range order {
 		f := frames[k]
-		seiNALU := carriage.FrameSEINALU(f.Field1, f.Field2, f.CCCount, codec)
-		newData, err := spliceSEIBeforeVCL(samples[idx].Data, seiNALU, codec)
-		if err != nil {
-			return fmt.Errorf("cc608 splice sample %d: %w", idx, err)
-		}
-		samples[idx].Data = newData
-		samples[idx].Size = uint32(len(newData))
+		seis[idx] = carriage.FrameSEINALU(f.Field1, f.Field2, f.CCCount, codec)
+		size += len(samples[idx].Data) + 4 + len(seis[idx])
 	}
-	return nil
+	// The payload has room for all samples, so appending never moves the views into it.
+	payload := make([]byte, 0, size)
+	for i := range samples {
+		start := len(payload)
+		payload, err = appendSEIBeforeVCL(payload, samples[i].Data, seis[i], codec)
+		if err != nil {
+			return nil, fmt.Errorf("cc608 splice sample %d: %w", i, err)
+		}
+		samples[i].Data = payload[start:len(payload):len(payload)]
+		samples[i].Size = uint32(len(payload) - start)
+	}
+	return payload, nil
 }
 
-// spliceSEIBeforeVCL returns sampleData (length-prefixed AVCC) with seiNALU
+// appendSEIBeforeVCL appends sampleData (length-prefixed AVCC) to dst with seiNALU
 // inserted — with its own 4-byte length prefix — immediately before the first VCL
 // NALU. If there is no VCL NALU, the SEI is appended at the end. seiNALU is the
 // bare NAL unit from carriage.FrameSEINALU (no length prefix).
-func spliceSEIBeforeVCL(sampleData, seiNALU []byte, codec carriage.Codec) ([]byte, error) {
-	nalus, err := avc.GetNalusFromSample(sampleData) // pure 4-byte-length split, codec-agnostic
-	if err != nil {
-		return nil, err
+func appendSEIBeforeVCL(dst, sampleData, seiNALU []byte, codec carriage.Codec) ([]byte, error) {
+	if len(sampleData) < 4 {
+		return dst, fmt.Errorf("sample of %d bytes has no NALUs", len(sampleData))
 	}
-	insertAt := len(nalus)
-	for i, n := range nalus {
-		if len(n) > 0 && isVCLNalu(n, codec) {
-			insertAt = i
+	insertAt := len(sampleData)
+	for pos := 0; pos+4 < len(sampleData); {
+		start := pos + 4
+		end := uint64(start) + uint64(binary.BigEndian.Uint32(sampleData[pos:start]))
+		if end > uint64(len(sampleData)) {
+			return dst, fmt.Errorf("NALU length %d at byte %d exceeds sample size %d", end-uint64(start), pos,
+				len(sampleData))
+		}
+		if end > uint64(start) && isVCLNalu(sampleData[start:end], codec) {
+			insertAt = pos
 			break
 		}
+		pos = int(end)
 	}
-	ordered := make([][]byte, 0, len(nalus)+1)
-	ordered = append(ordered, nalus[:insertAt]...)
-	ordered = append(ordered, seiNALU)
-	ordered = append(ordered, nalus[insertAt:]...)
-
-	total := 0
-	for _, n := range ordered {
-		total += 4 + len(n)
-	}
-	out := make([]byte, 0, total)
-	var lenBuf [4]byte
-	for _, n := range ordered {
-		binary.BigEndian.PutUint32(lenBuf[:], uint32(len(n)))
-		out = append(out, lenBuf[:]...)
-		out = append(out, n...)
-	}
-	return out, nil
+	dst = append(dst, sampleData[:insertAt]...)
+	dst = binary.BigEndian.AppendUint32(dst, uint32(len(seiNALU)))
+	dst = append(dst, seiNALU...)
+	return append(dst, sampleData[insertAt:]...), nil
 }
 
 // isVCLNalu reports whether a NALU (no length prefix) is a VCL (coded-slice) unit.
@@ -284,10 +288,11 @@ func applyCC608(seg *mp4.MediaSegment, meta segMeta, cfg *ResponseConfig) error 
 		if i == len(seg.Fragments)-1 {
 			next.Nr++
 		}
-		if err := injectCC608(samples, fps, unit, next, codec, cc); err != nil {
+		payload, err := injectCC608(samples, fps, unit, next, codec, cc)
+		if err != nil {
 			return err
 		}
-		if err := writeBackCC608Samples(frag, samples); err != nil {
+		if err := writeBackCC608Samples(frag, samples, payload); err != nil {
 			return err
 		}
 	}
@@ -317,9 +322,9 @@ func cc608FPS(rep *RepData, samples []mp4.FullSample) (float64, error) {
 }
 
 // writeBackCC608Samples writes grown samples back into a fragment: it updates each
-// trun per-sample size and rebuilds the mdat from the samples' data. The samples
-// must already be the injected ones (new, non-aliased Data).
-func writeBackCC608Samples(frag *mp4.Fragment, samples []mp4.FullSample) error {
+// trun per-sample size and makes payload, the samples' data in decode order as
+// injectCC608 returns it, the mdat data.
+func writeBackCC608Samples(frag *mp4.Fragment, samples []mp4.FullSample, payload []byte) error {
 	trun := frag.Moof.Traf.Trun
 	if !trun.HasSampleSize() {
 		return fmt.Errorf("cc608: trun without per-sample sizes is not supported")
@@ -327,15 +332,9 @@ func writeBackCC608Samples(frag *mp4.Fragment, samples []mp4.FullSample) error {
 	if len(trun.Samples) != len(samples) {
 		return fmt.Errorf("cc608: trun has %d samples but got %d", len(trun.Samples), len(samples))
 	}
-	total := 0
 	for i := range samples {
-		total += len(samples[i].Data)
-	}
-	data := make([]byte, 0, total)
-	for i := range samples {
-		data = append(data, samples[i].Data...)
 		trun.Samples[i].Size = samples[i].Size
 	}
-	frag.Mdat.Data = data
+	frag.Mdat.Data = payload
 	return nil
 }

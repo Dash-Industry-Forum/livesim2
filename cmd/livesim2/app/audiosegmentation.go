@@ -182,9 +182,7 @@ func createAudioSeg(vodFS fs.FS, a *asset, rec audioRecipe) (*mp4.MediaSegment, 
 		}
 		outputFullSamples = append(outputFullSamples, fss[itvl.startIdx:itvl.endIdx]...)
 		if itvl.nrFillSamples > 0 { // Repeat last sample to fill up
-			for i := uint32(0); i < itvl.nrFillSamples; i++ {
-				outputFullSamples = append(outputFullSamples, fss[len(fss)-1])
-			}
+			outputFullSamples = appendFillSamples(outputFullSamples, fss[len(fss)-1], itvl.nrFillSamples)
 		}
 	}
 	resetSegmentToNewSamples(seg,
@@ -192,6 +190,18 @@ func createAudioSeg(vodFS fs.FS, a *asset, rec audioRecipe) (*mp4.MediaSegment, 
 		rec.segNr,
 		rec.startTime)
 	return seg, nil
+}
+
+// appendFillSamples appends n repetitions of sample to fss. Each has its own copy of the
+// data, since resetSegmentToNewSamples adds the samples without copying their data, and
+// encryption changes the data in place.
+func appendFillSamples(fss []mp4.FullSample, sample mp4.FullSample, n uint32) []mp4.FullSample {
+	for range n {
+		fill := sample
+		fill.Data = slices.Clone(sample.Data)
+		fss = append(fss, fill)
+	}
+	return fss
 }
 
 func getTrex(initSeg *mp4.InitSegment) *mp4.TrexBox {
@@ -202,20 +212,16 @@ func getTrex(initSeg *mp4.InitSegment) *mp4.TrexBox {
 }
 
 // resetSegmentToNewSamples sets the segment to use one fragment with full samples from fss.
+// The mdat references the sample data instead of copying it, so no two samples may share
+// data, since encryption changes the data in place.
 func resetSegmentToNewSamples(seg *mp4.MediaSegment, fss []mp4.FullSample, seqNr uint32, baseMediaDecodeTime uint64) {
 	seg.Fragments = seg.Fragments[:1]
 	nrNewSamples := len(fss)
 	frag := seg.Fragments[0]
 	trun := frag.Moof.Traf.Trun
 	trun.Samples = make([]mp4.Sample, 0, nrNewSamples)
-	totDataSize := uint32(0)
-	for i := range fss {
-		totDataSize += fss[i].Size
-	}
-	frag.Mdat.Data = make([]byte, 0, totDataSize)
-	for i := range fss {
-		frag.AddFullSample(fss[i])
-	}
+	frag.Mdat.SetData(nil)
+	frag.AddFullSamples(fss)
 	frag.Moof.Mfhd.SequenceNumber = seqNr
 	frag.Moof.Traf.Tfdt.SetBaseMediaDecodeTime(baseMediaDecodeTime)
 	// _  = frag.Moof.Traf.OptimizeTfhdTrun()

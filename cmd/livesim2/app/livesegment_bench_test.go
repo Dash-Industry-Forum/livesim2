@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"io/fs"
 	"log/slog"
+	"net/http"
 	"os"
 	"testing"
 )
@@ -56,6 +57,38 @@ func BenchmarkPrepareChunks(b *testing.B) {
 				}
 			}
 		})
+	}
+}
+
+// discardResponseWriter is an http.ResponseWriter that drops what is written to it.
+type discardResponseWriter struct{ h http.Header }
+
+func (d *discardResponseWriter) Header() http.Header         { return d.h }
+func (d *discardResponseWriter) Write(p []byte) (int, error) { return len(p), nil }
+func (d *discardResponseWriter) WriteHeader(int)             {}
+
+// BenchmarkWriteLiveSegment measures serving an 8s video and audio segment with
+// writeLiveSegment, with and without encryption.
+func BenchmarkWriteLiveSegment(b *testing.B) {
+	vodFS, a := benchAsset(b, "testpic_8s")
+	for _, seg := range []string{"V300/10.m4s", "A48/10.m4s"} {
+		for _, drm := range []string{"", "eccp-cenc", "eccp-cbcs"} {
+			name := drm
+			if name == "" {
+				name = "clear"
+			}
+			b.Run(seg[:1]+"/"+name, func(b *testing.B) {
+				cfg := NewResponseConfig()
+				cfg.DRM = drm
+				w := &discardResponseWriter{h: http.Header{}}
+				b.ReportAllocs()
+				for b.Loop() {
+					if err := writeLiveSegment(benchLog, w, cfg, nil, vodFS, a, seg, 100_000, nil, false); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		}
 	}
 }
 
