@@ -232,6 +232,26 @@ func SegmentHash(seg []byte) ([]byte, error) {
 	return h.Sum(nil), nil
 }
 
+// c2paUUID identifies a uuid box holding a C2PA Manifest Store (C2PA §A.5.1).
+var c2paUUID = []byte{0xd8, 0xfe, 0xc3, 0xd6, 0x1b, 0x0e, 0x48, 0x3c, 0x92, 0x97, 0x58, 0x28, 0x87, 0x7e, 0xc4, 0x81}
+
+// WithoutManifestBox returns data with its top-level C2PA Manifest Store uuid boxes removed.
+// For a signed init segment, that is the init segment before signing.
+func WithoutManifestBox(data []byte) ([]byte, error) {
+	boxes, err := topLevelBoxes(data)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]byte, 0, len(data))
+	for _, b := range boxes {
+		if b.boxType == "uuid" && len(b.data) >= 24 && bytes.Equal(b.data[8:24], c2paUUID) {
+			continue
+		}
+		out = append(out, b.data...)
+	}
+	return out, nil
+}
+
 func isExcludedVSIEmsg(b box) bool {
 	end := uriOffsetInEmsg + len(SchemeIDURI)
 	return b.boxType == "emsg" && len(b.data) >= end &&

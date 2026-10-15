@@ -155,6 +155,9 @@ func (am *assetMgr) loadAsset(logger *slog.Logger, mpdPath string) error {
 			if len(r.Segments) == 0 {
 				return fmt.Errorf("rep %s of type %s has no segments", rep.Id, r.ContentType)
 			}
+			if err := r.loadC2PA(logger, am.vodFS, assetPath); err != nil {
+				logger.Warn("C2PA VSI data not loaded", "rep", r.ID, "err", err.Error())
+			}
 			asset.Reps[r.ID] = r
 			avgSegDurMS := int(math.Round(float64(r.duration()*1000.0)) / float64((r.MediaTimescale * len(r.Segments))))
 			if asset.SegmentDurMS == 0 || avgSegDurMS < asset.SegmentDurMS {
@@ -914,6 +917,7 @@ type RepData struct {
 	initSeg                *mp4.InitSegment `json:"-"`
 	initBytes              []byte           `json:"-"`
 	encData                *repEncData      `json:"-"`
+	c2pa                   *c2paRep         `json:"-"` // pre-signed C2PA VSI init and session key, if any
 }
 
 type repEncData struct {

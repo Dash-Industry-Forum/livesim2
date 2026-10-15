@@ -135,6 +135,7 @@ type ResponseConfig struct {
 	TimeSubsSegNr                bool                 `json:"TimeSubsSegNr,omitempty"`
 	TimeSubsRegion               int                  `json:"TimeSubsRegion,omitempty"`
 	CC608                        *CC608Config         `json:"CC608,omitempty"`
+	C2PAVSI                      bool                 `json:"C2PAVSI,omitempty"`
 	Host                         string               `json:"Host,omitempty"`
 	PatchTTL                     int                  `json:"Patch,omitempty"`
 	DRM                          string               `json:"DRM,omitempty"` // Includes ECCP as eccp-cbcs or eccp-cenc
@@ -449,6 +450,11 @@ cfgLoop:
 			cfg.TimeSubsRegion = sc.Atoi(key, val)
 		case "timecc608": // in-band CTA-608 captions: <channel>-<lang> (e.g. CC1-eng)
 			cfg.CC608 = sc.ParseCC608Config(key, val)
+		case "c2pa": // C2PA live media signing: vsi (Verifiable Segment Info)
+			if val != "vsi" {
+				sc.err = fmt.Errorf("c2pa: unknown method %q (supported: vsi)", val)
+			}
+			cfg.C2PAVSI = true
 		case "statuscode":
 			cfg.SegStatusCodes = sc.ParseSegStatusCodes(key, val)
 		case "traffic":
@@ -534,6 +540,10 @@ func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 		// injection is incompatible with on-the-fly encryption. Pre-encrypted assets
 		// are rejected later, at serve time, when the representation is known.
 		return fmt.Errorf("timecc608 cannot be combined with drm (SEI must be added in the clear)")
+	}
+
+	if err := verifyC2PAConfig(cfg); err != nil {
+		return err
 	}
 
 	if cfg.ChunkDurSSR != "" && cfg.SSRAS == "" {

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Dash-Industry-Forum/livesim2/pkg/c2pavsi"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/drm"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/scte35"
 	m "github.com/Eyevinn/dash-mpd/mpd"
@@ -336,6 +337,21 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 				&m.EventStreamType{
 					SchemeIdUri: scte35.SchemeIDURI,
 					Value:       cfg.SCTE35.Value,
+				})
+		}
+
+		if cfg.C2PAVSI && (as.ContentType == "video" || as.ContentType == "audio") {
+			// Every representation needs a pre-signed init segment and session key.
+			for _, rep := range as.Representations {
+				if rd, ok := a.Reps[rep.Id]; !ok || rd.c2pa == nil {
+					return nil, errC2PAUnavailable
+				}
+			}
+			// Declare the VSI emsg scheme so that players pass the events on.
+			as.InbandEventStreams = append(as.InbandEventStreams,
+				&m.EventStreamType{
+					SchemeIdUri: c2pavsi.SchemeIDURI,
+					Value:       c2pavsi.Value,
 				})
 		}
 
