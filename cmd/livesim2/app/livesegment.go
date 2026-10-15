@@ -396,6 +396,12 @@ func matchInit(segmentPart string, cfg *ResponseConfig, drmCfg *drm.DrmConfig, a
 	for _, rep := range a.Reps {
 		if segmentPart == rep.InitURI {
 			im.init = rep.initBytes
+			if cfg.C2PAVSI && (rep.ContentType == "video" || rep.ContentType == "audio") {
+				if rep.c2pa == nil {
+					return im, errC2PAUnavailable
+				}
+				im.init = rep.c2pa.init
+			}
 			if rep.encData == nil { // pre-encrypted or subtitle track
 				im.isInit = true
 				im.rep = rep
@@ -459,6 +465,19 @@ func writeLiveSegment(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConf
 			}
 		}
 		updateSidx(outSeg.seg, outSeg.meta)
+		if cfg.C2PAVSI && (outSeg.meta.rep.ContentType == "video" || outSeg.meta.rep.ContentType == "audio") {
+			signed, err := signC2PASegment(outSeg.seg, outSeg.meta)
+			if err != nil {
+				return fmt.Errorf("c2pa: %w", err)
+			}
+			w.Header().Set("Content-Length", strconv.Itoa(len(signed)))
+			w.Header().Set("Content-Type", outSeg.meta.rep.SegmentType())
+			if _, err := w.Write(signed); err != nil {
+				log.Error("write live segment response", "error", err)
+				return err
+			}
+			return nil
+		}
 		w.Header().Set("Content-Length", strconv.FormatUint(outSeg.seg.Size(), 10))
 		w.Header().Set("Content-Type", outSeg.meta.rep.SegmentType())
 		// Encode writes the sample data straight from the segment buffer, without copying it.
