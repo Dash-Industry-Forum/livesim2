@@ -121,6 +121,11 @@ func (s *Signer) PublicKey() ed25519.PublicKey {
 	return s.key.Public().(ed25519.PublicKey)
 }
 
+// ManifestID returns the identifier of the init segment manifest that announces the key.
+func (s *Signer) ManifestID() string {
+	return s.manifestID
+}
+
 // SignSegment returns seg with a VSI emsg box inserted after any leading styp, sidx and prft
 // boxes, before the first moof (ISO/IEC 23009-1 and CMAF box order). seqNr is the segment's
 // sequence number, normally its moof/mfhd sequence_number. timescale and duration fill the

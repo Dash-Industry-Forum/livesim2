@@ -341,7 +341,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		}
 
 		if cfg.C2PAVSI && (as.ContentType == "video" || as.ContentType == "audio") {
-			// Every representation needs a pre-signed init segment and session key.
+			// Every representation needs a signed init segment and session key.
 			for _, rep := range as.Representations {
 				if rd, ok := a.Reps[rep.Id]; !ok || rd.c2pa == nil {
 					return nil, errC2PAUnavailable

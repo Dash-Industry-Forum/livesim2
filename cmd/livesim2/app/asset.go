@@ -6,6 +6,7 @@ package app
 
 import (
 	"compress/gzip"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -44,6 +45,7 @@ type assetMgr struct {
 	repDataDir          string
 	writeRepData        bool
 	writeMissingRepData bool
+	c2pa                *c2paCredentials // signs init segments for c2pa_vsi; nil disables it
 }
 
 // findAsset finds the asset by matching the uri with all assets paths.
@@ -155,8 +157,8 @@ func (am *assetMgr) loadAsset(logger *slog.Logger, mpdPath string) error {
 			if len(r.Segments) == 0 {
 				return fmt.Errorf("rep %s of type %s has no segments", rep.Id, r.ContentType)
 			}
-			if err := r.loadC2PA(logger, am.vodFS, assetPath); err != nil {
-				logger.Warn("C2PA VSI data not loaded", "rep", r.ID, "err", err.Error())
+			if err := r.signC2PAInit(context.Background(), logger, am.c2pa, assetPath); err != nil {
+				logger.Warn("C2PA VSI init not signed", "rep", r.ID, "err", err.Error())
 			}
 			asset.Reps[r.ID] = r
 			avgSegDurMS := int(math.Round(float64(r.duration()*1000.0)) / float64((r.MediaTimescale * len(r.Segments))))
@@ -917,7 +919,7 @@ type RepData struct {
 	initSeg                *mp4.InitSegment `json:"-"`
 	initBytes              []byte           `json:"-"`
 	encData                *repEncData      `json:"-"`
-	c2pa                   *c2paRep         `json:"-"` // pre-signed C2PA VSI init and session key, if any
+	c2pa                   *c2paRep         `json:"-"` // C2PA-signed init and VSI session key, if any
 }
 
 type repEncData struct {

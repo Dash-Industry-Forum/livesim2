@@ -6,90 +6,173 @@ package app
 
 import (
 	"bytes"
-	"encoding/hex"
-	"encoding/json"
+	"context"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
-	"path"
+	"math/big"
+	"time"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/c2pavsi"
 	"github.com/Eyevinn/mp4ff/mp4"
+	"github.com/richardwooding/c2pa"
 )
 
 // C2PA Verifiable Segment Info (c2pa_vsi option).
 //
-// A representation can be served with C2PA VSI when its asset has a pre-signed init segment
-// and session key for it under c2pa/<representation id>/:
+// When livesim2 loads an asset, it signs the init segment of each audio and video
+// representation with a C2PA manifest (github.com/richardwooding/c2pa) whose
+// c2pa.session-keys assertion announces a new Ed25519 session key. With c2pa_vsi, livesim2
+// serves that init segment and signs each media segment with the session key.
 //
-//   - init.mp4: the init segment livesim2 serves, signed with a C2PA manifest whose
-//     c2pa.session-keys assertion announces the session key.
-//   - vsi.json: {"manifestId": "...", "kid": "...", "seed": "<hex>"}. That is the manifest's
-//     identifier, and the session key's identifier and 32-byte Ed25519 seed.
-//
-// livesim2 serves that init segment and signs each media segment with the session key.
+// The claim-signing certificate and key come from the c2pacert and c2pakey options. Without
+// them, livesim2 creates a test CA and end-entity certificate at startup, which validators
+// report as untrusted.
 
-// errC2PAUnavailable is returned when c2pa_vsi is requested for media without a pre-signed
-// init segment and session key.
+// errC2PAUnavailable is returned when c2pa_vsi is requested for a representation without a
+// signed init segment and session key.
 var errC2PAUnavailable = errors.New(
-	"c2pa_vsi: no pre-signed C2PA init segment and session key for this representation")
+	"c2pa_vsi: no C2PA-signed init segment and session key for this representation")
 
-const (
-	c2paDir      = "c2pa"
-	c2paInitName = "init.mp4"
-	c2paInfoName = "vsi.json"
-)
+// c2paSessionKeyValidity is the validityPeriod of the session keys livesim2 creates. They
+// are not rotated, so it covers a long-running server.
+const c2paSessionKeyValidity = 365 * 24 * time.Hour
 
-// c2paRep holds a representation's pre-signed init segment and its session key signer.
+// c2paCredentials are the claim signer for init segments and its end-entity certificate.
+type c2paCredentials struct {
+	signer *c2pa.Signer
+	leaf   *x509.Certificate
+}
+
+// c2paRep holds a representation's signed init segment and its session key signer.
 type c2paRep struct {
 	init   []byte
 	signer *c2pavsi.Signer
 }
 
-type c2paVSIInfo struct {
-	ManifestID string `json:"manifestId"`
-	Kid        string `json:"kid"`
-	Seed       string `json:"seed"`
+// newC2PACredentials loads the claim-signing certificate chain and private key from PEM
+// files, or creates test ones if both paths are empty.
+func newC2PACredentials(logger *slog.Logger, certPath, keyPath string) (*c2paCredentials, error) {
+	var (
+		key   crypto.Signer
+		chain []*x509.Certificate
+		err   error
+	)
+	switch {
+	case certPath == "" && keyPath == "":
+		key, chain, err = c2paTestCredentials()
+		if err != nil {
+			return nil, fmt.Errorf("c2pa test credentials: %w", err)
+		}
+		logger.Info("C2PA: signing init segments with a generated test certificate")
+	case certPath == "" || keyPath == "":
+		return nil, errors.New("c2pacert and c2pakey must be set together")
+	default:
+		pair, err := tls.LoadX509KeyPair(certPath, keyPath)
+		if err != nil {
+			return nil, fmt.Errorf("c2pa credentials: %w", err)
+		}
+		var ok bool
+		if key, ok = pair.PrivateKey.(crypto.Signer); !ok {
+			return nil, errors.New("c2pa credentials: private key cannot sign")
+		}
+		for _, der := range pair.Certificate {
+			cert, err := x509.ParseCertificate(der)
+			if err != nil {
+				return nil, fmt.Errorf("c2pa credentials: %w", err)
+			}
+			chain = append(chain, cert)
+		}
+	}
+	signer, err := c2pa.NewSigner(key, chain, c2pa.WithClaimGenerator("livesim2", "c2pa_vsi"))
+	if err != nil {
+		return nil, fmt.Errorf("c2pa signer: %w", err)
+	}
+	return &c2paCredentials{signer: signer, leaf: chain[0]}, nil
 }
 
-// loadC2PA loads the representation's pre-signed C2PA init segment and session key, if the
-// asset has them. It checks that the signed init segment is the one livesim2 serves, plus
-// the C2PA manifest box.
-func (r *RepData) loadC2PA(logger *slog.Logger, vodFS fs.FS, assetPath string) error {
-	dir := path.Join(assetPath, c2paDir, r.ID)
-	signedInit, err := fs.ReadFile(vodFS, path.Join(dir, c2paInitName))
-	if errors.Is(err, fs.ErrNotExist) {
+// c2paTestCredentials creates an ES256 test CA and an end-entity certificate it issued that
+// meet the C2PA certificate profile, and returns the end-entity key and the chain. The
+// end-entity certificate has the id-kp-emailProtection EKU, as c2pa-rs's sample certificates
+// do, which validators accept for claim signing.
+func c2paTestCredentials() (crypto.Signer, []*x509.Certificate, error) {
+	now := time.Now()
+	newCert := func(tmpl, parent *x509.Certificate, pub, signer any) (*x509.Certificate, error) {
+		serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 64))
+		if err != nil {
+			return nil, err
+		}
+		tmpl.SerialNumber = serial
+		tmpl.NotBefore = now.Add(-time.Hour)
+		tmpl.NotAfter = now.Add(c2paSessionKeyValidity + 24*time.Hour)
+		der, err := x509.CreateCertificate(rand.Reader, tmpl, parent, pub, signer)
+		if err != nil {
+			return nil, err
+		}
+		return x509.ParseCertificate(der)
+	}
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, err
+	}
+	caTmpl := &x509.Certificate{
+		Subject:               pkix.Name{Organization: []string{"livesim2"}, CommonName: "livesim2 C2PA test CA"},
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+	ca, err := newCert(caTmpl, caTmpl, &caKey.PublicKey, caKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, err
+	}
+	leaf, err := newCert(&x509.Certificate{
+		Subject:               pkix.Name{Organization: []string{"livesim2"}, CommonName: "livesim2 C2PA test signer"},
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageEmailProtection},
+		BasicConstraintsValid: true,
+	}, ca, &key.PublicKey, caKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	return key, []*x509.Certificate{leaf, ca}, nil
+}
+
+// signC2PAInit signs the representation's init segment with a new session key, so that
+// c2pa_vsi can serve it. Only clear audio and video representations are signed.
+func (r *RepData) signC2PAInit(ctx context.Context, logger *slog.Logger, creds *c2paCredentials, assetPath string) error {
+	if creds == nil || r.PreEncrypted || (r.ContentType != "audio" && r.ContentType != "video") {
 		return nil
 	}
+	seed := make([]byte, 32)
+	if _, err := rand.Read(seed); err != nil {
+		return err
+	}
+	kid := []byte(assetPath + "/" + r.ID)
+	signedInit, signer, err := c2pavsi.SignInit(ctx, r.initBytes, c2pavsi.InitConfig{
+		Signer:    creds.signer,
+		Leaf:      creds.leaf,
+		Seed:      seed,
+		Kid:       kid,
+		CreatedAt: time.Now(),
+		Validity:  c2paSessionKeyValidity,
+		Title:     string(kid),
+	})
 	if err != nil {
-		return fmt.Errorf("read c2pa init: %w", err)
-	}
-	infoData, err := fs.ReadFile(vodFS, path.Join(dir, c2paInfoName))
-	if err != nil {
-		return fmt.Errorf("read %s: %w", c2paInfoName, err)
-	}
-	var info c2paVSIInfo
-	if err := json.Unmarshal(infoData, &info); err != nil {
-		return fmt.Errorf("decode %s: %w", c2paInfoName, err)
-	}
-	seed, err := hex.DecodeString(info.Seed)
-	if err != nil {
-		return fmt.Errorf("%s seed: %w", c2paInfoName, err)
-	}
-	signer, err := c2pavsi.NewSigner(seed, []byte(info.Kid), info.ManifestID)
-	if err != nil {
-		return fmt.Errorf("%s: %w", c2paInfoName, err)
-	}
-	unsigned, err := c2pavsi.WithoutManifestBox(signedInit)
-	if err != nil {
-		return fmt.Errorf("c2pa init: %w", err)
-	}
-	if !bytes.Equal(unsigned, r.initBytes) {
-		return errors.New("c2pa init does not match the init segment livesim2 serves; re-sign it")
+		return err
 	}
 	r.c2pa = &c2paRep{init: signedInit, signer: signer}
-	logger.Info("C2PA VSI enabled", "rep", r.ID, "kid", info.Kid, "manifestId", info.ManifestID)
+	logger.Debug("C2PA VSI init signed", "rep", r.ID, "kid", string(kid), "manifestId", signer.ManifestID())
 	return nil
 }
 

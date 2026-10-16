@@ -1,7 +1,0 @@
-{
-  "manifestId": "urn:c2pa:2cab9e1e-33e5-4878-8d31-624f41bb202e",
-  "kid": "testpic_2s-A48",
-  "seed": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
-  "publicKey": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
-  "firstSequenceNumber": 1
-}

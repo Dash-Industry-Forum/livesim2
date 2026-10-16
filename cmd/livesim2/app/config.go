@@ -68,6 +68,11 @@ type ServerConfig struct {
 	PlayURL    string         `json:"playurl"`
 	DrmCfgFile string         `json:"drmcfgfile"`
 	DrmCfg     *drm.DrmConfig `json:"drmcfg"`
+	// C2PACertPath and C2PAKeyPath are PEM files with the certificate chain and private key
+	// that sign C2PA manifests in init segments (c2pa_vsi). If both are empty, livesim2
+	// creates a test certificate at startup.
+	C2PACertPath string `json:"c2pacert"`
+	C2PAKeyPath  string `json:"c2pakey"`
 }
 
 var DefaultConfig = ServerConfig{
@@ -137,6 +142,8 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 			"If empty, auto-detected from the request (honors X-Forwarded-Proto)")
 	f.String("playurl", k.String("playurl"), "URL template to play mpd. %s will be replaced by MPD URL")
 	f.String("drmcfgfile", k.String("drmcfgfile"), "DRM config file path")
+	f.String("c2pacert", k.String("c2pacert"), "C2PA claim-signing certificate chain (PEM) for c2pa_vsi. Default: generated test certificate")
+	f.String("c2pakey", k.String("c2pakey"), "C2PA claim-signing private key (PEM) for c2pa_vsi")
 
 	if err := f.Parse(args[1:]); err != nil {
 		return nil, fmt.Errorf("command line parse: %w", err)
