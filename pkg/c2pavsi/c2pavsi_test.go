@@ -256,3 +256,85 @@ func TestNewSignerValidation(t *testing.T) {
 	_, err = NewSigner(make([]byte, 32), []byte("k"), "")
 	assert.Error(t, err)
 }
+
+// emsgV0 is a version 0 emsg box with the given scheme_id_uri, value and message_data.
+func emsgV0(scheme, value string, data []byte) []byte {
+	body := []byte{0, 0, 0, 0} // version 0, flags
+	body = append(body, scheme...)
+	body = append(body, 0)
+	body = append(body, value...)
+	body = append(body, 0)
+	body = append(body, make([]byte, 16)...) // timescale, presentation_time_delta, event_duration, id
+	body = append(body, data...)
+	box := binary.BigEndian.AppendUint32(nil, uint32(8+len(body)))
+	box = append(box, "emsg"...)
+	return append(box, body...)
+}
+
+func exclusionValues(h BMFFHash) []string {
+	var values []string
+	for _, e := range h.Exclusions {
+		for _, d := range e.Data {
+			values = append(values, string(d.Value))
+		}
+	}
+	return values
+}
+
+// TestExclusionValue checks that SignSegment emits the NUL-terminated exclusion value
+// (c2pa-org/specs-core#2542) and that segments with the legacy unterminated value, such as
+// the c2pa-rs fixtures, still verify.
+func TestExclusionValue(t *testing.T) {
+	signer := newTestSigner(t, "V300")
+	init := mustRead(t, filepath.Join("testdata", "V300", "raw", "init.mp4"))
+	raw := mustRead(t, segmentFiles(t, filepath.Join("testdata", "V300", "raw"))[0])
+	timescale, seqNr, duration := trackTiming(t, init, raw)
+	signed, err := signer.SignSegment(raw, seqNr, timescale, duration)
+	require.NoError(t, err)
+	info, err := Verify(signed, signer.PublicKey())
+	require.NoError(t, err)
+	assert.Equal(t, []string{SchemeIDURI + "\x00"}, exclusionValues(info.BMFFHash))
+
+	legacy := mustRead(t, segmentFiles(t, filepath.Join("testdata", "V300", "c2pars"))[0])
+	info, err = Verify(legacy, signer.PublicKey())
+	require.NoError(t, err)
+	assert.Equal(t, []string{SchemeIDURI}, exclusionValues(info.BMFFHash))
+}
+
+// TestExcludedNonVSIEmsg checks that an emsg box the exclusion matches but that isn't a VSI
+// emsg box fails verification instead of riding along unhashed (c2pa-org/specs-core#2619).
+func TestExcludedNonVSIEmsg(t *testing.T) {
+	signer := newTestSigner(t, "V300")
+	init := mustRead(t, filepath.Join("testdata", "V300", "raw", "init.mp4"))
+	raw := mustRead(t, segmentFiles(t, filepath.Join("testdata", "V300", "raw"))[0])
+	timescale, seqNr, duration := trackTiming(t, init, raw)
+	longer := emsgV0(SchemeIDURI+"-extra", Value, []byte("data"))
+
+	// With the NUL-terminated value, a longer scheme isn't excluded: it's hashed like any
+	// other box, so the segment verifies and changing it is detected.
+	boxes, err := topLevelBoxes(raw)
+	require.NoError(t, err)
+	styp := boxes[0].data
+	withLonger := append(append(bytes.Clone(styp), longer...), raw[len(styp):]...)
+	signed, err := signer.SignSegment(withLonger, seqNr, timescale, duration)
+	require.NoError(t, err)
+	_, err = Verify(signed, signer.PublicKey())
+	require.NoError(t, err)
+	at := bytes.Index(signed, longer)
+	require.Positive(t, at)
+	tampered := bytes.Clone(signed)
+	tampered[at+len(longer)-1] ^= 0xff
+	_, err = Verify(tampered, signer.PublicKey())
+	assert.ErrorContains(t, err, "does not match bmffHash")
+
+	// The exact scheme with another value is excluded by either form.
+	signed, err = signer.SignSegment(raw, seqNr, timescale, duration)
+	require.NoError(t, err)
+	_, err = Verify(append(signed, emsgV0(SchemeIDURI, "other", nil)...), signer.PublicKey())
+	assert.ErrorContains(t, err, "not a VSI emsg box")
+
+	// The legacy prefix match also excludes the longer scheme.
+	legacy := mustRead(t, segmentFiles(t, filepath.Join("testdata", "V300", "c2pars"))[0])
+	_, err = Verify(append(bytes.Clone(legacy), longer...), signer.PublicKey())
+	assert.ErrorContains(t, err, "not a VSI emsg box")
+}

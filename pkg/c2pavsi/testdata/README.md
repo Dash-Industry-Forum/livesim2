@@ -10,6 +10,8 @@ For each track of `testpic_2s` (`V300` video, `A48` audio):
 
 The c2pa-rs signer comes from the experimental live video support in [contentauth/c2pa-rs#2862](https://github.com/contentauth/c2pa-rs/issues/2862), at commit `8f16c0f78673461ba41c184e71d29a6492be571c` of [mrappard/c2pa-rs-text-support](https://github.com/mrappard/c2pa-rs-text-support). The init manifest is signed with c2pa-rs's public ES256 **test** certificate, and the session key seed is the fixed test value `000102…1f`.
 
+That commit predates [c2pa-org/specs-core#2542](https://github.com/c2pa-org/specs-core/pull/2542), so the segments' `bmffHash` exclusion uses the earlier value: `scheme_id_uri` without its NUL terminator. This package signs with the NUL-terminated value and accepts both, so the fixtures also cover the legacy form.
+
 The fixtures were generated with the `vsi-golden` tool from the LiveSim C2PA demo:
 
 ```
