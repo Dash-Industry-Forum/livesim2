@@ -42,6 +42,13 @@ const (
 	// uriOffsetInEmsg is where scheme_id_uri starts in a version 0 emsg box: the 8-byte box
 	// header and the 4-byte version and flags. The bmffHash exclusion matches the URI there.
 	uriOffsetInEmsg = 12
+	// exclusionValue is the bmffHash exclusion's data match: scheme_id_uri with its NUL
+	// terminator (c2pa-org/specs-core#2542), so only emsg boxes with exactly the VSI scheme
+	// match.
+	exclusionValue = SchemeIDURI + "\x00"
+	// legacyExclusionValue is the earlier value without the terminator, still accepted by
+	// Verify during the transition. As a prefix it also matches longer schemes.
+	legacyExclusionValue = SchemeIDURI
 	// coseAlgEdDSA is the COSE algorithm identifier for EdDSA (RFC 9053).
 	coseAlgEdDSA = -8
 	// coseHeaderAlg and coseHeaderKid are COSE header labels (RFC 9052).
@@ -82,7 +89,7 @@ type SegmentInfo struct {
 func vsiExclusion() ExclusionsMap {
 	return ExclusionsMap{
 		XPath: "/emsg",
-		Data:  []DataMap{{Offset: uriOffsetInEmsg, Value: []byte(SchemeIDURI)}},
+		Data:  []DataMap{{Offset: uriOffsetInEmsg, Value: []byte(exclusionValue)}},
 	}
 }
 
@@ -214,16 +221,21 @@ func buildEmsg(timescale, presentationTimeDelta, duration, id uint32, messageDat
 
 // SegmentHash returns seg's c2pa.hash.bmff.v3 SHA-256: over each top-level box, in order, its
 // 8-byte big-endian file offset followed by the box bytes, leaving out VSI emsg boxes (those
-// whose bytes at offset 12 start with the VSI scheme_id_uri, as the bmffHash exclusion
-// matches them).
+// whose bytes at offset 12 are the NUL-terminated VSI scheme_id_uri, as the bmffHash
+// exclusion matches them).
 func SegmentHash(seg []byte) ([]byte, error) {
+	return segmentHash(seg, exclusionValue)
+}
+
+// segmentHash is SegmentHash for the exclusion data match value.
+func segmentHash(seg []byte, value string) ([]byte, error) {
 	boxes, err := topLevelBoxes(seg)
 	if err != nil {
 		return nil, err
 	}
 	h := sha256.New()
 	for _, b := range boxes {
-		if isExcludedVSIEmsg(b) {
+		if isExcludedEmsg(b, value) {
 			continue
 		}
 		h.Write(binary.BigEndian.AppendUint64(nil, uint64(b.offset)))
@@ -252,10 +264,11 @@ func WithoutManifestBox(data []byte) ([]byte, error) {
 	return out, nil
 }
 
-func isExcludedVSIEmsg(b box) bool {
-	end := uriOffsetInEmsg + len(SchemeIDURI)
+// isExcludedEmsg reports whether the bmffHash exclusion with data match value leaves b out.
+func isExcludedEmsg(b box, value string) bool {
+	end := uriOffsetInEmsg + len(value)
 	return b.boxType == "emsg" && len(b.data) >= end &&
-		string(b.data[uriOffsetInEmsg:end]) == SchemeIDURI
+		string(b.data[uriOffsetInEmsg:end]) == value
 }
 
 type box struct {
