@@ -419,7 +419,11 @@ cfgLoop:
 		case "utc": // Get hyphen-separated list of utc-timing methods and make into list
 			cfg.UTCTimingMethods = sc.SplitUTCTimings(key, val)
 		case "snr": // Segment startNumber. -1 means default implicit number which ==  1
-			cfg.StartNr = sc.AtoiUint32Ptr(key, val)
+			if val == "-1" {
+				cfg.StartNr = nil
+			} else {
+				cfg.StartNr = sc.AtoiUint32Ptr(key, val)
+			}
 		case "ato": // availabilityTimeOffset
 			cfg.AvailabilityTimeOffsetS = sc.AtofInf(key, val)
 		case "ltgt": // latencyTargetMS

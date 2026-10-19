@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the audio segments (`PT2S` for 2.005 s segments).
 - SegmentTimeline (`$Time$`) audio segments returned 410 when `start_` or `startrel_` set a non-zero availabilityStartTime.
 - Live MPD signaling: `@publishTime` no longer stays at availabilityStartTime for SegmentTimeline MPDs with
-  thumbnails, and `utc_direct` carries the current time instead of an empty value.
+  thumbnails, `utc_direct` carries the current time instead of an empty value, and `snr_-1` omits `@startNumber` as documented instead of failing with 400.
 
 ## [1.14.0] - 2026-09-30
 

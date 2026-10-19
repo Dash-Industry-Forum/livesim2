@@ -887,6 +887,8 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 	if cfg.StartNr != nil {
 		startNr := Ptr(uint32(*cfg.StartNr))
 		as.SegmentTemplate.StartNumber = startNr
+	} else {
+		as.SegmentTemplate.StartNumber = nil // Implicit default 1, as getStartNr
 	}
 	as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
 
