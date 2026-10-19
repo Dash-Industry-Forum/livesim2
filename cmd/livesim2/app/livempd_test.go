@@ -705,6 +705,7 @@ func TestUTCTiming(t *testing.T) {
 		utcTimings        []string
 		wantedPublishTime string
 		wantedUTCTimings  int
+		wantedDirect      string
 	}{
 		{
 			desc:              "Default with no UTCTiming",
@@ -733,6 +734,16 @@ func TestUTCTiming(t *testing.T) {
 			wantedPublishTime: "1970-01-01T00:00:50Z",
 			wantedUTCTimings:  3,
 		},
+		{
+			desc:              "Direct carries the generation time, not publishTime",
+			asset:             "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
+			mpdName:           "stream.mpd",
+			nowMS:             51_500,
+			utcTimings:        []string{"direct"},
+			wantedPublishTime: "1970-01-01T00:00:50Z",
+			wantedUTCTimings:  1,
+			wantedDirect:      "1970-01-01T00:00:51Z",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
@@ -750,6 +761,10 @@ func TestUTCTiming(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, m.DateTime(tc.wantedPublishTime), liveMPD.PublishTime)
 			assert.Equal(t, tc.wantedUTCTimings, len(liveMPD.UTCTimings))
+			if tc.wantedDirect != "" {
+				assert.Equal(t, UtcTimingDirectScheme, string(liveMPD.UTCTimings[0].SchemeIdUri))
+				assert.Equal(t, tc.wantedDirect, liveMPD.UTCTimings[0].Value)
+			}
 		})
 	}
 }
