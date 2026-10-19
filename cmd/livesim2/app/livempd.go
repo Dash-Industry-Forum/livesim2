@@ -175,7 +175,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		}
 	}
 
-	addUTCTimings(mpd, cfg)
+	addUTCTimings(mpd, cfg, nowMS)
 
 	afterStop := false
 	endTimeMS := nowMS
@@ -1076,7 +1076,8 @@ func lastSegAvailTimeS(cfg *ResponseConfig, lsi lastSegInfo) float64 {
 }
 
 // addUTCTimings adds or keeps the UTCTiming elements to the MPD.
-func addUTCTimings(mpd *m.MPD, cfg *ResponseConfig) {
+// The direct method carries nowMS, the time the MPD is generated, rounded down to whole seconds.
+func addUTCTimings(mpd *m.MPD, cfg *ResponseConfig, nowMS int) {
 	switch {
 	case len(cfg.UTCTimingMethods) == 0:
 		// default if none is set. Use HTTP with ms precision.
@@ -1097,7 +1098,7 @@ func addUTCTimings(mpd *m.MPD, cfg *ResponseConfig) {
 			case UtcTimingDirect:
 				ut = &m.DescriptorType{
 					SchemeIdUri: UtcTimingDirectScheme,
-					Value:       string(mpd.PublishTime),
+					Value:       string(m.ConvertToDateTimeS(int64(nowMS / 1000))), // DIRECT-VALUE has no fraction
 				}
 			case UtcTimingNtp:
 				ut = &m.DescriptorType{
