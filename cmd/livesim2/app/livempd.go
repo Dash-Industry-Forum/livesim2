@@ -425,19 +425,17 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 			if err != nil {
 				return nil, fmt.Errorf("adjustASFor %s: %w", templateType, err)
 			}
-			if asIdx == 0 {
-				mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, se.lsi))
-			}
 		case segmentNumber:
 			err := adjustAdaptationSetForSegmentNumber(cfg, a, as, explicitChunkDurS)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForSegmentNumber: %w", err)
 			}
-			mpd.PublishTime = mpd.AvailabilityStartTime
 		default:
 			return nil, fmt.Errorf("unknown mpd type")
 		}
 	}
+	// Set from the MPD type, since image AdaptationSets always use $Number$
+	mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, refSegEntries.lsi))
 	if maxSegDur := maxLiveSegmentDuration(a, period); maxSegDur != nil {
 		mpd.MaxSegmentDuration = maxSegDur
 	}

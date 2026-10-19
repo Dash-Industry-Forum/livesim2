@@ -552,6 +552,14 @@ func TestPublishTime(t *testing.T) {
 			wantedPublishTime: "1970-01-01T00:02:30Z",
 		},
 		{
+			desc:              "SegmentTimeline with thumbnails, which use $Number$",
+			asset:             "testpic_2s",
+			mpdName:           "Manifest_thumbs.mpd",
+			segTimelineTime:   true,
+			nowMS:             11_000,
+			wantedPublishTime: "1970-01-01T00:00:10Z",
+		},
+		{
 			desc:                   "LL SegmentTimeline, early not yet available MPD",
 			asset:                  "testpic_2s",
 			mpdName:                "Manifest.mpd",
