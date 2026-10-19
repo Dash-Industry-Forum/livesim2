@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shift from them, so uploads that follow are always renumbered.
 - Live MPDs set `@maxSegmentDuration` from the actual segment durations, so it is no longer shorter than
   the audio segments (`PT2S` for 2.005 s segments).
+- SegmentTimeline (`$Time$`) audio segments returned 410 when `start_` or `startrel_` set a non-zero availabilityStartTime.
 
 ## [1.14.0] - 2026-09-30
 
