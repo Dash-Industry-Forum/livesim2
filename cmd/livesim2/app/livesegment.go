@@ -288,7 +288,8 @@ func findRefSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseCo
 	dur := uint32(refRep.Segments[relNr].EndTime - refRep.Segments[relNr].StartTime)
 
 	// Check interval validity
-	segAvailTimeS := float64(refEndTime) / float64(refRep.MediaTimescale)
+	mediaRef := uint64(cfg.StartTimeS) * uint64(refRep.MediaTimescale) // TODO. Add period offset
+	segAvailTimeS := float64(refEndTime+mediaRef) / float64(refRep.MediaTimescale)
 	nowS := float64(nowMS) * 0.001
 	err := CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
 	if err != nil {
@@ -689,7 +690,7 @@ func findRefSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int
 
 		refMeta, err = findRefSegMetaFromTime(a, rep, requestTime, cfg, nowMS)
 		if err != nil {
-			return refMeta, fmt.Errorf("findSegMetaFromNr from reference: %w", err)
+			return refMeta, fmt.Errorf("findRefSegMetaFromTime: %w", err)
 		}
 	default:
 		return refMeta, fmt.Errorf("unknown liveMPD type")
