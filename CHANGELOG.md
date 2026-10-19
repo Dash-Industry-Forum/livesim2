@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - cmaf-ingest-receiver answers the first master-track segment uploads only after deriving the number and time
   shift from them, so uploads that follow are always renumbered.
+- Live MPDs set `@maxSegmentDuration` from the actual segment durations, so it is no longer shorter than
+  the audio segments (`PT2S` for 2.005 s segments).
 
 ## [1.14.0] - 2026-09-30
 

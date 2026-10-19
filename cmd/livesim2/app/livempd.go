@@ -438,6 +438,9 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 			return nil, fmt.Errorf("unknown mpd type")
 		}
 	}
+	if maxSegDur := maxLiveSegmentDuration(a, period); maxSegDur != nil {
+		mpd.MaxSegmentDuration = maxSegDur
+	}
 	if len(cfg.TimeSubsStpp) > 0 {
 		err = addTimeSubs(cfg, a, period, cfg.TimeSubsStpp, "stpp", firstUTCTiming(mpd))
 		if err != nil {
@@ -1037,6 +1040,27 @@ func calcPublishTime(cfg *ResponseConfig, lsi lastSegInfo) float64 {
 	default:
 		panic("liveMPD type not yet implemented")
 	}
+}
+
+// maxLiveSegmentDuration returns MPD@maxSegmentDuration for the Representations of period,
+// rounded up to whole milliseconds. Representations that are not in the asset, such as generated
+// subtitles, are skipped. It returns nil if no Representation is in the asset.
+func maxLiveSegmentDuration(a *asset, period *m.Period) *m.Duration {
+	var maxDurMS uint64
+	for _, as := range period.AdaptationSets {
+		for _, rep := range as.Representations {
+			rd, ok := a.Reps[rep.Id]
+			if !ok || rd.MediaTimescale <= 0 {
+				continue
+			}
+			timescale := uint64(rd.MediaTimescale)
+			maxDurMS = max(maxDurMS, (a.maxLiveSegDur(rd)*1000+timescale-1)/timescale)
+		}
+	}
+	if maxDurMS == 0 {
+		return nil
+	}
+	return Ptr(m.Duration(time.Duration(maxDurMS) * time.Millisecond))
 }
 
 // lastSegAvailTimeS returns the availabilityTime of the last segment,
