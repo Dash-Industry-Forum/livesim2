@@ -1162,6 +1162,28 @@ func TestEndNumberRemovedFromMPD(t *testing.T) {
 	}
 }
 
+// TestImplicitStartNumber checks that snr_-1 leaves out startNumber, so the default 1 applies.
+func TestImplicitStartNumber(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	log := slog.Default()
+	err := am.discoverAssets(log)
+	require.NoError(t, err)
+	nowMS := 50_000
+	cfg, err := processURLCfg("/livesim2/snr_-1/testpic_2s/Manifest.mpd", nowMS)
+	require.NoError(t, err)
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+	liveMPD, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, nowMS)
+	require.NoError(t, err)
+	for _, as := range liveMPD.Periods[0].AdaptationSets {
+		assert.Nil(t, as.SegmentTemplate.StartNumber)
+	}
+	so, err := genLiveSegment(log, vodFS, asset, cfg, "V300/1.m4s", nowMS, false /* isLast */)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(0), so.seg.Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime())
+}
+
 func TestGenerateTimelineEntries(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 

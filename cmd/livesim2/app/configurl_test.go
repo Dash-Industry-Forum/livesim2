@@ -69,6 +69,26 @@ func TestProcessURLCfg(t *testing.T) {
 			},
 		},
 		{
+			url:         "/livesim2/snr_-1/asset.mpd",
+			nowMS:       0,
+			contentPart: "asset.mpd",
+			wantedCfg: &ResponseConfig{
+				URLParts:                     []string{"", "livesim2", "snr_-1", "asset.mpd"},
+				URLContentIdx:                3,
+				StartTimeS:                   0,
+				TimeShiftBufferDepthS:        Ptr(defaultTimeShiftBufferDepthS),
+				AvailabilityTimeCompleteFlag: true,
+				TimeSubsDurMS:                defaultTimeSubsDurMS,
+				TimeSubsSegNr:                true,
+			},
+		},
+		{
+			url:         "/livesim2/snr_-2/asset.mpd",
+			nowMS:       0,
+			contentPart: "asset.mpd",
+			err:         `key=snr, err=strconv.ParseUint: parsing "-2": invalid syntax`,
+		},
+		{
 			url:         "/livesim2/tsbd_1/drm_ezdrm1/asset.mpd",
 			nowMS:       0,
 			contentPart: "asset.mpd",
