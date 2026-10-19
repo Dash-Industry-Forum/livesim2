@@ -334,7 +334,7 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 		if rsd.chunkNr > 0 {
 			rsd.isComplete = true
 			rsd.dur = rsd.totDur
-			ch.addChunkData(*rsd)
+			ch.addCompleteSegData(*rsd)
 		}
 
 		w.WriteHeader(http.StatusOK)

@@ -70,8 +70,9 @@ type recSegData struct {
 	isLmsg          bool
 	isSlate         bool
 	isComplete      bool
-	shouldBeShifted bool // Set by receiver
-	isShifted       bool // Is modified by the receiver
+	shouldBeShifted bool          // Set by receiver
+	isShifted       bool          // Is modified by the receiver
+	processed       chan struct{} // If set, closed when the channel goroutine has handled the data
 }
 
 func newChannel(ctx context.Context, chCfg ChannelConfig, chDir string) *channel {
@@ -299,7 +300,30 @@ func (ch *channel) addChunkData(rsd recSegData) {
 	ch.recSegCh <- rsd
 }
 
+// addCompleteSegData passes the data of a complete segment to the channel goroutine.
+// Until the master track's segment duration is known, it returns only after the
+// master track's data has been handled, so that segments uploaded after the response
+// get the sequence number and time shift derived from it.
+func (ch *channel) addCompleteSegData(rsd recSegData) {
+	ch.mu.RLock()
+	wait := rsd.name == ch.masterTrName && ch.masterSegDuration == 0
+	ch.mu.RUnlock()
+	if !wait {
+		ch.addChunkData(rsd)
+		return
+	}
+	rsd.processed = make(chan struct{})
+	ch.addChunkData(rsd)
+	select {
+	case <-rsd.processed:
+	case <-ch.done:
+	}
+}
+
 func (ch *channel) receivedSegData(rsd recSegData) {
+	if rsd.processed != nil {
+		defer close(rsd.processed)
+	}
 	log := slog.Default().With("chName", ch.name, "trName", rsd.name, "seqNr", rsd.seqNr)
 	ch.mu.RLock()
 	_, ok := ch.trDatas[rsd.name]
@@ -349,8 +373,8 @@ func (ch *channel) receivedSegData(rsd recSegData) {
 						return
 					}
 					dur := sdb.items[1].dur
-					ch.masterSegDuration = dur
 					ch.mu.Lock()
+					ch.masterSegDuration = dur
 					rd := ch.trDatas[name]
 					ch.masterTimescale = rd.timeScaleOut
 					segTime0 := int64(sdb.items[0].dts)

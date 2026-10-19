@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Live segments are written straight to the response, and audio, chunked and `timecc608_` segments share or
   build their sample data without extra copies, cutting allocated bytes per segment by 20-67% and time by up to 40%.
 
+### Fixed
+
+- cmaf-ingest-receiver answers the first master-track segment uploads only after deriving the number and time
+  shift from them, so uploads that follow are always renumbered.
+
 ## [1.14.0] - 2026-09-30
 
 ### Added
