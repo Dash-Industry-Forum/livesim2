@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"math"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -741,6 +743,50 @@ func TestUTCTiming(t *testing.T) {
 			assert.Equal(t, m.DateTime(tc.wantedPublishTime), liveMPD.PublishTime)
 			assert.Equal(t, tc.wantedUTCTimings, len(liveMPD.UTCTimings))
 		})
+	}
+}
+
+// TestMaxSegmentDuration checks that MPD@maxSegmentDuration covers every segment in the
+// SegmentTimelines, including audio segments cut at whole frames after the video boundaries.
+func TestMaxSegmentDuration(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	err := am.discoverAssets(slog.Default())
+	require.NoError(t, err)
+
+	wanted := map[string]time.Duration{
+		"testpic_2s/Manifest.mpd": 2006 * time.Millisecond, // 94 AAC frames
+		"testpic_6s/Manifest.mpd": 6016 * time.Millisecond, // 282 AAC frames
+	}
+	nowMS := 1_000_000
+	for _, assetPath := range slices.Sorted(maps.Keys(am.assets)) {
+		a := am.assets[assetPath]
+		for _, mpdName := range slices.Sorted(maps.Keys(a.MPDs)) {
+			for _, mode := range []SegTimelineMode{SegTimelineModeNone, SegTimelineModeTime, SegTimelineModeNr} {
+				name := fmt.Sprintf("%s/%s mode=%q", assetPath, mpdName, mode)
+				cfg := NewResponseConfig()
+				cfg.SegTimelineMode = mode
+				require.NoError(t, verifyAndFillConfig(cfg, nowMS))
+				liveMPD, err := LiveMPD(a, mpdName, cfg, nil, nowMS)
+				require.NoError(t, err, name)
+				require.NotNil(t, liveMPD.MaxSegmentDuration, name)
+				maxDur := time.Duration(*liveMPD.MaxSegmentDuration)
+				if w, ok := wanted[path.Join(assetPath, mpdName)]; ok {
+					require.Equal(t, w, maxDur, name)
+				}
+				for _, as := range liveMPD.Periods[0].AdaptationSets {
+					st := as.SegmentTemplate
+					if st == nil || st.SegmentTimeline == nil {
+						continue
+					}
+					timescale := time.Duration(st.GetTimescale())
+					for _, s := range st.SegmentTimeline.S {
+						d := time.Duration(s.D) * time.Second / timescale
+						require.LessOrEqual(t, d, maxDur, "%s %s", name, as.ContentType)
+					}
+				}
+			}
+		}
 	}
 }
 

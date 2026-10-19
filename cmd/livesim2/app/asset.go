@@ -939,6 +939,28 @@ func (r RepData) duration() int {
 	return int(r.Segments[len(r.Segments)-1].EndTime - r.Segments[0].StartTime)
 }
 
+// maxSegDur returns the longest segment duration in media timescale.
+func (r RepData) maxSegDur() uint64 {
+	var maxDur uint64
+	for _, s := range r.Segments {
+		maxDur = max(maxDur, s.EndTime-s.StartTime)
+	}
+	return maxDur
+}
+
+// maxLiveSegDur returns the longest live segment duration of rep in its media timescale.
+// Audio segments are cut at the reference segment boundaries rounded up to whole frames
+// (calcAudioSegRecipe), so they are at most a reference segment rounded up to whole frames.
+func (a *asset) maxLiveSegDur(rep *RepData) uint64 {
+	if rep.ContentType != "audio" || rep.ConstantSampleDuration == nil || *rep.ConstantSampleDuration == 0 {
+		return rep.maxSegDur()
+	}
+	frameDur := uint64(*rep.ConstantSampleDuration)
+	refDur := a.refRep.maxSegDur() * uint64(rep.MediaTimescale)
+	refFrameDur := uint64(a.refRep.MediaTimescale) * frameDur
+	return (refDur + refFrameDur - 1) / refFrameDur * frameDur
+}
+
 // sampleDur returns sample duration if known or can easily be derived.
 func (r RepData) sampleDur() uint32 {
 	if r.DefaultSampleDuration != 0 {
