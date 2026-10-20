@@ -282,8 +282,8 @@ func NewResponseConfig() *ResponseConfig {
 		StartTimeS:                   defaultAvailabilityStartTimeS,
 		AvailabilityTimeCompleteFlag: defaultAvailabilityTimeComplete,
 		SSRFlag:                      defaultSSRFlag,
-		TimeShiftBufferDepthS:        Ptr(defaultTimeShiftBufferDepthS),
-		StartNr:                      Ptr(defaultStartNr),
+		TimeShiftBufferDepthS:        new(defaultTimeShiftBufferDepthS),
+		StartNr:                      new(defaultStartNr),
 		TimeSubsDurMS:                defaultTimeSubsDurMS,
 		TimeSubsSegNr:                true,
 	}
@@ -519,7 +519,7 @@ func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 		return fmt.Errorf("minimumUpdatePeriod must be > 0")
 	}
 	if cfg.getAvailabilityTimeOffsetS() > 0 && cfg.LatencyTargetMS == nil {
-		cfg.LatencyTargetMS = Ptr(defaultLatencyTargetMS)
+		cfg.LatencyTargetMS = new(defaultLatencyTargetMS)
 	}
 	if cfg.TimeShiftBufferDepthS != nil {
 		tsbd := *cfg.TimeShiftBufferDepthS

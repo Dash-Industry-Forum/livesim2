@@ -192,8 +192,8 @@ func cc608TestSamples(nFrames int, vclNalu []byte) []mp4.FullSample {
 	size := len(avccSample(vclNalu))
 	for i := range samples {
 		samples[i] = mp4.FullSample{
-			Sample: mp4.Sample{Size: uint32(size)},
-			Data:   avccSample(vclNalu),
+			Size: uint32(size),
+			Data: avccSample(vclNalu),
 		}
 	}
 	return samples
@@ -581,7 +581,7 @@ func TestGenLiveSegmentCC608NrTimeOffset(t *testing.T) {
 		t.Run(c.desc, func(t *testing.T) {
 			cfg := NewResponseConfig()
 			cfg.CC608 = cc608Cfg(t, "CC1-eng-pop")
-			cfg.StartNr = Ptr(c.startNr)
+			cfg.StartNr = new(c.startNr)
 			cfg.StartTimeS = c.startTimeS
 
 			var samples []mp4.FullSample
@@ -647,7 +647,7 @@ func TestPrepareChunksCC608(t *testing.T) {
 
 	cfg := NewResponseConfig()
 	cfg.CC608 = cc608Cfg(t, "CC1-eng-pop")
-	cfg.ChunkDurS = Ptr(0.5) // 2s segment -> 4 chunks
+	cfg.ChunkDurS = new(0.5) // 2s segment -> 4 chunks
 	const nowMS = 100_000
 	const nr = 40 // segment 40 starts at 40*2s = 80s = 00:01:20
 

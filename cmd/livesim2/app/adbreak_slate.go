@@ -177,12 +177,10 @@ func (g *slateGen) samples(specs []slateFrameSpec, decodeStart uint64, ctoOffset
 			flags = mp4.SyncSampleFlags
 		}
 		samples = append(samples, mp4.FullSample{
-			Sample: mp4.Sample{
-				Flags: flags, Dur: spec.dur, Size: uint32(len(data)),
-				CompositionTimeOffset: ctoOffset,
-			},
-			DecodeTime: t,
-			Data:       data,
+			Flags: flags, Dur: spec.dur, Size: uint32(len(data)),
+			CompositionTimeOffset: ctoOffset,
+			DecodeTime:            t,
+			Data:                  data,
 		})
 		t += uint64(spec.dur)
 	}

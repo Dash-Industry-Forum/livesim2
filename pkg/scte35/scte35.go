@@ -173,30 +173,30 @@ func (c Cue) BinarySignal() *m.SignalType {
 // [Cue.Binary] in the XML representation of SCTE 35 §12.
 func (c Cue) XMLSignal() *m.SignalType {
 	sis := m.NewSpliceInfoSection()
-	sis.ProtocolVersion = m.Ptr(uint8(0))
+	sis.ProtocolVersion = new(uint8(0))
 	sis.PtsAdjustment = 0
-	sis.Tier = m.Ptr(c.Tier)
+	sis.Tier = new(c.Tier)
 	switch c.Cmd {
 	case TimeSignal:
 		ts := m.NewTimeSignal()
 		ts.SpliceTime = m.NewSpliceTime()
-		ts.SpliceTime.PtsTime = m.Ptr(c.PTS)
+		ts.SpliceTime.PtsTime = new(c.PTS)
 		sis.TimeSignal = ts
 		for _, l := range c.Levels {
 			sis.SegmentationDescriptors = append(sis.SegmentationDescriptors, l.xmlDescriptor())
 		}
 	default:
 		si := m.NewSpliceInsert()
-		si.SpliceEventId = m.Ptr(c.EventID)
-		si.SpliceEventCancelIndicator = m.Ptr(false)
-		si.OutOfNetworkIndicator = m.Ptr(c.OutOfNetwork)
-		si.SpliceImmediateFlag = m.Ptr(c.SpliceImmediate)
-		si.UniqueProgramId = m.Ptr(uint16(0))
-		si.AvailNum = m.Ptr(uint8(0))
-		si.AvailsExpected = m.Ptr(uint8(0))
+		si.SpliceEventId = new(c.EventID)
+		si.SpliceEventCancelIndicator = new(false)
+		si.OutOfNetworkIndicator = new(c.OutOfNetwork)
+		si.SpliceImmediateFlag = new(c.SpliceImmediate)
+		si.UniqueProgramId = new(uint16(0))
+		si.AvailNum = new(uint8(0))
+		si.AvailsExpected = new(uint8(0))
 		if !c.SpliceImmediate {
 			st := m.NewSpliceTime()
-			st.PtsTime = m.Ptr(c.PTS)
+			st.PtsTime = new(c.PTS)
 			si.Program = &m.SpliceInsertProgramType{
 				XMLName:    xml.Name{Space: m.SCTE35Namespace, Local: "Program"},
 				SpliceTime: st,
@@ -252,21 +252,21 @@ func (l Level) descriptor() gsc.SegmentationDescriptor {
 // which is how the XML representation expresses delivery_not_restricted_flag = 1.
 func (l Level) xmlDescriptor() *m.SegmentationDescriptorType {
 	d := m.NewSegmentationDescriptor()
-	d.SegmentationEventId = m.Ptr(l.EventID)
-	d.SegmentationEventCancelIndicator = m.Ptr(false)
-	d.SegmentationTypeId = m.Ptr(l.TypeID)
-	d.SegmentNum = m.Ptr(l.Num)
-	d.SegmentsExpected = m.Ptr(l.Expected)
+	d.SegmentationEventId = new(l.EventID)
+	d.SegmentationEventCancelIndicator = new(false)
+	d.SegmentationTypeId = new(l.TypeID)
+	d.SegmentNum = new(l.Num)
+	d.SegmentsExpected = new(l.Expected)
 	if l.HasSubSegments && CarriesSubSegments(l.TypeID) {
-		d.SubSegmentNum = m.Ptr(l.SubNum)
-		d.SubSegmentsExpected = m.Ptr(l.SubExpected)
+		d.SubSegmentNum = new(l.SubNum)
+		d.SubSegmentsExpected = new(l.SubExpected)
 	}
 	if l.DurationPTS != 0 {
-		d.SegmentationDuration = m.Ptr(l.DurationPTS)
+		d.SegmentationDuration = new(l.DurationPTS)
 	}
 	if len(l.UPID) > 0 {
 		upid := m.NewSegmentationUpid(string(l.UPID))
-		upid.SegmentationUpidType = m.Ptr(l.UPIDType)
+		upid.SegmentationUpidType = new(l.UPIDType)
 		d.SegmentationUpids = []*m.SegmentationUpidType{upid}
 	}
 	return d

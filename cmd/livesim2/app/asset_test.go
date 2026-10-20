@@ -301,56 +301,56 @@ func TestCalculateK(t *testing.T) {
 			description:     "zero chunk duration",
 			segmentDuration: 192000,
 			mediaTimescale:  96000,
-			chunkDuration:   Ptr(0.0),
+			chunkDuration:   new(0.0),
 			expectedK:       nil,
 		},
 		{
 			description:     "negative chunk duration",
 			segmentDuration: 192000,
 			mediaTimescale:  96000,
-			chunkDuration:   Ptr(-1.0),
+			chunkDuration:   new(-1.0),
 			expectedK:       nil,
 		},
 		{
 			description:     "zero media timescale",
 			segmentDuration: 192000,
 			mediaTimescale:  0,
-			chunkDuration:   Ptr(1.0),
+			chunkDuration:   new(1.0),
 			expectedK:       nil,
 		},
 		{
 			description:     "k=4",
 			segmentDuration: 192000,
 			mediaTimescale:  96000,
-			chunkDuration:   Ptr(0.5),
-			expectedK:       Ptr(uint64(4)),
+			chunkDuration:   new(0.5),
+			expectedK:       new(uint64(4)),
 		},
 		{
 			description:     "k=1, returns nil",
 			segmentDuration: 192000,
 			mediaTimescale:  96000,
-			chunkDuration:   Ptr(2.0),
+			chunkDuration:   new(2.0),
 			expectedK:       nil,
 		},
 		{
 			description:     "rounding up",
 			segmentDuration: 192000,
 			mediaTimescale:  96000,
-			chunkDuration:   Ptr(0.57), // 3.5087... -> 4
-			expectedK:       Ptr(uint64(4)),
+			chunkDuration:   new(0.57), // 3.5087... -> 4
+			expectedK:       new(uint64(4)),
 		},
 		{
 			description:     "rounding down",
 			segmentDuration: 192000,
 			mediaTimescale:  96000,
-			chunkDuration:   Ptr(0.58), // 3.448... -> 3
-			expectedK:       Ptr(uint64(3)),
+			chunkDuration:   new(0.58), // 3.448... -> 3
+			expectedK:       new(uint64(3)),
 		},
 		{
 			description:     "chunk duration greater than segment duration",
 			segmentDuration: 192000,
 			mediaTimescale:  96000,
-			chunkDuration:   Ptr(2.5), // 2.5s > 2.0s segment duration
+			chunkDuration:   new(2.5), // 2.5s > 2.0s segment duration
 			expectedK:       nil,
 			expectedError:   "chunk duration 2.50s must be less than or equal to segment duration 2.00s",
 		},

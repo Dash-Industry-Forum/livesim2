@@ -79,7 +79,7 @@ func CreateTimeSubsPaintConfig(kind, val string) (*TimeSubsPaintConfig, error) {
 	}
 	cfg := &TimeSubsPaintConfig{NoChange: true}
 	parts := strings.Split(val, ";")
-	for _, lang := range strings.Split(parts[0], ",") {
+	for lang := range strings.SplitSeq(parts[0], ",") {
 		if lang == "" {
 			return nil, fmt.Errorf("%s config %q has an empty language", kind, val)
 		}

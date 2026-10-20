@@ -5,6 +5,7 @@
 package app
 
 import (
+	"slices"
 	"sync"
 	"time"
 )
@@ -156,8 +157,7 @@ func (m *SgaiSessionMgr) RecordBeacon(sid, adID, event, cmcd, evID string) {
 // hold mu. When no break id is carried (evID == "") it degrades to the prior (adId,event)
 // behavior, collapsing all such beacons within the window.
 func (m *SgaiSessionMgr) recentDuplicateBeacon(s *SgaiSession, adID, event, evID string, ts time.Time) bool {
-	for i := len(s.Events) - 1; i >= 0; i-- {
-		e := s.Events[i]
+	for _, e := range slices.Backward(s.Events) {
 		if ts.Sub(e.Time) > sgaiDedupWindow {
 			return false
 		}
@@ -171,8 +171,7 @@ func (m *SgaiSessionMgr) recentDuplicateBeacon(s *SgaiSession, adID, event, evID
 // recentDuplicateDecision reports whether a decision for the same pod was recorded for this
 // session within sgaiDedupWindow. Caller must hold mu.
 func (m *SgaiSessionMgr) recentDuplicateDecision(s *SgaiSession, pod []string, ts time.Time) bool {
-	for i := len(s.Events) - 1; i >= 0; i-- {
-		e := s.Events[i]
+	for _, e := range slices.Backward(s.Events) {
 		if ts.Sub(e.Time) > sgaiDedupWindow {
 			return false
 		}

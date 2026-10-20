@@ -113,10 +113,10 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 	if err != nil {
 		return nil, err
 	}
-	mpd.Type = Ptr("dynamic")
+	mpd.Type = new("dynamic")
 	mpd.MediaPresentationDuration = nil
 	mpd.AvailabilityStartTime = m.ConvertToDateTime(float64(cfg.StartTimeS))
-	mpd.MinimumUpdatePeriod = Ptr(m.Duration(a.SegmentDurMS * 1_000_000))
+	mpd.MinimumUpdatePeriod = new(m.Duration(a.SegmentDurMS * 1_000_000))
 	if cfg.MinimumUpdatePeriodS != nil {
 		mpd.MinimumUpdatePeriod = m.Seconds2DurPtr(*cfg.MinimumUpdatePeriodS)
 	}
@@ -192,7 +192,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 	period := mpd.Periods[0]
 	period.Duration = nil
 	period.Id = "P0"
-	period.Start = Ptr(m.Duration(0))
+	period.Start = new(m.Duration(0))
 	for bNr := 0; bNr < len(cfg.Traffic); bNr++ {
 		b := m.NewBaseURL(baseURL(bNr))
 		period.BaseURLs = append(period.BaseURLs, b)
@@ -229,7 +229,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		case "video", "audio":
 			if cfg.PatchTTL > 0 && as.Id == nil {
 				slog.Debug("Inserting ID for AdaptationSet for patch", "contentType", as.ContentType, "id", asIdx+1)
-				as.Id = Ptr(uint32(asIdx + 1))
+				as.Id = new(uint32(asIdx + 1))
 			}
 			if cfg.DRM != "" {
 				if a.refRep.PreEncrypted {
@@ -575,7 +575,7 @@ func addPatchLocation(mpd *m.MPD, cfg *ResponseConfig) {
 }
 
 func makeMPDStatic(mpd *m.MPD, mpdDurS int) {
-	mpd.Type = Ptr(m.STATIC_TYPE)
+	mpd.Type = new(m.STATIC_TYPE)
 	mpd.TimeShiftBufferDepth = nil
 	mpd.MinimumUpdatePeriod = nil
 	mpd.SuggestedPresentationDelay = nil
@@ -608,7 +608,7 @@ func splitPeriod(mpd *m.MPD, a *asset, cfg *ResponseConfig, wTimes wrapTimes) er
 		for aNr, as := range p.AdaptationSets {
 			inAS := inPeriod.AdaptationSets[aNr]
 			timeScale := int(as.SegmentTemplate.GetTimescale())
-			pto := Ptr(uint64(pNr * periodDur * timeScale))
+			pto := new(uint64(pNr * periodDur * timeScale))
 			templateType := cfg.liveMPDType()
 			if as.ContentType == "image" {
 				templateType = segmentNumber
@@ -618,7 +618,7 @@ func splitPeriod(mpd *m.MPD, a *asset, cfg *ResponseConfig, wTimes wrapTimes) er
 				as.SegmentTemplate.PresentationTimeOffset = pto
 				segDur := int(*as.SegmentTemplate.Duration)
 				startNr := uint32(pNr * periodDur * timeScale / segDur)
-				as.SegmentTemplate.StartNumber = Ptr(startNr)
+				as.SegmentTemplate.StartNumber = new(startNr)
 			case timeLineTime:
 				as.SegmentTemplate.PresentationTimeOffset = pto
 				inS := inAS.SegmentTemplate.SegmentTimeline.S
@@ -688,7 +688,7 @@ func reduceS(entries []*m.S, startNr *uint32, timescale int, periodStartS, perio
 			}
 			if currS == nil {
 				currS = &m.S{
-					T: Ptr(t),
+					T: new(t),
 					D: d,
 				}
 				outStartNr = nr
@@ -698,7 +698,7 @@ func reduceS(entries []*m.S, startNr *uint32, timescale int, periodStartS, perio
 					currS.R++
 				} else {
 					currS = &m.S{
-						T: Ptr(t),
+						T: new(t),
 						D: d,
 					}
 					newS = append(newS, currS)
@@ -720,9 +720,9 @@ func createServiceDescription(latencyTargetMS uint32) []*m.ServiceDescriptionTyp
 			Latencies: []*m.LatencyType{
 				{
 					ReferenceId: 0,
-					Max:         Ptr(maxLatency),
-					Min:         Ptr(minLatency),
-					Target:      Ptr(latencyTargetMS),
+					Max:         new(maxLatency),
+					Min:         new(minLatency),
+					Target:      new(latencyTargetMS),
 				},
 			},
 			PlaybackRates: []*m.PlaybackRateType{
@@ -809,7 +809,7 @@ func setOffsetInAdaptationSet(cfg *ResponseConfig, as *m.AdaptationSetType,
 		as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(ato)
 	}
 	if !cfg.AvailabilityTimeCompleteFlag {
-		as.SegmentTemplate.AvailabilityTimeComplete = Ptr(false)
+		as.SegmentTemplate.AvailabilityTimeComplete = new(false)
 		if cfg.getAvailabilityTimeOffsetS() > 0 {
 			as.SegmentTemplate.AvailabilityTimeOffset = m.FloatInf64(cfg.getAvailabilityTimeOffsetS())
 			as.ProducerReferenceTimes = createProducerReferenceTimes(cfg.StartTimeS, utcTiming)
@@ -826,7 +826,7 @@ func adjustAdaptationSetForTimeline(cfg *ResponseConfig, se segEntries, as *m.Ad
 	}
 
 	as.SegmentTemplate.Duration = nil
-	as.SegmentTemplate.Timescale = Ptr(se.mediaTimescale)
+	as.SegmentTemplate.Timescale = new(se.mediaTimescale)
 
 	isNumberBased := cfg.SegTimelineMode == SegTimelineModeNr || cfg.SegTimelineMode == SegTimelineModeNrPattern
 	isPatternBased := cfg.SegTimelineMode == SegTimelineModePattern || cfg.SegTimelineMode == SegTimelineModeNrPattern
@@ -834,7 +834,7 @@ func adjustAdaptationSetForTimeline(cfg *ResponseConfig, se segEntries, as *m.Ad
 	if isNumberBased {
 		as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Time$", "$Number$")
 		if se.startNr >= 0 {
-			as.SegmentTemplate.StartNumber = Ptr(uint32(se.startNr))
+			as.SegmentTemplate.StartNumber = new(uint32(se.startNr))
 		}
 	} else {
 		as.SegmentTemplate.Media = strings.ReplaceAll(as.SegmentTemplate.Media, "$Number$", "$Time$")
@@ -880,12 +880,12 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 		default:
 			dur = uint32(rep0.duration() / len(rep0.Segments))
 		}
-		as.SegmentTemplate.Duration = Ptr(uint32(dur))
-		as.SegmentTemplate.Timescale = Ptr(uint32(timeScale))
+		as.SegmentTemplate.Duration = new(uint32(dur))
+		as.SegmentTemplate.Timescale = new(uint32(timeScale))
 	}
 	as.SegmentTemplate.SegmentTimeline = nil
 	if cfg.StartNr != nil {
-		startNr := Ptr(uint32(*cfg.StartNr))
+		startNr := new(uint32(*cfg.StartNr))
 		as.SegmentTemplate.StartNumber = startNr
 	} else {
 		as.SegmentTemplate.StartNumber = nil // Implicit default 1, as getStartNr
@@ -955,7 +955,7 @@ func addTimeSubs(cfg *ResponseConfig, a *asset, period *m.Period, languages []st
 		st.SetTimescale(SUBS_TIME_TIMESCALE)
 
 		if vST.Duration != nil {
-			st.Duration = Ptr(*vST.Duration * 1000 / vST.GetTimescale())
+			st.Duration = new(*vST.Duration * 1000 / vST.GetTimescale())
 		}
 		if vST.StartNumber != nil {
 			st.StartNumber = vST.StartNumber
@@ -965,7 +965,7 @@ func addTimeSubs(cfg *ResponseConfig, a *asset, period *m.Period, languages []st
 			st.SegmentTimeline = changeTimelineTimescale(vST.SegmentTimeline, int(*vST.Timescale), SUBS_TIME_TIMESCALE)
 		}
 		as := m.NewAdaptationSet()
-		as.Id = Ptr(nextFreeAdaptationSetID(period, 100))
+		as.Id = new(nextFreeAdaptationSetID(period, 100))
 		as.Lang = lang
 		as.ContentType = "text"
 		as.MimeType = "application/mp4"
@@ -1060,7 +1060,7 @@ func maxLiveSegmentDuration(a *asset, period *m.Period) *m.Duration {
 	if maxDurMS == 0 {
 		return nil
 	}
-	return Ptr(m.Duration(time.Duration(maxDurMS) * time.Millisecond))
+	return new(m.Duration(time.Duration(maxDurMS) * time.Millisecond))
 }
 
 // lastSegAvailTimeS returns the availabilityTime of the last segment,
@@ -1156,7 +1156,7 @@ func changeTimelineTimescale(inSTL *m.SegmentTimelineType, oldTimescale, newTime
 	o.S = make([]*m.S, 0, len(inSTL.S))
 	for _, s := range inSTL.S {
 		outS := m.S{
-			T: m.Ptr(round(*s.T)),
+			T: new(round(*s.T)),
 			N: nil,
 			D: round(s.D),
 			R: s.R,
@@ -1296,8 +1296,8 @@ func detectAndApplyPattern(se segEntries, expectedPatternLen int) *m.SegmentTime
 					// D is omitted when using patterns (P attribute)
 					R: numSegments - 1,
 					CommonDurationPatternAttributes: m.CommonDurationPatternAttributes{
-						P:  Ptr(uint32(1)),                  // Reference pattern id="1"
-						PE: Ptr(uint32(patternEntryOffset)), // Start at the correct offset in the canonical pattern
+						P:  new(uint32(1)),                  // Reference pattern id="1"
+						PE: new(uint32(patternEntryOffset)), // Start at the correct offset in the canonical pattern
 					},
 				}
 				stl.S = []*m.S{s}

@@ -9,7 +9,7 @@ import (
 )
 
 func TestCalculateAudioSegRecipe(t *testing.T) {
-	rd := RepData{ConstantSampleDuration: Ptr(uint32(1024)), MediaTimescale: 48000}
+	rd := RepData{ConstantSampleDuration: new(uint32(1024)), MediaTimescale: 48000}
 	cases := []struct {
 		desc              string
 		refNr             uint32
@@ -66,7 +66,7 @@ func TestCalculateAudioSegRecipe(t *testing.T) {
 // TestAppendFillSamples checks that each fill sample has its own copy of the data, so
 // that in-place encryption does not encrypt the same bytes twice.
 func TestAppendFillSamples(t *testing.T) {
-	last := mp4.FullSample{Sample: mp4.Sample{Dur: 1024, Size: 2}, Data: []byte{1, 2}}
+	last := mp4.FullSample{Dur: 1024, Size: 2, Data: []byte{1, 2}}
 	fss := appendFillSamples([]mp4.FullSample{last}, last, 2)
 	require.Len(t, fss, 3)
 	for i := range fss {

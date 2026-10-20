@@ -196,7 +196,7 @@ func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, now
 	ts := sgaiEventTimescale
 	es := &m.EventStreamType{
 		SchemeIdUri: AlternativeMPDReplaceScheme,
-		Timescale:   m.Ptr(ts),
+		Timescale:   new(ts),
 	}
 	for _, b := range insts {
 		inner := &m.AlternativeMPDEventType{
@@ -211,10 +211,10 @@ func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, now
 		}
 		es.Events = append(es.Events, &m.EventType{
 			PresentationTime: uint64(b.offsetS) * uint64(ts),
-			Duration:         m.Ptr(uint64(b.durS) * uint64(ts)),
-			Id:               m.Ptr(b.id),
+			Duration:         new(uint64(b.durS) * uint64(ts)),
+			Id:               new(b.id),
 			ReplacePresentation: &m.AlternativeMPDReplaceEventType{
-				Clip:                    m.Ptr(cfg.SGAI.Clip),
+				Clip:                    new(cfg.SGAI.Clip),
 				AlternativeMPDEventType: inner,
 			},
 		})
@@ -222,12 +222,10 @@ func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, now
 	// Annex I: carry the main MPD URL query (e.g. the session id) onto the altmpd request
 	// and add the execution-delta state of the first signaled break.
 	es.RequestParam = []*m.ExtendedUrlInfoType{{
-		UrlQueryInfoType: m.UrlQueryInfoType{
-			// prta first so the well-formed param is always present even when the MPD URL
-			// carries no query ($querypart$ then expands to empty rather than leaving a "&&").
-			QueryTemplate:  fmt.Sprintf("prta=$urn:mpeg:dash:state:execution-delta#%d$&$querypart$", insts[0].id),
-			UseMPDUrlQuery: true,
-		},
+		// prta first so the well-formed param is always present even when the MPD URL
+		// carries no query ($querypart$ then expands to empty rather than leaving a "&&").
+		QueryTemplate:     fmt.Sprintf("prta=$urn:mpeg:dash:state:execution-delta#%d$&$querypart$", insts[0].id),
+		UseMPDUrlQuery:    true,
 		IncludeInRequests: "altmpd",
 	}}
 	period.EventStreams = append(period.EventStreams, es)

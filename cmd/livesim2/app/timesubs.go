@@ -541,11 +541,9 @@ func stppTimeSampleTmpl(tt *template.Template, tmplName string, cues []cueItvl, 
 	}
 	sampleData := buf.Bytes()
 	return mp4.FullSample{
-		Sample: mp4.Sample{
-			Flags: mp4.SyncSampleFlags,
-			Dur:   uint32(endMS - startMS),
-			Size:  uint32(len(sampleData)),
-		},
+		Flags:      mp4.SyncSampleFlags,
+		Dur:        uint32(endMS - startMS),
+		Size:       uint32(len(sampleData)),
 		DecodeTime: uint64(startMS),
 		Data:       sampleData,
 	}, nil

@@ -297,7 +297,7 @@ segLoop:
 		}
 	}
 	if commonSampleDur >= 0 {
-		rp.ConstantSampleDuration = Ptr(uint32(commonSampleDur))
+		rp.ConstantSampleDuration = new(uint32(commonSampleDur))
 	}
 	// Detect whether the video already carries in-band CEA-608 captions, so a
 	// timecc608 request can be rejected instead of injecting a second caption stream
@@ -568,7 +568,7 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int, e
 		return se, err
 	}
 
-	s := &m.S{T: Ptr(t), D: d, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: k}}
+	s := &m.S{T: new(t), D: d, K: k}
 	lsi := lastSegInfo{
 		timescale: uint64(rep.MediaTimescale),
 		startTime: t,
@@ -586,7 +586,7 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int, e
 			continue
 		}
 		d = seg.dur()
-		s = &m.S{D: d, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: k}}
+		s = &m.S{D: d, K: k}
 		se.entries = append(se.entries, s)
 		lsi.dur = d
 		lsi.nr = nr
@@ -660,7 +660,7 @@ func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string, e
 					}
 				}
 
-				s = &m.S{T: m.Ptr(adjustedT), D: adjustedD, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: k}}
+				s = &m.S{T: new(adjustedT), D: adjustedD, K: k}
 				se.entries = append(se.entries, s)
 				expectedTime = adjustedT + adjustedD // Update expected time after first segment
 			} else {
@@ -681,10 +681,10 @@ func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string, e
 					// Only add explicit T if the time is not continuous
 					if adjustedT == expectedTime {
 						// Time is continuous, no need for explicit T
-						s = &m.S{D: d, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: k}}
+						s = &m.S{D: d, K: k}
 					} else {
 						// Time is discontinuous, need explicit T
-						s = &m.S{T: m.Ptr(adjustedT), D: d, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: k}}
+						s = &m.S{T: new(adjustedT), D: d, K: k}
 					}
 					se.entries = append(se.entries, s)
 					expectedTime = adjustedT + d

@@ -107,11 +107,9 @@ func wvttTimeSamples(cues []cueItvl, startMS, endMS int, lang string, nr uint32,
 
 func fullSample(start int, end int, data []byte) mp4.FullSample {
 	return mp4.FullSample{
-		Sample: mp4.Sample{
-			Flags: mp4.SyncSampleFlags,
-			Dur:   uint32(end - start),
-			Size:  uint32(len(data)),
-		},
+		Flags:      mp4.SyncSampleFlags,
+		Dur:        uint32(end - start),
+		Size:       uint32(len(data)),
 		DecodeTime: uint64(start),
 		Data:       data,
 	}

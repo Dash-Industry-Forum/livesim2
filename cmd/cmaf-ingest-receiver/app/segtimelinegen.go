@@ -180,7 +180,7 @@ func (sg *segmentTimelineGenerator) modifySegmentTemplate(as *mpd.AdaptationSetT
 	}
 	st := as.SegmentTemplate
 	st.Duration = nil // Remove duration since we will use SegmentTimeline
-	st.StartNumber = mpd.Ptr(uint32(firstNr))
+	st.StartNumber = new(uint32(firstNr))
 	rep := as.Representations[0]
 	repName := rep.Id
 	sdb, ok := sg.segDataBuffers[repName]
@@ -197,7 +197,7 @@ func (sg *segmentTimelineGenerator) modifySegmentTemplate(as *mpd.AdaptationSetT
 		}
 		if s == nil {
 			s = &mpd.S{
-				T: mpd.Ptr(uint64(sd.dts)),
+				T: new(uint64(sd.dts)),
 				D: uint64(sd.dur),
 				R: 0,
 			}
