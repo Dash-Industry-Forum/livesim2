@@ -7,35 +7,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"runtime"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// finalRemove removes a directory with retry logic for Windows.
-// On Windows, file handles may be held briefly after close, causing removal to fail.
-func finalRemove(dir string) {
-	maxRetries := 1
-	if runtime.GOOS == "windows" {
-		maxRetries = 5
-	}
-	var err error
-	for i := 0; i < maxRetries; i++ {
-		err = os.RemoveAll(dir)
-		if err == nil {
-			return
-		}
-		if i < maxRetries-1 {
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to remove temp dir after %d attempts: %s\n", maxRetries, err)
-	}
-}
 
 func TestBasicAuth(t *testing.T) {
 
@@ -62,12 +38,10 @@ func TestBasicAuth(t *testing.T) {
 			expectedResponseCode: http.StatusOK},
 	}
 
-	tmpDir, err := os.MkdirTemp("", "ew-cmaf-ingest-test")
-	assert.NoError(t, err)
 	opts := Options{
 		prefix:                "/upload",
 		timeShiftBufferDepthS: 30,
-		storage:               tmpDir,
+		storage:               t.TempDir(),
 	}
 
 	data, err := os.ReadFile("testdata/video/init.cmfv")
@@ -76,15 +50,14 @@ func TestBasicAuth(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	receiver, err := NewReceiver(ctx, &opts, &config)
 	require.NoError(t, err)
-	// Cleanup: cancel context, wait for goroutines, then remove temp dir
+	// Cleanup: cancel context and wait for goroutines
 	defer func() {
 		cancel()
 		receiver.WaitAll()
-		finalRemove(tmpDir)
 	}()
 	router := setupRouter(receiver, opts.storage, "")
-	server := httptest.NewServer(router)
-	defer server.Close()
+	server := httptest.NewTestServer(t, router)
+	client := server.Client()
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			buf := bytes.NewBuffer(data)
@@ -92,8 +65,9 @@ func TestBasicAuth(t *testing.T) {
 			req, err := http.NewRequest(http.MethodPut, url, buf)
 			require.NoError(t, err)
 			req.SetBasicAuth(c.user, c.password)
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := client.Do(req)
 			require.NoError(t, err)
+			require.NoError(t, resp.Body.Close())
 			assert.Equal(t, c.expectedResponseCode, resp.StatusCode)
 		})
 	}
