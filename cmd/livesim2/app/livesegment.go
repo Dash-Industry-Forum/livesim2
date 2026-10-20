@@ -1004,11 +1004,6 @@ func writeChunk(w http.ResponseWriter, chk chunk) error {
 	return nil
 }
 
-// Ptr returns a pointer to a value of any type
-func Ptr[T any](v T) *T {
-	return &v
-}
-
 // shiftStppTime shifts the baseMediaDecodeTime and the TTML timestamps in an stpp segment.
 // Both stpp text and stpp image with embedded images as sub samples are supported.
 // Note that other "timestamps" that matches the pattern hh:mm:ss[.mmm] will also be shifted.

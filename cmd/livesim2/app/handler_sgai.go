@@ -325,23 +325,21 @@ func buildAdListMPD(host string, pod []string, durMS map[string]int, breakID str
 		es := &m.EventStreamType{
 			SchemeIdUri: sgaiCallbackScheme,
 			Value:       "1",
-			Timescale:   m.Ptr(sgaiTrackingTimescale),
+			Timescale:   new(sgaiTrackingTimescale),
 		}
 		for j, tp := range sgaiTrackingPoints {
 			pt := uint64(float64(d) * tp.fraction)
 			es.Events = append(es.Events, &m.EventType{
 				PresentationTime: pt,
-				Id:               m.Ptr(uint64(i*len(sgaiTrackingPoints) + j + 1)),
+				Id:               new(uint64(i*len(sgaiTrackingPoints) + j + 1)),
 				Value:            sgaiBeaconURL(host, adID, tp.event, breakID),
 			})
 		}
 		// Annex I: carry the List-MPD request query (session id, interests, break) onto each
 		// callback beacon GET, so the common-path beacon stays attributable per viewer/break.
 		es.RequestParam = []*m.ExtendedUrlInfoType{{
-			UrlQueryInfoType: m.UrlQueryInfoType{
-				QueryTemplate:  "$querypart$",
-				UseMPDUrlQuery: true,
-			},
+			QueryTemplate:     "$querypart$",
+			UseMPDUrlQuery:    true,
 			IncludeInRequests: "callback",
 		}}
 		p.EventStreams = []*m.EventStreamType{es}

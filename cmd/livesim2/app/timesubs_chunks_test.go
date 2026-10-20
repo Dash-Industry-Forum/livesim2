@@ -96,7 +96,7 @@ func TestChunkedTimeSubsAvailability(t *testing.T) {
 	cfg.TimeSubsStpp = []string{"en"}
 	cfg.AvailabilityTimeCompleteFlag = false
 	cfg.AvailabilityTimeOffsetS = 1.8
-	cfg.LatencyTargetMS = Ptr(uint32(2000))
+	cfg.LatencyTargetMS = new(uint32(2000))
 	chunkDurS := 0.2
 	cfg.ChunkDurS = &chunkDurS
 

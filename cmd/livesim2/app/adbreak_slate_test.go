@@ -112,7 +112,7 @@ func TestApplySGAISlate(t *testing.T) {
 	rep := &RepData{ID: "V300", InitURI: "V300/init.mp4"}
 	cfg := NewResponseConfig()
 	cfg.SGAI = &SGAIConfig{
-		AdBreaks:       AdBreaks{Periodic: &AdBreakPeriodic{PeriodS: 60, DurationS: 20}},
+		Periodic:       &AdBreakPeriodic{PeriodS: 60, DurationS: 20},
 		ResolveOffsetS: 60,
 	}
 	seg := slateTestSegment(t)
@@ -178,7 +178,7 @@ func TestApplySGAISlateFallsBackToRepSampleDuration(t *testing.T) {
 	vodFS := os.DirFS("testdata")
 	a := &asset{AssetPath: "assets/testpic_2s"}
 	cfg := NewResponseConfig()
-	cfg.SGAI = &SGAIConfig{AdBreaks: AdBreaks{Periodic: &AdBreakPeriodic{PeriodS: 60, DurationS: 20}}, ResolveOffsetS: 60}
+	cfg.SGAI = &SGAIConfig{Periodic: &AdBreakPeriodic{PeriodS: 60, DurationS: 20}, ResolveOffsetS: 60}
 	meta := segMeta{newTime: 0, newNr: 7, timescale: 90000}
 
 	// Strip the per-sample (trun) and default (tfhd) durations to mimic such a segment.
@@ -210,7 +210,7 @@ func TestApplySGAISlateFallsBackToRepSampleDuration(t *testing.T) {
 
 func TestAdBreakForSegment(t *testing.T) {
 	cfg := NewResponseConfig()
-	cfg.SGAI = &SGAIConfig{AdBreaks: AdBreaks{Breaks: []AdBreak{{OffsetS: 30, DurationS: 15}}}}
+	cfg.SGAI = &SGAIConfig{Breaks: []AdBreak{{OffsetS: 30, DurationS: 15}}}
 
 	// Segment starting at 30s (in 90k ticks) is in the break; end reported in epoch ms.
 	// The event id is the 1-based break index (matches the live MPD's Replace event id).
@@ -227,7 +227,7 @@ func TestAdBreakForSegment(t *testing.T) {
 
 	// svta_ drives the same slate from its own schedule.
 	svtaCfg := NewResponseConfig()
-	svtaCfg.SVTA = &SVTAConfig{AdBreaks: AdBreaks{Breaks: []AdBreak{{OffsetS: 30, DurationS: 15}}}, AdsPerBreak: 1}
+	svtaCfg.SVTA = &SVTAConfig{Breaks: []AdBreak{{OffsetS: 30, DurationS: 15}}, AdsPerBreak: 1}
 	endMS, id, ok = adBreakForSegment(svtaCfg, segMeta{newTime: 30 * 90000, timescale: 90000})
 	assert.True(t, ok)
 	assert.Equal(t, int64(45_000), endMS)
@@ -238,7 +238,7 @@ func TestAdBreakForSegment(t *testing.T) {
 	assert.False(t, ok)
 	// A 10 MHz track at today's wall clock: newTime*1000 would overflow int64.
 	per := NewResponseConfig()
-	per.SGAI = &SGAIConfig{AdBreaks: AdBreaks{Periodic: &AdBreakPeriodic{PeriodS: 60, DurationS: 20}}}
+	per.SGAI = &SGAIConfig{Periodic: &AdBreakPeriodic{PeriodS: 60, DurationS: 20}}
 	const ts = 10_000_000
 	minuteS := uint64(1_790_683_440) // a full minute in 2026
 	endMS, _, ok = adBreakForSegment(per, segMeta{newTime: (minuteS + 4) * ts, timescale: ts})

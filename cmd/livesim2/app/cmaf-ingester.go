@@ -186,7 +186,7 @@ func (cm *cmafIngesterMgr) NewCmafIngester(req CmafIngesterSetup) (nr uint64, er
 		nextSegTrigger: make(chan struct{}),
 	}
 	if c.dur != nil {
-		c.nrSegsToSend = m.Ptr(*c.dur * 1000 / asset.SegmentDurMS)
+		c.nrSegsToSend = new(*c.dur * 1000 / asset.SegmentDurMS)
 	}
 	cm.ingesters[nr] = &c
 

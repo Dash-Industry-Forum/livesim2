@@ -79,7 +79,7 @@ func TestLiveMPDStart(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 8000, asset.LoopDurMS)
 		cfg := NewResponseConfig()
-		cfg.StartNr = Ptr(tc.startNr)
+		cfg.StartNr = new(tc.startNr)
 		nowMS := 100_000
 		// Number template
 		liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nil, nowMS)
@@ -396,7 +396,7 @@ func TestLastAvailableSegment(t *testing.T) {
 			}
 			cfg.AvailabilityTimeOffsetS = tc.availabilityTimeOffset
 			if tc.availabilityTimeOffset > 0 && !tc.availabilityTimeComplete {
-				cfg.ChunkDurS = Ptr(2 - tc.availabilityTimeOffset)
+				cfg.ChunkDurS = new(2 - tc.availabilityTimeOffset)
 				cfg.AvailabilityTimeCompleteFlag = false
 			}
 			tsbd := m.Duration(60 * time.Second)
@@ -592,11 +592,11 @@ func TestPublishTime(t *testing.T) {
 			}
 			if tc.availabilityTimeOffset > 0 {
 				cfg.AvailabilityTimeOffsetS = tc.availabilityTimeOffset
-				cfg.ChunkDurS = Ptr(2 - tc.availabilityTimeOffset)
+				cfg.ChunkDurS = new(2 - tc.availabilityTimeOffset)
 				cfg.AvailabilityTimeCompleteFlag = false
 			}
 			if tc.periodsPerHour > 0 {
-				cfg.PeriodsPerHour = Ptr(tc.periodsPerHour)
+				cfg.PeriodsPerHour = new(tc.periodsPerHour)
 			}
 			err := verifyAndFillConfig(cfg, tc.nowMS)
 			require.NoError(t, err)
@@ -872,7 +872,7 @@ func TestAudioSegmentTimeFollowsVideo(t *testing.T) {
 			asset, ok := am.findAsset(tc.asset)
 			require.True(t, ok)
 			cfg := NewResponseConfig()
-			cfg.TimeShiftBufferDepthS = Ptr(tc.timeShiftBufferDepthS)
+			cfg.TimeShiftBufferDepthS = new(tc.timeShiftBufferDepthS)
 			switch tc.mpdStlType {
 			case "timelineTime":
 				cfg.SegTimelineMode = SegTimelineModeTime
@@ -949,7 +949,7 @@ func TestMultiPeriod(t *testing.T) {
 			nrPeriodsPerHour:              60,
 			mpdStlType:                    "timelineNumber",
 			wantedNrPeriods:               2,
-			wantedStartNrs:                []*int{Ptr(469), Ptr(480)},
+			wantedStartNrs:                []*int{new(469), new(480)},
 			wantedPresentationTimeOffsets: [][]int{{43200000, 81000000}, {46080000, 86400000}},
 			wantedErr:                     "",
 		},
@@ -961,7 +961,7 @@ func TestMultiPeriod(t *testing.T) {
 			nrPeriodsPerHour:              60,
 			mpdStlType:                    "$Number$",
 			wantedNrPeriods:               2,
-			wantedStartNrs:                []*int{Ptr(450), Ptr(480)},
+			wantedStartNrs:                []*int{new(450), new(480)},
 			wantedPresentationTimeOffsets: [][]int{{900, 900}, {960, 960}},
 			wantedErr:                     "",
 		},
@@ -982,7 +982,7 @@ func TestMultiPeriod(t *testing.T) {
 			nrPeriodsPerHour:              30,
 			mpdStlType:                    "$Number$",
 			wantedNrPeriods:               2,
-			wantedStartNrs:                []*int{Ptr(105), Ptr(120)},
+			wantedStartNrs:                []*int{new(105), new(120)},
 			wantedPresentationTimeOffsets: [][]int{{40320000, 12902400}, {46080000, 14745600}},
 			wantedErr:                     "",
 		},
@@ -992,7 +992,7 @@ func TestMultiPeriod(t *testing.T) {
 			asset, ok := am.findAsset(tc.asset)
 			require.True(t, ok)
 			cfg := NewResponseConfig()
-			cfg.PeriodsPerHour = Ptr(tc.nrPeriodsPerHour)
+			cfg.PeriodsPerHour = new(tc.nrPeriodsPerHour)
 			switch tc.mpdStlType {
 			case "timelineTime":
 				cfg.SegTimelineMode = SegTimelineModeTime
@@ -1115,16 +1115,16 @@ func TestFractionalFramerateMPDs(t *testing.T) {
 func TestFillContentTypes(t *testing.T) {
 	p := &m.Period{
 		AdaptationSets: []*m.AdaptationSetType{
-			{Id: Ptr(uint32(1)), RepresentationBaseType: m.RepresentationBaseType{MimeType: "video/mp4"}},
-			{Id: Ptr(uint32(2)), RepresentationBaseType: m.RepresentationBaseType{MimeType: "audio/mp4"}},
-			{Id: Ptr(uint32(2)), RepresentationBaseType: m.RepresentationBaseType{MimeType: "application/mp4"}},
-			{Id: Ptr(uint32(4)), ContentType: "audio"},
-			{Id: Ptr(uint32(4))},
-			{Id: Ptr(uint32(4)), Representations: []*m.RepresentationType{
-				{RepresentationBaseType: m.RepresentationBaseType{MimeType: "video/mp4"}},
+			{Id: new(uint32(1)), MimeType: "video/mp4"},
+			{Id: new(uint32(2)), MimeType: "audio/mp4"},
+			{Id: new(uint32(2)), MimeType: "application/mp4"},
+			{Id: new(uint32(4)), ContentType: "audio"},
+			{Id: new(uint32(4))},
+			{Id: new(uint32(4)), Representations: []*m.RepresentationType{
+				{MimeType: "video/mp4"},
 			}},
-			{Id: Ptr(uint32(4)), Representations: []*m.RepresentationType{
-				{RepresentationBaseType: m.RepresentationBaseType{Codecs: "ac-3"}},
+			{Id: new(uint32(4)), Representations: []*m.RepresentationType{
+				{Codecs: "ac-3"},
 			}},
 		},
 	}
@@ -1214,12 +1214,12 @@ func TestGenerateTimelineEntries(t *testing.T) {
 			reID:                   "V300",
 			wt:                     wrapTimes{startRelMS: 0, nowRelMS: 7000, startWraps: 0, nowWraps: 0},
 			atoMS:                  0,
-			chunkDur:               Ptr(0.5),
+			chunkDur:               new(0.5),
 			expectedStartNr:        0,
 			expectedLsiNr:          2,
 			expectedMediaTimescale: 90000,
 			expectedEntries: []*m.S{
-				{T: Ptr(uint64(0)), D: 180000, R: 2, CommonSegmentSequenceAttributes: m.CommonSegmentSequenceAttributes{K: Ptr(uint64(4))}},
+				{T: new(uint64(0)), D: 180000, R: 2, K: new(uint64(4))},
 			},
 		},
 		{
@@ -1227,7 +1227,7 @@ func TestGenerateTimelineEntries(t *testing.T) {
 			reID:          "V300",
 			wt:            wrapTimes{startRelMS: 0, nowRelMS: 7000, startWraps: 0, nowWraps: 0},
 			atoMS:         0,
-			chunkDur:      Ptr(2.1),
+			chunkDur:      new(2.1),
 			expectedError: "chunk duration 2.10s must be less than or equal to segment duration 2.00s",
 		},
 	}
@@ -1528,7 +1528,7 @@ func TestUpdateSSRAdaptationSet(t *testing.T) {
 		{
 			desc: "video adaptation set with SSR configuration",
 			as: &m.AdaptationSetType{
-				Id:          Ptr(uint32(2)),
+				Id:          new(uint32(2)),
 				ContentType: "video",
 			},
 			nextMap:                    map[uint32]uint32{1: 2, 2: 3},
@@ -1543,7 +1543,7 @@ func TestUpdateSSRAdaptationSet(t *testing.T) {
 		{
 			desc: "video adaptation set not in nextMap",
 			as: &m.AdaptationSetType{
-				Id:          Ptr(uint32(3)),
+				Id:          new(uint32(3)),
 				ContentType: "video",
 			},
 			nextMap:                    map[uint32]uint32{1: 2},
@@ -1556,7 +1556,7 @@ func TestUpdateSSRAdaptationSet(t *testing.T) {
 		{
 			desc: "audio adaptation set (should not be processed)",
 			as: &m.AdaptationSetType{
-				Id:          Ptr(uint32(1)),
+				Id:          new(uint32(1)),
 				ContentType: "audio",
 			},
 			nextMap:                    map[uint32]uint32{1: 2},
@@ -1581,7 +1581,7 @@ func TestUpdateSSRAdaptationSet(t *testing.T) {
 		{
 			desc: "video adaptation set with switching value but no prev",
 			as: &m.AdaptationSetType{
-				Id:          Ptr(uint32(1)),
+				Id:          new(uint32(1)),
 				ContentType: "video",
 			},
 			nextMap:                    map[uint32]uint32{1: 2},
@@ -1597,7 +1597,7 @@ func TestUpdateSSRAdaptationSet(t *testing.T) {
 			desc: "video adaptation set with existing properties",
 			as: func() *m.AdaptationSetType {
 				as := &m.AdaptationSetType{
-					Id:          Ptr(uint32(2)),
+					Id:          new(uint32(2)),
 					ContentType: "video",
 				}
 				as.EssentialProperties = append(as.EssentialProperties, &m.DescriptorType{
@@ -1956,7 +1956,7 @@ func TestPatternConsistency(t *testing.T) {
 				t.Run(fmt.Sprintf("nowMS_%d", nowMS), func(t *testing.T) {
 					cfg := NewResponseConfig()
 					cfg.SegTimelineMode = modeTest.mode
-					cfg.TimeShiftBufferDepthS = Ptr(30)
+					cfg.TimeShiftBufferDepthS = new(30)
 
 					liveMPD, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, nowMS)
 					require.NoError(t, err)
@@ -2102,7 +2102,7 @@ func TestVideoAudioSegmentCountMatch(t *testing.T) {
 		t.Run(fmt.Sprintf("nowMS_%d", nowMS), func(t *testing.T) {
 			cfg := NewResponseConfig()
 			cfg.SegTimelineMode = SegTimelineModePattern
-			cfg.TimeShiftBufferDepthS = Ptr(30)
+			cfg.TimeShiftBufferDepthS = new(30)
 
 			liveMPD, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, nowMS)
 			require.NoError(t, err)
@@ -2156,7 +2156,7 @@ func TestPatternStabilityWithTimeShift(t *testing.T) {
 
 	cfg := NewResponseConfig()
 	cfg.SegTimelineMode = SegTimelineModePattern
-	cfg.TimeShiftBufferDepthS = Ptr(30)
+	cfg.TimeShiftBufferDepthS = new(30)
 
 	// Get MPD at a base time that aligns with pattern start (pE=0)
 	baseNowMS := 8000000
@@ -2603,7 +2603,7 @@ func convertVideoSegmentsToEntries(segments []Segment, _ uint32) []*m.S {
 
 	entries := make([]*m.S, 0)
 	currentEntry := &m.S{
-		T: Ptr(segments[0].StartTime),
+		T: new(segments[0].StartTime),
 		D: segments[0].EndTime - segments[0].StartTime,
 		R: 0,
 	}
@@ -2648,7 +2648,7 @@ func calculateAudioPattern(refSE segEntries, sampleDur uint32, audioTimescale ui
 
 			if currentEntry == nil {
 				currentEntry = &m.S{
-					T: Ptr(audioT),
+					T: new(audioT),
 					D: audioDur,
 					R: 0,
 				}
@@ -2710,7 +2710,7 @@ func TestPEOffsetCalculation(t *testing.T) {
 				} else {
 					entry := &m.S{D: currentDur, R: currentR}
 					if !startSet {
-						entry.T = Ptr(tc.startTime)
+						entry.T = new(tc.startTime)
 						startSet = true
 					}
 					entries = append(entries, entry)
@@ -2721,7 +2721,7 @@ func TestPEOffsetCalculation(t *testing.T) {
 			// Add the last entry
 			entry := &m.S{D: currentDur, R: currentR}
 			if !startSet {
-				entry.T = Ptr(tc.startTime)
+				entry.T = new(tc.startTime)
 			}
 			entries = append(entries, entry)
 
@@ -2751,7 +2751,7 @@ func TestPatternDurationCalculation(t *testing.T) {
 	// Audio pattern: [96256, 96256, 96256, 95232] at 48kHz should equal 8s
 
 	entries := []*m.S{
-		{D: 96256, R: 2, T: Ptr(uint64(0))}, // 3 segments of 96256
+		{D: 96256, R: 2, T: new(uint64(0))}, // 3 segments of 96256
 		{D: 95232, R: 0},                    // 1 segment of 95232
 		{D: 96256, R: 2},                    // 3 segments of 96256 (repeat)
 		{D: 95232, R: 0},                    // 1 segment of 95232 (repeat)
@@ -2839,7 +2839,7 @@ func TestComputeExpectedPatternLen(t *testing.T) {
 			refSE := segEntries{
 				mediaTimescale: tc.videoTimescale,
 				entries: []*m.S{
-					{T: Ptr(uint64(0)), D: tc.videoDur, R: 0},
+					{T: new(uint64(0)), D: tc.videoDur, R: 0},
 				},
 			}
 			got := computeExpectedPatternLen(refSE, tc.audioTimescale, tc.audioFrameDur)
@@ -2852,7 +2852,7 @@ func TestComputeExpectedPatternLen(t *testing.T) {
 		refSE := segEntries{
 			mediaTimescale: 48000,
 			entries: []*m.S{
-				{T: Ptr(uint64(0)), D: 96000, R: 0},
+				{T: new(uint64(0)), D: 96000, R: 0},
 				{D: 48000, R: 0},
 			},
 		}
@@ -2903,7 +2903,7 @@ func TestPECalculationWithSpecificNowMS(t *testing.T) {
 			// Create response config for the specific nowMS
 			cfg := NewResponseConfig()
 			cfg.SegTimelineMode = SegTimelineModePattern
-			cfg.TimeShiftBufferDepthS = Ptr(30)
+			cfg.TimeShiftBufferDepthS = new(30)
 
 			// Generate MPD for this nowMS - this should trigger the PE calculation
 			mpd, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, tc.nowMS)
@@ -2994,7 +2994,7 @@ func TestProducerReferenceTimeFollowsUTCTiming(t *testing.T) {
 			cfg.UTCTimingMethods = c.methods
 			cfg.AvailabilityTimeCompleteFlag = false
 			cfg.AvailabilityTimeOffsetS = 1.5
-			cfg.LatencyTargetMS = Ptr(uint32(3000))
+			cfg.LatencyTargetMS = new(uint32(3000))
 
 			liveMPD, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, 100_000)
 			require.NoError(t, err)

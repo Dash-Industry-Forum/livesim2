@@ -40,7 +40,7 @@ func BenchmarkPrepareChunks(b *testing.B) {
 		}
 		b.Run(name, func(b *testing.B) {
 			cfg := NewResponseConfig()
-			cfg.ChunkDurS = Ptr(1.0)
+			cfg.ChunkDurS = new(1.0)
 			cfg.DRM = drm
 			var buf bytes.Buffer
 			b.ReportAllocs()

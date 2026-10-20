@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/chunkparser"
-	"github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/Eyevinn/mp4ff/bits"
 	"github.com/Eyevinn/mp4ff/mp4"
 )
@@ -143,7 +142,7 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 		shouldBeShifted: masterTimeShift != 0 || masterSeqNrShift != 0,
 	}
 
-	defaultDur := mpd.Ptr(uint32(0))
+	defaultDur := new(uint32(0))
 
 	chunkParserCallback := func(cd chunkparser.ChunkData) error {
 		// Set ofh to the write file output and then write data

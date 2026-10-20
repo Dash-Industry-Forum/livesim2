@@ -48,9 +48,9 @@ func TestCmafIngesterMgr(t *testing.T) {
 		nrTriggers         int
 		expectedNrSegments int
 	}{
-		{"/livesim2/segtimeline_1/ato_1/chunkdur_1000/testpic_2s/Manifest.mpd", mpd.Ptr(int(10000)), false, 2, 4},
-		{"/livesim2/segtimeline_1/testpic_2s/Manifest.mpd", mpd.Ptr(int(10000)), true, 2, 2},
-		{"/livesim2/segtimeline_1/testpic_2s/Manifest.mpd", mpd.Ptr(int(10000)), false, 2, 6},
+		{"/livesim2/segtimeline_1/ato_1/chunkdur_1000/testpic_2s/Manifest.mpd", new(int(10000)), false, 2, 4},
+		{"/livesim2/segtimeline_1/testpic_2s/Manifest.mpd", new(int(10000)), true, 2, 2},
+		{"/livesim2/segtimeline_1/testpic_2s/Manifest.mpd", new(int(10000)), false, 2, 6},
 	}
 
 	for i, c := range cases {

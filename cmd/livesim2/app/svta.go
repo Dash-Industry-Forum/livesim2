@@ -308,7 +308,7 @@ func addSVTAAdCreativeEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, 
 	ts := sc.Timescale
 	es := &m.EventStreamType{
 		SchemeIdUri: SVTAAdCreativeScheme,
-		Timescale:   m.Ptr(ts),
+		Timescale:   new(ts),
 	}
 	sid := cfg.SteerSessionID
 	for _, b := range insts {
@@ -354,8 +354,8 @@ func addSVTAAdCreativeEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, 
 			}
 			es.Events = append(es.Events, &m.EventType{
 				PresentationTime: offsetTicks + startTicks,
-				Duration:         m.Ptr(endTicks - startTicks),
-				Id:               m.Ptr(b.id*1000 + uint64(slot)),
+				Duration:         new(endTicks - startTicks),
+				Id:               new(b.id*1000 + uint64(slot)),
 				Value:            svtaPayload("slot", s),
 			})
 		}
@@ -378,8 +378,8 @@ func svtaPodEvent(host string, b adBreakInst, breakID, sid string, offsetTicks, 
 	}
 	return &m.EventType{
 		PresentationTime: offsetTicks,
-		Duration:         m.Ptr(totalTicks),
-		Id:               m.Ptr(b.id * 1000),
+		Duration:         new(totalTicks),
+		Id:               new(b.id * 1000),
 		Value:            svtaPayload("pod", pod),
 	}
 }
@@ -435,11 +435,11 @@ func svtaListMPDEventStream(host, adID, breakID, sid string, durMS int, eventID 
 	}
 	return &m.EventStreamType{
 		SchemeIdUri: SVTAAdCreativeScheme,
-		Timescale:   m.Ptr(sgaiTrackingTimescale),
+		Timescale:   new(sgaiTrackingTimescale),
 		Events: []*m.EventType{{
 			PresentationTime: 0,
-			Duration:         m.Ptr(uint64(durMS)),
-			Id:               m.Ptr(eventID),
+			Duration:         new(uint64(durMS)),
+			Id:               new(eventID),
 			Value:            svtaPayload("slot", slot),
 		}},
 	}

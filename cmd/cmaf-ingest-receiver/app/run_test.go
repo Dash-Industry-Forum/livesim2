@@ -75,14 +75,12 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 			wg := sync.WaitGroup{}
 
 			// Send all init segments and check that they have been received
-			wg.Add(1)
-			go func() {
+			wg.Go(func() {
 				for _, trd := range testTrackData {
 					sendSegment(t, http.DefaultClient, server.URL, opts.prefix, srcDir, chName, trd.trName, "init",
 						trd.ext, c.streamsURLFormat, http.StatusOK)
 				}
-				wg.Done()
-			}()
+			})
 			wg.Wait()
 			// Check what has been uploaded tmpDir/chName
 			dstDir := filepath.Join(tmpDir, chName)
@@ -100,15 +98,13 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 
 			// Send first media segments and check that they have been received
 			wg = sync.WaitGroup{}
-			wg.Add(1)
-			go func() {
+			wg.Go(func() {
 				for _, trd := range testTrackData {
 					segName := fmt.Sprintf("%d", trd.minNr)
 					sendSegment(t, http.DefaultClient, server.URL, opts.prefix, srcDir, chName, trd.trName, segName,
 						trd.ext, c.streamsURLFormat, http.StatusOK)
 				}
-				wg.Done()
-			}()
+			})
 			wg.Wait()
 			// Check that first media segment has been written (poll: the write is asynchronous)
 			for _, trd := range testTrackData {
@@ -118,15 +114,13 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 
 			// Send the second media segments. Since the duration is not the same, there should be no content_info.json written.
 			wg = sync.WaitGroup{}
-			wg.Add(1)
-			go func() {
+			wg.Go(func() {
 				for _, trd := range testTrackData {
 					segName := fmt.Sprintf("%d", trd.minNr+1)
 					sendSegment(t, http.DefaultClient, server.URL, opts.prefix, srcDir, chName, trd.trName, segName,
 						trd.ext, c.streamsURLFormat, http.StatusOK)
 				}
-				wg.Done()
-			}()
+			})
 			wg.Wait()
 			// Check that the second media segment has been written (poll: the write is asynchronous)
 			for _, trd := range testTrackData {
@@ -138,15 +132,13 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 			// Send the third media segments. Since the duration of segment 2 and 3 are the same, manifest and content_info
 			// should have been written unless shifted.
 			wg = sync.WaitGroup{}
-			wg.Add(1)
-			go func() {
+			wg.Go(func() {
 				for _, trd := range testTrackData {
 					segName := fmt.Sprintf("%d", trd.minNr+2)
 					sendSegment(t, http.DefaultClient, server.URL, opts.prefix, srcDir, chName, trd.trName, segName,
 						trd.ext, c.streamsURLFormat, http.StatusOK)
 				}
-				wg.Done()
-			}()
+			})
 			wg.Wait()
 			// Poll for the manifest (written asynchronously); the SegmentTimeline-number MPD must not
 			// appear until a later segment triggers it.
@@ -177,15 +169,13 @@ func TestReceivingMediaLiveInput(t *testing.T) {
 
 			// Send the fourth media segments.
 			// If shifted, there should be segments in the SegmentTimel line MPD, if not, just one segment.
-			wg.Add(1)
-			go func() {
+			wg.Go(func() {
 				for _, trd := range testTrackData {
 					segName := fmt.Sprintf("%d", trd.minNr+3)
 					sendSegment(t, http.DefaultClient, server.URL, opts.prefix, srcDir, chName, trd.trName, segName,
 						trd.ext, c.streamsURLFormat, http.StatusOK)
 				}
-				wg.Done()
-			}()
+			})
 			wg.Wait()
 			// Poll until the SegmentTimeline-number MPD has been written to the expected state.
 			expStartNr, expNrSegments := 896605655, 3
@@ -304,14 +294,12 @@ func TestReceivingNonIdealInput(t *testing.T) {
 	wg := sync.WaitGroup{}
 	nextNr := 0
 	for range 1 {
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			for _, trd := range testTrackData {
 				sendSegment(t, http.DefaultClient, server.URL, opts.prefix, srcDir, chName, trd.trName, fmt.Sprintf("%d", nextNr),
 					trd.ext, streamsURLFormat, http.StatusOK)
 			}
-			wg.Done()
-		}()
+		})
 		wg.Wait()
 		nextNr++
 	}
@@ -347,14 +335,12 @@ func TestReceivingNonIdealInput(t *testing.T) {
 
 	// Send second media segments and check that they have been received
 	wg = sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		for _, trd := range testTrackData {
 			sendSegment(t, http.DefaultClient, server.URL, opts.prefix, srcDir, chName, trd.trName, fmt.Sprintf("%d", nextNr),
 				trd.ext, streamsURLFormat, http.StatusOK)
 		}
-		wg.Done()
-	}()
+	})
 	wg.Wait()
 	nextNr++
 	// Check that second segment has been written to nr 8091, except for second video track which has been updated
@@ -400,14 +386,12 @@ func TestReceivingNonIdealInput(t *testing.T) {
 
 	// Send the third media segments. Since segment duration for video is the same, segment data should be written to SegmentTimeline.
 	wg = sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		for _, trd := range testTrackData {
 			sendSegment(t, http.DefaultClient, server.URL, opts.prefix, srcDir, chName, trd.trName, fmt.Sprintf("%d", nextNr),
 				trd.ext, streamsURLFormat, http.StatusOK)
 		}
-		wg.Done()
-	}()
+	})
 	wg.Wait()
 	nextNr++
 	// Poll until the SegmentTimeline-number MPD has been written (startNumber settles to 449002890).
@@ -423,15 +407,13 @@ func TestReceivingNonIdealInput(t *testing.T) {
 	// Next, let us have a jump in the sequence numbers, so segmentTimes should have one new number.
 	// There should still be one interval, since we don't generate multi-interval segmentTimes (yet).
 	nextNr++ // Skipping one
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		for _, trd := range testTrackData {
 			sendSegment(t, http.DefaultClient, server.URL, opts.prefix, srcDir, chName, trd.trName, fmt.Sprintf("%d", nextNr),
 
 				trd.ext, streamsURLFormat, http.StatusOK)
 		}
-		wg.Done()
-	}()
+	})
 	wg.Wait()
 	nextNr++
 	// Poll until the SegmentTimeline-number MPD has been re-written (startNumber settles to 449002892).

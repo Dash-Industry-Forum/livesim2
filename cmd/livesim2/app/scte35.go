@@ -6,6 +6,7 @@ package app
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -496,8 +497,8 @@ func (c *SCTE35Config) timeSignalCuePoints(b adBreakInst, breakStartS int64,
 	if c.AdsPerBreak > 0 {
 		closing.cue.Levels = append(closing.cue.Levels, creative(c.AdsPerBreak, false))
 	}
-	for j := len(c.Levels) - 1; j >= 0; j-- {
-		closing.cue.Levels = append(closing.cue.Levels, level(c.Levels[j], j, false, 0, c.upid(b.id, c.Levels[j], 0)))
+	for j, v := range slices.Backward(c.Levels) {
+		closing.cue.Levels = append(closing.cue.Levels, level(v, j, false, 0, c.upid(b.id, v, 0)))
 	}
 	return append(out, closing)
 }
@@ -671,7 +672,7 @@ func addSCTE35Events(period *m.Period, cfg *ResponseConfig, nowMS int) {
 	es := &m.EventStreamType{
 		SchemeIdUri: m.AnyURI(scheme),
 		Value:       sc.Value,
-		Timescale:   m.Ptr(sc.Timescale),
+		Timescale:   new(sc.Timescale),
 	}
 	nowS := int64(nowMS/1000) - int64(cfg.StartTimeS)
 	for _, b := range insts {
@@ -685,8 +686,8 @@ func addSCTE35Events(period *m.Period, cfg *ResponseConfig, nowMS int) {
 				// than with no @duration at all, which DASH defines as an unknown duration.
 				// SCTE 214-1 §6.7.2.1 item 2: an event that closes another one "should have
 				// a duration of zero and shall not be infinite".
-				Duration: m.Ptr(uint64(cp.durS) * uint64(sc.Timescale)),
-				Id:       m.Ptr(cp.id),
+				Duration: new(uint64(cp.durS) * uint64(sc.Timescale)),
+				Id:       new(cp.id),
 			}
 			if sc.MPDForm == "xml" {
 				ev.Signal = cp.cue.XMLSignal()

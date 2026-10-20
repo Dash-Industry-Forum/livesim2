@@ -317,7 +317,7 @@ func TestChunkSegmentAcrossFragments(t *testing.T) {
 		for i := range uint32(3) {
 			n := byte(3*nr + i + 1)
 			frag.AddFullSample(mp4.FullSample{
-				Sample:     mp4.Sample{Flags: mp4.SyncSampleFlags, Dur: 100, Size: 2},
+				Flags: mp4.SyncSampleFlags, Dur: 100, Size: 2,
 				DecodeTime: uint64(100 * (3*nr + i)),
 				Data:       []byte{n, n},
 			})
@@ -352,7 +352,7 @@ func TestChunkSegmentAcrossFragments(t *testing.T) {
 	}
 
 	// Only the requested chunk is returned.
-	chunks, err = chunkSegment(init, seg, meta, 400, Ptr(1))
+	chunks, err = chunkSegment(init, seg, meta, 400, new(1))
 	require.NoError(t, err)
 	require.Len(t, chunks, 1)
 	require.Nil(t, chunks[0].styp)
@@ -509,7 +509,7 @@ func TestStartNumber(t *testing.T) {
 		require.True(t, ok)
 		require.NoError(t, err)
 		cfg := NewResponseConfig()
-		cfg.StartNr = Ptr(tc.startNr)
+		cfg.StartNr = new(tc.startNr)
 		media := strings.Replace(tc.media, "$NrOrTime$", fmt.Sprintf("%d", (tc.requestNr)), 1)
 		so, err := genLiveSegment(log, vodFS, asset, cfg, media, tc.nowMS, false /* isLast */)
 		if tc.expectedErr != "" {
@@ -666,7 +666,7 @@ func TestLLSegmentAvailability(t *testing.T) {
 			require.Fail(t, "unknown mpdType")
 		}
 		if tc.startNr != 0 {
-			cfg.StartNr = Ptr(tc.startNr)
+			cfg.StartNr = new(tc.startNr)
 		}
 		media := strings.Replace(tc.media, "$NrOrTime$", fmt.Sprintf("%d", (tc.requestMedia)), 1)
 		so, err := genLiveSegment(log, vodFS, asset, cfg, media, tc.nowMS, false /* isLast */)
@@ -1071,7 +1071,7 @@ func TestWriteSubSegment(t *testing.T) {
 			cfg := NewResponseConfig()
 			cfg.SSRAS = "1,2"
 			cfg.ChunkDurSSR = "1,1.0"
-			cfg.ChunkDurS = Ptr(1.0)
+			cfg.ChunkDurS = new(1.0)
 
 			rr := httptest.NewRecorder()
 			ctx := context.Background()
@@ -1134,7 +1134,7 @@ func TestWriteSubSegmentWithChunkDuration(t *testing.T) {
 			media:                   "V300/10.m4s",
 			subSegmentPart:          "5",
 			nowMS:                   88_000,
-			chunkDurS:               Ptr(0.2),
+			chunkDurS:               new(0.2),
 			availabilityTimeOffsetS: 0.1,
 			expSeqNr:                10,
 		},
@@ -1144,7 +1144,7 @@ func TestWriteSubSegmentWithChunkDuration(t *testing.T) {
 			media:                   "V300/10.m4s",
 			subSegmentPart:          "10",
 			nowMS:                   88_000,
-			chunkDurS:               Ptr(0.2),
+			chunkDurS:               new(0.2),
 			availabilityTimeOffsetS: 0.1,
 			expSeqNr:                10,
 		},
@@ -1154,7 +1154,7 @@ func TestWriteSubSegmentWithChunkDuration(t *testing.T) {
 			media:                   "V300/10.m4s",
 			subSegmentPart:          "5",
 			nowMS:                   88_000,
-			chunkDurS:               Ptr(0.2),
+			chunkDurS:               new(0.2),
 			availabilityTimeOffsetS: 1.8,
 			expSeqNr:                10,
 		},

@@ -102,7 +102,7 @@ func TestAddSGAIReplaceEvents(t *testing.T) {
 	cfg.Host = "https://example.com"
 	skip := 5
 	cfg.SGAI = &SGAIConfig{
-		AdBreaks:       AdBreaks{Breaks: []AdBreak{{OffsetS: 30, DurationS: 15}}},
+		Breaks:         []AdBreak{{OffsetS: 30, DurationS: 15}},
 		AdEndpoint:     "/sgai/ads",
 		ResolveOffsetS: 60,
 		SkipAfterS:     &skip,
@@ -181,7 +181,7 @@ func TestAddSGAIReplaceEventsPeriodic(t *testing.T) {
 	cfg := NewResponseConfig()
 	cfg.Host = "https://example.com"
 	cfg.SGAI = &SGAIConfig{
-		AdBreaks:       AdBreaks{Periodic: &AdBreakPeriodic{PeriodS: 60, DurationS: 20}},
+		Periodic:       &AdBreakPeriodic{PeriodS: 60, DurationS: 20},
 		AdEndpoint:     "/sgai/ads",
 		ResolveOffsetS: 60,
 		Clip:           true,

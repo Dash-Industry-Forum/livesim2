@@ -218,7 +218,7 @@ func (ch *channel) addInitDataAndUpdateTimescale(stream stream, init *mp4.InitSe
 	if currAsSet == nil {
 		currAsSet = m.NewAdaptationSet()
 		currAsSet.Lang = lang
-		currAsSet.Id = m.Ptr(uint32(len(p.AdaptationSets) + 1))
+		currAsSet.Id = new(uint32(len(p.AdaptationSets) + 1))
 		currAsSet.ContentType = m.RFC6838ContentTypeType(stream.mediaType)
 		mimeType, ok := mimeTypeFromMediaType[stream.mediaType]
 		if !ok {
@@ -249,7 +249,7 @@ func (ch *channel) addInitDataAndUpdateTimescale(stream stream, init *mp4.InitSe
 	ext := extFromMediaType[stream.mediaType]
 	if currAsSet.SegmentTemplate == nil {
 		currAsSet.SegmentTemplate = m.NewSegmentTemplate()
-		currAsSet.SegmentTemplate.Timescale = m.Ptr(uint32(trak.Mdia.Mdhd.Timescale))
+		currAsSet.SegmentTemplate.Timescale = new(uint32(trak.Mdia.Mdhd.Timescale))
 		currAsSet.SegmentTemplate.Media = fmt.Sprintf("$RepresentationID$/$Number$%s", ext)
 		currAsSet.SegmentTemplate.Initialization = fmt.Sprintf("$RepresentationID$/init%s", ext)
 	}
@@ -510,8 +510,8 @@ func (ch *channel) updateAndWriteMPD(log *slog.Logger) error {
 	for _, asSet := range ch.mpd.Periods[0].AdaptationSets {
 		stl := asSet.SegmentTemplate
 		dur := uint64(ch.masterSegDuration) * uint64((*stl.Timescale)) / uint64(ch.masterTimescale)
-		stl.Duration = m.Ptr(uint32(dur))
-		stl.StartNumber = m.Ptr(uint32(0))
+		stl.Duration = new(uint32(dur))
+		stl.StartNumber = new(uint32(0))
 	}
 	mpdPath := filepath.Join(ch.dir, "manifest.mpd")
 	err := writeMPD(ch.mpd, mpdPath)
