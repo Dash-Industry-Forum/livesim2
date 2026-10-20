@@ -88,9 +88,11 @@ func SetupServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 		return nil, fmt.Errorf("routes: %w", err)
 	}
 
-	server.assetMgr.c2pa, err = newC2PACredentials(logger, cfg.C2PACertPath, cfg.C2PAKeyPath)
-	if err != nil {
-		return nil, err
+	if cfg.C2PA {
+		server.assetMgr.c2pa, err = newC2PACredentials(logger, cfg.C2PACertPath, cfg.C2PAKeyPath)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	start := time.Now()

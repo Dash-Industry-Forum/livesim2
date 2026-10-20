@@ -22,6 +22,7 @@ import (
 	"github.com/richardwooding/c2pa"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/veraison/go-cose"
 )
 
 // testClaimSigner returns a claim signer with an ES256 test CA and end-entity certificate.
@@ -66,12 +67,12 @@ func TestSignInit(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	unsigned, err := WithoutManifestBox(signed)
-	require.NoError(t, err)
-	assert.Equal(t, init, unsigned, "only the manifest box is added")
+	assert.Equal(t, init, withoutManifestBox(t, signed), "only the manifest box is added")
 
+	// The manifest ID read from the C2PA box is the active manifest's label.
 	res := c2pa.Validate(context.Background(), c2pa.BMFF, bytes.NewReader(signed))
 	assert.Equal(t, signer.ManifestID(), res.ActiveManifestLabel)
+	assert.Contains(t, signer.ManifestID(), "urn:c2pa:")
 	codes := map[c2pa.StatusCode]bool{}
 	for _, st := range res.Statuses {
 		codes[st.Code] = true
@@ -84,11 +85,11 @@ func TestSignInit(t *testing.T) {
 	require.NoError(t, err)
 	var sk struct {
 		Keys []struct {
-			Key               map[int]any `cbor:"key"`
-			MinSequenceNumber uint64      `cbor:"minSequenceNumber"`
-			CreatedAt         cbor.Tag    `cbor:"createdAt"`
-			ValidityPeriod    uint64      `cbor:"validityPeriod"`
-			SignerBinding     cbor.RawTag `cbor:"signerBinding"`
+			Key               map[int]any     `cbor:"key"`
+			MinSequenceNumber uint64          `cbor:"minSequenceNumber"`
+			CreatedAt         cbor.Tag        `cbor:"createdAt"`
+			ValidityPeriod    uint64          `cbor:"validityPeriod"`
+			SignerBinding     cbor.RawMessage `cbor:"signerBinding"`
 		} `cbor:"keys"`
 	}
 	require.NoError(t, cbor.Unmarshal(data, &sk))
@@ -97,14 +98,57 @@ func TestSignInit(t *testing.T) {
 	assert.Equal(t, []byte(signer.PublicKey()), k.Key[-2])
 	assert.Equal(t, cbor.Tag{Number: 0, Content: "2026-10-16T12:00:00Z"}, k.CreatedAt)
 	assert.Equal(t, uint64(3600), k.ValidityPeriod)
-	assert.Equal(t, uint64(coseSign1Tag), k.SignerBinding.Number)
 	assert.True(t, bytes.Contains(signed, data), "the init manifest carries this assertion")
+
+	// signerBinding: a COSE_Sign1 by the session key over the detached CBOR byte string of
+	// the claim signer's certificate.
+	var binding cose.Sign1Message
+	require.NoError(t, binding.UnmarshalCBOR(k.SignerBinding))
+	assert.Nil(t, binding.Payload, "detached")
+	binding.Payload, err = cbor.Marshal(leaf.Raw)
+	require.NoError(t, err)
+	verifier, err := cose.NewVerifier(cose.AlgorithmEdDSA, signer.PublicKey())
+	require.NoError(t, err)
+	require.NoError(t, binding.Verify(nil, verifier))
 
 	raw := mustRead(t, segmentFiles(t, filepath.Join("testdata", "V300", "raw"))[0])
 	timescale, seqNr, duration := trackTiming(t, init, raw)
-	seg, err := signer.SignSegment(raw, seqNr, timescale, duration)
+	seg, err := sign(t, signer, raw, seqNr, timescale, duration)
 	require.NoError(t, err)
 	info, err := Verify(seg, signer.PublicKey())
 	require.NoError(t, err)
 	assert.Equal(t, signer.ManifestID(), info.ManifestID)
+}
+
+// TestActiveManifestLabel checks reading the manifest label for assets without a usable C2PA
+// Manifest Store box, and the createdAt encoding of the Unix epoch.
+func TestActiveManifestLabel(t *testing.T) {
+	init := mustRead(t, filepath.Join("testdata", "V300", "raw", "init.mp4"))
+	_, err := activeManifestLabel(init)
+	assert.ErrorContains(t, err, "no C2PA Manifest Store box")
+
+	c2paBox := makeBox("uuid", append(append(bytes.Clone(c2paUUID), 0, 0, 0, 0), "manifest\x00"...))
+	_, err = activeManifestLabel(append(bytes.Clone(c2paBox), make([]byte, 8)...))
+	assert.Error(t, err, "truncated store")
+
+	key := ed25519.NewKeyFromSeed(make([]byte, 32))
+	data, err := SessionKeysAssertion(key, []byte("k"), []byte{1}, time.Unix(0, 0), time.Second)
+	require.NoError(t, err)
+	assert.True(t, bytes.Contains(data, []byte("1970-01-01T00:00:00Z")))
+}
+
+// withoutManifestBox returns data with its top-level C2PA Manifest Store uuid boxes removed.
+// For a signed init segment, that is the init segment before signing.
+func withoutManifestBox(t *testing.T, data []byte) []byte {
+	t.Helper()
+	boxes, err := topLevelBoxes(data)
+	require.NoError(t, err)
+	var out []byte
+	for _, b := range boxes {
+		if b.boxType == "uuid" && bytes.HasPrefix(b.payload(), c2paUUID) {
+			continue
+		}
+		out = append(out, b.data...)
+	}
+	return out
 }

@@ -12,6 +12,7 @@ import (
 	"fmt"
 
 	"github.com/fxamacker/cbor/v2"
+	"github.com/veraison/go-cose"
 )
 
 // Emsg holds the fields of a VSI emsg box.
@@ -82,41 +83,23 @@ func Verify(seg []byte, pub ed25519.PublicKey) (*SegmentInfo, error) {
 	if emsg == nil {
 		return nil, errors.New("segment has no VSI emsg box")
 	}
-	var tag cbor.RawTag
-	if err := cbor.Unmarshal(emsg.MessageData, &tag); err != nil {
+	var msg cose.Sign1Message
+	if err := msg.UnmarshalCBOR(emsg.MessageData); err != nil {
 		return nil, fmt.Errorf("decode COSE_Sign1: %w", err)
 	}
-	if tag.Number != coseSign1Tag {
-		return nil, fmt.Errorf("message_data has CBOR tag %d, want %d (COSE_Sign1)", tag.Number, coseSign1Tag)
+	if alg, err := msg.Headers.Protected.Algorithm(); err != nil || alg != cose.AlgorithmEdDSA {
+		return nil, errors.New("protected header alg must be EdDSA")
 	}
-	var sign1 struct {
-		_           struct{} `cbor:",toarray"`
-		Protected   []byte
-		Unprotected cbor.RawMessage
-		Payload     []byte
-		Signature   []byte
-	}
-	if err := cbor.Unmarshal(tag.Content, &sign1); err != nil {
-		return nil, fmt.Errorf("decode COSE_Sign1: %w", err)
-	}
-	// Header labels can be integers or text (c2pa-rs writes a text "iat" label).
-	var protected map[any]any
-	if err := cbor.Unmarshal(sign1.Protected, &protected); err != nil {
-		return nil, fmt.Errorf("decode protected header: %w", err)
-	}
-	if alg, ok := intLabel(protected, coseHeaderAlg).(int64); !ok || alg != coseAlgEdDSA {
-		return nil, fmt.Errorf("protected header alg must be EdDSA (%d)", coseAlgEdDSA)
-	}
-	toBeSigned, err := sigStructure(sign1.Protected, sign1.Payload)
+	verifier, err := cose.NewVerifier(cose.AlgorithmEdDSA, pub)
 	if err != nil {
 		return nil, err
 	}
-	if !ed25519.Verify(pub, toBeSigned, sign1.Signature) {
-		return nil, errors.New("VSI signature does not verify")
+	if err := msg.Verify(nil, verifier); err != nil {
+		return nil, fmt.Errorf("VSI signature does not verify: %w", err)
 	}
 
 	var info SegmentInfo
-	if err := cbor.Unmarshal(sign1.Payload, &info); err != nil {
+	if err := cbor.Unmarshal(msg.Payload, &info); err != nil {
 		return nil, fmt.Errorf("decode segment-info-map: %w", err)
 	}
 	value, ok := vsiExclusionValue(info.BMFFHash)
@@ -145,29 +128,6 @@ func Verify(seg []byte, pub ed25519.PublicKey) (*SegmentInfo, error) {
 		return nil, errors.New("segment hash does not match bmffHash")
 	}
 	return &info, nil
-}
-
-// intLabel returns the value of integer label in a decoded COSE header map. CBOR integers
-// decode as uint64 (non-negative) or int64 (negative); negative values are returned as int64.
-func intLabel(header map[any]any, label int64) any {
-	for k, v := range header {
-		var key int64
-		switch k := k.(type) {
-		case uint64:
-			key = int64(k)
-		case int64:
-			key = k
-		default:
-			continue
-		}
-		if key == label {
-			if u, ok := v.(uint64); ok {
-				return int64(u)
-			}
-			return v
-		}
-	}
-	return nil
 }
 
 // vsiExclusionValue returns the data match value of h's VSI emsg exclusion: the

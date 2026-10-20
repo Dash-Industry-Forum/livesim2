@@ -7,8 +7,8 @@ package c2pavsi
 import (
 	"bytes"
 	"context"
-	"crypto"
 	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -16,6 +16,7 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/richardwooding/c2pa"
+	"github.com/veraison/go-cose"
 )
 
 // SessionKeysLabel is the label of the C2PA assertion that announces session keys.
@@ -26,6 +27,9 @@ const (
 	coseKeyTypeOKP   = 1
 	coseCurveEd25519 = 6
 )
+
+// c2paUUID identifies a uuid box holding a C2PA Manifest Store (C2PA §A.5.1).
+var c2paUUID = []byte{0xd8, 0xfe, 0xc3, 0xd6, 0x1b, 0x0e, 0x48, 0x3c, 0x92, 0x97, 0x58, 0x28, 0x87, 0x7e, 0xc4, 0x81}
 
 // InitConfig configures SignInit.
 type InitConfig struct {
@@ -63,24 +67,28 @@ func SignInit(ctx context.Context, init []byte, cfg InitConfig) ([]byte, *Signer
 	if err != nil {
 		return nil, nil, err
 	}
+	// Sign validates its own output, so the result needs no further check. The created
+	// action needs a digitalSourceType; the signed asset is the init segment, which holds
+	// codec configuration but no media samples, so it is "empty" (C2PA "Actions": an asset
+	// created with no digital content). That says nothing about how the media was made,
+	// which the signer can't know.
 	var signed bytes.Buffer
 	err = cfg.Signer.Sign(ctx, c2pa.BMFF, bytes.NewReader(init), &signed, c2pa.Manifest{
 		Title: cfg.Title,
 		Actions: []c2pa.Action{{
 			Action:            c2pa.ActionCreated,
-			DigitalSourceType: c2pa.DigitalSourceTypeDigitalCapture,
+			DigitalSourceType: c2pa.DigitalSourceTypeEmpty,
 		}},
 		Assertions: []c2pa.Assertion{{Label: SessionKeysLabel, Value: cbor.RawMessage(sessionKeys)}},
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("sign init segment: %w", err)
 	}
-	// The manifest ID that media segments refer to is the active manifest's label.
-	res := c2pa.Validate(ctx, c2pa.BMFF, bytes.NewReader(signed.Bytes()))
-	if res.ActiveManifestLabel == "" {
-		return nil, nil, errors.New("signed init segment has no active manifest")
+	manifestID, err := activeManifestLabel(signed.Bytes())
+	if err != nil {
+		return nil, nil, err
 	}
-	signer, err := NewSigner(cfg.Seed, cfg.Kid, res.ActiveManifestLabel)
+	signer, err := NewSigner(cfg.Seed, cfg.Kid, manifestID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -99,19 +107,25 @@ func SessionKeysAssertion(key ed25519.PrivateKey, kid, leafDER []byte, createdAt
 	if err != nil {
 		return nil, err
 	}
-	protected, err := enc.Marshal(map[int]int{coseHeaderAlg: coseAlgEdDSA})
-	if err != nil {
-		return nil, err
-	}
 	certBstr, err := enc.Marshal(leafDER)
 	if err != nil {
 		return nil, err
 	}
-	toBeSigned, err := sigStructure(protected, certBstr)
+	coseSigner, err := cose.NewSigner(cose.AlgorithmEdDSA, key)
 	if err != nil {
 		return nil, err
 	}
-	sig, err := key.Sign(nil, toBeSigned, crypto.Hash(0))
+	binding := cose.Sign1Message{
+		Headers: cose.Headers{
+			Protected: cose.ProtectedHeader{cose.HeaderLabelAlgorithm: cose.AlgorithmEdDSA},
+		},
+		Payload: certBstr,
+	}
+	if err := binding.Sign(rand.Reader, nil, coseSigner); err != nil {
+		return nil, fmt.Errorf("sign signerBinding: %w", err)
+	}
+	binding.Payload = nil // detached
+	bindingCBOR, err := binding.MarshalCBOR()
 	if err != nil {
 		return nil, err
 	}
@@ -119,14 +133,90 @@ func SessionKeysAssertion(key ed25519.PrivateKey, kid, leafDER []byte, createdAt
 		"key": map[int]any{
 			1:  coseKeyTypeOKP,
 			2:  kid,
-			3:  coseAlgEdDSA,
+			3:  int64(cose.AlgorithmEdDSA),
 			-1: coseCurveEd25519,
 			-2: []byte(key.Public().(ed25519.PublicKey)),
 		},
 		"minSequenceNumber": 0,
 		"createdAt":         cbor.Tag{Number: 0, Content: createdAt.UTC().Format(time.RFC3339)},
 		"validityPeriod":    uint64(validity / time.Second),
-		// Detached payload: nil in the COSE_Sign1 array.
-		"signerBinding": cbor.Tag{Number: coseSign1Tag, Content: []any{protected, map[int]any{}, nil, sig}},
+		"signerBinding":     cbor.RawMessage(bindingCBOR),
 	}}})
+}
+
+// activeManifestLabel returns the label of the active manifest of a signed BMFF asset: the
+// last manifest superbox in its C2PA Manifest Store (C2PA §11.1.4). The store is in a uuid
+// box (C2PA §A.5.1) holding, after the C2PA uuid and the FullBox version and flags, the
+// NUL-terminated box purpose, for "manifest" an 8-byte Merkle offset, and the store's
+// JUMBF superbox.
+func activeManifestLabel(asset []byte) (string, error) {
+	boxes, err := topLevelBoxes(asset)
+	if err != nil {
+		return "", err
+	}
+	for _, b := range boxes {
+		p := b.payload()
+		if b.boxType != "uuid" || len(p) < 20 || !bytes.Equal(p[:16], c2paUUID) {
+			continue
+		}
+		purpose, rest, ok := cutCString(p[20:])
+		if !ok {
+			return "", errors.New("C2PA box has no purpose")
+		}
+		if purpose == "manifest" {
+			if len(rest) < 8 {
+				return "", errors.New("C2PA box is truncated")
+			}
+			rest = rest[8:]
+		}
+		store, err := topLevelBoxes(rest)
+		if err != nil {
+			return "", fmt.Errorf("C2PA Manifest Store: %w", err)
+		}
+		if len(store) == 0 || store[0].boxType != "jumb" {
+			return "", errors.New("C2PA box holds no JUMBF superbox")
+		}
+		if label, err := jumbLabel(store[0]); err != nil || label != "c2pa" {
+			return "", errors.New("C2PA box holds no C2PA Manifest Store")
+		}
+		children, err := topLevelBoxes(store[0].payload())
+		if err != nil {
+			return "", fmt.Errorf("C2PA Manifest Store: %w", err)
+		}
+		var active string
+		for _, c := range children[1:] { // after the store's description box
+			if c.boxType == "jumb" {
+				if active, err = jumbLabel(c); err != nil {
+					return "", err
+				}
+			}
+		}
+		if active == "" {
+			return "", errors.New("C2PA Manifest Store has no manifest")
+		}
+		return active, nil
+	}
+	return "", errors.New("no C2PA Manifest Store box")
+}
+
+// jumbLabel returns the label of a JUMBF superbox from its description box (ISO/IEC 19566-5):
+// a 16-byte content type, a toggles byte, then, when toggle 0x02 is set, the NUL-terminated
+// label.
+func jumbLabel(jumb box) (string, error) {
+	children, err := topLevelBoxes(jumb.payload())
+	if err != nil {
+		return "", err
+	}
+	if len(children) == 0 || children[0].boxType != "jumd" {
+		return "", errors.New("JUMBF superbox has no description box")
+	}
+	desc := children[0].payload()
+	if len(desc) < 17 || desc[16]&0x02 == 0 {
+		return "", errors.New("JUMBF superbox has no label")
+	}
+	label, _, ok := cutCString(desc[17:])
+	if !ok {
+		return "", errors.New("JUMBF label is not terminated")
+	}
+	return label, nil
 }

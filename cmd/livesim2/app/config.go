@@ -68,6 +68,9 @@ type ServerConfig struct {
 	PlayURL    string         `json:"playurl"`
 	DrmCfgFile string         `json:"drmcfgfile"`
 	DrmCfg     *drm.DrmConfig `json:"drmcfg"`
+	// C2PA enables the experimental c2pa_vsi URL option. Off by default, since it signs every
+	// clear audio and video init segment at startup.
+	C2PA bool `json:"c2pa"`
 	// C2PACertPath and C2PAKeyPath are PEM files with the certificate chain and private key
 	// that sign C2PA manifests in init segments (c2pa_vsi). If both are empty, livesim2
 	// creates a test certificate at startup.
@@ -142,8 +145,11 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 			"If empty, auto-detected from the request (honors X-Forwarded-Proto)")
 	f.String("playurl", k.String("playurl"), "URL template to play mpd. %s will be replaced by MPD URL")
 	f.String("drmcfgfile", k.String("drmcfgfile"), "DRM config file path")
-	f.String("c2pacert", k.String("c2pacert"), "C2PA claim-signing certificate chain (PEM) for c2pa_vsi. Default: generated test certificate")
-	f.String("c2pakey", k.String("c2pakey"), "C2PA claim-signing private key (PEM) for c2pa_vsi")
+	f.Bool("c2pa", k.Bool("c2pa"),
+		"Experimental: enable C2PA live media signing (the c2pa_vsi URL option). Signs every clear audio and video init segment at startup")
+	f.String("c2pacert", k.String("c2pacert"),
+		"C2PA claim-signing certificate chain (PEM), with --c2pa. Default: a generated test certificate")
+	f.String("c2pakey", k.String("c2pakey"), "C2PA claim-signing private key (PEM), with --c2pa")
 
 	if err := f.Parse(args[1:]); err != nil {
 		return nil, fmt.Errorf("command line parse: %w", err)
@@ -174,6 +180,9 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 	err = checkTLSParams(k)
 	if err != nil {
 		return nil, err
+	}
+	if !k.Bool("c2pa") && (k.String("c2pacert") != "" || k.String("c2pakey") != "") {
+		return nil, fmt.Errorf("c2pacert and c2pakey need the c2pa option")
 	}
 
 	// Make vodPath absolute in case it is not already

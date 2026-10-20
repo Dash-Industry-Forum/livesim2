@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/x509"
+	"encoding/binary"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -27,9 +28,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// c2paTestServer starts a test server with the c2pa option.
 func c2paTestServer(t *testing.T) (*httptest.Server, *Server) {
 	t.Helper()
-	cfg := ServerConfig{VodRoot: "testdata/assets", LogFormat: logging.LogDiscard}
+	return c2paTestServerWith(t, true)
+}
+
+func c2paTestServerWith(t *testing.T, enableC2PA bool) (*httptest.Server, *Server) {
+	t.Helper()
+	cfg := ServerConfig{VodRoot: "testdata/assets", LogFormat: logging.LogDiscard, C2PA: enableC2PA}
 	require.NoError(t, logging.InitSlog(cfg.LogLevel, cfg.LogFormat))
 	server, err := SetupServer(context.Background(), &cfg)
 	require.NoError(t, err)
@@ -60,6 +67,27 @@ func c2paGet(t *testing.T, url string) (int, []byte) {
 	return resp.StatusCode, body
 }
 
+// c2paBoxUUID identifies a uuid box holding a C2PA Manifest Store (C2PA §A.5.1).
+var c2paBoxUUID = []byte{0xd8, 0xfe, 0xc3, 0xd6, 0x1b, 0x0e, 0x48, 0x3c, 0x92, 0x97, 0x58, 0x28, 0x87, 0x7e, 0xc4, 0x81}
+
+// withoutC2PABox returns an init segment without its top-level C2PA Manifest Store box.
+func withoutC2PABox(t *testing.T, data []byte) []byte {
+	t.Helper()
+	var out []byte
+	for pos := 0; pos < len(data); {
+		require.GreaterOrEqual(t, len(data)-pos, 8)
+		size := int(binary.BigEndian.Uint32(data[pos:]))
+		require.True(t, size >= 8 && pos+size <= len(data), "box size at %d", pos)
+		b := data[pos : pos+size]
+		isC2PA := string(b[4:8]) == "uuid" && size >= 24 && bytes.Equal(b[8:24], c2paBoxUUID)
+		if !isC2PA {
+			out = append(out, b...)
+		}
+		pos += size
+	}
+	return out
+}
+
 func emsgSchemes(t *testing.T, seg []byte) []string {
 	t.Helper()
 	f, err := mp4.DecodeFile(bytes.NewReader(seg))
@@ -87,6 +115,7 @@ func TestC2PAVSIMPD(t *testing.T) {
 
 func TestC2PAVSISegments(t *testing.T) {
 	ts, server := c2paTestServer(t)
+	ids := map[int]map[uint32]string{} // segment number → emsg id → rep
 	for _, rep := range []string{"V300", "A48"} {
 		t.Run(rep, func(t *testing.T) {
 			base := ts.URL + "/livesim2/c2pa_vsi/testpic_2s/" + rep
@@ -105,10 +134,10 @@ func TestC2PAVSISegments(t *testing.T) {
 			}
 			assert.True(t, codes[c2pa.StatusClaimSignatureValidated], "claim signature")
 			assert.True(t, codes[c2pa.StatusAssertionBMFFHashMatch], "bmff hash")
-			unsigned, err := c2pavsi.WithoutManifestBox(init)
-			require.NoError(t, err)
+			assert.Contains(t, res.Info.ClaimGenerator, "livesim2")
+			assert.True(t, bytes.Contains(init, []byte("1970-01-01T00:00:00Z")), "session key createdAt is the Unix epoch")
 			_, plain := c2paGet(t, ts.URL+"/livesim2/testpic_2s/"+rep+"/init.mp4?nowMS=610000")
-			assert.Equal(t, plain, unsigned, "the signed init is the plain init plus the manifest box")
+			assert.Equal(t, plain, withoutC2PABox(t, init), "the signed init is the plain init plus the manifest box")
 
 			initSeg, err := mp4.DecodeFile(bytes.NewReader(init))
 			require.NoError(t, err)
@@ -127,6 +156,11 @@ func TestC2PAVSISegments(t *testing.T) {
 				assert.Equal(t, timescale, emsg.Timescale)
 				assert.Zero(t, emsg.PresentationTimeDelta)
 				assert.NotZero(t, emsg.EventDuration)
+				if ids[nr] == nil {
+					ids[nr] = map[uint32]string{}
+				}
+				assert.NotContains(t, ids[nr], emsg.ID, "emsg id of %s segment %d is used by another track", rep, nr)
+				ids[nr][emsg.ID] = rep
 
 				// Signing is deterministic, so repeated requests return the same bytes.
 				_, again := c2paGet(t, fmt.Sprintf("%s/%d.m4s?nowMS=610000", base, nr))
@@ -149,9 +183,9 @@ func TestC2PAVSIWithSCTE35(t *testing.T) {
 		_, err := c2pavsi.Verify(seg, pub)
 		require.NoError(t, err, "segment %d", nr)
 		schemes := emsgSchemes(t, seg)
+		assert.Contains(t, schemes, c2pavsi.SchemeIDURI, "segment %d", nr)
 		if len(schemes) > 1 {
 			withCue++
-			assert.Equal(t, c2pavsi.SchemeIDURI, schemes[0], "the VSI emsg comes first")
 		}
 	}
 	assert.NotZero(t, withCue, "a segment with an SCTE-35 cue")
@@ -216,4 +250,32 @@ func TestC2PAInitsSigned(t *testing.T) {
 		}
 	}
 	assert.Positive(t, signed)
+}
+
+// TestC2PADisabled checks that without the c2pa option no init segment is signed and
+// c2pa_vsi requests are rejected.
+func TestC2PADisabled(t *testing.T) {
+	ts, server := c2paTestServerWith(t, false)
+	assert.Nil(t, server.assetMgr.c2pa)
+	for path, a := range server.assetMgr.assets {
+		for id, rd := range a.Reps {
+			assert.Nil(t, rd.c2pa, "%s/%s", path, id)
+		}
+	}
+	for _, url := range []string{"testpic_2s/Manifest.mpd", "testpic_2s/V300/init.mp4", "testpic_2s/V300/300.m4s"} {
+		status, body := c2paGet(t, ts.URL+"/livesim2/c2pa_vsi/"+url+"?nowMS=610000")
+		assert.Equal(t, http.StatusBadRequest, status, url)
+		assert.Contains(t, string(body), "C2PA is not enabled on this server", url)
+	}
+	status, _ := c2paGet(t, ts.URL+"/livesim2/testpic_2s/V300/300.m4s?nowMS=610000")
+	assert.Equal(t, http.StatusOK, status)
+}
+
+// TestC2PAConfigNeedsOption checks that the credential options are refused without c2pa.
+func TestC2PAConfigNeedsOption(t *testing.T) {
+	_, err := LoadConfig([]string{"livesim2", "--c2pacert", "cert.pem", "--c2pakey", "key.pem"}, t.TempDir())
+	assert.ErrorContains(t, err, "need the c2pa option")
+	cfg, err := LoadConfig([]string{"livesim2", "--c2pa"}, t.TempDir())
+	require.NoError(t, err)
+	assert.True(t, cfg.C2PA)
 }

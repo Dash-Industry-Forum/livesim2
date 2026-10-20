@@ -6,31 +6,34 @@
 // (VSI), as defined in the Live Media chapter of the C2PA 2.5 specification.
 //
 // A VSI stream's init segment carries a C2PA manifest whose c2pa.session-keys assertion
-// announces one or more Ed25519 session keys. Producing that manifest needs a full C2PA
-// implementation and is done elsewhere; this package handles the per-segment part:
+// announces one or more Ed25519 session keys ([SignInit]). Each media segment then carries
+// an emsg box (scheme_id_uri urn:c2pa:verifiable-segment-info, value fseg) whose
+// message_data is a COSE_Sign1, signed with a session key, over the segment's sequence
+// number, its c2pa.hash.bmff.v3 hash and the init manifest's identifier:
 //
+//   - [Signer.SignSegment] adds that emsg box to a segment and encodes it.
 //   - [SegmentHash] computes a segment's c2pa.hash.bmff.v3 hash: SHA-256 over each top-level
 //     box, in order, as its 8-byte big-endian file offset followed by its bytes, leaving out
 //     the VSI emsg box.
-//   - [Signer.SignSegment] inserts an emsg box (scheme_id_uri urn:c2pa:verifiable-segment-info,
-//     value fseg) whose message_data is a COSE_Sign1, signed with a session key, over the
-//     segment's sequence number, its hash and the init manifest's identifier.
 //   - [Verify] checks a signed segment against a session public key.
 //
-// Signing is deterministic: the optional claimed-time-of-signing (iat) header is not written,
-// and Ed25519 signatures depend only on the key and message, so the same segment always
-// signs to the same bytes.
+// Segment signing is deterministic: the optional claimed-time-of-signing (iat) header is not
+// written, and Ed25519 signatures depend only on the key and message, so the same segment
+// always signs to the same bytes.
 package c2pavsi
 
 import (
 	"bytes"
 	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
 
+	"github.com/Eyevinn/mp4ff/mp4"
 	"github.com/fxamacker/cbor/v2"
+	"github.com/veraison/go-cose"
 )
 
 const (
@@ -49,13 +52,6 @@ const (
 	// legacyExclusionValue is the earlier value without the terminator, still accepted by
 	// Verify during the transition. As a prefix it also matches longer schemes.
 	legacyExclusionValue = SchemeIDURI
-	// coseAlgEdDSA is the COSE algorithm identifier for EdDSA (RFC 9053).
-	coseAlgEdDSA = -8
-	// coseHeaderAlg and coseHeaderKid are COSE header labels (RFC 9052).
-	coseHeaderAlg = 1
-	coseHeaderKid = 4
-	// coseSign1Tag is the CBOR tag of a COSE_Sign1_Tagged structure.
-	coseSign1Tag = 18
 )
 
 // DataMap is a bmff-hash-map exclusion's data match: value at offset from the box start.
@@ -96,8 +92,11 @@ func vsiExclusion() ExclusionsMap {
 // Signer signs segments of one track with one session key.
 type Signer struct {
 	key        ed25519.PrivateKey
+	coseSigner cose.Signer
 	kid        []byte
 	manifestID string
+	// The emsg id of a segment is seqNr*idCount + idIndex, modulo 2^32; see SetEventIDs.
+	idIndex, idCount uint32
 }
 
 // NewSigner returns a Signer for the Ed25519 session key with the given 32-byte seed.
@@ -113,7 +112,12 @@ func NewSigner(seed, kid []byte, manifestID string) (*Signer, error) {
 	if manifestID == "" {
 		return nil, errors.New("manifest ID must not be empty")
 	}
-	return &Signer{key: ed25519.NewKeyFromSeed(seed), kid: kid, manifestID: manifestID}, nil
+	key := ed25519.NewKeyFromSeed(seed)
+	coseSigner, err := cose.NewSigner(cose.AlgorithmEdDSA, key)
+	if err != nil {
+		return nil, err
+	}
+	return &Signer{key: key, coseSigner: coseSigner, kid: kid, manifestID: manifestID, idCount: 1}, nil
 }
 
 // PublicKey returns the session public key.
@@ -126,46 +130,109 @@ func (s *Signer) ManifestID() string {
 	return s.manifestID
 }
 
-// SignSegment returns seg with a VSI emsg box inserted after any leading styp, sidx and prft
-// boxes, before the first moof (ISO/IEC 23009-1 and CMAF box order). seqNr is the segment's
-// sequence number, normally its moof/mfhd sequence_number. timescale and duration fill the
-// emsg box's timescale and event_duration: the track timescale and the segment's duration in
-// it. A single-level sidx has its first referenced_size grown to cover the emsg box. Segments
-// with an ssix, more than one sidx, or a sidx referencing another sidx are rejected.
-func (s *Signer) SignSegment(seg []byte, seqNr uint64, timescale, duration uint32) ([]byte, error) {
+// SetEventIDs makes the emsg ids of this track differ from those of the other tracks signed
+// alongside it: of count tracks, the one with index i (0 ≤ i < count) gives the segment with
+// sequence number n the id n*count + i, modulo 2^32. Without it, the id is the sequence
+// number, the same in every track.
+//
+// Players such as dash.js treat inband events with the same scheme_id_uri, value and id in
+// one Period as one event, so with equal ids only one track's VSI events would reach an
+// application.
+func (s *Signer) SetEventIDs(index, count uint32) error {
+	if index >= count {
+		return fmt.Errorf("event id index %d must be below the track count %d", index, count)
+	}
+	s.idIndex, s.idCount = index, count
+	return nil
+}
+
+// eventID is the emsg id of the segment with sequence number seqNr.
+func (s *Signer) eventID(seqNr uint64) uint32 {
+	return uint32(seqNr)*s.idCount + s.idIndex
+}
+
+// SignSegment adds a VSI emsg box to seg and returns the encoded, signed segment. seqNr is
+// the segment's sequence number, normally its moof/mfhd sequence_number. timescale and
+// duration fill the emsg box's timescale and event_duration: the track timescale and the
+// segment's duration in it.
+//
+// The emsg box goes into the first fragment, after any emsg boxes already there. A sidx with
+// one reference per fragment has its referenced sizes updated to include the new box; a
+// segment with another sidx layout is rejected. seg is changed.
+func (s *Signer) SignSegment(seg *mp4.MediaSegment, seqNr uint64, timescale, duration uint32) ([]byte, error) {
 	if timescale == 0 {
 		return nil, errors.New("timescale must not be 0")
 	}
-	insertAt, err := emsgInsertionPoint(seg)
+	if len(seg.Fragments) == 0 {
+		return nil, errors.New("segment has no fragments")
+	}
+	if len(seg.Sidxs) > 1 {
+		return nil, errors.New("VSI signing does not support media segments with more than one sidx box")
+	}
+	if seg.Sidx != nil {
+		if len(seg.Sidx.SidxRefs) != len(seg.Fragments) {
+			return nil, errors.New("VSI signing needs a sidx with one reference per fragment")
+		}
+		for _, ref := range seg.Sidx.SidxRefs {
+			if ref.ReferenceType != 0 {
+				return nil, errors.New("VSI signing does not support a sidx that references another sidx")
+			}
+		}
+	}
+
+	// The hash prefixes each box with its offset, which depends on the emsg box's size. A
+	// placeholder signed over a zero hash of the same length gives the emsg its final size;
+	// the real signature then overwrites the placeholder message_data in place.
+	placeholder, err := s.messageData(make([]byte, sha256.Size), seqNr)
 	if err != nil {
 		return nil, err
 	}
-	// Two passes: the hash prefixes each box with its offset in the final segment, which
-	// depends on the emsg box's size. A placeholder hash of the same length gives that size.
-	draftEmsg, err := s.emsgBox(make([]byte, sha256.Size), seqNr, timescale, duration)
+	seg.Fragments[0].AddEmsg(&mp4.EmsgBox{
+		Version:       0,
+		TimeScale:     timescale,
+		EventDuration: duration,
+		ID:            s.eventID(seqNr),
+		SchemeIDURI:   SchemeIDURI,
+		Value:         Value,
+		MessageData:   placeholder,
+	})
+	if seg.Sidx != nil {
+		// A subsegment starts at its fragment's first box, so it includes the emsg boxes.
+		for i, frag := range seg.Fragments {
+			seg.Sidx.SidxRefs[i].ReferencedSize = uint32(frag.Size())
+		}
+	}
+
+	buf := bytes.NewBuffer(make([]byte, 0, seg.Size()))
+	if err := seg.Encode(buf); err != nil {
+		return nil, fmt.Errorf("encode segment: %w", err)
+	}
+	out := buf.Bytes()
+	hash, err := SegmentHash(out)
 	if err != nil {
 		return nil, err
 	}
-	draft, err := insertBox(seg, insertAt, draftEmsg)
+	messageData, err := s.messageData(hash, seqNr)
 	if err != nil {
 		return nil, err
 	}
-	hash, err := SegmentHash(draft)
+	if len(messageData) != len(placeholder) {
+		return nil, errors.New("signed VSI differs in size from its placeholder")
+	}
+	emsg, err := FindEmsg(out)
 	if err != nil {
 		return nil, err
 	}
-	emsg, err := s.emsgBox(hash, seqNr, timescale, duration)
-	if err != nil {
-		return nil, err
+	if emsg == nil {
+		return nil, errors.New("encoded segment has no VSI emsg box")
 	}
-	if len(emsg) != len(draftEmsg) {
-		return nil, errors.New("final VSI emsg box differs in size from its draft")
-	}
-	return insertBox(seg, insertAt, emsg)
+	copy(emsg.MessageData, messageData) // emsg.MessageData is a subslice of out
+	return out, nil
 }
 
-func (s *Signer) emsgBox(hash []byte, seqNr uint64, timescale, duration uint32) ([]byte, error) {
-	info := SegmentInfo{
+// messageData returns the COSE_Sign1 over the segment-info-map with hash and seqNr.
+func (s *Signer) messageData(hash []byte, seqNr uint64) ([]byte, error) {
+	payload, err := cbor.Marshal(SegmentInfo{
 		SequenceNumber: seqNr,
 		BMFFHash: BMFFHash{
 			Exclusions: []ExclusionsMap{vsiExclusion()},
@@ -174,54 +241,22 @@ func (s *Signer) emsgBox(hash []byte, seqNr uint64, timescale, duration uint32) 
 			Name:       "jumbf manifest",
 		},
 		ManifestID: s.manifestID,
-	}
-	payload, err := cbor.Marshal(info)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("encode segment-info-map: %w", err)
 	}
-	sign1, err := signCOSE(s.key, s.kid, payload)
-	if err != nil {
-		return nil, err
+	msg := cose.Sign1Message{
+		Headers: cose.Headers{
+			Protected:   cose.ProtectedHeader{cose.HeaderLabelAlgorithm: cose.AlgorithmEdDSA},
+			Unprotected: cose.UnprotectedHeader{cose.HeaderLabelKeyID: s.kid},
+		},
+		Payload: payload,
 	}
-	// The emsg id only needs to be unique within the session.
-	return buildEmsg(timescale, 0, duration, uint32(seqNr), sign1), nil
-}
-
-func signCOSE(key ed25519.PrivateKey, kid, payload []byte) ([]byte, error) {
-	protected, err := cbor.Marshal(map[int]int{coseHeaderAlg: coseAlgEdDSA})
-	if err != nil {
-		return nil, err
+	// Ed25519 doesn't use the random source.
+	if err := msg.Sign(rand.Reader, nil, s.coseSigner); err != nil {
+		return nil, fmt.Errorf("sign VSI: %w", err)
 	}
-	toBeSigned, err := sigStructure(protected, payload)
-	if err != nil {
-		return nil, err
-	}
-	signature := ed25519.Sign(key, toBeSigned)
-	return cbor.Marshal(cbor.Tag{
-		Number:  coseSign1Tag,
-		Content: []any{protected, map[int][]byte{coseHeaderKid: kid}, payload, signature},
-	})
-}
-
-// sigStructure is the COSE Sig_structure for a COSE_Sign1 with no external AAD (RFC 9052 §4.4).
-func sigStructure(protected, payload []byte) ([]byte, error) {
-	return cbor.Marshal([]any{"Signature1", protected, []byte{}, payload})
-}
-
-func buildEmsg(timescale, presentationTimeDelta, duration, id uint32, messageData []byte) []byte {
-	var body bytes.Buffer
-	body.Write([]byte{0, 0, 0, 0}) // version 0, flags
-	body.WriteString(SchemeIDURI)
-	body.WriteByte(0)
-	body.WriteString(Value)
-	body.WriteByte(0)
-	for _, v := range []uint32{timescale, presentationTimeDelta, duration, id} {
-		body.Write(binary.BigEndian.AppendUint32(nil, v))
-	}
-	body.Write(messageData)
-	box := binary.BigEndian.AppendUint32(nil, uint32(8+body.Len()))
-	box = append(box, "emsg"...)
-	return append(box, body.Bytes()...)
+	return msg.MarshalCBOR()
 }
 
 // SegmentHash returns seg's c2pa.hash.bmff.v3 SHA-256: over each top-level box, in order, its
@@ -249,26 +284,6 @@ func segmentHash(seg []byte, value string) ([]byte, error) {
 	return h.Sum(nil), nil
 }
 
-// c2paUUID identifies a uuid box holding a C2PA Manifest Store (C2PA §A.5.1).
-var c2paUUID = []byte{0xd8, 0xfe, 0xc3, 0xd6, 0x1b, 0x0e, 0x48, 0x3c, 0x92, 0x97, 0x58, 0x28, 0x87, 0x7e, 0xc4, 0x81}
-
-// WithoutManifestBox returns data with its top-level C2PA Manifest Store uuid boxes removed.
-// For a signed init segment, that is the init segment before signing.
-func WithoutManifestBox(data []byte) ([]byte, error) {
-	boxes, err := topLevelBoxes(data)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]byte, 0, len(data))
-	for _, b := range boxes {
-		if b.boxType == "uuid" && len(b.data) >= 24 && bytes.Equal(b.data[8:24], c2paUUID) {
-			continue
-		}
-		out = append(out, b.data...)
-	}
-	return out, nil
-}
-
 // isExcludedEmsg reports whether the bmffHash exclusion with data match value leaves b out.
 func isExcludedEmsg(b box, value string) bool {
 	end := uriOffsetInEmsg + len(value)
@@ -282,116 +297,40 @@ type box struct {
 	data    []byte // the whole box, header included
 }
 
-// topLevelBoxes splits seg into its top-level boxes. Trailing bytes too short for a box
-// header are an error, as is a box that runs past the end of seg.
-func topLevelBoxes(seg []byte) ([]box, error) {
+// payload returns the box's content after its header.
+func (b box) payload() []byte {
+	if binary.BigEndian.Uint32(b.data) == 1 {
+		return b.data[16:]
+	}
+	return b.data[8:]
+}
+
+// topLevelBoxes splits data into its top-level boxes. Trailing bytes too short for a box
+// header are an error, as is a box that runs past the end of data.
+func topLevelBoxes(data []byte) ([]box, error) {
 	var boxes []box
-	for pos := 0; pos < len(seg); {
-		if len(seg)-pos < 8 {
+	for pos := 0; pos < len(data); {
+		if len(data)-pos < 8 {
 			return nil, fmt.Errorf("truncated box header at offset %d", pos)
 		}
-		size := uint64(binary.BigEndian.Uint32(seg[pos:]))
-		boxType := string(seg[pos+4 : pos+8])
+		size := uint64(binary.BigEndian.Uint32(data[pos:]))
+		boxType := string(data[pos+4 : pos+8])
+		minSize := uint64(8)
 		switch size {
 		case 0:
-			size = uint64(len(seg) - pos)
+			size = uint64(len(data) - pos)
 		case 1:
-			if len(seg)-pos < 16 {
+			if len(data)-pos < 16 {
 				return nil, fmt.Errorf("truncated largesize at offset %d", pos)
 			}
-			size = binary.BigEndian.Uint64(seg[pos+8:])
+			size = binary.BigEndian.Uint64(data[pos+8:])
+			minSize = 16
 		}
-		if size < 8 || size > uint64(len(seg)-pos) {
+		if size < minSize || size > uint64(len(data)-pos) {
 			return nil, fmt.Errorf("box %q at offset %d has bad size %d", boxType, pos, size)
 		}
-		boxes = append(boxes, box{boxType: boxType, offset: pos, data: seg[pos : pos+int(size)]})
+		boxes = append(boxes, box{boxType: boxType, offset: pos, data: data[pos : pos+int(size)]})
 		pos += int(size)
 	}
 	return boxes, nil
-}
-
-// emsgInsertionPoint returns the offset after the leading styp, sidx and prft boxes.
-func emsgInsertionPoint(seg []byte) (int, error) {
-	boxes, err := topLevelBoxes(seg)
-	if err != nil {
-		return 0, err
-	}
-	insertAt, sidxCount := 0, 0
-	for _, b := range boxes {
-		switch b.boxType {
-		case "styp", "prft":
-		case "sidx":
-			sidxCount++
-		case "ssix":
-			return 0, errors.New("VSI signing does not support media segments with an ssix box")
-		default:
-			if sidxCount > 1 {
-				return 0, errors.New("VSI signing does not support media segments with more than one sidx box")
-			}
-			return insertAt, nil
-		}
-		insertAt += len(b.data)
-	}
-	if sidxCount > 1 {
-		return 0, errors.New("VSI signing does not support media segments with more than one sidx box")
-	}
-	return insertAt, nil
-}
-
-// insertBox returns seg with ins inserted at offset insertAt, growing a leading sidx's first
-// reference to cover it: the inserted box sits between the sidx and the first moof, so it
-// becomes part of the first subsegment (ISO/IEC 14496-12 §8.16.3).
-func insertBox(seg []byte, insertAt int, ins []byte) ([]byte, error) {
-	out := make([]byte, 0, len(seg)+len(ins))
-	out = append(out, seg[:insertAt]...)
-	out = append(out, ins...)
-	out = append(out, seg[insertAt:]...)
-	if err := growFirstSidxReference(out[:insertAt], uint32(len(ins))); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func growFirstSidxReference(leading []byte, by uint32) error {
-	boxes, err := topLevelBoxes(leading)
-	if err != nil {
-		return err
-	}
-	for _, b := range boxes {
-		if b.boxType != "sidx" {
-			continue
-		}
-		sidx := b.data
-		headerLen := 8
-		if binary.BigEndian.Uint32(sidx) == 1 {
-			headerLen = 16
-		}
-		if len(sidx) < headerLen+1 {
-			return errors.New("malformed sidx box")
-		}
-		// FullBox header(4) + reference_ID(4) + timescale(4) + earliest_presentation_time and
-		// first_offset (4+4 for version 0, 8+8 otherwise) + reserved(2).
-		countAt := headerLen + 12 + 8 + 2
-		if sidx[headerLen] != 0 {
-			countAt = headerLen + 12 + 16 + 2
-		}
-		refAt := countAt + 2
-		if len(sidx) < refAt+4 {
-			return errors.New("malformed sidx box")
-		}
-		if binary.BigEndian.Uint16(sidx[countAt:]) == 0 {
-			return nil
-		}
-		ref := binary.BigEndian.Uint32(sidx[refAt:])
-		if ref&0x8000_0000 != 0 {
-			return errors.New("VSI signing does not support a sidx that references another sidx")
-		}
-		size := uint64(ref&0x7fff_ffff) + uint64(by)
-		if size > 0x7fff_ffff {
-			return errors.New("sidx referenced_size overflows")
-		}
-		binary.BigEndian.PutUint32(sidx[refAt:], uint32(size))
-		return nil
-	}
-	return nil
 }

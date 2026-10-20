@@ -5,7 +5,6 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"crypto"
 	"crypto/ecdsa"
@@ -18,32 +17,51 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"slices"
 	"time"
 
+	"github.com/Dash-Industry-Forum/livesim2/internal"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/c2pavsi"
 	"github.com/Eyevinn/mp4ff/mp4"
 	"github.com/richardwooding/c2pa"
 )
 
-// C2PA Verifiable Segment Info (c2pa_vsi option).
+// C2PA Verifiable Segment Info (c2pa_vsi option). Experimental.
 //
-// When livesim2 loads an asset, it signs the init segment of each audio and video
-// representation with a C2PA manifest (github.com/richardwooding/c2pa) whose
-// c2pa.session-keys assertion announces a new Ed25519 session key. With c2pa_vsi, livesim2
-// serves that init segment and signs each media segment with the session key.
+// The feature is off unless the server runs with the c2pa option. Then, when livesim2 loads
+// an asset, it signs the init segment of each clear audio and video representation with a
+// C2PA manifest (github.com/richardwooding/c2pa) whose c2pa.session-keys assertion announces
+// a new Ed25519 session key. With c2pa_vsi, livesim2 serves that init segment and signs each
+// media segment with the session key.
 //
 // The claim-signing certificate and key come from the c2pacert and c2pakey options. Without
 // them, livesim2 creates a test CA and end-entity certificate at startup, which validators
 // report as untrusted.
+//
+// Session keys and manifest IDs are created at startup, so they change when the server
+// restarts and differ between server instances. Serve a stream from a single instance, and
+// have players fetch the init segment again after a restart: segments signed after a restart
+// don't validate against an init segment from before it.
+
+// errC2PADisabled is returned when c2pa_vsi is requested from a server without the c2pa option.
+var errC2PADisabled = errors.New("c2pa_vsi: C2PA is not enabled on this server (c2pa option)")
 
 // errC2PAUnavailable is returned when c2pa_vsi is requested for a representation without a
 // signed init segment and session key.
 var errC2PAUnavailable = errors.New(
 	"c2pa_vsi: no C2PA-signed init segment and session key for this representation")
 
-// c2paSessionKeyValidity is the validityPeriod of the session keys livesim2 creates. They
-// are not rotated, so it covers a long-running server.
-const c2paSessionKeyValidity = 365 * 24 * time.Hour
+// c2paValidityAfterStart is how long after server start the session keys and the generated
+// test certificate stay valid. Session keys are not rotated, so it covers a long-running
+// server.
+const c2paValidityAfterStart = 365 * 24 * time.Hour
+
+// c2paKeyCreatedAt is the createdAt of the session keys: the Unix epoch, the earliest media
+// time livesim2 can serve (availabilityStartTime defaults to 0, and nowMS, nowDate and
+// publishTime can ask for any time since). A validator that checks the key against a
+// segment's presentation time (c2pa-org/specs-core#2620) then accepts every segment,
+// including those from before a restart in a time-shift buffer of up to 48 hours.
+var c2paKeyCreatedAt = time.Unix(0, 0).UTC()
 
 // c2paCredentials are the claim signer for init segments and its end-entity certificate.
 type c2paCredentials struct {
@@ -91,7 +109,7 @@ func newC2PACredentials(logger *slog.Logger, certPath, keyPath string) (*c2paCre
 			chain = append(chain, cert)
 		}
 	}
-	signer, err := c2pa.NewSigner(key, chain, c2pa.WithClaimGenerator("livesim2", "c2pa_vsi"))
+	signer, err := c2pa.NewSigner(key, chain, c2pa.WithClaimGenerator("livesim2", internal.Version()))
 	if err != nil {
 		return nil, fmt.Errorf("c2pa signer: %w", err)
 	}
@@ -111,7 +129,7 @@ func c2paTestCredentials() (crypto.Signer, []*x509.Certificate, error) {
 		}
 		tmpl.SerialNumber = serial
 		tmpl.NotBefore = now.Add(-time.Hour)
-		tmpl.NotAfter = now.Add(c2paSessionKeyValidity + 24*time.Hour)
+		tmpl.NotAfter = now.Add(c2paValidityAfterStart + 24*time.Hour)
 		der, err := x509.CreateCertificate(rand.Reader, tmpl, parent, pub, signer)
 		if err != nil {
 			return nil, err
@@ -149,7 +167,8 @@ func c2paTestCredentials() (crypto.Signer, []*x509.Certificate, error) {
 }
 
 // signC2PAInit signs the representation's init segment with a new session key, so that
-// c2pa_vsi can serve it. Only clear audio and video representations are signed.
+// c2pa_vsi can serve it. Only clear audio and video representations are signed, and only
+// when C2PA is enabled (creds is not nil).
 func (r *RepData) signC2PAInit(ctx context.Context, logger *slog.Logger, creds *c2paCredentials, assetPath string) error {
 	if creds == nil || r.PreEncrypted || (r.ContentType != "audio" && r.ContentType != "video") {
 		return nil
@@ -164,8 +183,8 @@ func (r *RepData) signC2PAInit(ctx context.Context, logger *slog.Logger, creds *
 		Leaf:      creds.leaf,
 		Seed:      seed,
 		Kid:       kid,
-		CreatedAt: time.Now(),
-		Validity:  c2paSessionKeyValidity,
+		CreatedAt: c2paKeyCreatedAt,
+		Validity:  time.Since(c2paKeyCreatedAt) + c2paValidityAfterStart,
 		Title:     string(kid),
 	})
 	if err != nil {
@@ -176,26 +195,32 @@ func (r *RepData) signC2PAInit(ctx context.Context, logger *slog.Logger, creds *
 	return nil
 }
 
-// signC2PASegment encodes seg and adds a VSI emsg box for the representation's session key.
+// setC2PAEventIDs gives the VSI emsg boxes of each signed representation of the asset its
+// own ids (c2pavsi.Signer.SetEventIDs), so that players don't merge the VSI events of
+// different tracks for the same segment. Representations are numbered in ID order.
+func (a *asset) setC2PAEventIDs() error {
+	var ids []string
+	for id, rep := range a.Reps {
+		if rep.c2pa != nil {
+			ids = append(ids, id)
+		}
+	}
+	slices.Sort(ids)
+	for i, id := range ids {
+		if err := a.Reps[id].c2pa.signer.SetEventIDs(uint32(i), uint32(len(ids))); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// signC2PASegment adds a VSI emsg box for the representation's session key to seg and
+// returns the encoded segment.
 func signC2PASegment(seg *mp4.MediaSegment, meta segMeta) ([]byte, error) {
-	rep := meta.rep
-	if rep.c2pa == nil {
+	if meta.rep.c2pa == nil {
 		return nil, errC2PAUnavailable
 	}
-	var buf bytes.Buffer
-	if err := seg.Encode(&buf); err != nil {
-		return nil, fmt.Errorf("encode segment: %w", err)
-	}
-	var duration uint64
-	for _, frag := range seg.Fragments {
-		traf := frag.Moof.Traf
-		defaultDur := rep.DefaultSampleDuration
-		if traf.Tfhd.HasDefaultSampleDuration() {
-			defaultDur = traf.Tfhd.DefaultSampleDuration
-		}
-		duration += traf.Trun.Duration(defaultDur)
-	}
-	return rep.c2pa.signer.SignSegment(buf.Bytes(), uint64(meta.newNr), uint32(rep.MediaTimescale), uint32(duration))
+	return meta.rep.c2pa.signer.SignSegment(seg, uint64(meta.newNr), meta.timescale, meta.newDur)
 }
 
 // verifyC2PAConfig rejects options c2pa_vsi can't be combined with yet.
@@ -208,10 +233,10 @@ func verifyC2PAConfig(cfg *ResponseConfig) error {
 		// The segment hash is only known once the whole segment exists.
 		return errors.New("c2pa_vsi cannot be combined with chunked delivery (chunkdur, ssras)")
 	case cfg.DRM != "":
-		// Encrypted init segments are generated per request and can't be pre-signed.
+		// Encrypted init segments are generated per request, not signed at load.
 		return errors.New("c2pa_vsi cannot be combined with drm or eccp")
 	case len(cfg.TimeSubsStpp) > 0 || len(cfg.TimeSubsWvtt) > 0 || cfg.TimeSubsStpc != nil || cfg.TimeSubsWvtc != nil:
-		// Generated subtitle tracks have no pre-signed init segment.
+		// Generated subtitle tracks have no signed init segment.
 		return errors.New("c2pa_vsi cannot be combined with generated time subtitles")
 	}
 	return nil

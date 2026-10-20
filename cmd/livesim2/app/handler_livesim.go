@@ -104,6 +104,10 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, errHT.Error(), errHT.statusCode)
 		return
 	}
+	if cfg.C2PAVSI && s.assetMgr.c2pa == nil {
+		http.Error(w, errC2PADisabled.Error(), http.StatusBadRequest)
+		return
+	}
 
 	contentPart := cfg.URLContentPart()
 	log.Debug("requested content", "url", contentPart)

@@ -132,21 +132,22 @@ func TestSignRawSegments(t *testing.T) {
 			raw := mustRead(t, file)
 			timescale, seqNr, duration := trackTiming(t, init, raw)
 
-			signed, err := signer.SignSegment(raw, seqNr, timescale, duration)
+			signed, err := sign(t, signer, raw, seqNr, timescale, duration)
 			require.NoError(t, err, file)
 			info, err := Verify(signed, signer.PublicKey())
 			require.NoError(t, err, file)
 			assert.Equal(t, seqNr, info.SequenceNumber)
 			assert.Equal(t, loadInfo(t, rep).ManifestID, info.ManifestID)
 
-			// styp stays first; the emsg box goes before the first moof.
+			// styp stays first; the emsg box goes before the first moof, and nothing else changes.
 			assert.Equal(t, append([]string{"styp", "emsg"}, topLevelTypes(t, raw)[1:]...), topLevelTypes(t, signed))
+			assert.Equal(t, raw, withoutVSIEmsg(t, signed))
 			emsg, err := FindEmsg(signed)
 			require.NoError(t, err)
 			assert.Equal(t, Emsg{timescale, 0, duration, uint32(seqNr), emsg.MessageData}, *emsg)
 
 			// Deterministic: the same segment always signs to the same bytes.
-			again, err := signer.SignSegment(raw, seqNr, timescale, duration)
+			again, err := sign(t, signer, raw, seqNr, timescale, duration)
 			require.NoError(t, err)
 			assert.Equal(t, signed, again)
 		}
@@ -158,7 +159,7 @@ func TestTamperedSegmentFails(t *testing.T) {
 	init := mustRead(t, filepath.Join("testdata", "V300", "raw", "init.mp4"))
 	raw := mustRead(t, segmentFiles(t, filepath.Join("testdata", "V300", "raw"))[0])
 	timescale, seqNr, duration := trackTiming(t, init, raw)
-	signed, err := signer.SignSegment(raw, seqNr, timescale, duration)
+	signed, err := sign(t, signer, raw, seqNr, timescale, duration)
 	require.NoError(t, err)
 
 	tampered := bytes.Clone(signed)
@@ -192,7 +193,7 @@ func TestWriteSignedForInterop(t *testing.T) {
 		for _, file := range segmentFiles(t, filepath.Join("testdata", rep, "raw")) {
 			raw := mustRead(t, file)
 			timescale, seqNr, duration := trackTiming(t, init, raw)
-			signed, err := signer.SignSegment(raw, seqNr, timescale, duration)
+			signed, err := sign(t, signer, raw, seqNr, timescale, duration)
 			require.NoError(t, err)
 			require.NoError(t, os.WriteFile(filepath.Join(dir, filepath.Base(file)), signed, 0o644))
 		}
@@ -221,17 +222,46 @@ func makeSidx(refs ...[2]uint32) []byte {
 	return makeBox("sidx", p)
 }
 
-func TestSidxAndIndexLayouts(t *testing.T) {
-	signer, err := NewSigner(bytes.Repeat([]byte{1}, 32), []byte("k"), "urn:c2pa:test")
+// sign decodes raw with mp4ff and signs it.
+func sign(t *testing.T, s *Signer, raw []byte, seqNr uint64, timescale, duration uint32) ([]byte, error) {
+	t.Helper()
+	f, err := mp4.DecodeFile(bytes.NewReader(raw))
 	require.NoError(t, err)
-	media := append(makeBox("moof", []byte{1, 2, 3}), makeBox("mdat", []byte{4, 5, 6, 7})...)
-	styp := makeBox("styp", []byte("msdhmsdh"))
-	prft := makeBox("prft", make([]byte, 16))
+	return s.SignSegment(f.Segments[0], seqNr, timescale, duration)
+}
 
-	seg := bytes.Join([][]byte{styp, makeSidx([2]uint32{0, uint32(len(media))}), prft, media}, nil)
-	signed, err := signer.SignSegment(seg, 1, 1000, 2000)
+// withoutVSIEmsg returns seg without its VSI emsg boxes.
+func withoutVSIEmsg(t *testing.T, seg []byte) []byte {
+	t.Helper()
+	boxes, err := topLevelBoxes(seg)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"styp", "sidx", "prft", "emsg", "moof", "mdat"}, topLevelTypes(t, signed))
+	var out []byte
+	for _, b := range boxes {
+		if parseVSIEmsg(b) == nil {
+			out = append(out, b.data...)
+		}
+	}
+	return out
+}
+
+// TestSidxLayouts checks that a sidx with one reference per fragment grows to include the
+// VSI emsg box, and that other sidx layouts are rejected.
+func TestSidxLayouts(t *testing.T) {
+	signer := newTestSigner(t, "V300")
+	init := mustRead(t, filepath.Join("testdata", "V300", "raw", "init.mp4"))
+	raw := mustRead(t, segmentFiles(t, filepath.Join("testdata", "V300", "raw"))[0])
+	timescale, seqNr, duration := trackTiming(t, init, raw)
+	boxes, err := topLevelBoxes(raw)
+	require.NoError(t, err)
+	styp, media := boxes[0].data, raw[len(boxes[0].data):]
+	withSidx := func(sidxs ...[]byte) []byte {
+		return bytes.Join(append(append([][]byte{styp}, sidxs...), media), nil)
+	}
+
+	seg := withSidx(makeSidx([2]uint32{0, uint32(len(media))}))
+	signed, err := sign(t, signer, seg, seqNr, timescale, duration)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"styp", "sidx", "emsg", "moof", "mdat"}, topLevelTypes(t, signed))
 	emsgLen := len(signed) - len(seg)
 	sidx := signed[len(styp):]
 	assert.Equal(t, uint32(len(media)+emsgLen), binary.BigEndian.Uint32(sidx[32:])&0x7fff_ffff)
@@ -239,13 +269,33 @@ func TestSidxAndIndexLayouts(t *testing.T) {
 	require.NoError(t, err)
 
 	for name, bad := range map[string][]byte{
-		"ssix":         bytes.Join([][]byte{makeSidx([2]uint32{0, 10}), makeBox("ssix", make([]byte, 8)), media}, nil),
-		"two sidx":     bytes.Join([][]byte{makeSidx([2]uint32{0, 10}), makeSidx([2]uint32{0, 10}), media}, nil),
-		"hierarchical": bytes.Join([][]byte{makeSidx([2]uint32{1, 10}), media}, nil),
+		"two sidx":         withSidx(makeSidx([2]uint32{0, uint32(len(media))}), makeSidx([2]uint32{0, uint32(len(media))})),
+		"hierarchical":     withSidx(makeSidx([2]uint32{1, uint32(len(media))})),
+		"refs ≠ fragments": withSidx(makeSidx([2]uint32{0, 10}, [2]uint32{0, uint32(len(media)) - 10})),
 	} {
-		_, err := signer.SignSegment(bad, 1, 1000, 2000)
+		_, err := sign(t, signer, bad, seqNr, timescale, duration)
 		assert.Error(t, err, name)
 	}
+}
+
+// TestEventIDs checks that SetEventIDs gives each track of a segment its own emsg id.
+func TestEventIDs(t *testing.T) {
+	init := mustRead(t, filepath.Join("testdata", "V300", "raw", "init.mp4"))
+	raw := mustRead(t, segmentFiles(t, filepath.Join("testdata", "V300", "raw"))[0])
+	timescale, seqNr, duration := trackTiming(t, init, raw)
+	ids := map[uint32]bool{}
+	for index := range uint32(3) {
+		signer := newTestSigner(t, "V300")
+		require.NoError(t, signer.SetEventIDs(index, 3))
+		signed, err := sign(t, signer, raw, seqNr, timescale, duration)
+		require.NoError(t, err)
+		emsg, err := FindEmsg(signed)
+		require.NoError(t, err)
+		assert.Equal(t, uint32(seqNr)*3+index, emsg.ID)
+		ids[emsg.ID] = true
+	}
+	assert.Len(t, ids, 3)
+	assert.Error(t, newTestSigner(t, "V300").SetEventIDs(2, 2))
 }
 
 func TestNewSignerValidation(t *testing.T) {
@@ -289,7 +339,7 @@ func TestExclusionValue(t *testing.T) {
 	init := mustRead(t, filepath.Join("testdata", "V300", "raw", "init.mp4"))
 	raw := mustRead(t, segmentFiles(t, filepath.Join("testdata", "V300", "raw"))[0])
 	timescale, seqNr, duration := trackTiming(t, init, raw)
-	signed, err := signer.SignSegment(raw, seqNr, timescale, duration)
+	signed, err := sign(t, signer, raw, seqNr, timescale, duration)
 	require.NoError(t, err)
 	info, err := Verify(signed, signer.PublicKey())
 	require.NoError(t, err)
@@ -316,7 +366,7 @@ func TestExcludedNonVSIEmsg(t *testing.T) {
 	require.NoError(t, err)
 	styp := boxes[0].data
 	withLonger := append(append(bytes.Clone(styp), longer...), raw[len(styp):]...)
-	signed, err := signer.SignSegment(withLonger, seqNr, timescale, duration)
+	signed, err := sign(t, signer, withLonger, seqNr, timescale, duration)
 	require.NoError(t, err)
 	_, err = Verify(signed, signer.PublicKey())
 	require.NoError(t, err)
@@ -328,7 +378,7 @@ func TestExcludedNonVSIEmsg(t *testing.T) {
 	assert.ErrorContains(t, err, "does not match bmffHash")
 
 	// The exact scheme with another value is excluded by either form.
-	signed, err = signer.SignSegment(raw, seqNr, timescale, duration)
+	signed, err = sign(t, signer, raw, seqNr, timescale, duration)
 	require.NoError(t, err)
 	_, err = Verify(append(signed, emsgV0(SchemeIDURI, "other", nil)...), signer.PublicKey())
 	assert.ErrorContains(t, err, "not a VSI emsg box")

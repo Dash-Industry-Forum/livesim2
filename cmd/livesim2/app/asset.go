@@ -172,6 +172,9 @@ func (am *assetMgr) loadAsset(logger *slog.Logger, mpdPath string) error {
 			}
 		}
 	}
+	if err := asset.setC2PAEventIDs(); err != nil {
+		return fmt.Errorf("c2pa event ids: %w", err)
+	}
 	logger.Info("Asset MPD loaded")
 	return nil
 }
