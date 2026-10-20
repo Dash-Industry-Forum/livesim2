@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/chunkparser"
@@ -36,10 +38,6 @@ func TestCmafIngesterMgr(t *testing.T) {
 	}
 	err := logging.InitSlog(cfg.LogLevel, cfg.LogFormat)
 	require.NoError(t, err)
-	server, err := SetupServer(context.Background(), &cfg)
-	require.NoError(t, err)
-	cm := NewCmafIngesterMgr(server)
-	cm.Start()
 
 	cases := []struct {
 		livesimURL         string
@@ -48,44 +46,57 @@ func TestCmafIngesterMgr(t *testing.T) {
 		nrTriggers         int
 		expectedNrSegments int
 	}{
-		{"/livesim2/segtimeline_1/ato_1/chunkdur_1000/testpic_2s/Manifest.mpd", new(int(10000)), false, 2, 4},
+		{"/livesim2/segtimeline_1/ato_1/chunkdur_1000/testpic_2s/Manifest.mpd", new(int(10000)), false, 2, 6},
 		{"/livesim2/segtimeline_1/testpic_2s/Manifest.mpd", new(int(10000)), true, 2, 2},
 		{"/livesim2/segtimeline_1/testpic_2s/Manifest.mpd", new(int(10000)), false, 2, 6},
 	}
 
-	for i, c := range cases {
-		rc := newCmafReceiverTestServer()
-		recServer := httptest.NewServer(rc)
-		setup := CmafIngesterSetup{
-			User:        "",
-			PassWord:    "",
-			DestRoot:    recServer.URL,
-			DestName:    "testpic_ingest",
-			URL:         c.livesimURL,
-			TestNowMS:   c.testNowMS,
-			Duration:    nil,
-			StreamsURLs: c.streamsURLs,
-		}
-		cId, err := cm.NewCmafIngester(setup)
+	// The bubble's fake clock makes the chunk pacing take no real time.
+	synctest.Test(t, func(t *testing.T) {
+		server, err := SetupServer(context.Background(), &cfg)
 		require.NoError(t, err)
-		require.Equal(t, uint64(i+1), cId, "CMAF ingester ID be one-based and increase by 1")
-		cI := cm.ingesters[cId]
-		require.NotNil(t, cI, "CMAF ingester should be created")
-		ctx := context.Background()
-		ctx, cancel := context.WithTimeout(ctx, 1000*time.Second)
-		go cI.start(ctx)
-		for j := 0; j < c.nrTriggers; j++ {
-			cI.triggerNextSegment()
+		cm := NewCmafIngesterMgr(server)
+		cm.Start()
+
+		for i, c := range cases {
+			rc := newCmafReceiverTestServer()
+			recServer := httptest.NewTestServer(t, rc)
+			cm.client = recServer.Client()
+			setup := CmafIngesterSetup{
+				User:        "",
+				PassWord:    "",
+				DestRoot:    recServer.URL,
+				DestName:    "testpic_ingest",
+				URL:         c.livesimURL,
+				TestNowMS:   c.testNowMS,
+				Duration:    nil,
+				StreamsURLs: c.streamsURLs,
+			}
+			cId, err := cm.NewCmafIngester(setup)
+			require.NoError(t, err)
+			require.Equal(t, uint64(i+1), cId, "CMAF ingester ID be one-based and increase by 1")
+			cI := cm.ingesters[cId]
+			require.NotNil(t, cI, "CMAF ingester should be created")
+			ctx, cancel := context.WithCancel(context.Background())
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				cI.start(ctx)
+			}()
+			for range c.nrTriggers {
+				cI.triggerNextSegment()
+			}
+			// Chunked segments are paced, so wait one segment duration for the last one to be sent.
+			// With TestNowMS, no further segment is sent until triggered.
+			synctest.Sleep(2 * time.Second)
+			rc.mu.Lock()
+			nrReceived := len(rc.receivedSegments)
+			rc.mu.Unlock()
+			require.Equal(t, c.expectedNrSegments, nrReceived, "Number of segments received")
+			cancel()
+			<-done
 		}
-		time.Sleep(500 * time.Millisecond)
-		// Now we need to check that the segments are received
-		rc.mu.Lock()
-		nrReceived := len(rc.receivedSegments)
-		rc.mu.Unlock()
-		require.Equal(t, c.expectedNrSegments, nrReceived, "Number of segments received")
-		cancel()
-		recServer.Close()
-	}
+	})
 }
 
 type cmafReceiverTestServer struct {
@@ -167,83 +178,94 @@ func (s *cmafReceiverTestServer) ServeHTTP(w http.ResponseWriter, r *http.Reques
 // receiver before the next Write is made, so that no part of a CMAF chunk
 // is delayed until the next chunk is produced.
 func TestCmafSourceChunkedNoHoldBack(t *testing.T) {
-	received := make(chan int, 100)
-	recServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		buf := make([]byte, 16*1024)
-		for {
-			n, err := r.Body.Read(buf)
-			if n > 0 {
-				received <- n
+	synctest.Test(t, func(t *testing.T) {
+		received := make(chan int, 100)
+		recServer := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			buf := make([]byte, 16*1024)
+			for {
+				n, err := r.Body.Read(buf)
+				if n > 0 {
+					received <- n
+				}
+				if err != nil {
+					break
+				}
 			}
-			if err != nil {
-				break
+			w.WriteHeader(http.StatusOK)
+		}))
+		client := recServer.Client()
+
+		cs := newCmafSource(slog.Default(), client, recServer.URL+"/seg.m4s", "video", "", "", true)
+		sendDone := make(chan struct{})
+		go func() {
+			defer close(sendDone)
+			cs.sendChunked(context.Background())
+		}()
+
+		// The fake clock only reaches the timeout if the bytes are held back.
+		waitForBytes := func(want int) {
+			t.Helper()
+			got := 0
+			timeout := time.After(2 * time.Second)
+			for got < want {
+				select {
+				case n := <-received:
+					got += n
+				case <-timeout:
+					t.Fatalf("received %d of %d bytes before next write", got, want)
+				}
 			}
+			require.Equal(t, want, got)
 		}
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer recServer.Close()
 
-	cs := newCmafSource(slog.Default(), recServer.URL+"/seg.m4s", "video", "", "", true)
-	sendDone := make(chan struct{})
-	go func() {
-		defer close(sendDone)
-		cs.sendChunked(context.Background())
-	}()
-
-	waitForBytes := func(want int) {
-		t.Helper()
-		got := 0
-		timeout := time.After(2 * time.Second)
-		for got < want {
-			select {
-			case n := <-received:
-				got += n
-			case <-timeout:
-				t.Fatalf("received %d of %d bytes before next write", got, want)
-			}
+		// Sizes below, at, and above the 32KB io.Copy buffer size of the HTTP client
+		for _, size := range []int{100, 32 * 1024, 60_000, 100_000} {
+			n, err := cs.Write(make([]byte, size))
+			require.NoError(t, err)
+			require.Equal(t, size, n)
+			waitForBytes(size)
 		}
-		require.Equal(t, want, got)
-	}
-
-	// Sizes below, at, and above the 32KB io.Copy buffer size of the HTTP client
-	for _, size := range []int{100, 32 * 1024, 60_000, 100_000} {
-		n, err := cs.Write(make([]byte, size))
-		require.NoError(t, err)
-		require.Equal(t, size, n)
-		waitForBytes(size)
-	}
-	require.NoError(t, cs.pw.Close())
-	<-sendDone
+		require.NoError(t, cs.pw.Close())
+		<-sendDone
+	})
 }
 
 // TestCmafSourceChunkedReceiverGone checks that a writer is not blocked
 // forever if the request fails.
 func TestCmafSourceChunkedReceiverGone(t *testing.T) {
-	recServer := httptest.NewServer(http.NotFoundHandler())
-	url := recServer.URL + "/seg.m4s"
-	recServer.Close()
-
-	cs := newCmafSource(slog.Default(), url, "video", "", "", true)
-	sendDone := make(chan struct{})
-	go func() {
-		defer close(sendDone)
-		cs.sendChunked(context.Background())
-	}()
-	writeErr := make(chan error, 1)
-	go func() {
-		var err error
-		for err == nil {
-			_, err = cs.Write(make([]byte, 1000))
+	synctest.Test(t, func(t *testing.T) {
+		// The request fails without the body being read or closed
+		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return nil, errors.New("receiver gone")
+		})}
+		cs := newCmafSource(slog.Default(), client, "http://example.com/seg.m4s", "video", "", "", true)
+		sendDone := make(chan struct{})
+		go func() {
+			defer close(sendDone)
+			cs.sendChunked(context.Background())
+		}()
+		writeErr := make(chan error, 1)
+		go func() {
+			var err error
+			for err == nil {
+				_, err = cs.Write(make([]byte, 1000))
+			}
+			writeErr <- err
+		}()
+		select {
+		case err := <-writeErr:
+			require.Error(t, err)
+		case <-time.After(2 * time.Second):
+			t.Fatal("writer blocked after failed request")
 		}
-		writeErr <- err
-	}()
-	select {
-	case err := <-writeErr:
-		require.Error(t, err)
-	case <-time.After(2 * time.Second):
-		t.Fatal("writer blocked after failed request")
-	}
-	<-sendDone
+		<-sendDone
+	})
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }
 
 // TestCmafIngesterSegmentAfterAvailability checks that a chunked segment sent
@@ -258,54 +280,58 @@ func TestCmafIngesterSegmentAfterAvailability(t *testing.T) {
 	}
 	err := logging.InitSlog(cfg.LogLevel, cfg.LogFormat)
 	require.NoError(t, err)
-	server, err := SetupServer(context.Background(), &cfg)
-	require.NoError(t, err)
-	cm := NewCmafIngesterMgr(server)
-	cm.Start()
 
-	var mu sync.Mutex
-	completedMS := make(map[string]int)
-	recServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.Copy(io.Discard, r.Body)
+	// The bubble's fake clock makes the waiting and the pacing take no real time.
+	synctest.Test(t, func(t *testing.T) {
+		server, err := SetupServer(context.Background(), &cfg)
+		require.NoError(t, err)
+		cm := NewCmafIngesterMgr(server)
+		cm.Start()
+
+		var mu sync.Mutex
+		completedMS := make(map[string]int)
+		recServer := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = io.Copy(io.Discard, r.Body)
+			mu.Lock()
+			completedMS[r.URL.Path] = unixMS()
+			mu.Unlock()
+			w.WriteHeader(http.StatusOK)
+		}))
+		cm.client = recServer.Client()
+
+		// 2s segments with 0.5s chunks. With ato 1.5s, a segment is available after its first chunk.
+		setup := CmafIngesterSetup{
+			DestRoot: recServer.URL,
+			DestName: "testpic_ingest",
+			URL:      "/livesim2/ato_1.5/chunkdur_0.5/testpic_2s/Manifest.mpd",
+		}
+		cId, err := cm.NewCmafIngester(setup)
+		require.NoError(t, err)
+		c := cm.ingesters[cId]
+
+		// Pick the segment in progress, and start sending it at least minLateMS after its availability time
+		const minLateMS = 500
+		segNr := findLastSegNr(c.cfg, c.asset, unixMS(), c.asset.refRep) + 1
+		availMS, err := calcSegmentAvailabilityTime(c.asset, c.asset.refRep, uint32(segNr), c.cfg)
+		require.NoError(t, err)
+		if wait := int(availMS) + minLateMS - unixMS(); wait > 0 {
+			time.Sleep(time.Duration(wait) * time.Millisecond)
+		}
+		lateMS := unixMS() - int(availMS)
+		segEndMS := int(availMS) + 1500
+
+		err = c.sendMediaSegments(context.Background(), segNr, int(availMS), false)
+		require.NoError(t, err)
+
 		mu.Lock()
-		completedMS[r.URL.Path] = unixMS()
-		mu.Unlock()
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer recServer.Close()
-
-	// 2s segments with 0.5s chunks. With ato 1.5s, a segment is available after its first chunk.
-	setup := CmafIngesterSetup{
-		DestRoot: recServer.URL,
-		DestName: "testpic_ingest",
-		URL:      "/livesim2/ato_1.5/chunkdur_0.5/testpic_2s/Manifest.mpd",
-	}
-	cId, err := cm.NewCmafIngester(setup)
-	require.NoError(t, err)
-	c := cm.ingesters[cId]
-
-	// Pick the segment in progress, and start sending it at least minLateMS after its availability time
-	const minLateMS = 500
-	segNr := findLastSegNr(c.cfg, c.asset, unixMS(), c.asset.refRep) + 1
-	availMS, err := calcSegmentAvailabilityTime(c.asset, c.asset.refRep, uint32(segNr), c.cfg)
-	require.NoError(t, err)
-	if wait := int(availMS) + minLateMS - unixMS(); wait > 0 {
-		time.Sleep(time.Duration(wait) * time.Millisecond)
-	}
-	lateMS := unixMS() - int(availMS)
-	segEndMS := int(availMS) + 1500
-
-	err = c.sendMediaSegments(context.Background(), segNr, int(availMS), false)
-	require.NoError(t, err)
-
-	mu.Lock()
-	defer mu.Unlock()
-	require.Len(t, completedMS, len(c.repsData))
-	for path, doneMS := range completedMS {
-		delayMS := doneMS - segEndMS
-		require.Less(t, delayMS, lateMS/2, "segment %s completed %dms after its end, started %dms late",
-			path, delayMS, lateMS)
-	}
+		defer mu.Unlock()
+		require.Len(t, completedMS, len(c.repsData))
+		for path, doneMS := range completedMS {
+			delayMS := doneMS - segEndMS
+			require.Less(t, delayMS, lateMS/2, "segment %s completed %dms after its end, started %dms late",
+				path, delayMS, lateMS)
+		}
+	})
 }
 
 func TestRepLabels(t *testing.T) {
