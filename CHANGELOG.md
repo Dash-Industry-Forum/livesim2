@@ -9,12 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Experimental C2PA live media signing: with the server option `--c2pa`, livesim2 signs the init segment of
-  every clear audio and video representation at startup with a C2PA manifest announcing an Ed25519 session key,
-  and the URL option `c2pa_vsi` serves those init segments and signs each media segment with C2PA 2.5 Verifiable
-  Segment Info (a COSE_Sign1 in an `emsg` box). `--c2pacert`/`--c2pakey` set the claim-signing certificate and
-  key; without them a test certificate is generated. Both the server options and `c2pa_vsi` are experimental and
-  may change. Session keys are created at startup, so players must fetch the init segment again after a restart.
+- Experimental C2PA live media signing: server option `--c2pa` (`--c2pacert`/`--c2pakey`) and URL option `c2pa_vsi`,
+  signing init segments with a C2PA manifest and media segments with C2PA 2.5 VSI `emsg` boxes.
 
 ### Changed
 

@@ -62,11 +62,11 @@ func parseVSIEmsg(b box) *Emsg {
 }
 
 func cutCString(b []byte) (string, []byte, bool) {
-	i := bytes.IndexByte(b, 0)
-	if i < 0 {
+	before, after, ok := bytes.Cut(b, []byte{0})
+	if !ok {
 		return "", nil, false
 	}
-	return string(b[:i]), b[i+1:], true
+	return string(before), after, true
 }
 
 // Verify checks seg's VSI emsg box against the session public key pub and returns the
