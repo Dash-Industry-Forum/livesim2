@@ -30,11 +30,12 @@ func createReversePlayerProxy(prefix, playerURL string) http.Handler {
 	url, _ := url.Parse(playerURL)
 
 	return &httputil.ReverseProxy{
-		Director: func(r *http.Request) {
-			r.URL.Path = strings.Replace(r.URL.Path, prefix, "", 1)
-			r.URL.Scheme = url.Scheme
-			r.URL.Host = url.Host
-			r.Host = url.Host
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.Out.URL.Path = strings.Replace(pr.In.URL.Path, prefix, "", 1)
+			pr.Out.URL.Scheme = url.Scheme
+			pr.Out.URL.Host = url.Host
+			pr.Out.Host = url.Host
+			pr.SetXForwarded() // Director got X-Forwarded-For added automatically, Rewrite does not
 		},
 	}
 }

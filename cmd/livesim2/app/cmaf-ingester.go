@@ -104,7 +104,7 @@ func (cm *cmafIngesterMgr) NewCmafIngester(req CmafIngesterSetup) (nr uint64, er
 	}
 	nowMS, cfg, errHT := cfgFromRequest(mpdReq, log)
 	if errHT != nil {
-		return 0, fmt.Errorf("failed to get config from request: %w", errHT)
+		return 0, fmt.Errorf("failed to get config from request: %w", *errHT)
 	}
 
 	contentPart := cfg.URLContentPart()

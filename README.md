@@ -226,7 +226,7 @@ the 1970 Epoch start, and makes it possible to test time-dependent requests in a
 
 ## Get Started
 
-Install Go 1.25 or later.
+Install Go 1.27 or later.
 
 Then run
 

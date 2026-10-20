@@ -8,7 +8,7 @@
 # Mount a volume with VoD Content at /vod to have livesim2 serve everything below it
 
 # Build Stage
-FROM golang:1.25-alpine3.22 AS BuildStage
+FROM golang:1.27-alpine3.23 AS BuildStage
 RUN apk add git
 WORKDIR /work
 COPY . .
