@@ -10,43 +10,49 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
+// TestRequestLimiter runs in a synctest bubble, so time only advances with time.Sleep
+// and the requests take no time.
 func TestRequestLimiter(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		endpointCalledCount := int64(0)
 
-	endpointCalledCount := int64(0)
+		maxNrRequests := 5
+		maxTime := 100 * time.Millisecond
+		ltr, err := NewIPRequestLimiter(maxNrRequests, maxTime, time.Now(), "192.168.5.0/24", "")
+		require.NoError(t, err)
+		lmw := NewLimiterMiddleware("limiter", ltr)
 
-	maxNrRequests := 5
-	maxTime := 100 * time.Millisecond
-	ltr, err := NewIPRequestLimiter(maxNrRequests, maxTime, time.Now(), "192.168.5.0/24", "")
-	require.NoError(t, err)
-	lmw := NewLimiterMiddleware("limiter", ltr)
+		handler := func(w http.ResponseWriter, r *http.Request) {
+			atomic.AddInt64(&endpointCalledCount, 1)
+		}
 
-	handler := func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt64(&endpointCalledCount, 1)
-	}
+		mux := http.NewServeMux()
 
-	mux := http.NewServeMux()
+		finalHandler := http.HandlerFunc(handler)
+		mux.Handle("/", lmw(finalHandler))
 
-	finalHandler := http.HandlerFunc(handler)
-	mux.Handle("/", lmw(finalHandler))
+		ts := httptest.NewTestServer(t, mux)
 
-	ts := httptest.NewServer(mux)
-	defer ts.Close()
-
-	for i := range maxNrRequests {
-		doRequestAndCheckResponse(t, ts, i+1, maxNrRequests, http.StatusOK)
-	}
-	for i := maxNrRequests; i <= maxNrRequests+2; i++ {
-		doRequestAndCheckResponse(t, ts, i+1, maxNrRequests, http.StatusTooManyRequests)
-	}
-	time.Sleep(maxTime)
-	for i := range maxNrRequests {
-		doRequestAndCheckResponse(t, ts, i+1, maxNrRequests, http.StatusOK)
-	}
+		for i := range maxNrRequests {
+			doRequestAndCheckResponse(t, ts, i+1, maxNrRequests, http.StatusOK)
+		}
+		for i := maxNrRequests; i <= maxNrRequests+2; i++ {
+			doRequestAndCheckResponse(t, ts, i+1, maxNrRequests, http.StatusTooManyRequests)
+		}
+		// The counters are reset once more than maxTime has passed, not when it has just passed.
+		time.Sleep(maxTime)
+		doRequestAndCheckResponse(t, ts, maxNrRequests+4, maxNrRequests, http.StatusTooManyRequests)
+		time.Sleep(time.Millisecond)
+		for i := range maxNrRequests {
+			doRequestAndCheckResponse(t, ts, i+1, maxNrRequests, http.StatusOK)
+		}
+	})
 }
 
 func TestWhiteList(t *testing.T) {
@@ -77,10 +83,10 @@ func TestWhiteList(t *testing.T) {
 
 func doRequestAndCheckResponse(t *testing.T, ts *httptest.Server, reqNr, maxNrRequests int, wantedStatus int) {
 	t.Helper()
-	res, err := http.Get(ts.URL)
-	if err != nil {
-		t.Error(err)
-	}
+	client := ts.Client()
+	res, err := client.Get(ts.URL)
+	require.NoError(t, err)
+	require.NoError(t, res.Body.Close())
 	limitHeader := res.Header.Get("limiter")
 	wantedHeader := fmt.Sprintf("%d (max %d)", reqNr, maxNrRequests)
 	if limitHeader != wantedHeader {

@@ -40,10 +40,12 @@ type cmafIngesterMgr struct {
 	state     ingesterState
 	s         *Server
 	cancels   map[uint64]context.CancelFunc
+	client    *http.Client // HTTP client of new ingesters
 }
 
 type cmafIngester struct {
 	mgr            *cmafIngesterMgr
+	client         *http.Client
 	user           string
 	passWord       string
 	destRoot       string
@@ -69,6 +71,7 @@ func NewCmafIngesterMgr(s *Server) *cmafIngesterMgr {
 		cancels:   make(map[uint64]context.CancelFunc),
 		state:     ingesterStateNotStarted,
 		s:         s,
+		client:    http.DefaultClient,
 	}
 }
 
@@ -169,6 +172,7 @@ func (cm *cmafIngesterMgr) NewCmafIngester(req CmafIngesterSetup) (nr uint64, er
 
 	c := cmafIngester{
 		mgr:            cm,
+		client:         cm.client,
 		user:           req.User,
 		passWord:       req.PassWord,
 		destRoot:       req.DestRoot,
@@ -481,7 +485,7 @@ func (c *cmafIngester) sendInitSegment(ctx context.Context, rd cmafRepData, rawI
 }
 
 func (c *cmafIngester) sendRequest(_ context.Context, req *http.Request, url string) error {
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("Error sending request: %w", err)
 	}
@@ -595,7 +599,7 @@ func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup,
 	u := fmt.Sprintf("%s/%s", c.dest(), segPath)
 	c.log.Info("send media segment", "path", segPath, "segNr", segNr, "nowMS", nowMS, "url", u, "chunked", c.useChunked)
 
-	src := newCmafSource(c.log, u, contentType, c.user, c.passWord, c.useChunked)
+	src := newCmafSource(c.log, c.client, u, contentType, c.user, c.passWord, c.useChunked)
 
 	// Create media segment based on number and send it to segPath
 	var sendDone chan struct{}
@@ -666,6 +670,7 @@ type cmafSource struct {
 	h           http.Header
 	status      int
 	log         *slog.Logger
+	client      *http.Client
 	pr          *io.PipeReader
 	pw          *io.PipeWriter
 	buffer      *bytes.Buffer
@@ -674,9 +679,10 @@ type cmafSource struct {
 	useChunked  bool
 }
 
-func newCmafSource(log *slog.Logger, url string, contentType, user, password string,
+func newCmafSource(log *slog.Logger, client *http.Client, url string, contentType, user, password string,
 	useChunked bool) *cmafSource {
 	cs := cmafSource{
+		client:      client,
 		url:         url,
 		contentType: contentType,
 		h:           make(http.Header),
@@ -703,7 +709,7 @@ func (cs *cmafSource) sendChunked(ctx context.Context) {
 		return
 	}
 	setReqHeaders(req, cs.contentType, cs.user, cs.password)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := cs.client.Do(req)
 	if err != nil {
 		cs.log.Error("sending request", "url", cs.url, "err", err)
 		return

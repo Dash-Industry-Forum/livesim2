@@ -16,6 +16,8 @@ import (
 	"path"
 	"strings"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/Dash-Industry-Forum/livesim2/pkg/drm"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
@@ -257,50 +259,59 @@ func TestLiveThumbSegment(t *testing.T) {
 	}
 }
 
+// TestWriteChunkedSegment runs in a synctest bubble, so the chunk pacing takes no real time
+// and can be checked exactly.
 func TestWriteChunkedSegment(t *testing.T) {
-	vodFS := os.DirFS("testdata/assets")
-	am := newAssetMgr(vodFS, "", false, false)
-	log := slog.Default()
-	err := am.discoverAssets(log)
-	require.NoError(t, err)
-	cfg := NewResponseConfig()
-	cfg.AvailabilityTimeCompleteFlag = false
-	cfg.AvailabilityTimeOffsetS = 7.0
-	chunkDur := 1.0
-	cfg.ChunkDurS = &chunkDur
-	err = logging.InitSlog("debug", "discard")
-	require.NoError(t, err)
+	synctest.Test(t, func(t *testing.T) {
+		vodFS := os.DirFS("testdata/assets")
+		am := newAssetMgr(vodFS, "", false, false)
+		log := slog.Default()
+		err := am.discoverAssets(log)
+		require.NoError(t, err)
+		cfg := NewResponseConfig()
+		cfg.AvailabilityTimeCompleteFlag = false
+		cfg.AvailabilityTimeOffsetS = 7.0
+		chunkDur := 1.0
+		cfg.ChunkDurS = &chunkDur
+		err = logging.InitSlog("debug", "discard")
+		require.NoError(t, err)
 
-	cases := []struct {
-		asset          string
-		initialization string
-		media          string
-		mediaTimescale int
-	}{
-		{
-			asset:          "testpic_8s",
-			media:          "V300/$NrOrTime$.m4s",
-			mediaTimescale: 15360,
-		},
-	}
-	for _, tc := range cases {
-		asset, ok := am.findAsset(tc.asset)
-		require.True(t, ok)
-		require.NoError(t, err)
-		nowMS := 86_000
-		rr := httptest.NewRecorder()
-		segmentPart := strings.Replace(tc.media, "$NrOrTime$", "10", 1)
-		mediaTime := 80 * tc.mediaTimescale
-		err := writeChunkedSegment(context.Background(), log, rr, cfg, nil, vodFS, asset, segmentPart, nowMS, nil, false /* isLast */)
-		require.NoError(t, err)
-		seg := rr.Body.Bytes()
-		sr := bits.NewFixedSliceReader(seg)
-		mp4d, err := mp4.DecodeFileSR(sr)
-		require.NoError(t, err)
-		bdt := mp4d.Segments[0].Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
-		require.Equal(t, mediaTime, int(bdt))
-		require.Equal(t, 8, len(mp4d.Segments[0].Fragments))
-	}
+		cases := []struct {
+			asset          string
+			initialization string
+			media          string
+			mediaTimescale int
+			pacingDur      time.Duration
+		}{
+			{
+				asset:          "testpic_8s",
+				media:          "V300/$NrOrTime$.m4s",
+				mediaTimescale: 15360,
+				// At 86s, the chunks ending at 87s and 88s are not yet available
+				pacingDur: 2 * time.Second,
+			},
+		}
+		for _, tc := range cases {
+			asset, ok := am.findAsset(tc.asset)
+			require.True(t, ok)
+			require.NoError(t, err)
+			nowMS := 86_000
+			rr := httptest.NewRecorder()
+			segmentPart := strings.Replace(tc.media, "$NrOrTime$", "10", 1)
+			mediaTime := 80 * tc.mediaTimescale
+			start := time.Now()
+			err := writeChunkedSegment(context.Background(), log, rr, cfg, nil, vodFS, asset, segmentPart, nowMS, nil, false /* isLast */)
+			require.NoError(t, err)
+			require.Equal(t, tc.pacingDur, time.Since(start), "time to write the chunks")
+			seg := rr.Body.Bytes()
+			sr := bits.NewFixedSliceReader(seg)
+			mp4d, err := mp4.DecodeFileSR(sr)
+			require.NoError(t, err)
+			bdt := mp4d.Segments[0].Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
+			require.Equal(t, mediaTime, int(bdt))
+			require.Equal(t, 8, len(mp4d.Segments[0].Fragments))
+		}
+	})
 }
 
 // TestChunkSegmentAcrossFragments checks that a chunk with samples from two fragments of
