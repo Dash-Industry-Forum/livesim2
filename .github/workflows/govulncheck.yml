@@ -24,7 +24,7 @@ jobs:
       # govulncheck@latest tracks the current Go release and setup-go fixes
       # GOTOOLCHAIN=local, so an older pinned toolchain cannot build the
       # scanner (x/vuln v1.8.0 needs >= 1.26). Stdlib findings are therefore
-      # reported against the latest release, not against 1.25.
+      # reported against the latest release, not against 1.27.
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
