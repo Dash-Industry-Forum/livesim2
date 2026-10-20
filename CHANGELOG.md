@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   thumbnails, `utc_direct` carries the current time instead of an empty value, and `snr_-1` omits `@startNumber` as documented instead of failing with 400.
 - Live segments of assets with a `sidx` now get a `sidx` that matches them: 64-bit earliest presentation time,
   and sizes and durations that include `scte35_` `emsg` boxes, encryption and resegmented audio.
+- The livesim2 CMAF ingester no longer leaks a goroutine when an ingest stops on an error.
 
 ## [1.14.0] - 2026-09-30
 
