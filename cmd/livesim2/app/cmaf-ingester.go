@@ -332,17 +332,13 @@ func (c *cmafIngester) start(ctx context.Context) {
 		return
 	}
 	c.log.Info("Next segment availability time", "time", availabilityTime)
-	var timer *time.Timer
 	deltaTime := 24 * time.Hour
 	if c.testNowMS == nil {
 		deltaTime = time.Duration(availabilityTime-int64(nowMS)) * time.Millisecond
 	}
-	timer = time.NewTimer(deltaTime)
-	defer func() {
-		if !timer.Stop() {
-			<-timer.C
-		}
-	}()
+	timer := time.NewTimer(deltaTime)
+	// Draining timer.C after Stop would block forever if the loop already received from it.
+	defer timer.Stop()
 
 	// Main loop for sending segments
 	for {
