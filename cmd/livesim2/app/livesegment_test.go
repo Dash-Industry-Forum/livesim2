@@ -1196,3 +1196,120 @@ func TestWriteSubSegmentWithChunkDuration(t *testing.T) {
 		})
 	}
 }
+
+// TestLiveSegmentSidx checks that the sidx a VoD segment brings describes the live segment
+// as sent, also when a larger tfdt, emsg boxes, captions or encryption grow it, and for
+// audio segments built from other samples than the VoD segment.
+func TestLiveSegmentSidx(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+	nowMS := 1_700_000_000_000 // media times above 2^32 need a version 1 sidx
+
+	cases := []struct {
+		desc, urlOpts, asset, rep string
+		segDurS                   int
+	}{
+		{"video", "", "testpic_8s", "V300", 8},
+		{"video with SCTE-35 emsg", "scte35_1/", "testpic_8s", "V300", 8},
+		{"video with captions", "timecc608_CC1-eng/", "testpic_8s", "V300", 8},
+		{"encrypted video", "eccp_cbcs/", "testpic_8s", "V300", 8},
+		{"audio", "", "testpic_2s_av1", "A48", 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			a, ok := am.findAsset(tc.asset)
+			require.True(t, ok)
+			rep := a.Reps[tc.rep]
+			trex := rep.initSeg.Moov.Mvex.Trex
+			nrEmsgs := 0
+			lastNr := nowMS/1000/tc.segDurS - 2
+			for nr := lastNr - 5; nr <= lastNr; nr++ {
+				segPart := fmt.Sprintf("%s/%d.m4s", tc.rep, nr)
+				cfg, err := processURLCfg("/livesim2/"+tc.urlOpts+tc.asset+"/"+segPart, nowMS)
+				require.NoError(t, err)
+				rr := httptest.NewRecorder()
+				err = writeLiveSegment(slog.Default(), rr, cfg, nil, vodFS, a, segPart, nowMS, nil, false)
+				require.NoError(t, err, segPart)
+				f, err := mp4.DecodeFile(rr.Body)
+				require.NoError(t, err)
+				seg := f.Segments[0]
+				sidx := seg.Sidx
+				require.NotNil(t, sidx)
+				nrEmsgs += len(seg.Fragments[0].Emsgs)
+
+				tfdt := seg.Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
+				require.Greater(t, tfdt, uint64(math.MaxUint32))
+				assert.Equal(t, uint32(rep.MediaTimescale), sidx.Timescale)
+				assert.Equal(t, byte(1), sidx.Version)
+				assert.Equal(t, tfdt, sidx.EarliestPresentationTime)
+				require.Len(t, sidx.SidxRefs, len(seg.Fragments))
+				for i, frag := range seg.Fragments {
+					samples, err := frag.GetFullSamples(trex)
+					require.NoError(t, err)
+					var dur uint64
+					for _, s := range samples {
+						dur += uint64(s.Dur)
+					}
+					assert.Equal(t, frag.Size(), uint64(sidx.SidxRefs[i].ReferencedSize), "%s ref %d size", segPart, i)
+					assert.Equal(t, dur, uint64(sidx.SidxRefs[i].SubSegmentDuration), "%s ref %d duration", segPart, i)
+				}
+			}
+			if tc.urlOpts == "scte35_1/" {
+				require.Positive(t, nrEmsgs, "some segment should carry an SCTE-35 emsg")
+			}
+		})
+	}
+}
+
+// TestUpdateSidx checks the sidx references for segments with more than one fragment.
+func TestUpdateSidx(t *testing.T) {
+	// Two fragments of three 1000-tick samples, with different sizes, from 2^32.
+	newSeg := func(nrRefs int) *mp4.MediaSegment {
+		seg := mp4.NewMediaSegment()
+		for i := range 2 {
+			frag, err := mp4.CreateFragment(1, 1)
+			require.NoError(t, err)
+			for j := range 3 {
+				frag.AddFullSample(mp4.FullSample{
+					Dur:        1000,
+					Size:       uint32(i + 1),
+					DecodeTime: 1<<32 + uint64(3000*i+1000*j),
+					Data:       make([]byte, i+1),
+				})
+			}
+			seg.AddFragment(frag)
+		}
+		seg.AddSidx(&mp4.SidxBox{Timescale: 1, SidxRefs: make([]mp4.SidxRef, nrRefs)})
+		return seg
+	}
+	meta := segMeta{newTime: 1 << 32, newDur: 6000, timescale: 1000}
+
+	cases := []struct {
+		desc   string
+		nrRefs int
+		single bool
+	}{
+		{"one reference per fragment", 2, false},
+		{"one reference", 1, true},
+		{"other number of references", 3, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			seg := newSeg(tc.nrRefs)
+			updateSidx(seg, meta)
+			sidx := seg.Sidx
+			assert.Equal(t, byte(1), sidx.Version)
+			assert.Equal(t, uint64(1<<32), sidx.EarliestPresentationTime)
+			assert.Equal(t, uint32(1000), sidx.Timescale)
+			size0, size1 := uint32(seg.Fragments[0].Size()), uint32(seg.Fragments[1].Size())
+			require.NotEqual(t, size0, size1)
+			want := []mp4.SidxRef{{ReferencedSize: size0, SubSegmentDuration: 3000},
+				{ReferencedSize: size1, SubSegmentDuration: 3000}}
+			if tc.single {
+				want = []mp4.SidxRef{{ReferencedSize: size0 + size1, SubSegmentDuration: 6000}}
+			}
+			assert.Equal(t, want, sidx.SidxRefs)
+		})
+	}
+}

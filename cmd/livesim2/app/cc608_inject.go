@@ -296,15 +296,7 @@ func applyCC608(seg *mp4.MediaSegment, meta segMeta, cfg *ResponseConfig) error 
 			return err
 		}
 	}
-	// Injection grows each fragment, so a segment index (sidx) that references the
-	// fragments by size would go stale. genLiveSegment's other mutations are
-	// size-invariant, so this is the only place that must fix it. No-op unless the
-	// stored segment carries a sidx with one reference per fragment.
-	if seg.Sidx != nil && len(seg.Sidx.SidxRefs) == len(seg.Fragments) {
-		for i, frag := range seg.Fragments {
-			seg.Sidx.SidxRefs[i].ReferencedSize = uint32(frag.Moof.Size() + frag.Mdat.Size())
-		}
-	}
+	// Injection grows each fragment; writeLiveSegment updates the sidx sizes (updateSidx).
 	return nil
 }
 

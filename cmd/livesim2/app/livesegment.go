@@ -50,15 +50,9 @@ func genLiveSegment(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig
 			return so, fmt.Errorf("not 1 but %d segments", len(segFile.Segments))
 		}
 		seg := segFile.Segments[0]
-		if seg.Sidx != nil {
-			if len(seg.Sidxs) > 1 {
-				log.Error("more than one sidx not supported", "asset", a.AssetPath, "segment", segmentPart)
-				return so, fmt.Errorf("more than one sidx not supported")
-			}
-			if seg.Sidx.Timescale != meta.timescale {
-				seg.Sidx.Timescale = meta.timescale
-			}
-			seg.Sidx.EarliestPresentationTime = meta.newTime
+		if len(seg.Sidxs) > 1 {
+			log.Error("more than one sidx not supported", "asset", a.AssetPath, "segment", segmentPart)
+			return so, fmt.Errorf("more than one sidx not supported")
 		}
 		timeShift := meta.newTime - seg.Fragments[0].Moof.Traf.Tfdt.BaseMediaDecodeTime()
 		if strings.HasPrefix(meta.rep.Codecs, "stpp") {
@@ -464,6 +458,7 @@ func writeLiveSegment(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConf
 				return fmt.Errorf("encryptFrags: %w", err)
 			}
 		}
+		updateSidx(outSeg.seg, outSeg.meta)
 		w.Header().Set("Content-Length", strconv.FormatUint(outSeg.seg.Size(), 10))
 		w.Header().Set("Content-Type", outSeg.meta.rep.SegmentType())
 		// Encode writes the sample data straight from the segment buffer, without copying it.
@@ -481,6 +476,45 @@ func writeLiveSegment(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConf
 		return err
 	}
 	return nil
+}
+
+// updateSidx makes the segment index (sidx) that a segment brings from the VoD asset
+// describe the live segment as sent. The live segment has another timing, and its
+// fragments can have another size: a version 1 tfdt, emsg boxes, CTA-608 captions and
+// encryption all grow them, and a live audio segment is built from other samples than
+// the VoD segment whose sidx it carries. A sidx with one reference per fragment keeps
+// them; any other sidx gets a single reference to the whole segment.
+func updateSidx(seg *mp4.MediaSegment, meta segMeta) {
+	sidx := seg.Sidx
+	if sidx == nil || len(sidx.SidxRefs) == 0 {
+		return
+	}
+	sidx.Timescale = meta.timescale
+	sidx.EarliestPresentationTime = meta.newTime
+	if meta.newTime > math.MaxUint32 {
+		sidx.Version = 1 // version 0 has a 32-bit earliest_presentation_time
+	}
+	if len(sidx.SidxRefs) != len(seg.Fragments) {
+		sidx.SidxRefs = sidx.SidxRefs[:1]
+	}
+	if len(sidx.SidxRefs) == 1 {
+		var size uint64
+		for _, frag := range seg.Fragments {
+			size += frag.Size()
+		}
+		sidx.SidxRefs[0].ReferencedSize = uint32(size)
+		sidx.SidxRefs[0].SubSegmentDuration = meta.newDur
+		return
+	}
+	// A subsegment lasts until the next fragment starts, and the last one until the segment ends.
+	end := meta.newTime + uint64(meta.newDur)
+	for i := len(seg.Fragments) - 1; i >= 0; i-- {
+		frag := seg.Fragments[i]
+		start := frag.Moof.Traf.Tfdt.BaseMediaDecodeTime()
+		sidx.SidxRefs[i].ReferencedSize = uint32(frag.Size())
+		sidx.SidxRefs[i].SubSegmentDuration = uint32(end - start)
+		end = start
+	}
 }
 
 func encryptFrags(log *slog.Logger, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
