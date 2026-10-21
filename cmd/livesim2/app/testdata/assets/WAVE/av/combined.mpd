@@ -14,7 +14,7 @@
           <S t="0" d="25600" r="3"/>
         </SegmentTimeline>
       </SegmentTemplate>
-      <Representation id="video25fps" mimeType="video/mp4" codecs="avc1.640028" width="1920" height="1080" frameRate="25" sar="1:1" bandwidth="4900000">
+      <Representation id="video25fps" mimeType="video/mp4" codecs="avc3.640028" width="1920" height="1080" frameRate="25" sar="1:1" bandwidth="4900000">
       </Representation>
     </AdaptationSet>
     <AdaptationSet segmentAlignment="true" lang="und" startWithSAP="1" contentType="audio" containerProfiles="'cfmc','cmf2','caac'">
