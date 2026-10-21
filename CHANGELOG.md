@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   build their sample data without extra copies, cutting allocated bytes per segment by 20-67% and time by up to 40%.
   VoD segments are read into reused buffers, and the chunks of a segment are made in one reused fragment, which
   cuts what is left by up to 98% (clear video) and the allocations of chunked segments by up to 69%.
+- The livesim2 CMAF ingester reports segment uploads that fail or get an error response, and sends them once more.
 
 ### Fixed
 
