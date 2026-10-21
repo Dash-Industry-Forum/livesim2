@@ -68,7 +68,7 @@ func TestParamToMPD(t *testing.T) {
 			mpd:              "testpic_2s/Manifest.mpd",
 			params:           "periods_60/continuous_1/",
 			wantedStatusCode: http.StatusOK,
-			wantedInMPD:      []string{`<SupplementalProperty schemeIdUri="urn:mpeg:dash:period-continuity:2015" value="1"></SupplementalProperty>`},
+			wantedInMPD:      []string{`<SupplementalProperty schemeIdUri="urn:mpeg:dash:period-continuity:2015" value="P`},
 		},
 		{
 			desc:             "SVTA2053 ad creative signaling",

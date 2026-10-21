@@ -605,6 +605,14 @@ func splitPeriod(mpd *m.MPD, a *asset, cfg *ResponseConfig, wTimes wrapTimes) er
 	startPeriodNr := wTimes.startTimeMS / (periodDur * 1000)
 	endPeriodNr := wTimes.nowMS / (periodDur * 1000)
 	inPeriod := mpd.Periods[0]
+	if cfg.ContMultiPeriodFlag {
+		// Period continuity relates the Adaptation Sets with the same @id in two Periods.
+		for _, as := range inPeriod.AdaptationSets {
+			if as.Id == nil {
+				as.Id = new(nextFreeAdaptationSetID(inPeriod, 0))
+			}
+		}
+	}
 	nrPeriods := endPeriodNr - startPeriodNr + 1
 	periods := make([]*m.Period, 0, nrPeriods)
 	for pNr := startPeriodNr; pNr <= endPeriodNr; pNr++ {
@@ -639,10 +647,11 @@ func splitPeriod(mpd *m.MPD, a *asset, cfg *ResponseConfig, wTimes wrapTimes) er
 			default:
 				return fmt.Errorf("unknown mpd type")
 			}
-			if cfg.ContMultiPeriodFlag {
+			if cfg.ContMultiPeriodFlag && pNr > startPeriodNr {
+				// The value is the @id of the earlier Period that this one continues (ISO/IEC 23009-1 5.3.2.4).
 				periodContinuity := m.DescriptorType{
 					SchemeIdUri: "urn:mpeg:dash:period-continuity:2015",
-					Value:       "1",
+					Value:       fmt.Sprintf("P%d", pNr-1),
 				}
 				as.SupplementalProperties = append(as.SupplementalProperties, &periodContinuity)
 			}

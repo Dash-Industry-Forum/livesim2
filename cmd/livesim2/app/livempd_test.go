@@ -3035,3 +3035,53 @@ func TestProducerReferenceTimeFollowsUTCTiming(t *testing.T) {
 		})
 	}
 }
+
+// TestPeriodContinuity checks that continuous_1 relates each Period to the previous Period
+// in the MPD by its @id, and gives Adaptation Sets without an @id one, since continuity holds
+// between Adaptation Sets with the same @id (ISO/IEC 23009-1 5.3.2.4).
+func TestPeriodContinuity(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+	cases := []struct {
+		asset   string
+		mpdName string
+	}{
+		{"testpic_2s", "Manifest.mpd"},
+		{"ads/train_ad", "manifest.mpd"}, // Adaptation Sets without @id
+	}
+	const nowMS = 200_000 // 140-200 s in the time-shift buffer, so Periods P2 and P3
+	for _, c := range cases {
+		t.Run(c.asset, func(t *testing.T) {
+			asset, ok := am.findAsset(c.asset)
+			require.True(t, ok)
+			cfg, err := processURLCfg(fmt.Sprintf("/livesim2/periods_60/continuous_1/%s/%s", c.asset, c.mpdName), nowMS)
+			require.NoError(t, err)
+			liveMPD, err := LiveMPD(asset, c.mpdName, cfg, nil, nowMS)
+			require.NoError(t, err)
+			require.Len(t, liveMPD.Periods, 2)
+			for i, p := range liveMPD.Periods {
+				for _, as := range p.AdaptationSets {
+					require.NotNil(t, as.Id, "Period %s AdaptationSet @id", p.Id)
+					var values []string
+					for _, sp := range as.SupplementalProperties {
+						if sp.SchemeIdUri == "urn:mpeg:dash:period-continuity:2015" {
+							values = append(values, sp.Value)
+						}
+					}
+					if i == 0 {
+						require.Empty(t, values, "no earlier Period in the MPD for %s", p.Id)
+						continue
+					}
+					prev := liveMPD.Periods[i-1]
+					require.Equal(t, []string{prev.Id}, values, "continuity of Period %s", p.Id)
+					found := false
+					for _, prevAS := range prev.AdaptationSets {
+						found = found || (prevAS.Id != nil && *prevAS.Id == *as.Id)
+					}
+					require.True(t, found, "AdaptationSet %d in Period %s", *as.Id, prev.Id)
+				}
+			}
+		})
+	}
+}
