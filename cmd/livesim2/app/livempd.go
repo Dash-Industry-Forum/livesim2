@@ -218,6 +218,14 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 	}
 
 	adaptationSets := orderAdaptationSetsByContentType(period.AdaptationSets)
+	// Give each Adaptation Set without an @id one. The attribute is optional, but it is needed
+	// to refer to an Adaptation Set, as period continuity, MPD patches and MPD updates do.
+	// The ids of the VoD MPD are kept, so every request gets the same ids.
+	for _, as := range adaptationSets {
+		if as.Id == nil {
+			as.Id = new(nextFreeAdaptationSetID(period, 1))
+		}
+	}
 	var refSegEntries segEntries
 	for asIdx, as := range adaptationSets {
 		if as.SegmentTemplate != nil {
@@ -228,10 +236,6 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 
 		switch as.ContentType {
 		case "video", "audio":
-			if cfg.PatchTTL > 0 && as.Id == nil {
-				slog.Debug("Inserting ID for AdaptationSet for patch", "contentType", as.ContentType, "id", asIdx+1)
-				as.Id = new(uint32(asIdx + 1))
-			}
 			if cfg.DRM != "" {
 				if a.refRep.PreEncrypted {
 					return nil, fmt.Errorf("drm parameter %q, but pre-encrypted asset %s cannot be encrypted again",
@@ -605,14 +609,6 @@ func splitPeriod(mpd *m.MPD, a *asset, cfg *ResponseConfig, wTimes wrapTimes) er
 	startPeriodNr := wTimes.startTimeMS / (periodDur * 1000)
 	endPeriodNr := wTimes.nowMS / (periodDur * 1000)
 	inPeriod := mpd.Periods[0]
-	if cfg.ContMultiPeriodFlag {
-		// Period continuity relates the Adaptation Sets with the same @id in two Periods.
-		for _, as := range inPeriod.AdaptationSets {
-			if as.Id == nil {
-				as.Id = new(nextFreeAdaptationSetID(inPeriod, 0))
-			}
-		}
-	}
 	nrPeriods := endPeriodNr - startPeriodNr + 1
 	periods := make([]*m.Period, 0, nrPeriods)
 	for pNr := startPeriodNr; pNr <= endPeriodNr; pNr++ {
