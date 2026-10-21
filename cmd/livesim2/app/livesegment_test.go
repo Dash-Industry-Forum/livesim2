@@ -341,13 +341,15 @@ func TestChunkSegmentAcrossFragments(t *testing.T) {
 	require.Len(t, seg.Fragments, 2)
 
 	meta := segMeta{newTime: 5000, newNr: 7, newDur: 600}
-	chunks, err := chunkSegment(init, seg, meta, 400, nil)
+	chunks, err := chunkSegment(init, seg, meta, 400, nil, nil)
 	require.NoError(t, err)
-	require.Len(t, chunks, 2)
 	wantData := [][]byte{{1, 1, 2, 2, 3, 3, 4, 4}, {5, 5, 6, 6}}
 	wantDur := []uint64{400, 200}
 	wantTime := []uint64{5000, 5400}
-	for i, chk := range chunks {
+	i := 0
+	for chk, err := range chunks {
+		require.NoError(t, err)
+		require.Less(t, i, len(wantData), "too many chunks")
 		require.Equal(t, wantData[i], chk.frag.Mdat.Payload(), "chunk %d", i)
 		var out bytes.Buffer
 		require.NoError(t, chk.frag.Encode(&out))
@@ -360,14 +362,21 @@ func TestChunkSegmentAcrossFragments(t *testing.T) {
 		for j, fs := range fss {
 			require.Equal(t, wantData[i][2*j:2*j+2], fs.Data, "chunk %d sample %d", i, j)
 		}
+		i++
 	}
+	require.Equal(t, len(wantData), i, "number of chunks")
 
-	// Only the requested chunk is returned.
-	chunks, err = chunkSegment(init, seg, meta, 400, new(1))
+	// Only the requested chunk is made.
+	chunks, err = chunkSegment(init, seg, meta, 400, new(1), nil)
 	require.NoError(t, err)
-	require.Len(t, chunks, 1)
-	require.Nil(t, chunks[0].styp)
-	require.Equal(t, wantData[1], chunks[0].frag.Mdat.Payload())
+	nrChunks := 0
+	for chk, err := range chunks {
+		require.NoError(t, err)
+		require.Nil(t, chk.styp)
+		require.Equal(t, wantData[1], chk.frag.Mdat.Payload())
+		nrChunks++
+	}
+	require.Equal(t, 1, nrChunks)
 }
 
 func TestAvailabilityTime(t *testing.T) {

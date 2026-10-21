@@ -5,6 +5,7 @@
 package app
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io/fs"
@@ -654,20 +655,25 @@ func TestPrepareChunksCC608(t *testing.T) {
 	so, chunks, err := prepareChunks(logger, vodFS, asset, cfg, nil, fmt.Sprintf("1080/%d.m4s", nr), nowMS, false, nil)
 	require.NoError(t, err)
 	require.Equal(t, "video/mp4", so.meta.rep.SegmentType())
-	require.Greater(t, len(chunks), 1, "expected several chunks")
 
 	trex := so.meta.rep.initSeg.Moov.Mvex.Trex
 	var samples []mp4.FullSample
-	for ci, chk := range chunks {
+	ci := 0
+	for chk, err := range chunks {
+		require.NoError(t, err)
 		fss, err := chk.frag.GetFullSamples(trex)
 		require.NoError(t, err)
 		require.NotEmpty(t, fss, "chunk %d has samples", ci)
 		for i := range fss {
 			require.True(t, avc.ContainsNaluType(fss[i].Data, avc.NALU_SEI),
 				"chunk %d sample %d missing SEI", ci, i)
+			// The chunk fragment is reused for the next chunk, so keep a copy.
+			fss[i].Data = bytes.Clone(fss[i].Data)
 		}
 		samples = append(samples, fss...)
+		ci++
 	}
+	require.Greater(t, ci, 1, "expected several chunks")
 
 	// Reassembled across the chunks, the segment's second cue flips on its boundary.
 	// The first cue's build lives in segment 39, which this test does not fetch (see
