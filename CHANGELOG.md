@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Experimental C2PA live media signing: server option `--c2pa` (`--c2pacert`/`--c2pakey`) and URL option `c2pa_vsi`,
   signing init segments with a C2PA manifest and media segments with C2PA 2.5 VSI `emsg` boxes.
+- URL option `inbandps_1` signals AVC and HEVC video as `avc3`/`hev1` and adds the parameter sets in-band in front of
+  the slices of each IDR or IRAP picture, instead of needing separate avc3 content.
 - `/assets` and urlgen flag MPDs that cannot be looped, since a Representation is more than a segment shorter than the
   loop, and MPDs that define a Representation differently from another MPD of the asset, which is also logged.
 

@@ -397,3 +397,17 @@ func TestURLGenMpdsEndpointUpdatesDRMsOOB(t *testing.T) {
 	require.Contains(t, out, `id="drms" hx-swap-oob="innerHTML"`, "DRM block must be an out-of-band swap into #drms")
 	require.Contains(t, out, `value="eccp-cbcs"`, "a clear asset must still offer the DRM choices")
 }
+
+func TestCreateURLInbandPS(t *testing.T) {
+	q := url.Values{}
+	q.Set("asset", "testpic_2s")
+	q.Set("mpd", "Manifest.mpd")
+	q.Set("stl", "nr")
+	q.Set("inbandps", "on")
+	r := httptest.NewRequest("GET", "/urlgen/create?"+q.Encode(), nil)
+	data := createURL(r, testAssetsInfo(), nil)
+	require.Empty(t, data.Errors)
+	require.True(t, data.InbandPS)
+	require.Contains(t, data.URL, "/inbandps_1/")
+	require.Contains(t, data.URL, "/testpic_2s/Manifest.mpd")
+}

@@ -234,6 +234,16 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 
 		var explicitChunkDurS = (*float64)(nil)
 
+		if cfg.InbandPS && as.ContentType == "video" {
+			if a.refRep.PreEncrypted {
+				return nil, fmt.Errorf("inbandps, but the samples of pre-encrypted asset %s cannot be changed", a.AssetPath)
+			}
+			as.Codecs = inbandCodecs(as.Codecs)
+			for _, rep := range as.Representations {
+				rep.Codecs = inbandCodecs(rep.Codecs)
+			}
+		}
+
 		switch as.ContentType {
 		case "video", "audio":
 			if cfg.DRM != "" {

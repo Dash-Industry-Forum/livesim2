@@ -292,8 +292,8 @@ func applyCC608(seg *mp4.MediaSegment, meta segMeta, cfg *ResponseConfig) error 
 		if err != nil {
 			return err
 		}
-		if err := writeBackCC608Samples(frag, samples, payload); err != nil {
-			return err
+		if err := writeBackSamples(frag, samples, payload); err != nil {
+			return fmt.Errorf("cc608: %w", err)
 		}
 	}
 	// Injection grows each fragment; writeLiveSegment updates the sidx sizes (updateSidx).
@@ -313,16 +313,15 @@ func cc608FPS(rep *RepData, samples []mp4.FullSample) (float64, error) {
 	return float64(rep.MediaTimescale) / float64(durTicks), nil
 }
 
-// writeBackCC608Samples writes grown samples back into a fragment: it updates each
-// trun per-sample size and makes payload, the samples' data in decode order as
-// injectCC608 returns it, the mdat data.
-func writeBackCC608Samples(frag *mp4.Fragment, samples []mp4.FullSample, payload []byte) error {
+// writeBackSamples writes grown samples back into a fragment: it updates each
+// trun per-sample size and makes payload, the samples' data in decode order, the mdat data.
+func writeBackSamples(frag *mp4.Fragment, samples []mp4.FullSample, payload []byte) error {
 	trun := frag.Moof.Traf.Trun
 	if !trun.HasSampleSize() {
-		return fmt.Errorf("cc608: trun without per-sample sizes is not supported")
+		return fmt.Errorf("trun without per-sample sizes is not supported")
 	}
 	if len(trun.Samples) != len(samples) {
-		return fmt.Errorf("cc608: trun has %d samples but got %d", len(trun.Samples), len(samples))
+		return fmt.Errorf("trun has %d samples but got %d", len(trun.Samples), len(samples))
 	}
 	for i := range samples {
 		trun.Samples[i].Size = samples[i].Size
