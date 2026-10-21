@@ -50,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of after the whole segment; an unavailable one gives 425 instead of an empty 200 response.
 - `continuous_1` period-continuity descriptors give the `@id` of the previous Period instead of `1`, and are left
   out of the first Period.
+- cmaf-ingest-receiver no longer allocates the size that a box header or `Content-Length` claims before the data
+  arrives, and answers 413 to a chunk larger than 200 MB.
 
 ## [1.14.0] - 2026-09-30
 

@@ -308,19 +308,18 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 
 	log.Debug("Receiving file", "url", path, "contentLength", contentLength, "totSize", rsd.totSize)
 	const maxBufSize = 200 * 1024 * 1024 // 200MB
-	var buf []byte
 	if contentLength > maxBufSize {
 		log.Error("Content-Length exceeds maximum buffer size", "contentLength", contentLength, "maxBufSize", maxBufSize)
 		http.Error(w, "Content-Length too large", http.StatusRequestEntityTooLarge)
 		return
 	}
-	if contentLength > 0 {
-		buf = make([]byte, contentLength)
-	} else {
-		buf = make([]byte, 1024)
-	}
+	// The buffer grows with the data that arrives, so neither a Content-Length nor the size
+	// in a box header allocates memory before the data is there.
+	const initialBufSize = 64 * 1024
+	buf := make([]byte, initialBufSize)
 	if ch.receiveNrRaws == 0 {
 		p := chunkparser.NewMP4ChunkParser(req.Body, buf, chunkParserCallback)
+		p.SetMaxChunkSize(maxBufSize)
 		err = p.Parse()
 		if err == nil && contentLength > 0 && nrReceived != int(contentLength) {
 			err = fmt.Errorf("received %d of %d bytes: %w", nrReceived, contentLength, io.ErrUnexpectedEOF)
@@ -332,6 +331,11 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 				if rmErr := os.Remove(filePath); rmErr != nil {
 					log.Warn("Failed to remove incomplete file", "path", filePath, "err", rmErr)
 				}
+			}
+			if errors.Is(err, chunkparser.ErrChunkTooLarge) {
+				log.Error("Chunk too large", "err", err)
+				http.Error(w, "Chunk too large", http.StatusRequestEntityTooLarge)
+				return
 			}
 			if errors.Is(err, io.ErrUnexpectedEOF) {
 				// The upload ended inside a box, so the segment is incomplete. With a 400 response,
