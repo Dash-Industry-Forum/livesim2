@@ -37,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The livesim2 CMAF ingester no longer leaks a goroutine when an ingest stops on an error.
 - `timesubsstpc_` and `timesubswvtc_` sample entries carry their mandatory `ttma` box (5 s maximum activation).
 - `sgai_` with `resolve=0` writes `earliestResolutionTimeOffset="0"` instead of leaving the attribute out.
+- cmaf-ingest-receiver answers 400 to an upload that ends inside an MP4 box, and removes what it wrote, instead of
+  storing the truncated segment and listing it in the MPD. A box of size 0 or 1 no longer makes it hang.
 
 ## [1.14.0] - 2026-09-30
 
