@@ -104,6 +104,10 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, errHT.Error(), errHT.statusCode)
 		return
 	}
+	if cfg.C2PAVSI && s.assetMgr.c2pa == nil {
+		http.Error(w, errC2PADisabled.Error(), http.StatusBadRequest)
+		return
+	}
 
 	contentPart := cfg.URLContentPart()
 	log.Debug("requested content", "url", contentPart)
@@ -140,7 +144,7 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		_, mpdName := path.Split(contentPart)
 		err := writeLiveMPD(log, w, cfg, s.Cfg.DrmCfg, a, mpdName, nowMS)
 		if err != nil {
-			if errors.Is(err, errCC608AlreadyCaptioned) {
+			if errors.Is(err, errCC608AlreadyCaptioned) || errors.Is(err, errC2PAUnavailable) {
 				log.Info("liveMPD rejected", "err", err)
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
@@ -199,7 +203,7 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 			case errors.Is(err, errNotFound):
 				http.Error(w, "Not Found", http.StatusNotFound)
 				return
-			case errors.Is(err, errCC608AlreadyCaptioned):
+			case errors.Is(err, errCC608AlreadyCaptioned), errors.Is(err, errC2PAUnavailable):
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			case errors.As(err, &tooEarly):

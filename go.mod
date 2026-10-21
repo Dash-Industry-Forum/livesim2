@@ -13,12 +13,15 @@ require (
 	github.com/caddyserver/certmagic v0.25.4
 	github.com/danielgtaylor/huma/v2 v2.38.0
 	github.com/dusted-go/logging v1.3.0
+	github.com/fxamacker/cbor/v2 v2.9.6
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/google/go-cmp v0.7.0
 	github.com/knadh/koanf v1.5.0
 	github.com/prometheus/client_golang v1.23.2
+	github.com/richardwooding/c2pa v0.22.1
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
+	github.com/veraison/go-cose v1.3.0
 )
 
 require (
@@ -41,6 +44,7 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
+	github.com/x448/float16 v0.8.4 // indirect
 	github.com/zeebo/blake3 v0.2.4 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.1 // indirect

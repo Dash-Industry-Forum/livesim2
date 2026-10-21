@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Experimental C2PA live media signing: server option `--c2pa` (`--c2pacert`/`--c2pakey`) and URL option `c2pa_vsi`,
+  signing init segments with a C2PA manifest and media segments with C2PA 2.5 VSI `emsg` boxes.
+
 ### Changed
 
 - Go 1.27 or later is now required (`go.mod`, GitHub Actions workflows and the `Dockerfile` build stage), with
