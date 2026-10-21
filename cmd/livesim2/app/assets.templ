@@ -51,7 +51,7 @@ templ assetsPage(aInfo assetsInfo, forVod bool) {
 							<tr><th>MPD URL</th><th>Description</th><th>Duration</th></tr>
 							for _, m := range a.MPDs {
 								{{ url := aInfo.Host + base + a.Path + "/" + m.Path }}
-								<tr data-not-loopable?={ m.NotLoopable != "" }>
+								<tr data-not-loopable?={ m.NotLoopable != "" } data-rep-conflict?={ m.RepConflicts != "" }>
 									<td>
 										{ m.Path }
 										<span role="button" onclick={ templ.JSFuncCall("navigator.clipboard.writeText", url) }>Copy</span>
@@ -62,6 +62,10 @@ templ assetsPage(aInfo assetsInfo, forVod bool) {
 										if m.NotLoopable != "" {
 											<br/>
 											<small>Not loopable, so the live stream has gaps: { m.NotLoopable }</small>
+										}
+										if m.RepConflicts != "" {
+											<br/>
+											<small>Representations { m.RepConflicts }</small>
 										}
 									</td>
 									<td>{ m.Dur }</td>

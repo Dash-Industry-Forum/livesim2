@@ -147,8 +147,13 @@ func (am *assetMgr) loadAsset(logger *slog.Logger, mpdPath string) error {
 				return fmt.Errorf("segmentTemplate on Representation level. Only supported on AdaptationSet level")
 			}
 			asset.mpdRepIDs[mpdName] = append(asset.mpdRepIDs[mpdName], rep.Id)
-			if _, ok := asset.Reps[rep.Id]; ok {
-				logger.Debug("Representation already loaded", "rep", rep.Id)
+			if loaded, ok := asset.Reps[rep.Id]; ok {
+				if diff := repDiff(loaded, as, rep); diff != "" {
+					logger.Warn("Representation defined differently by another MPD, which is used", "rep", rep.Id, "diff", diff)
+					asset.mpdRepConflicts[mpdName] = append(asset.mpdRepConflicts[mpdName], rep.Id+" ("+diff+")")
+				} else {
+					logger.Debug("Representation already loaded", "rep", rep.Id)
+				}
 				continue
 			}
 			r, err := am.loadRep(logger, assetPath, as, rep)
@@ -477,15 +482,49 @@ type asset struct {
 	Reps         map[string]*RepData         `json:"representations"`
 	refRep       *RepData                    `json:"-"` // First video or audio representation
 	mpdRepIDs    map[string][]string         `json:"-"` // Representation ids of each MPD
+	// mpdRepConflicts lists, for each MPD, its Representations that another MPD defines differently
+	mpdRepConflicts map[string][]string `json:"-"`
 }
 
 func newAsset(assetPath string) *asset {
 	return &asset{
-		AssetPath: assetPath,
-		MPDs:      make(map[string]internal.MPDData),
-		Reps:      make(map[string]*RepData),
-		mpdRepIDs: make(map[string][]string),
+		AssetPath:       assetPath,
+		MPDs:            make(map[string]internal.MPDData),
+		Reps:            make(map[string]*RepData),
+		mpdRepIDs:       make(map[string][]string),
+		mpdRepConflicts: make(map[string][]string),
 	}
+}
+
+// repConflicts returns which Representations of an MPD of the asset another MPD of the asset
+// defines differently, or "" if there are none. All MPDs of an asset share a Representation
+// by its @id, so the definition of the MPD that is loaded first is used for all of them.
+func (a *asset) repConflicts(mpdName string) string {
+	conflicts := a.mpdRepConflicts[mpdName]
+	if len(conflicts) == 0 {
+		return ""
+	}
+	return "defined differently by another MPD of the asset: " + strings.Join(conflicts, "; ")
+}
+
+// repDiff returns how rep of an MPD differs from the Representation with the same @id that
+// another MPD of the asset has defined, or "" if they are the same.
+func repDiff(loaded *RepData, as *m.AdaptationSetType, rep *m.RepresentationType) string {
+	codecs := as.Codecs
+	if rep.Codecs != "" {
+		codecs = rep.Codecs
+	}
+	var diffs []string
+	if initURI := replaceIdentifiers(rep, as.SegmentTemplate.Initialization); initURI != loaded.InitURI {
+		diffs = append(diffs, fmt.Sprintf("init %s, not %s", initURI, loaded.InitURI))
+	}
+	if mediaURI := replaceIdentifiers(rep, as.SegmentTemplate.Media); mediaURI != loaded.MediaURI {
+		diffs = append(diffs, fmt.Sprintf("media %s, not %s", mediaURI, loaded.MediaURI))
+	}
+	if codecs != loaded.Codecs {
+		diffs = append(diffs, fmt.Sprintf("codecs %s, not %s", codecs, loaded.Codecs))
+	}
+	return strings.Join(diffs, ", ")
 }
 
 // notLoopable returns why an MPD of the asset cannot be looped: it lists the Representations

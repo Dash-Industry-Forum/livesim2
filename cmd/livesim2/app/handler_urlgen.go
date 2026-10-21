@@ -47,10 +47,11 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		mpds := make([]mpdInfo, 0, len(asset.MPDs))
 		for _, mpd := range asset.MPDs {
 			mpds = append(mpds, mpdInfo{
-				Path:        mpd.Name,
-				Desc:        mpd.Title,
-				Dur:         mpd.Dur,
-				NotLoopable: asset.notLoopable(mpd.Name),
+				Path:         mpd.Name,
+				Desc:         mpd.Title,
+				Dur:          mpd.Dur,
+				NotLoopable:  asset.notLoopable(mpd.Name),
+				RepConflicts: asset.repConflicts(mpd.Name),
 			})
 		}
 		sort.Slice(mpds, func(i, j int) bool {
@@ -103,10 +104,14 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 func mpdsFromAssetInfo(a *assetInfo) []nameWithSelect {
 	mpds := make([]nameWithSelect, len(a.MPDs))
 	for i, mpd := range a.MPDs {
-		mpds[i] = nameWithSelect{Name: mpd.Path}
+		var notes []string
 		if mpd.NotLoopable != "" {
-			mpds[i].Desc = "not loopable"
+			notes = append(notes, "not loopable")
 		}
+		if mpd.RepConflicts != "" {
+			notes = append(notes, "conflicting Representations")
+		}
+		mpds[i] = nameWithSelect{Name: mpd.Path, Desc: strings.Join(notes, ", ")}
 	}
 	return mpds
 }
