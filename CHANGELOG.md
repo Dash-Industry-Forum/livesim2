@@ -42,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   storing the truncated segment and listing it in the MPD. A box of size 0 or 1 no longer makes it hang.
 - `ssras_` Partial Segments use the `chunkdurssr_` duration of their own URL, not that of the last MPD request,
   and no longer fail with 500 before any MPD has been requested.
+- `ssras_` Partial Segments become available after their own MPD duration, the sequence duration divided by `@k`,
+  instead of after the whole segment; an unavailable one gives 425 instead of an empty 200 response.
 
 ## [1.14.0] - 2026-09-30
 

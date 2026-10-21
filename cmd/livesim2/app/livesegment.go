@@ -929,11 +929,24 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 		return fmt.Errorf("non-positive chunk index: %d", chunkIndex)
 	}
 
-	so, chunks, err := prepareChunks(log, vodFS, a, cfg, drmCfg, segmentPart, nowMS, isLast, &chunkIndex)
+	// A Partial Segment becomes available before the segment, so the segment is made
+	// without checking its availability, and the Partial Segment is checked below.
+	segCfg := cfg
+	if !isImage(segmentPart) {
+		c := *cfg
+		c.AvailabilityTimeOffsetS = math.Inf(1)
+		segCfg = &c
+	}
+	so, chunks, err := prepareChunks(log, vodFS, a, segCfg, drmCfg, segmentPart, nowMS, isLast, &chunkIndex)
 	if err != nil {
 		return err
 	}
 	defer so.bufs.release()
+	if !isImage(segmentPart) {
+		if err := checkPartialSegmentAvailability(cfg, so.meta, chunkIndex, nowMS); err != nil {
+			return err
+		}
+	}
 
 	err = setHeaders(w, so, segmentPart)
 	if err != nil {
@@ -942,31 +955,17 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 	if isImage(segmentPart) {
 		return nil
 	}
-	rep := so.meta.rep
-
-	newTimeInt, err := uint64ToInt(so.meta.newTime)
-	if err != nil {
-		return fmt.Errorf("newTime out of range: %w", err)
-	}
-	chunkAvailTime := newTimeInt + cfg.StartTimeS*int(rep.MediaTimescale)
 
 	// Only the requested chunk is made.
 	for chk, err := range chunks {
 		if err != nil {
 			return fmt.Errorf("get chunk %d: %w", chunkIndex, err)
 		}
-		chunkAvailTime += int(chk.dur)
-
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-
-		chunkAvailMS := chunkAvailTime * 1000 / int(rep.MediaTimescale)
-		if chunkAvailMS < nowMS {
-			err = writeChunk(w, chk)
-			if err != nil {
-				return fmt.Errorf("writeChunk: %w", err)
-			}
+		if err := writeChunk(w, chk); err != nil {
+			return fmt.Errorf("writeChunk: %w", err)
 		}
 		return nil
 	}
@@ -994,6 +993,33 @@ func requestChunkDurS(cfg *ResponseConfig, rep *RepData) (*float64, error) {
 		}
 	}
 	return cfg.ChunkDurS, nil
+}
+
+// checkPartialSegmentAvailability checks that the Partial Segment with sub-number subNr of the
+// Segment Sequence of meta is available. Its MPD duration is the sequence duration divided by
+// @k, which gives its MPD start time and availability start time (ISO/IEC 23009-1 5.3.9.7.1),
+// and the availabilityTimeOffset applies to it as to any other segment.
+func checkPartialSegmentAvailability(cfg *ResponseConfig, meta segMeta, subNr, nowMS int) error {
+	chunkDurS, err := requestChunkDurS(cfg, meta.rep)
+	if err != nil {
+		return err
+	}
+	k, err := calculateK(uint64(meta.newDur), int(meta.timescale), chunkDurS)
+	if err != nil {
+		return err
+	}
+	nrParts := uint64(1)
+	if k != nil {
+		nrParts = *k
+	}
+	if uint64(subNr) >= nrParts {
+		return fmt.Errorf("sub-number %d with @k=%d: %w", subNr, nrParts, errNotFound)
+	}
+	mediaRef := uint64(cfg.StartTimeS) * uint64(meta.timescale)
+	partEnd := meta.newTime + mediaRef + uint64(subNr+1)*uint64(meta.newDur)/nrParts
+	availTimeS := float64(partEnd) / float64(meta.timescale)
+	return CheckTimeValidity(availTimeS, float64(nowMS)*0.001, float64(*cfg.TimeShiftBufferDepthS),
+		cfg.getAvailabilityTimeOffsetS())
 }
 
 func unixMS() int {
@@ -1063,7 +1089,7 @@ func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta,
 	first, last := 0, len(ends)-1
 	if chunkIndex != nil {
 		if *chunkIndex >= len(ends) {
-			return nil, fmt.Errorf("chunk %d not found", *chunkIndex)
+			return nil, fmt.Errorf("chunk %d %w", *chunkIndex, errNotFound)
 		}
 		first, last = *chunkIndex, *chunkIndex
 	}
