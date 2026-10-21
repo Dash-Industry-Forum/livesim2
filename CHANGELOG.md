@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   build their sample data without extra copies, cutting allocated bytes per segment by 20-67% and time by up to 40%.
   VoD segments are read into reused buffers, and the chunks of a segment are made in one reused fragment, which
   cuts what is left by up to 98% (clear video) and the allocations of chunked segments by up to 69%.
+- Live MPDs give each Adaptation Set without an `@id` the lowest free id from 1, since period continuity, MPD patches
+  and MPD updates refer to Adaptation Sets by `@id`. Before, only `patch_ttl` added ids, to video and audio only.
 - The livesim2 CMAF ingester reports segment uploads that fail or get an error response, and sends them once more.
 
 ### Fixed
@@ -44,8 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and no longer fail with 500 before any MPD has been requested.
 - `ssras_` Partial Segments become available after their own MPD duration, the sequence duration divided by `@k`,
   instead of after the whole segment; an unavailable one gives 425 instead of an empty 200 response.
-- `continuous_1` period-continuity descriptors give the `@id` of the previous Period instead of `1`, are left out of
-  the first Period, and Adaptation Sets without an `@id` get one, since continuity relates Adaptation Sets by `@id`.
+- `continuous_1` period-continuity descriptors give the `@id` of the previous Period instead of `1`, and are left
+  out of the first Period.
 
 ## [1.14.0] - 2026-09-30
 
