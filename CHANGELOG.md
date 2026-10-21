@@ -44,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and no longer fail with 500 before any MPD has been requested.
 - `ssras_` Partial Segments become available after their own MPD duration, the sequence duration divided by `@k`,
   instead of after the whole segment; an unavailable one gives 425 instead of an empty 200 response.
+- `continuous_1` period-continuity descriptors give the `@id` of the previous Period instead of `1`, are left out of
+  the first Period, and Adaptation Sets without an `@id` get one, since continuity relates Adaptation Sets by `@id`.
 
 ## [1.14.0] - 2026-09-30
 
