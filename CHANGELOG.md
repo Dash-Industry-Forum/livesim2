@@ -52,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   out of the first Period.
 - cmaf-ingest-receiver no longer allocates the size that a box header or `Content-Length` claims before the data
   arrives, and answers 413 to a chunk larger than 200 MB.
+- `ssras_` signals the `SegmentSequenceProperties@cadence` that the IDR pictures of the content allow, not always 1.
+  The repdata cache format is now version 2, so `*_data.json.gz` caches are rebuilt once.
 
 ## [1.14.0] - 2026-09-30
 

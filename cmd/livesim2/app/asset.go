@@ -294,6 +294,12 @@ func (am *assetMgr) loadRep(logger *slog.Logger, assetPath string, as *m.Adaptat
 	default:
 		return nil, fmt.Errorf("unknown type of representation")
 	}
+	if rp.ContentType == "video" {
+		rp.SAPGrid = sapGrid(rp.Segments)
+	}
+	for i := range rp.Segments {
+		rp.Segments[i].syncOffsets = nil
+	}
 	commonSampleDur := -1
 segLoop:
 	for _, seg := range rp.Segments {
@@ -926,7 +932,8 @@ const (
 // new field must be derived from the media (not just read from an older cache) so that
 // stale <id>_data.json.gz files are regenerated instead of silently lacking the field.
 // v1 added HasCEA608 (caption detection, #321).
-const currentRepDataVersion = 1
+// v2 added SAPGrid (SegmentSequenceProperties cadence).
+const currentRepDataVersion = 2
 
 // RepData provides information about a representation
 type RepData struct {
@@ -944,6 +951,7 @@ type RepData struct {
 	EditListOffset         int64            `json:"editListOffset,omitempty"`
 	PreEncrypted           bool             `json:"preEncrypted"`
 	HasCEA608              bool             `json:"hasCEA608,omitempty"` // Video samples already carry CEA-608 cc_data SEI (#321)
+	SAPGrid                uint64           `json:"sapGrid,omitempty"`   // Sync sample period of all segments, see sapGrid
 	adaptationSetID        *uint32          `json:"-"`                   // AdaptationSet@id in the VoD MPD, for the ssras_ options
 	mediaRegexp            *regexp.Regexp   `json:"-"`
 	initSeg                *mp4.InitSegment `json:"-"`
@@ -1248,8 +1256,61 @@ func (r *RepData) readMP4Segment(vodFS fs.FS, assetPath string, time uint64, nr 
 	if err == nil {
 		seg.CommonSampleDur = commonSampleDur
 	}
+	if r.ContentType == "video" {
+		// Without the offsets, no SAPGrid is derived, which is safe.
+		seg.syncOffsets, _ = syncOffsets(s, r.initSeg.Moov.Mvex.Trex, t)
+	}
 
 	return seg, nil
+}
+
+// syncOffsets returns the decode times of the sync samples of a segment, relative to its start.
+func syncOffsets(seg *mp4.MediaSegment, trex *mp4.TrexBox, start uint64) ([]uint64, error) {
+	var offsets []uint64
+	for _, frag := range seg.Fragments {
+		samples, err := frag.GetFullSamples(trex)
+		if err != nil {
+			return nil, err
+		}
+		for _, s := range samples {
+			if s.IsSync() {
+				offsets = append(offsets, s.DecodeTime-start)
+			}
+		}
+	}
+	return offsets, nil
+}
+
+// sapGrid returns the smallest period P such that every segment has a sync sample at each
+// multiple of P from its start, or 0 if there is no such P shorter than the segments.
+// The candidates are the sync sample offsets of the first segment.
+func sapGrid(segs []Segment) uint64 {
+	if len(segs) == 0 {
+		return 0
+	}
+	for _, p := range segs[0].syncOffsets {
+		if p > 0 && sapGridHolds(segs, p) {
+			return p
+		}
+	}
+	return 0
+}
+
+// sapGridHolds reports whether every segment has a sync sample at each multiple of p.
+func sapGridHolds(segs []Segment, p uint64) bool {
+	for _, s := range segs {
+		offsets := s.syncOffsets // in increasing order
+		j := 0
+		for t := uint64(0); t < s.dur(); t += p {
+			for j < len(offsets) && offsets[j] < t {
+				j++
+			}
+			if j == len(offsets) || offsets[j] != t {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // readThumbSegment reads a thumbnail segment, and returns an error if file does not exist.
@@ -1286,10 +1347,11 @@ func replaceTimeOrNr(str string, val int) string {
 }
 
 type Segment struct {
-	StartTime       uint64 `json:"startTime"`
-	EndTime         uint64 `json:"endTime"`
-	Nr              uint32 `json:"nr"`
-	CommonSampleDur uint32 `json:"-"`
+	StartTime       uint64   `json:"startTime"`
+	EndTime         uint64   `json:"endTime"`
+	Nr              uint32   `json:"nr"`
+	CommonSampleDur uint32   `json:"-"`
+	syncOffsets     []uint64 // Sync sample offsets of video segments while the representation is read
 }
 
 func (s Segment) dur() uint64 {
