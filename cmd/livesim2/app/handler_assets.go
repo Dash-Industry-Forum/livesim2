@@ -27,9 +27,10 @@ type assetInfo struct {
 }
 
 type mpdInfo struct {
-	Path string
-	Desc string
-	Dur  string
+	Path        string
+	Desc        string
+	Dur         string
+	NotLoopable string // Why the MPD cannot be looped, if so
 }
 
 // assetHandlerFunc returns information about assets
@@ -58,9 +59,10 @@ func (s *Server) assetsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		mpds := make([]mpdInfo, 0, len(asset.MPDs))
 		for _, mpd := range asset.MPDs {
 			mpds = append(mpds, mpdInfo{
-				Path: mpd.Name,
-				Desc: mpd.Title,
-				Dur:  mpd.Dur,
+				Path:        mpd.Name,
+				Desc:        mpd.Title,
+				Dur:         mpd.Dur,
+				NotLoopable: asset.notLoopable(mpd.Name),
 			})
 		}
 		sort.Slice(mpds, func(i, j int) bool {
