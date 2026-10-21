@@ -586,8 +586,7 @@ func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, availMS
 	}
 	var resends []mediaUpload
 	for _, u := range uploads {
-		var ue uploadError
-		if !errors.As(u.err, &ue) {
+		if _, ok := errors.AsType[uploadError](u.err); !ok {
 			continue
 		}
 		msg := fmt.Sprintf("Upload of %s failed: %v", u.segPath, u.err)
