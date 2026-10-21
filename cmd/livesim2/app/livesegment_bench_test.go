@@ -51,7 +51,10 @@ func BenchmarkPrepareChunks(b *testing.B) {
 					b.Fatal(err)
 				}
 				buf.Reset()
-				for _, chk := range chunks {
+				for chk, err := range chunks {
+					if err != nil {
+						b.Fatal(err)
+					}
 					if err := chk.frag.Encode(&buf); err != nil {
 						b.Fatal(err)
 					}

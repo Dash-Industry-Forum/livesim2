@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/fs"
+	"iter"
 	"log/slog"
 	"math"
 	"net/http"
@@ -537,8 +538,28 @@ func updateSidx(seg *mp4.MediaSegment, meta segMeta) {
 	}
 }
 
+// encryptFrags encrypts the fragments of a segment in place.
 func encryptFrags(log *slog.Logger, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
 	rp *RepData, frags []*mp4.Fragment) error {
+	enc, err := fragmentEncryptor(log, cfg, drmCfg, rp)
+	if err != nil {
+		return err
+	}
+	for i, f := range frags {
+		if err := enc.EncryptFragment(f); err != nil {
+			return fmt.Errorf("encrypt fragments: fragment %d: %w", i, err)
+		}
+	}
+	return nil
+}
+
+// fragmentEncryptor returns an encryptor for the fragments of one segment of rp.
+// A segment's fragments form one decode sequence, so they are encrypted with the same
+// encryptor, in order. mp4ff makes a fresh per-sequence sample protector for it, which
+// keeps AV1 reference-frame state consistent across the fragments and safe under
+// concurrent requests (ipd itself is immutable and shared).
+func fragmentEncryptor(log *slog.Logger, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
+	rp *RepData) (*mp4.FragmentEncryptor, error) {
 	var ipd *mp4.InitProtectData
 	var key, kid, iv []byte
 	var scheme string
@@ -552,11 +573,11 @@ func encryptFrags(log *slog.Logger, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
 	default: //  cfg.DRM != ""
 		dd, ok := drmCfg.Map[cfg.DRM]
 		if !ok {
-			return fmt.Errorf("drm configuration %q not found", cfg.DRM)
+			return nil, fmt.Errorf("drm configuration %q not found", cfg.DRM)
 		}
 		keyData, err := dd.CPIXData.GetContentKey(rp.ContentType)
 		if err != nil {
-			return fmt.Errorf("get content key for %s: %w", rp.ContentType, err)
+			return nil, fmt.Errorf("get content key for %s: %w", rp.ContentType, err)
 		}
 		scheme = keyData.CommonEncryptionScheme
 		ipdStart := *ed.initEnc[scheme].pd
@@ -569,13 +590,11 @@ func encryptFrags(log *slog.Logger, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
 		key = keyData.Key
 	}
 	log.Debug("encrypting with DRM", "scheme", scheme, "kid", hex.EncodeToString(kid), "iv", hex.EncodeToString(iv))
-	// A segment's fragments form one decode sequence, so encrypt them together. mp4ff builds a
-	// fresh per-sequence sample protector, which keeps AV1 reference-frame state consistent across
-	// the fragments and safe under concurrent requests (ipd itself is immutable and shared).
-	if _, err := mp4.EncryptFragments(frags, key, iv, ipd); err != nil {
-		return fmt.Errorf("encrypt fragments: %w", err)
+	enc, err := ipd.NewFragmentEncryptor(key, iv)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt fragments: %w", err)
 	}
-	return nil
+	return enc, nil
 }
 
 type segOut struct {
@@ -753,9 +772,10 @@ func findRefSegMeta(a *asset, cfg *ResponseConfig, segmentPart string, nowMS int
 	return refMeta, nil
 }
 
-// prepareChunks generates a live segment, chunks it, and encrypts it if needed.
+// prepareChunks generates a live segment and returns an iterator over its chunks,
+// which are made, and encrypted if needed, one at a time as they are iterated over.
 func prepareChunks(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
-	segmentPart string, nowMS int, isLast bool, chunkIndex *int) (segOut, []chunk, error) {
+	segmentPart string, nowMS int, isLast bool, chunkIndex *int) (segOut, iter.Seq2[chunk, error], error) {
 
 	so, err := genLiveSegment(log, vodFS, a, cfg, segmentPart, nowMS, isLast)
 	if err != nil {
@@ -783,19 +803,16 @@ func prepareChunks(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig,
 		// No chunk duration configured - chunking should not be performed
 		return so, nil, fmt.Errorf("chunking requested but no chunk duration configured (chunkDurS or chunkDurSSR)")
 	}
-	chunks, err := chunkSegment(rep.initSeg, seg, so.meta, chunkDur, chunkIndex)
-	if err != nil {
-		return so, nil, fmt.Errorf("chunkSegment: %w", err)
-	}
+	var enc *mp4.FragmentEncryptor
 	if cfg.DRM != "" {
-		frags := make([]*mp4.Fragment, len(chunks))
-		for i, chk := range chunks {
-			frags[i] = chk.frag
-		}
-		err := encryptFrags(log, cfg, drmCfg, rep, frags)
+		enc, err = fragmentEncryptor(log, cfg, drmCfg, rep)
 		if err != nil {
 			return so, nil, fmt.Errorf("encryptFrags: %w", err)
 		}
+	}
+	chunks, err := chunkSegment(rep.initSeg, seg, so.meta, chunkDur, chunkIndex, enc)
+	if err != nil {
+		return so, nil, fmt.Errorf("chunkSegment: %w", err)
 	}
 	return so, chunks, nil
 }
@@ -866,18 +883,21 @@ func writeChunkedTimeSubsSegment(ctx context.Context, w http.ResponseWriter, cfg
 	}
 	// No Content-Length, since the chunks are sent as they become available.
 	w.Header().Set("Content-Type", "application/mp4")
-	return true, writeChunksPaced(ctx, w, chunks, tss.startMS, SUBS_TIME_TIMESCALE, cfg.StartTimeS, nowMS)
+	return true, writeChunksPaced(ctx, w, chunkSeq(chunks), tss.startMS, SUBS_TIME_TIMESCALE, cfg.StartTimeS, nowMS)
 }
 
 // writeChunksPaced writes the chunks of a segment as they become available timewise.
 // startMediaTime and timescale refer to the media timeline of the track in question.
 //
 // nowMS serves as reference for the current time and can be set to any value.
-func writeChunksPaced(ctx context.Context, w http.ResponseWriter, chunks []chunk,
+func writeChunksPaced(ctx context.Context, w http.ResponseWriter, chunks iter.Seq2[chunk, error],
 	startMediaTime, timescale, startTimeS, nowMS int) error {
 	startUnixMS := unixMS()
 	chunkAvailTime := startMediaTime + startTimeS*timescale
-	for _, chk := range chunks {
+	for chk, err := range chunks {
+		if err != nil {
+			return err
+		}
 		chunkAvailTime += int(chk.dur)
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -911,7 +931,7 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 		return fmt.Errorf("non-positive chunk index: %d", chunkIndex)
 	}
 
-	so, chunk, err := prepareChunks(log, vodFS, a, cfg, drmCfg, segmentPart, nowMS, isLast, &chunkIndex)
+	so, chunks, err := prepareChunks(log, vodFS, a, cfg, drmCfg, segmentPart, nowMS, isLast, &chunkIndex)
 	if err != nil {
 		return err
 	}
@@ -932,27 +952,27 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 	}
 	chunkAvailTime := newTimeInt + cfg.StartTimeS*int(rep.MediaTimescale)
 
-	if len(chunk) != 1 {
-		return fmt.Errorf("get chunk %d: expected 1 chunk, got %d", chunkIndex, len(chunk))
-	}
-
-	chk := chunk[0]
-
-	chunkAvailTime += int(chk.dur)
-
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	chunkAvailMS := chunkAvailTime * 1000 / int(rep.MediaTimescale)
-	if chunkAvailMS < nowMS {
-		err = writeChunk(w, chk)
+	// Only the requested chunk is made.
+	for chk, err := range chunks {
 		if err != nil {
-			return fmt.Errorf("writeChunk: %w", err)
+			return fmt.Errorf("get chunk %d: %w", chunkIndex, err)
+		}
+		chunkAvailTime += int(chk.dur)
+
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		chunkAvailMS := chunkAvailTime * 1000 / int(rep.MediaTimescale)
+		if chunkAvailMS < nowMS {
+			err = writeChunk(w, chk)
+			if err != nil {
+				return fmt.Errorf("writeChunk: %w", err)
+			}
 		}
 		return nil
 	}
-	return nil
+	return fmt.Errorf("get chunk %d: no chunk", chunkIndex)
 }
 
 func unixMS() int {
@@ -974,10 +994,14 @@ func createChunk(styp *mp4.StypBox, trackID, seqNr uint32) chunk {
 	}
 }
 
-// chunkSegment splits a segment into chunks of specified duration.
+// chunkSegment splits a segment into chunks of specified duration, and returns them as an iterator.
 // The first chunk gets an styp box if one is available in the incoming segment.
-// If chunkIndex is non-nil, returns only the chunk at that specific index (0-based),
-// and only that chunk is built.
+// If chunkIndex is non-nil, only the chunk at that specific index (0-based) is made.
+// If enc is non-nil, the chunks are encrypted with it, in order.
+//
+// The chunks are made one at a time in a single fragment, which is reset for the next
+// chunk, so that its boxes and encryption boxes are allocated only once. A chunk may
+// therefore only be used until the iteration continues.
 //
 // CTA-608 captions (timecc608) need no handling here: prepareChunks calls
 // genLiveSegment first, which injects the per-frame SEI into the whole segment's
@@ -985,7 +1009,8 @@ func createChunk(styp *mp4.StypBox, trackID, seqNr uint32) chunk {
 // therefore already carry their caption SEI, and each chunk inherits its share (the
 // per-second cues are self-contained per segment and reassembled by the receiver in
 // presentation order across the chunks). Re-injecting here would duplicate the SEI.
-func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta, chunkDur int, chunkIndex *int) ([]chunk, error) {
+func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta, chunkDur int, chunkIndex *int,
+	enc *mp4.FragmentEncryptor) (iter.Seq2[chunk, error], error) {
 	trex := init.Moov.Mvex.Trex
 	nrSamples := 0
 	for _, f := range seg.Fragments {
@@ -1001,48 +1026,77 @@ func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta,
 			return nil, err
 		}
 	}
-	chunks := make([]chunk, 0, segMeta.newDur/uint32(chunkDur))
-	trackID := init.Moov.Trak.Tkhd.TrackID
-	chunkNr := 1
-	chunkStart := 0 // index in fs of the first sample of chunk chunkNr
+	// ends[k] is the index in fs after the last sample of chunk k.
+	var ends []int
 	var totalDur = 0
 	sampleDecodeTime := segMeta.newTime
 	for i := range fs {
 		fs[i].DecodeTime = sampleDecodeTime
 		sampleDecodeTime += uint64(fs[i].Dur)
 		totalDur += int(fs[i].Dur)
-		if totalDur < chunkDur*chunkNr && i < len(fs)-1 {
+		if totalDur < chunkDur*(len(ends)+1) && i < len(fs)-1 {
 			continue
 		}
-		if chunkIndex == nil || (chunkNr-1) == *chunkIndex {
-			var styp *mp4.StypBox
-			if chunkNr == 1 {
-				styp = seg.Styp
+		ends = append(ends, i+1)
+	}
+	first, last := 0, len(ends)-1
+	if chunkIndex != nil {
+		if *chunkIndex >= len(ends) {
+			return nil, fmt.Errorf("chunk %d not found", *chunkIndex)
+		}
+		first, last = *chunkIndex, *chunkIndex
+	}
+	trackID := init.Moov.Trak.Tkhd.TrackID
+
+	return func(yield func(chunk, error) bool) {
+		var frag *mp4.Fragment
+		for k := first; k <= last; k++ {
+			var err error
+			if frag == nil {
+				frag, err = mp4.CreateFragment(segMeta.newNr, trackID)
+			} else {
+				err = frag.Reset(segMeta.newNr)
 			}
-			ch := createChunk(styp, trackID, segMeta.newNr)
-			addChunkSamples(ch.frag, fs[chunkStart:i+1])
-			ch.dur = sampleDecodeTime - fs[chunkStart].DecodeTime
-			chunks = append(chunks, ch)
-			if chunkIndex != nil {
-				return chunks, nil
+			if err != nil {
+				yield(chunk{}, fmt.Errorf("chunk %d: %w", k, err))
+				return
+			}
+			start := 0
+			if k > 0 {
+				start = ends[k-1]
+			}
+			samples := fs[start:ends[k]]
+			// The samples share the segment data without copying it, and encryption
+			// changes it in place, as it does for an unchunked segment.
+			frag.AddFullSamples(samples)
+			if enc != nil {
+				if err := enc.EncryptFragment(frag); err != nil {
+					yield(chunk{}, fmt.Errorf("encrypt chunk %d: %w", k, err))
+					return
+				}
+			}
+			chk := chunk{frag: frag}
+			if k == 0 {
+				chk.styp = seg.Styp
+			}
+			lastSample := samples[len(samples)-1]
+			chk.dur = lastSample.DecodeTime + uint64(lastSample.Dur) - samples[0].DecodeTime
+			if !yield(chk, nil) {
+				return
 			}
 		}
-		chunkStart = i + 1
-		chunkNr++
-	}
-
-	if chunkIndex != nil && len(chunks) == 0 {
-		return nil, fmt.Errorf("chunk %d not found", *chunkIndex)
-	}
-
-	return chunks, nil
+	}, nil
 }
 
-// addChunkSamples adds samples to the chunk fragment frag without copying their data.
-// The segment data is read for each request, so the chunk may share it and encryption
-// may change it in place, as it does for an unchunked segment.
-func addChunkSamples(frag *mp4.Fragment, samples []mp4.FullSample) {
-	frag.AddFullSamples(samples)
+// chunkSeq returns an iterator over a slice of chunks.
+func chunkSeq(chunks []chunk) iter.Seq2[chunk, error] {
+	return func(yield func(chunk, error) bool) {
+		for _, chk := range chunks {
+			if !yield(chk, nil) {
+				return
+			}
+		}
+	}
 }
 
 func writeChunk(w http.ResponseWriter, chk chunk) error {
