@@ -11,8 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Experimental C2PA live media signing: server option `--c2pa` (`--c2pacert`/`--c2pakey`) and URL option `c2pa_vsi`,
   signing init segments with a C2PA manifest and media segments with C2PA 2.5 VSI `emsg` boxes.
-- `/assets` and urlgen flag MPDs that cannot be looped, since a Representation is more than a segment shorter than
-  the asset loop, like the image subtitles of livesim-content's `testpic_2s/imsc1_img.mpd`.
+- `/assets` and urlgen flag MPDs that cannot be looped, since a Representation is more than a segment shorter than the
+  loop, and MPDs that define a Representation differently from another MPD of the asset, which is also logged.
 
 ### Changed
 
