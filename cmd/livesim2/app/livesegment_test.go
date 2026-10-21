@@ -1056,7 +1056,7 @@ func TestWriteSubSegment(t *testing.T) {
 			media:          "V300/10.m4s",
 			subSegmentPart: "1",
 			nowMS:          79_000,
-			expErr:         "createOutSeg: too early by",
+			expErr:         "too early by 3000ms", // Partial Segment 1 of 80-88 s ends at 82 s
 		},
 		{
 			desc:           "gone",
@@ -1064,7 +1064,7 @@ func TestWriteSubSegment(t *testing.T) {
 			media:          "V300/10.m4s",
 			subSegmentPart: "1",
 			nowMS:          400_000,
-			expErr:         "createOutSeg: gone",
+			expErr:         "gone",
 		},
 		{
 			desc:           "invalid sub-segment part (not a number)",

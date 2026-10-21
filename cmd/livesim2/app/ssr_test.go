@@ -75,6 +75,42 @@ func ssrPartialPath(chunkDur string, subNr int) string {
 	return fmt.Sprintf("/livesim2/ssras_2,1/chunkdurssr_2,%s/testpic_2s_low_delay/LD_360/51_%d.m4s", chunkDur, subNr)
 }
 
+// TestSSRPartialSegments checks that a Partial Segment becomes available after its own
+// MPD duration, the sequence duration divided by @k (ISO/IEC 23009-1 5.3.9.7.1), not after
+// the whole Segment Sequence, and that it has that duration.
+func TestSSRPartialSegments(t *testing.T) {
+	get := ssrTestServer(t)
+	init := ssrTestInit(t)
+	cases := []struct {
+		desc       string
+		chunkDur   string
+		subNr      int
+		nowMS      int
+		wantStatus int
+		wantStartS float64
+		wantDurS   float64
+	}{
+		{"first of 4 when available", "0.5", 0, 102_600, http.StatusOK, 102.0, 0.5},
+		{"first of 4 too early", "0.5", 0, 102_400, http.StatusTooEarly, 0, 0},
+		{"second of 4 too early", "0.5", 1, 102_600, http.StatusTooEarly, 0, 0},
+		{"last of 4", "0.5", 3, 104_000, http.StatusOK, 103.5, 0.5},
+		{"beyond @k", "0.5", 4, 105_000, http.StatusNotFound, 0, 0},
+		{"second of 2", "1", 1, 104_000, http.StatusOK, 103.0, 1.0},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			status, body := get(ssrPartialPath(c.chunkDur, c.subNr), c.nowMS)
+			require.Equal(t, c.wantStatus, status, string(body))
+			if status != http.StatusOK {
+				return
+			}
+			startS, durS := partialTiming(t, body, init)
+			require.InDelta(t, c.wantStartS, startS, 1e-9, "start time")
+			require.InDelta(t, c.wantDurS, durS, 1e-9, "duration")
+		})
+	}
+}
+
 // TestSSRChunkDurPerRequest checks that the chunkdurssr_ duration of a request decides its
 // Partial Segments, also after and while MPDs with another duration are requested.
 // Before, the MPD request stored its duration in the Representation data that all requests share.
