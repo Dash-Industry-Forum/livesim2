@@ -734,34 +734,30 @@ func (cs *cmafSource) Flush() {
 	cs.log.Debug("Flush")
 }
 
+// Write sends b in the request body in chunked mode. Otherwise, it adds b to the buffer
+// that is sent with the Content-Length that was set, since a segment may be written in
+// several parts.
 func (cs *cmafSource) Write(b []byte) (int, error) {
 	if cs.useChunked {
 		return cs.pw.Write(b)
 	}
-	contentLength := -1 // Set to -1 to signal that we have checked once
-	if cl, ok := cs.h["Content-Length"]; ok {
-		cl, err := strconv.Atoi(cl[0])
-		if err != nil {
-			cs.log.Error("Content-Length", "err", err)
-		}
-		contentLength = cl
-	}
-	if contentLength <= 0 {
-		return 0, fmt.Errorf("bad content length: %d", contentLength)
-	}
-	if len(b) != contentLength {
-		cs.log.Warn("Content-Length mismatch", "length", len(b), "contentLength", contentLength)
-	}
 	if cs.buffer == nil {
+		contentLength, err := cs.contentLength()
+		if err != nil {
+			return 0, err
+		}
 		cs.buffer = bytes.NewBuffer(make([]byte, 0, contentLength))
-	} else {
-		cs.buffer.Reset()
 	}
-	n, err := cs.buffer.Write(b)
-	if err != nil {
-		cs.log.Error("Write", "err", err)
+	return cs.buffer.Write(b)
+}
+
+// contentLength returns the Content-Length that was set for the segment.
+func (cs *cmafSource) contentLength() (int, error) {
+	cl, err := strconv.Atoi(cs.h.Get("Content-Length"))
+	if err != nil || cl <= 0 {
+		return 0, fmt.Errorf("bad content length %q", cs.h.Get("Content-Length"))
 	}
-	return n, err
+	return cl, nil
 }
 
 func (cs *cmafSource) WriteHeader(status int) {

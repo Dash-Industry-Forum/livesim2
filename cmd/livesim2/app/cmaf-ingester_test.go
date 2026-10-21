@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -91,6 +92,10 @@ func TestCmafIngesterMgr(t *testing.T) {
 			synctest.Sleep(2 * time.Second)
 			rc.mu.Lock()
 			nrReceived := len(rc.receivedSegments)
+			for path, data := range rc.receivedSegments {
+				_, err := mp4.DecodeFile(bytes.NewReader(data))
+				require.NoError(t, err, "segment %s should be complete", path)
+			}
 			rc.mu.Unlock()
 			require.Equal(t, c.expectedNrSegments, nrReceived, "Number of segments received")
 			cancel()
