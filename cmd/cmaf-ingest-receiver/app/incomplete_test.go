@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"log/slog"
@@ -207,4 +208,37 @@ func (b *lockedBuffer) Reset() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.buf.Reset()
+}
+
+// TestReceivingTooLargeChunk checks that an upload whose box header claims more than the
+// maximum chunk size is answered with 413 as soon as the header is read, without
+// allocating a buffer of the claimed size.
+func TestReceivingTooLargeChunk(t *testing.T) {
+	tmpDir := t.TempDir()
+	synctest.Test(t, func(t *testing.T) {
+		opts := Options{prefix: "/upload", timeShiftBufferDepthS: 30, storage: tmpDir}
+		ctx, cancel := context.WithCancel(context.Background())
+		receiver, err := NewReceiver(ctx, &opts, &Config{})
+		require.NoError(t, err)
+		defer func() {
+			cancel()
+			receiver.WaitAll()
+		}()
+		server := httptest.NewTestServer(t, setupRouter(receiver, opts.storage, ""))
+		client := server.Client()
+
+		// An mdat header that claims 300 MB, sent with chunked transfer encoding.
+		const claimed = 300 * 1024 * 1024
+		body := binary.BigEndian.AppendUint32(nil, claimed)
+		body = append(body, "mdat"...)
+		body = append(body, make([]byte, 1000)...)
+		req, err := http.NewRequest(http.MethodPut, server.URL+"/upload/ch/video/1.cmfv", io.NopCloser(bytes.NewReader(body)))
+		require.NoError(t, err)
+		req.ContentLength = -1
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		require.NoError(t, resp.Body.Close())
+		require.Equal(t, http.StatusRequestEntityTooLarge, resp.StatusCode)
+		assert.False(t, testFileExists(filepath.Join(tmpDir, "ch", "video", "1.cmfv")))
+	})
 }

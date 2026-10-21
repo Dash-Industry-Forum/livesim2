@@ -122,3 +122,42 @@ func TestChunkParserBoxSize(t *testing.T) {
 		}
 	}
 }
+
+// countingReader counts the bytes read from r.
+type countingReader struct {
+	r io.Reader
+	n int
+}
+
+func (c *countingReader) Read(b []byte) (int, error) {
+	n, err := c.r.Read(b)
+	c.n += n
+	return n, err
+}
+
+// TestChunkParserAllocation checks that the buffer grows with the data that arrives, not to
+// the size that a box header claims, and that SetMaxChunkSize rejects a box from its header.
+func TestChunkParserAllocation(t *testing.T) {
+	noop := func(ChunkData) error { return nil }
+	// An mdat header that claims 1 GiB, followed by only 100 bytes.
+	data := append([]byte{0x40, 0, 0, 0, 'm', 'd', 'a', 't'}, make([]byte, 100)...)
+	p := NewMP4ChunkParser(bytes.NewReader(data), make([]byte, 1024), noop)
+	require.ErrorIs(t, p.Parse(), io.ErrUnexpectedEOF)
+	require.LessOrEqual(t, len(p.GetBuffer()), 1024+minGrowth, "buffer size")
+
+	cr := &countingReader{r: bytes.NewReader(data)}
+	p = NewMP4ChunkParser(cr, make([]byte, 1024), noop)
+	p.SetMaxChunkSize(1 << 20)
+	require.ErrorIs(t, p.Parse(), ErrChunkTooLarge)
+	require.Equal(t, 8, cr.n, "only the box header is read")
+
+	// The largest chunk of 3_chunked.m4s, including its styp, has 3769 bytes.
+	segment, err := os.ReadFile("testdata/3_chunked.m4s")
+	require.NoError(t, err)
+	p = NewMP4ChunkParser(bytes.NewReader(segment), make([]byte, 1024), noop)
+	p.SetMaxChunkSize(3769)
+	require.NoError(t, p.Parse())
+	p = NewMP4ChunkParser(bytes.NewReader(segment), make([]byte, 1024), noop)
+	p.SetMaxChunkSize(3768)
+	require.ErrorIs(t, p.Parse(), ErrChunkTooLarge)
+}
