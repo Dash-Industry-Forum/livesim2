@@ -389,16 +389,6 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 			}
 		}
 
-		// Update RepData with ChunkDurSSR if configured
-		if explicitChunkDurS != nil {
-			// Update all representations of this adaptation set
-			for _, rep := range as.Representations {
-				if repData, exists := a.Reps[rep.Id]; exists {
-					repData.ChunkDurSSRS = explicitChunkDurS
-				}
-			}
-		}
-
 		atoMS, err := setOffsetInAdaptationSet(cfg, as, firstUTCTiming(mpd))
 		if err != nil {
 			return nil, err
