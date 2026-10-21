@@ -201,7 +201,7 @@ func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, now
 	for _, b := range insts {
 		inner := &m.AlternativeMPDEventType{
 			Uri:                          sgaiAdURI(cfg, b.id, b.durS),
-			EarliestResolutionTimeOffset: m.FloatInf64(float64(cfg.SGAI.ResolveOffsetS) * float64(ts)),
+			EarliestResolutionTimeOffset: new(uint64(cfg.SGAI.ResolveOffsetS) * uint64(ts)),
 			MaxDuration:                  uint64(b.durS) * uint64(ts),
 			ExecuteOnce:                  cfg.SGAI.ExecuteOnce,
 			NoJump:                       cfg.SGAI.NoJump,
