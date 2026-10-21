@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -102,6 +103,96 @@ func TestCmafIngesterMgr(t *testing.T) {
 			<-done
 		}
 	})
+}
+
+// TestCmafIngesterResend checks that a media segment whose upload fails is reported and
+// sent once more, both when the receiver aborts the upload and when it answers 400,
+// as the cmaf-ingest-receiver does for an incomplete segment.
+func TestCmafIngesterResend(t *testing.T) {
+	cfg := ServerConfig{VodRoot: "testdata/assets", TimeoutS: 0, LogFormat: logging.LogDiscard}
+	require.NoError(t, logging.InitSlog(cfg.LogLevel, cfg.LogFormat))
+	const chunkedURL = "/livesim2/segtimeline_1/ato_1/chunkdur_1000/testpic_2s/Manifest.mpd"
+	const wholeURL = "/livesim2/segtimeline_1/testpic_2s/Manifest.mpd"
+	cases := []struct {
+		desc       string
+		livesimURL string
+		failure    string
+	}{
+		{"chunked, aborted", chunkedURL, "abort"},
+		{"chunked, 400", chunkedURL, "400"},
+		{"whole, aborted", wholeURL, "abort"},
+		{"whole, 400", wholeURL, "400"},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				server, err := SetupServer(context.Background(), &cfg)
+				require.NoError(t, err)
+				cm := NewCmafIngesterMgr(server)
+				cm.Start()
+
+				// The first upload of each media segment fails, and later ones are received.
+				rc := newCmafReceiverTestServer()
+				var mu sync.Mutex
+				nrFailed := make(map[string]int)
+				recServer := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					mu.Lock()
+					fail := !strings.Contains(r.URL.Path, "init") && nrFailed[r.URL.Path] == 0
+					if fail {
+						nrFailed[r.URL.Path]++
+					}
+					mu.Unlock()
+					if !fail {
+						rc.ServeHTTP(w, r)
+						return
+					}
+					switch c.failure {
+					case "abort":
+						_, _ = io.CopyN(io.Discard, r.Body, 1000)
+						panic(http.ErrAbortHandler)
+					case "400":
+						http.Error(w, "Incomplete segment", http.StatusBadRequest)
+					}
+				}))
+				cm.client = recServer.Client()
+				setup := CmafIngesterSetup{
+					DestRoot:  recServer.URL,
+					DestName:  "testpic_ingest",
+					URL:       c.livesimURL,
+					TestNowMS: new(10000),
+				}
+				cId, err := cm.NewCmafIngester(setup)
+				require.NoError(t, err)
+				cI := cm.ingesters[cId]
+				ctx, cancel := context.WithCancel(context.Background())
+				done := make(chan struct{})
+				go func() {
+					defer close(done)
+					cI.start(ctx)
+				}()
+				cI.triggerNextSegment()
+				// Wait for the paced chunks of both the failed upload and the resend.
+				synctest.Sleep(4 * time.Second)
+				cancel()
+				<-done
+
+				require.Len(t, nrFailed, 2, "a failed upload for each media segment")
+				rc.mu.Lock()
+				defer rc.mu.Unlock()
+				require.Len(t, rc.receivedSegments, 4, "init and media segments received")
+				for path, data := range rc.receivedSegments {
+					f, err := mp4.DecodeFile(bytes.NewReader(data))
+					require.NoError(t, err, path)
+					if !strings.Contains(path, "init") {
+						require.Len(t, f.Segments, 1, path)
+					}
+				}
+				report := strings.Join(cI.report, "\n")
+				require.Equal(t, 2, strings.Count(report, "Upload of "), report)
+				require.Equal(t, 2, strings.Count(report, "Resent "), report)
+			})
+		})
+	}
 }
 
 type cmafReceiverTestServer struct {
@@ -201,10 +292,9 @@ func TestCmafSourceChunkedNoHoldBack(t *testing.T) {
 		client := recServer.Client()
 
 		cs := newCmafSource(slog.Default(), client, recServer.URL+"/seg.m4s", "video", "", "", true)
-		sendDone := make(chan struct{})
+		sendDone := make(chan error, 1)
 		go func() {
-			defer close(sendDone)
-			cs.sendChunked(context.Background())
+			sendDone <- cs.sendChunked(context.Background())
 		}()
 
 		// The fake clock only reaches the timeout if the bytes are held back.
@@ -231,7 +321,7 @@ func TestCmafSourceChunkedNoHoldBack(t *testing.T) {
 			waitForBytes(size)
 		}
 		require.NoError(t, cs.pw.Close())
-		<-sendDone
+		require.NoError(t, <-sendDone)
 	})
 }
 
@@ -244,10 +334,9 @@ func TestCmafSourceChunkedReceiverGone(t *testing.T) {
 			return nil, errors.New("receiver gone")
 		})}
 		cs := newCmafSource(slog.Default(), client, "http://example.com/seg.m4s", "video", "", "", true)
-		sendDone := make(chan struct{})
+		sendDone := make(chan error, 1)
 		go func() {
-			defer close(sendDone)
-			cs.sendChunked(context.Background())
+			sendDone <- cs.sendChunked(context.Background())
 		}()
 		writeErr := make(chan error, 1)
 		go func() {
@@ -263,7 +352,7 @@ func TestCmafSourceChunkedReceiverGone(t *testing.T) {
 		case <-time.After(2 * time.Second):
 			t.Fatal("writer blocked after failed request")
 		}
-		<-sendDone
+		require.Error(t, <-sendDone)
 	})
 }
 
