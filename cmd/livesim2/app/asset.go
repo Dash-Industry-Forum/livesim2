@@ -182,11 +182,12 @@ func (am *assetMgr) loadAsset(logger *slog.Logger, mpdPath string) error {
 func (am *assetMgr) loadRep(logger *slog.Logger, assetPath string, as *m.AdaptationSetType, rep *m.RepresentationType) (*RepData, error) {
 	logger = logger.With("rep", rep.Id)
 	rp := RepData{
-		Version:      currentRepDataVersion,
-		ID:           rep.Id,
-		ContentType:  string(as.ContentType),
-		Codecs:       as.Codecs,
-		MpdTimescale: 1,
+		Version:         currentRepDataVersion,
+		ID:              rep.Id,
+		ContentType:     string(as.ContentType),
+		Codecs:          as.Codecs,
+		MpdTimescale:    1,
+		adaptationSetID: as.Id,
 	}
 	// Try to load from JSON unless writeRepData is true (which forces regeneration)
 	shouldTryLoadJSON := !am.writeRepData
@@ -195,6 +196,7 @@ func (am *assetMgr) loadRep(logger *slog.Logger, assetPath string, as *m.Adaptat
 		ok, err := rp.loadFromJSON(logger, am.vodFS, am.repDataDir, assetPath)
 		if ok {
 			logger.Debug("Loaded representation data from JSON")
+			rp.adaptationSetID = as.Id
 			return &rp, err
 		}
 	}
@@ -916,8 +918,8 @@ type RepData struct {
 	ConstantSampleDuration *uint32          `json:"constantSampleDuration,omitempty"` // Non-zero if all samples have the same duration
 	EditListOffset         int64            `json:"editListOffset,omitempty"`
 	PreEncrypted           bool             `json:"preEncrypted"`
-	HasCEA608              bool             `json:"hasCEA608,omitempty"`    // Video samples already carry CEA-608 cc_data SEI (#321)
-	ChunkDurSSRS           *float64         `json:"chunkDurSSRS,omitempty"` // Low delay chunk duration in seconds
+	HasCEA608              bool             `json:"hasCEA608,omitempty"` // Video samples already carry CEA-608 cc_data SEI (#321)
+	adaptationSetID        *uint32          `json:"-"`                   // AdaptationSet@id in the VoD MPD, for the ssras_ options
 	mediaRegexp            *regexp.Regexp   `json:"-"`
 	initSeg                *mp4.InitSegment `json:"-"`
 	initBytes              []byte           `json:"-"`

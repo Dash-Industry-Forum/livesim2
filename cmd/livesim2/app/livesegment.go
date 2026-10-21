@@ -792,17 +792,15 @@ func prepareChunks(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig,
 	seg := so.seg
 
 	// Calculate chunk duration in media timescale units
-	var chunkDur int
-	if rep.ChunkDurSSRS != nil && *rep.ChunkDurSSRS > 0 {
-		// Use low delay chunk duration from adaptation set configuration
-		chunkDur = int(*rep.ChunkDurSSRS * float64(rep.MediaTimescale))
-	} else if cfg.ChunkDurS != nil && *cfg.ChunkDurS > 0 {
-		// Use explicit chunk duration from URL parameter
-		chunkDur = int(*cfg.ChunkDurS * float64(rep.MediaTimescale))
-	} else {
+	chunkDurS, err := requestChunkDurS(cfg, rep)
+	if err != nil {
+		return so, nil, err
+	}
+	if chunkDurS == nil || *chunkDurS <= 0 {
 		// No chunk duration configured - chunking should not be performed
 		return so, nil, fmt.Errorf("chunking requested but no chunk duration configured (chunkDurS or chunkDurSSR)")
 	}
+	chunkDur := int(*chunkDurS * float64(rep.MediaTimescale))
 	var enc *mp4.FragmentEncryptor
 	if cfg.DRM != "" {
 		enc, err = fragmentEncryptor(log, cfg, drmCfg, rep)
@@ -973,6 +971,29 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 		return nil
 	}
 	return fmt.Errorf("get chunk %d: no chunk", chunkIndex)
+}
+
+// requestChunkDurS returns the chunk duration of rep for a request. That is the chunkdurssr_
+// duration of the low-delay Adaptation Set of rep, if set, as the MPD signals it, and
+// otherwise the chunkdur_ duration. It comes from the request, since the Representation
+// data is shared by all requests.
+func requestChunkDurS(cfg *ResponseConfig, rep *RepData) (*float64, error) {
+	if cfg.SSRFlag && rep.adaptationSetID != nil {
+		nextMap, _, err := parseSSRAS(cfg.SSRAS)
+		if err != nil {
+			return nil, fmt.Errorf("parse SSRAS: %w", err)
+		}
+		if _, isLowDelay := nextMap[*rep.adaptationSetID]; isLowDelay {
+			chunkDurMap, err := parseChunkDurSSR(cfg.ChunkDurSSR)
+			if err != nil {
+				return nil, fmt.Errorf("parse ChunkDurSSR: %w", err)
+			}
+			if chunkDurS, ok := chunkDurMap[*rep.adaptationSetID]; ok {
+				return &chunkDurS, nil
+			}
+		}
+	}
+	return cfg.ChunkDurS, nil
 }
 
 func unixMS() int {
