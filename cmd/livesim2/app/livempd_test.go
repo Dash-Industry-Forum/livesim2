@@ -1636,7 +1636,7 @@ func TestUpdateSSRAdaptationSet(t *testing.T) {
 					if prevID, prevExists := tc.prevMap[*tc.as.Id]; prevExists {
 						prevIDPtr = &prevID
 					}
-					updateSSRAdaptationSet(tc.as, nextID, prevIDPtr, chunkDurSSRMap, &explicitChunkDurS)
+					updateSSRAdaptationSet(nil, tc.as, nextID, prevIDPtr, chunkDurSSRMap, &explicitChunkDurS)
 				}
 			}
 

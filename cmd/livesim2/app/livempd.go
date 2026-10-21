@@ -370,7 +370,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 
 			if nextIDExists {
 				//Low Delay Adaptation Set
-				updateSSRAdaptationSet(as, nextID, prevIDPtr, chunkDurSSRMap, &explicitChunkDurS)
+				updateSSRAdaptationSet(a, as, nextID, prevIDPtr, chunkDurSSRMap, &explicitChunkDurS)
 			} else if prevIDExists {
 				// Regular Adaptation Set for switching
 				updateSwitchingAdaptationSet(as, prevID)
@@ -514,7 +514,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 	return mpd, nil
 }
 
-func updateSSRAdaptationSet(as *m.AdaptationSetType, nextID uint32, prevID *uint32,
+func updateSSRAdaptationSet(a *asset, as *m.AdaptationSetType, nextID uint32, prevID *uint32,
 	chunkDurSSRMap map[uint32]float64, explicitChunkDurS **float64) {
 	// Add SubNumber to SegmentTemplate
 	if as.SegmentTemplate != nil {
@@ -536,11 +536,14 @@ func updateSSRAdaptationSet(as *m.AdaptationSetType, nextID uint32, prevID *uint
 	}
 
 	if as.ContentType == "video" {
-		// Add SegmentSequenceProperties to signal Low-Delay
-		as.SegmentSequenceProperties = []*m.SegmentSequencePropertiesType{{
-			SapType: 1,
-			Cadence: 1,
-		}}
+		// Add SegmentSequenceProperties to signal Low-Delay, if the content allows any.
+		// dash.js uses cadence 1 and sapType 1 as the L3D bootstrap configuration.
+		if cadence, ok := ssrCadence(a, as, *explicitChunkDurS); ok {
+			as.SegmentSequenceProperties = []*m.SegmentSequencePropertiesType{{
+				SapType: 1,
+				Cadence: cadence,
+			}}
+		}
 
 		// AdaptationSet@startWithSAP = 1
 		as.StartWithSAP = 1
@@ -550,6 +553,43 @@ func updateSSRAdaptationSet(as *m.AdaptationSetType, nextID uint32, prevID *uint
 		ep := m.NewDescriptor(SsrSchemeIdUri, ssrValue, "")
 		as.EssentialProperties = append(as.EssentialProperties, ep)
 	}
+}
+
+// ssrCadence returns the cadence of the Partial Segments of as that start with a sync sample,
+// which is signalled as SAP type 1, for all Representations of as. A Partial Segment starts with
+// the first sample at or after n times the chunk duration c, which is a sync sample if that is a
+// multiple of the SAP grid P of the Representation, so the cadence is P/gcd(P, c). Without
+// chunks, each Segment Sequence is a single segment, which starts with a SAP. ok is false if
+// only the first Partial Segment of each Segment Sequence is known to start with a SAP, which
+// @startWithSAP already says.
+func ssrCadence(a *asset, as *m.AdaptationSetType, chunkDurS *float64) (cadence uint32, ok bool) {
+	if chunkDurS == nil {
+		return 1, true
+	}
+	c := uint64(1)
+	for _, r := range as.Representations {
+		rd, exists := a.Reps[r.Id]
+		if !exists || len(rd.Segments) == 0 {
+			return 0, false
+		}
+		k, err := calculateK(rd.Segments[0].dur(), rd.MediaTimescale, chunkDurS)
+		if err != nil {
+			return 0, false
+		}
+		if k == nil {
+			continue // One Partial Segment per Segment Sequence
+		}
+		chunkDur := uint64(*chunkDurS * float64(rd.MediaTimescale)) // as the chunks are made
+		if rd.SAPGrid == 0 || chunkDur == 0 {
+			return 0, false
+		}
+		repCadence := rd.SAPGrid / gcd(rd.SAPGrid, chunkDur)
+		c = c / gcd(c, repCadence) * repCadence
+		if c >= *k {
+			return 0, false
+		}
+	}
+	return uint32(c), true
 }
 
 func updateSwitchingAdaptationSet(as *m.AdaptationSetType, prevID uint32) {
