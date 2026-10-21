@@ -22,8 +22,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ssrTestServer serves the test assets, and returns a function that GETs a path at nowMS.
-func ssrTestServer(t *testing.T) func(path string, nowMS int) (int, []byte) {
+// testLiveServer serves the test assets, and returns the server and a function that GETs a path at nowMS.
+func testLiveServer(t *testing.T) (*Server, func(path string, nowMS int) (int, []byte)) {
 	t.Helper()
 	cfg := ServerConfig{VodRoot: "testdata/assets", TimeoutS: 0, LogFormat: logging.LogDiscard}
 	require.NoError(t, logging.InitSlog(cfg.LogLevel, cfg.LogFormat))
@@ -31,7 +31,7 @@ func ssrTestServer(t *testing.T) func(path string, nowMS int) (int, []byte) {
 	require.NoError(t, err)
 	ts := httptest.NewTestServer(t, server.Router)
 	client := ts.Client()
-	return func(path string, nowMS int) (int, []byte) {
+	return server, func(path string, nowMS int) (int, []byte) {
 		resp, err := client.Get(fmt.Sprintf("%s%s?nowMS=%d", ts.URL, path, nowMS))
 		if err != nil {
 			return 0, nil
@@ -80,7 +80,7 @@ func ssrPartialPath(chunkDur string, subNr int) string {
 // MPD duration, the sequence duration divided by @k (ISO/IEC 23009-1 5.3.9.7.1), not after
 // the whole Segment Sequence, and that it has that duration.
 func TestSSRPartialSegments(t *testing.T) {
-	get := ssrTestServer(t)
+	_, get := testLiveServer(t)
 	init := ssrTestInit(t)
 	cases := []struct {
 		desc       string
@@ -116,7 +116,7 @@ func TestSSRPartialSegments(t *testing.T) {
 // Partial Segments, also after and while MPDs with another duration are requested.
 // Before, the MPD request stored its duration in the Representation data that all requests share.
 func TestSSRChunkDurPerRequest(t *testing.T) {
-	get := ssrTestServer(t)
+	_, get := testLiveServer(t)
 	init := ssrTestInit(t)
 	mpdPath := "/livesim2/ssras_2,1/chunkdurssr_2,0.5/testpic_2s_low_delay/Manifest.mpd"
 	checkPartial := func(t *testing.T) {

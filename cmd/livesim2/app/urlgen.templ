@@ -322,6 +322,13 @@ templ urlgenPage(d urlGenData) {
 						</label>
 					</details>
 					<details>
+						<summary>In-band parameter sets...</summary>
+						<label for="inbandps">
+							Signal avc1 and hvc1 video as avc3 and hev1, and add the parameter sets of the init segment in front of the slices of each IDR or IRAP picture that lacks them. Not for pre-encrypted assets or C2PA signing.
+							<input type="checkbox" id="inbandps" name="inbandps" checked?={ d.InbandPS }/>
+						</label>
+					</details>
+					<details>
 						<summary>Encryption and DRM</summary>
 						<fieldset>
 							<legend>Encryption on-the-fly with keys via ECCP or commercial DRM systems. Pre-encrypted assets cannot be changed.</legend>

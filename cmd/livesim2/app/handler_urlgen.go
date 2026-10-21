@@ -166,6 +166,7 @@ type urlGenData struct {
 	TimeSubsReg                 string // 0 for bottom and 1 for top
 	TimeSubsSegNr               string // 1 to show the segment number in the cue text, 0 to leave it out
 	TimeCC608                   string // in-band CTA-608 caption channel and language (e.g. CC1-eng)
+	InbandPS                    bool   // in-band parameter sets (avc3/hev1)
 	Drm                         string // empty means no DRM setup
 	UTCTiming                   string
 	Periods                     string   // number of periods per hour (1-60)
@@ -429,6 +430,10 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 		} else {
 			fmt.Fprintf(&sb, "timecc608_%s/", timeCC608)
 		}
+	}
+	if q.Get("inbandps") != "" {
+		data.InbandPS = true
+		sb.WriteString("inbandps_1/")
 	}
 	drm := q.Get("drm")
 	switch drm {

@@ -38,6 +38,12 @@ channel CC1, and advertises it with a CEA-608 `Accessibility` descriptor. The va
 `<channel>-<lang>[-<mode>[-<modifier>]]` (only `CC1` is supported so far). It cannot be
 combined with encryption and is rejected for assets that already carry captions.
 
+With `/inbandps_1`, AVC and HEVC video carries its parameter sets in-band: `avc1` and `hvc1` are
+signaled as `avc3` and `hev1` in the MPD and the init segment, and the SPS and PPS (plus VPS for
+HEVC) of the init segment are added in front of the slices of each IDR or IRAP picture that lacks
+them. Since all MPDs of an asset share its Representations, this replaces separate avc3 copies of the
+content. It works with encryption, but not with pre-encrypted assets or `c2pa_vsi`.
+
 `<lang>` is a three-letter ISO 639-2 code, since it ends up in the SCTE 214-1 descriptor
 value — `<Accessibility schemeIdUri="urn:scte:dash:cc:cea-608:2015" value="CC1=eng"/>` —
 whose scheme is defined in those terms. That is a different language form from DASH's

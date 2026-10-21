@@ -127,6 +127,12 @@ func genLiveSegment(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig
 			}
 			log.Debug("injected CTA-608 captions", "asset", a.AssetPath, "segment", segmentPart)
 		}
+		// In-band parameter sets come before any SEI, and before encryption, which keeps them in the clear.
+		if cfg.InbandPS && contentType == "video" && !meta.rep.PreEncrypted {
+			if err := addInbandParameterSets(seg, meta.rep); err != nil {
+				return so, err
+			}
+		}
 		outSeg.seg = seg
 		outSeg.data = nil
 	}
@@ -404,6 +410,11 @@ func matchInit(segmentPart string, cfg *ResponseConfig, drmCfg *drm.DrmConfig, a
 				im.init = rep.c2pa.init
 			}
 			if rep.encData == nil { // pre-encrypted or subtitle track
+				init, err := inbandInit(cfg, rep, im.init)
+				if err != nil {
+					return im, err
+				}
+				im.init = init
 				im.isInit = true
 				im.rep = rep
 				return im, nil
@@ -438,6 +449,11 @@ func matchInit(segmentPart string, cfg *ResponseConfig, drmCfg *drm.DrmConfig, a
 					im.init = sw.Bytes()
 				}
 			}
+			init, err := inbandInit(cfg, rep, im.init)
+			if err != nil {
+				return im, err
+			}
+			im.init = init
 			im.rep = rep
 			im.isInit = true
 			return im, nil

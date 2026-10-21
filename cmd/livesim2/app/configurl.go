@@ -135,6 +135,7 @@ type ResponseConfig struct {
 	TimeSubsSegNr                bool                 `json:"TimeSubsSegNr,omitempty"`
 	TimeSubsRegion               int                  `json:"TimeSubsRegion,omitempty"`
 	CC608                        *CC608Config         `json:"CC608,omitempty"`
+	InbandPS                     bool                 `json:"InbandPS,omitempty"` // avc3/hev1 with in-band parameter sets
 	C2PAVSI                      bool                 `json:"C2PAVSI,omitempty"`
 	Host                         string               `json:"Host,omitempty"`
 	PatchTTL                     int                  `json:"Patch,omitempty"`
@@ -454,6 +455,14 @@ cfgLoop:
 			cfg.TimeSubsRegion = sc.Atoi(key, val)
 		case "timecc608": // in-band CTA-608 captions: <channel>-<lang> (e.g. CC1-eng)
 			cfg.CC608 = sc.ParseCC608Config(key, val)
+		case "inbandps": // in-band parameter sets: avc1 and hvc1 video as avc3 and hev1
+			switch val {
+			case "1":
+				cfg.InbandPS = true
+			case "0":
+			default:
+				sc.err = fmt.Errorf("inbandps: value %q is not 0 or 1", val)
+			}
 		case "c2pa": // C2PA live media signing: vsi (Verifiable Segment Info)
 			if val != "vsi" {
 				sc.err = fmt.Errorf("c2pa: unknown method %q (supported: vsi)", val)
