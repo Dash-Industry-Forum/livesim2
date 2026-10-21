@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Experimental C2PA live media signing: server option `--c2pa` (`--c2pacert`/`--c2pakey`) and URL option `c2pa_vsi`,
   signing init segments with a C2PA manifest and media segments with C2PA 2.5 VSI `emsg` boxes.
+- New `preroll=<dur>` setting on the `sgai_` option, e.g. `sgai_p60:20;preroll=10`, that adds a preroll
+  ReplacePresentation event with `presentationTime="0"` and `id="0"`.
 
 ### Changed
 

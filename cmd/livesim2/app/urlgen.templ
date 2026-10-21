@@ -380,6 +380,10 @@ templ urlgenPage(d urlGenData) {
 									<it>svta=&lt;0|1&gt;</it> &mdash; also describe every ad of the returned pod with
 									SVTA2053 ad-creative signaling in the List MPD (default 0)
 								</li>
+								<li>
+									<it>preroll=&lt;dur&gt;</it> &mdash; also signal a preroll break of dur seconds: a Replace
+									event (id 0) at presentationTime 0, played when playback starts (default: none)
+								</li>
 							</ul>
 							<p>
 								Example:
