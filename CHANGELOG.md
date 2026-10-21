@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and keeps the `free` and `skip` boxes of VoD init segments; dash-mpd bumped to v0.19.0 (final DASH 6th edition schema).
 - Live segments are written straight to the response, and audio, chunked and `timecc608_` segments share or
   build their sample data without extra copies, cutting allocated bytes per segment by 20-67% and time by up to 40%.
+  VoD segments are read into reused buffers, which cuts what is left by up to 98% (clear video).
 
 ### Fixed
 

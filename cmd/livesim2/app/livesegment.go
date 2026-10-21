@@ -456,6 +456,7 @@ func writeLiveSegment(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConf
 	if err != nil {
 		return fmt.Errorf("convertToLive: %w", err)
 	}
+	defer outSeg.bufs.release()
 	if outSeg.seg != nil {
 		if cfg.DRM != "" {
 			frags := outSeg.seg.Fragments
@@ -581,6 +582,7 @@ type segOut struct {
 	seg  *mp4.MediaSegment
 	data []byte // Mainly used for image out
 	meta segMeta
+	bufs segBufs // Hold the VoD segment data that seg and data refer to
 }
 
 // findRepAndSegmentID finds the rep and segment ID (nr or time) for a given cfg and live segment request.
@@ -639,7 +641,7 @@ func createOutSeg(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart string
 		return so, err
 	}
 	segPath := path.Join(a.AssetPath, replaceTimeAndNr(rep.MediaURI, so.meta.origTime, so.meta.origNr))
-	so.data, err = fs.ReadFile(vodFS, segPath)
+	so.data, err = so.bufs.read(vodFS, segPath)
 	if err != nil {
 		return so, fmt.Errorf("read segment: %w", err)
 	}
@@ -699,7 +701,7 @@ func createAudioSegment(vodFS fs.FS, a *asset, cfg *ResponseConfig, segmentPart 
 		uint64(refRep.duration()),
 		refTimescale, rep)
 	var so segOut
-	so.seg, err = createAudioSeg(vodFS, a, recipe)
+	so.seg, err = createAudioSeg(vodFS, a, recipe, &so.bufs)
 	if err != nil {
 		return so, fmt.Errorf("createAudioSeg: %w", err)
 	}
@@ -829,6 +831,7 @@ func writeChunkedSegment(ctx context.Context, log *slog.Logger, w http.ResponseW
 	if err != nil {
 		return err
 	}
+	defer so.bufs.release()
 
 	err = setHeaders(w, so, segmentPart)
 	if err != nil {
@@ -912,6 +915,7 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 	if err != nil {
 		return err
 	}
+	defer so.bufs.release()
 
 	err = setHeaders(w, so, segmentPart)
 	if err != nil {

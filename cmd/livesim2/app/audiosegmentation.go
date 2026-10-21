@@ -67,7 +67,8 @@ func (s sampleItvl) dur(sampleDur uint64) uint64 {
 }
 
 // createAudioSeg takes a recipe and creates an output audio segment with the right samples.
-func createAudioSeg(vodFS fs.FS, a *asset, rec audioRecipe) (*mp4.MediaSegment, error) {
+// The VoD segments are read into bufs, which the samples of the returned segment refer to.
+func createAudioSeg(vodFS fs.FS, a *asset, rec audioRecipe, bufs *segBufs) (*mp4.MediaSegment, error) {
 	rep := rec.rep
 	sampleDur := uint64(*rep.ConstantSampleDuration)
 	var startSampleIdx, endSampleIdx uint32
@@ -160,7 +161,7 @@ func createAudioSeg(vodFS fs.FS, a *asset, rec audioRecipe) (*mp4.MediaSegment, 
 		}
 
 		segPath := path.Join(a.AssetPath, replaceTimeAndNr(rep.MediaURI, segmentTime, s.Nr))
-		data, err := fs.ReadFile(vodFS, segPath)
+		data, err := bufs.read(vodFS, segPath)
 		if err != nil {
 			return nil, fmt.Errorf("read segment: %w", err)
 		}

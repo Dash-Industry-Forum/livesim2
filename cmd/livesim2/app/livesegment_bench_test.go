@@ -6,6 +6,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -60,12 +61,13 @@ func BenchmarkPrepareChunks(b *testing.B) {
 	}
 }
 
-// discardResponseWriter is an http.ResponseWriter that drops what is written to it.
+// discardResponseWriter is an http.ResponseWriter and http.Flusher that drops what is written to it.
 type discardResponseWriter struct{ h http.Header }
 
 func (d *discardResponseWriter) Header() http.Header         { return d.h }
 func (d *discardResponseWriter) Write(p []byte) (int, error) { return len(p), nil }
 func (d *discardResponseWriter) WriteHeader(int)             {}
+func (d *discardResponseWriter) Flush()                      {}
 
 // BenchmarkWriteLiveSegment measures serving an 8s video and audio segment with
 // writeLiveSegment, with and without encryption.
@@ -89,6 +91,31 @@ func BenchmarkWriteLiveSegment(b *testing.B) {
 				}
 			})
 		}
+	}
+}
+
+// BenchmarkWriteChunkedSegment measures serving an 8s video segment as 1s chunks with
+// writeChunkedSegment, with and without encryption. All chunks are available, so none is waited for.
+func BenchmarkWriteChunkedSegment(b *testing.B) {
+	vodFS, a := benchAsset(b, "testpic_8s")
+	for _, drm := range []string{"", "eccp-cenc", "eccp-cbcs"} {
+		name := drm
+		if name == "" {
+			name = "clear"
+		}
+		b.Run(name, func(b *testing.B) {
+			cfg := NewResponseConfig()
+			cfg.ChunkDurS = new(1.0)
+			cfg.DRM = drm
+			w := &discardResponseWriter{h: http.Header{}}
+			b.ReportAllocs()
+			for b.Loop() {
+				err := writeChunkedSegment(context.Background(), benchLog, w, cfg, nil, vodFS, a, "V300/10.m4s", 100_000, nil, false)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
 	}
 }
 
