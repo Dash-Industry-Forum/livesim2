@@ -177,6 +177,26 @@ func TestAddSGAIReplaceEvents(t *testing.T) {
 	}
 }
 
+// TestSGAIResolveOffsetZero checks that resolve=0 is written, since an absent
+// earliestResolutionTimeOffset does not mean 0.
+func TestSGAIResolveOffsetZero(t *testing.T) {
+	cfg := NewResponseConfig()
+	cfg.Host = "https://example.com"
+	cfg.SGAI = &SGAIConfig{
+		Breaks:     []AdBreak{{OffsetS: 30, DurationS: 15}},
+		AdEndpoint: "/sgai/ads",
+	}
+	period := &m.Period{Id: "P0"}
+	mpd := &m.MPD{Periods: []*m.Period{period}}
+
+	addSGAIReplaceEvents(mpd, period, cfg, 0)
+
+	var buf bytes.Buffer
+	_, err := mpd.Write(&buf, "  ", true)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), `earliestResolutionTimeOffset="0"`)
+}
+
 func TestAddSGAIReplaceEventsPeriodic(t *testing.T) {
 	cfg := NewResponseConfig()
 	cfg.Host = "https://example.com"

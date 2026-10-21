@@ -65,7 +65,8 @@ func TestTimeSubsPaintConfigParsing(t *testing.T) {
 }
 
 // TestPaintSubsInitSegment checks that the paint-model tracks get their own sample entry,
-// since a receiver that only knows stpp or wvtt must not select them.
+// since a receiver that only knows stpp or wvtt must not select them, with its mandatory
+// ttma box.
 func TestPaintSubsInitSegment(t *testing.T) {
 	cfg := ServerConfig{VodRoot: "testdata/assets", TimeoutS: 0, LogFormat: logging.LogDiscard}
 	require.NoError(t, logging.InitSlog(cfg.LogLevel, cfg.LogFormat))
@@ -90,6 +91,16 @@ func TestPaintSubsInitSegment(t *testing.T) {
 			stsd := init.Init.Moov.Trak.Mdia.Minf.Stbl.Stsd
 			require.Equal(t, 1, len(stsd.Children))
 			require.Equal(t, c.sampleEnt, stsd.Children[0].Type())
+			var ttma *mp4.TtmaBox
+			switch c.sampleEnt {
+			case "stpc":
+				ttma = stsd.Stpc.Ttma
+			case "wvtc":
+				ttma = stsd.Wvtc.Ttma
+			}
+			require.NotNil(t, ttma, "ttma box")
+			timescale := init.Init.Moov.Trak.Mdia.Mdhd.Timescale
+			require.Equal(t, mp4.DefaultMaxActivationSeconds*timescale, ttma.MaxActivationPeriod)
 		})
 	}
 }

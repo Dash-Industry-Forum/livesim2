@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Go 1.27 or later is now required (`go.mod`, GitHub Actions workflows and the `Dockerfile` build stage), with
   updated `golang.org/x` dependencies.
-- mp4ff dependency bumped to v0.58.0, which encrypts (most of all cbcs) and decodes segments with far fewer allocations.
+- mp4ff dependency bumped to v0.60.0, which encrypts (most of all cbcs) and decodes segments with far fewer allocations
+  and keeps the `free` and `skip` boxes of VoD init segments; dash-mpd bumped to v0.19.0 (final DASH 6th edition schema).
 - Live segments are written straight to the response, and audio, chunked and `timecc608_` segments share or
   build their sample data without extra copies, cutting allocated bytes per segment by 20-67% and time by up to 40%.
 
@@ -32,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Live segments of assets with a `sidx` now get a `sidx` that matches them: 64-bit earliest presentation time,
   and sizes and durations that include `scte35_` `emsg` boxes, encryption and resegmented audio.
 - The livesim2 CMAF ingester no longer leaks a goroutine when an ingest stops on an error.
+- `timesubsstpc_` and `timesubswvtc_` sample entries carry their mandatory `ttma` box (5 s maximum activation).
+- `sgai_` with `resolve=0` writes `earliestResolutionTimeOffset="0"` instead of leaving the attribute out.
 
 ## [1.14.0] - 2026-09-30
 
