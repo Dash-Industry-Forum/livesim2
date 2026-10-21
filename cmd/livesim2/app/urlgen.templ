@@ -10,7 +10,11 @@ import "strconv"
 // into urlgenPage and also rendered standalone for the htmx /urlgen/mpds swap.
 templ mpdsFragment(mpds []nameWithSelect) {
 	for _, m := range mpds {
-		<option value={ m.Name } selected?={ m.Selected }>{ m.Name }</option>
+		if m.Desc != "" {
+			<option value={ m.Name } selected?={ m.Selected }>{ m.Name } ({ m.Desc })</option>
+		} else {
+			<option value={ m.Name } selected?={ m.Selected }>{ m.Name }</option>
+		}
 	}
 }
 
