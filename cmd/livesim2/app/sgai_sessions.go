@@ -37,12 +37,13 @@ type SgaiEventKind string
 const (
 	SgaiEventDecision SgaiEventKind = "decision" // an /sgai/ads ad-decision response
 	SgaiEventBeacon   SgaiEventKind = "beacon"   // an /sgai/beacon impression/tracking hit
+	SgaiEventRemote   SgaiEventKind = "remote"   // an SVTA2053 $remote field resolution
 )
 
 // SgaiEvent is a single recorded event in a session timeline.
 type SgaiEvent struct {
 	Time time.Time     `json:"time" doc:"When the event was recorded (server time)"`
-	Kind SgaiEventKind `json:"kind" doc:"Event kind: decision or beacon"`
+	Kind SgaiEventKind `json:"kind" doc:"Event kind: decision, beacon or remote"`
 	// Decision fields
 	Interests string   `json:"interests,omitempty" doc:"Interest steering value(s) used for this decision (comma-separated)"`
 	Pod       []string `json:"pod,omitempty" doc:"Ad pod returned (ad ids in order) for a decision"`
@@ -51,6 +52,8 @@ type SgaiEvent struct {
 	Event string `json:"event,omitempty" doc:"Beacon event type, e.g. impression"`
 	EvID  string `json:"evId,omitempty" doc:"Break/avail event id the beacon is attributed to, if any"`
 	CMCD  string `json:"cmcd,omitempty" doc:"CMCD payload carried on the beacon, if any"`
+	// Remote fields (AdID, Event and EvID are shared with beacons)
+	Result string `json:"result,omitempty" doc:"Answer to an SVTA2053 $remote fetch: 1 (resolved), 404 or wrongtype"`
 }
 
 // SgaiSession is the recorded state for one session id.
@@ -61,6 +64,7 @@ type SgaiSession struct {
 	LastSeen    time.Time   `json:"lastSeen" doc:"When the session was last active"`
 	DecisionCnt int         `json:"decisionCount" doc:"Number of ad decisions made"`
 	BeaconCnt   int         `json:"beaconCount" doc:"Number of beacons received"`
+	RemoteCnt   int         `json:"remoteCount" doc:"Number of SVTA2053 $remote fields resolved"`
 	Events      []SgaiEvent `json:"events" doc:"Timeline of decisions and beacons (oldest first)"`
 }
 
@@ -149,6 +153,23 @@ func (m *SgaiSessionMgr) RecordBeacon(sid, adID, event, cmcd, evID string) {
 	}
 	s.BeaconCnt++
 	m.appendEvent(s, SgaiEvent{Time: ts, Kind: SgaiEventBeacon, AdID: adID, Event: event, EvID: evID, CMCD: cmcd})
+	m.evictLocked(ts)
+}
+
+// RecordRemote records the fetch of an SVTA2053 $remote field (field is the key, e.g.
+// tracking) for a creative, or for the pod with adID svtaPodAdID. Every fetch is recorded,
+// since when the player resolves the field is what a test looks at. result is the answer, the
+// remote= mode.
+func (m *SgaiSessionMgr) RecordRemote(sid, adID, field, evID, result string) {
+	if sid == "" {
+		sid = "anon"
+	}
+	ts := m.now()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s := m.getOrCreate(sid, ts)
+	s.RemoteCnt++
+	m.appendEvent(s, SgaiEvent{Time: ts, Kind: SgaiEventRemote, AdID: adID, Event: field, EvID: evID, Result: result})
 	m.evictLocked(ts)
 }
 

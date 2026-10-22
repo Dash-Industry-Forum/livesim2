@@ -62,6 +62,10 @@ func TestCreateSGAIConfig(t *testing.T) {
 		{name: "svta off by default", val: "30:15", ok: true, check: func(t *testing.T, c *SGAIConfig) {
 			assert.False(t, c.SVTA)
 		}},
+		{name: "svta remote tracking", val: "30:15;svta=remote", ok: true, check: func(t *testing.T, c *SGAIConfig) {
+			assert.True(t, c.SVTA)
+			assert.True(t, c.SVTARemote)
+		}},
 		{name: "bad svta value", val: "30:15;svta=yes", ok: false},
 		{name: "periodic dur >= period", val: "p20:20", ok: false},
 		{name: "periodic zero period", val: "p0:5", ok: false},
@@ -139,6 +143,8 @@ func TestAddSGAIReplaceEvents(t *testing.T) {
 	withSVTA := *cfg
 	withSVTA.SGAI = &svtaCfg
 	assert.Equal(t, "https://example.com/sgai/ads?break=1&dur=15&svta=1", sgaiAdURI(&withSVTA, 1, 15))
+	svtaCfg.SVTARemote = true
+	assert.Equal(t, "https://example.com/sgai/ads?break=1&dur=15&svta=remote", sgaiAdURI(&withSVTA, 1, 15))
 	assert.Equal(t, uint64(1350000), rp.MaxDuration)
 	assert.True(t, rp.ExecuteOnce)
 	assert.Equal(t, int32(2), rp.NoJump)

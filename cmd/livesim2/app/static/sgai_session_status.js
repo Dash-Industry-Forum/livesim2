@@ -38,7 +38,8 @@
       'sid <b>' + esc(s.sid) + '</b>' +
       (s.interests ? ' <span class="pill">interests: ' + esc(s.interests) + '</span>' : '') +
       ' &nbsp; decisions: <b>' + (s.decisionCount||0) + '</b>' +
-      ' &nbsp; beacons: <b>' + (s.beaconCount||0) + '</b>';
+      ' &nbsp; beacons: <b>' + (s.beaconCount||0) + '</b>' +
+      (s.remoteCount ? ' &nbsp; remote fields: <b>' + s.remoteCount + '</b>' : '');
     const evs = (s.events || []).slice().reverse(); // newest first
     if (!evs.length) { document.getElementById('body').innerHTML =
       '<div class="empty">No events yet for this session.</div>'; return; }
@@ -47,6 +48,10 @@
       const detail = e.kind === 'decision'
         ? 'pod: <code>' + esc((e.pod||[]).join(' → ')) + '</code>'
           + (e.interests ? '  (interests ' + esc(e.interests) + ')' : '')
+        : e.kind === 'remote'
+        ? 'ad <code>' + esc(e.adId) + '</code> · $remote.' + esc(e.event) + ' fetched → '
+          + (e.result === '1' ? 'resolved' : '<b>' + esc(e.result) + '</b>')
+          + (e.evId ? '  (break <code>' + esc(e.evId) + '</code>)' : '')
         : 'ad <code>' + esc(e.adId) + '</code> · ' + esc(e.event)
           + (e.evId ? '  (break <code>' + esc(e.evId) + '</code>)' : '')
           + (e.cmcd ? '  cmcd: <code>' + esc(e.cmcd) + '</code>' : '');

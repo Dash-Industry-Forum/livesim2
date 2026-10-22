@@ -44,14 +44,15 @@ type SGAIConfig struct {
 	NoJump         int32  `json:"NoJump,omitempty"`
 	Clip           bool   `json:"Clip"`
 	ExecuteOnce    bool   `json:"ExecuteOnce"`
-	SVTA           bool   `json:"SVTA,omitempty"` // add SVTA2053 signaling to the List MPD
+	SVTA           bool   `json:"SVTA,omitempty"`       // add SVTA2053 signaling to the List MPD
+	SVTARemote     bool   `json:"SVTARemote,omitempty"` // with $remote.tracking instead of inline tracking
 }
 
 // CreateSGAIConfig parses the value of an "sgai" URL option.
 //
 // Grammar: ( <off>:<dur>[,<off>:<dur>...] | p<period>:<dur> )[;key=val;...]
 // keys: skipafter=<s>, nojump=<0|1|2>, clip=<0|1>, once=<0|1>, resolve=<s>, ep=<path>,
-// svta=<0|1>
+// svta=<0|1|remote>
 //
 // Examples: 30:15;skipafter=5;nojump=2  => one 15s break 30s in, skippable after 5s,
 // not skippable by seeking, latest such event wins.
@@ -105,14 +106,17 @@ func CreateSGAIConfig(val string) (*SGAIConfig, error) {
 		case "once":
 			cfg.ExecuteOnce = v == "1" || v == "true"
 		case "svta":
-			// Also describe each ad of the returned pod with SVTA2053 ad-creative signaling.
+			// Also describe each ad of the returned pod with SVTA2053 ad-creative signaling,
+			// with remote as $remote.tracking (SVTA2053-1 §5.2.2.2).
 			switch v {
 			case "1", "true":
-				cfg.SVTA = true
+				cfg.SVTA, cfg.SVTARemote = true, false
+			case "remote":
+				cfg.SVTA, cfg.SVTARemote = true, true
 			case "0", "false":
-				cfg.SVTA = false
+				cfg.SVTA, cfg.SVTARemote = false, false
 			default:
-				return nil, fmt.Errorf("sgai svta %q: must be 0 or 1", v)
+				return nil, fmt.Errorf("sgai svta %q: must be 0, 1 or remote", v)
 			}
 		case "resolve":
 			n, err := strconv.Atoi(v)
@@ -169,7 +173,10 @@ func (s *strConvAccErr) ParseSGAIConfig(key, val string) *SGAIConfig {
 // The client appends Annex I parameters (session id via useMPDUrlQuery and the execution-delta).
 func sgaiAdURI(cfg *ResponseConfig, id uint64, durS int) string {
 	uri := fmt.Sprintf("%s%s?break=%d&dur=%d", cfg.Host, cfg.SGAI.AdEndpoint, id, durS)
-	if cfg.SGAI.SVTA {
+	switch {
+	case cfg.SGAI.SVTARemote:
+		uri += "&svta=remote"
+	case cfg.SGAI.SVTA:
 		// The ad-decisioning endpoint is stateless about the stream configuration, so the
 		// request for SVTA2053 signaling in the List MPD rides on the URI.
 		uri += "&svta=1"

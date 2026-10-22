@@ -388,8 +388,9 @@ templ urlgenPage(d urlGenData) {
 								</li>
 								<li><it>ep=&lt;path&gt;</it> &mdash; ad-decisioning endpoint path (default /sgai/ads)</li>
 								<li>
-									<it>svta=&lt;0|1&gt;</it> &mdash; also describe every ad of the returned pod with
-									SVTA2053 ad-creative signaling in the List MPD (default 0)
+									<it>svta=&lt;0|1|remote&gt;</it> &mdash; also describe every ad of the returned pod with
+									SVTA2053 ad-creative signaling in the List MPD, with <it>remote</it> as a
+									<code>$remote.tracking</code> URL (default 0)
 								</li>
 							</ul>
 							<p>
@@ -476,6 +477,12 @@ templ urlgenPage(d urlGenData) {
 								<li>
 									<it>ts=&lt;n&gt;</it> &mdash; EventStream timescale, a positive 32-bit integer
 									(default 90000)
+								</li>
+								<li>
+									<it>remote=&lt;0|1|404|wrongtype&gt;</it> &mdash; give the tracking as a
+									<code>$remote.tracking</code> URL that the player resolves when the creative plays
+									(SVTA2053-1 &sect;5.2.2.2); <it>404</it> and <it>wrongtype</it> make that fetch fail
+									(default 0)
 								</li>
 							</ul>
 							<p>

@@ -63,14 +63,14 @@ func sgaiSessionStatusPage(host string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"><style>\n\t\t  td { vertical-align: top; }\n\t\t  button:hover:enabled { background: #e74c3c; }\n\t\t  tr.decision td.kind { color: var(--ss-info); font-weight: 700; }\n\t\t  tr.beacon td.kind { color: var(--ss-good); font-weight: 700; }\n\t\t</style></head><body data-api=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"><style>\n\t\t  td { vertical-align: top; }\n\t\t  button:hover:enabled { background: #e74c3c; }\n\t\t  tr.decision td.kind { color: var(--ss-info); font-weight: 700; }\n\t\t  tr.beacon td.kind { color: var(--ss-good); font-weight: 700; }\n\t\t  tr.remote td.kind { font-weight: 700; }\n\t\t</style></head><body data-api=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(host)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/sgai_session_status.templ`, Line: 24, Col: 23}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/sgai_session_status.templ`, Line: 25, Col: 23}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
@@ -83,7 +83,7 @@ func sgaiSessionStatusPage(host string) templ.Component {
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(host + "/static/session_status_common.js")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/sgai_session_status.templ`, Line: 42, Col: 58}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/sgai_session_status.templ`, Line: 43, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 		if templ_7745c5c3_Err != nil {
@@ -96,7 +96,7 @@ func sgaiSessionStatusPage(host string) templ.Component {
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(host + "/static/sgai_session_status.js")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/sgai_session_status.templ`, Line: 43, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/sgai_session_status.templ`, Line: 44, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 		if templ_7745c5c3_Err != nil {
