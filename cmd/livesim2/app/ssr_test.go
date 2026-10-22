@@ -172,7 +172,7 @@ func TestSAPGrid(t *testing.T) {
 // of the low-delay Representations, which have one at each full second, and that the
 // Partial Segments that it selects start with a sync sample.
 func TestSSRCadence(t *testing.T) {
-	get := ssrTestServer(t)
+	_, get := testLiveServer(t)
 	init := ssrTestInit(t)
 	cases := []struct {
 		chunkDur    string
