@@ -780,6 +780,10 @@ unchanged. It also has its own `segmentation_upid`, so every Start and End is id
 when a break ends where the next one starts, its closing message and the next opening message have
 different ids, and a client does not drop the second as a repeat.
 
+With `cmd=insert;end=1`, the closing message is a `splice_insert()` with `out_of_network_indicator`
+0 and a `break_duration()` of 0 without `auto_return`, and its Event has duration 0. DVB A178-3
+(TS 103 752-3) requires the `break_duration()` in every `splice_insert()`.
+
 ### Seeing the break
 
 By default a `scte35_` stream also *shows* its avails: inside each break the video track serves the

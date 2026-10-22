@@ -58,6 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   arrives, and answers 413 to a chunk larger than 200 MB.
 - `ssras_` signals the `SegmentSequenceProperties@cadence` that the IDR pictures of the content allow, not always 1.
   Repdata files are now version 2; older ones are re-scanned at each start until `--writemissingrepdata` rewrites them.
+- The closing `splice_insert` of `scte35_…;end=1` carries a `break_duration()` of 0, which DVB A178-3 requires in
+  every `splice_insert`.
 
 ## [1.14.0] - 2026-09-30
 
