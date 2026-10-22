@@ -403,7 +403,8 @@ func (c *SCTE35Config) cuePoints(b adBreakInst, astS int) []scte35CuePoint {
 		}}
 		if c.End {
 			// The return to the network, which SCTE-35 signals as a splice_insert with
-			// out_of_network_indicator = 0 and no break duration.
+			// out_of_network_indicator = 0. Its break_duration is 0 with auto_return = 0, as
+			// DVB A178-3r2 Table 2 allows for a return, so the Event duration is 0 too.
 			endS := b.offsetS + int64(b.durS)
 			out = append(out, scte35CuePoint{
 				atS: endS,

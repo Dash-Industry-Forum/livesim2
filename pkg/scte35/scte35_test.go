@@ -49,6 +49,24 @@ func TestSpliceInsertBinary(t *testing.T) {
 	assert.Equal(t, uint64(breakDur), uint64(cmd.Duration()), "break_duration")
 }
 
+// TestSpliceInsertReturn checks the closing splice_insert of a break: out_of_network_indicator
+// 0, and a break_duration() of 0 with auto_return 0, since DVB A178-3r2 Table 2 requires
+// duration_flag = 1 in every splice_insert.
+func TestSpliceInsertReturn(t *testing.T) {
+	cue := scte35.Cue{Cmd: scte35.SpliceInsert, PTS: ptsTime + breakDur, Tier: scte35.DefaultTier, EventID: 43}
+	sis := decodeSpliceInfoSection(t, cue.Binary())
+	cmd, ok := sis.CommandInfo().(gotsscte35.SpliceInsertCommand)
+	require.True(t, ok, "splice_insert command")
+	assert.False(t, cmd.IsOut(), "out_of_network_indicator")
+	assert.True(t, cmd.HasDuration(), "duration_flag")
+	assert.False(t, cmd.IsAutoReturn(), "auto_return")
+	assert.Equal(t, uint64(0), uint64(cmd.Duration()), "break_duration")
+
+	out, err := xml.Marshal(cue.XMLSignal())
+	require.NoError(t, err)
+	assert.Contains(t, string(out), `<BreakDuration autoReturn="false" duration="0"></BreakDuration>`)
+}
+
 // TestTimeSignalLevels checks that the levels of a nested cue all travel in one message, as
 // consecutive segmentation descriptors sharing one time_signal (SCTE 35 §14, Figure 5).
 func TestTimeSignalLevels(t *testing.T) {
