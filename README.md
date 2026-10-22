@@ -577,7 +577,14 @@ Enable it with the `sgai_` URL option, which schedules the breaks:
 - Options are appended with `;key=val`: `skipafter=<s>`, `nojump=<0|1|2>`, `clip=<0|1>`,
   `once=<0|1>`, `resolve=<s>` (earliest resolution offset), `ep=<path>` (ad endpoint),
   `svta=<0|1>` (add SVTA2053 ad-creative signaling to the returned ad pod, see
-  [below](#svta2053-ad-creative-signaling)). For example `sgai_p60:20;skipafter=5`.
+  [below](#svta2053-ad-creative-signaling)), `preroll=<dur>` (see below). For example
+  `sgai_p60:20;skipafter=5`.
+- Preroll: `preroll=<dur>` adds a Replace event of `<dur>` seconds with `presentationTime="0"`
+  (the period start) and `id="0"` (ad request `?break=0&dur=<dur>`). Players that treat an event
+  at time 0 as a preroll (e.g. Shaka Player) play it when playback starts, wherever in the live
+  timeline the viewer joins. It has no AD BREAK slate. For example `sgai_p60:20;preroll=10`. A
+  fixed break may not start before the preroll ends, and a periodic occurrence that would is not
+  signaled.
 
 The `/urlgen/` page and the [URL wiki page][urlparams] document the `sgai_` option and its
 parameters.

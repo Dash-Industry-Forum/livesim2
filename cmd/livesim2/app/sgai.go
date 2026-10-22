@@ -7,6 +7,7 @@ package app
 import (
 	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -33,6 +34,9 @@ const (
 
 	defaultSGAIAdEndpoint     = "/sgai/ads"
 	defaultSGAIResolveOffsetS = 60
+	// sgaiPrerollID is the Event@id (and @uri ?break=) of the preroll. The regular breaks
+	// are numbered from 1 (fixed: 1-based index, periodic: occurrence number + 1), so 0 is free.
+	sgaiPrerollID = uint64(0)
 )
 
 // SGAIConfig configures Alternative-MPD Replace ad breaks for a live stream.
@@ -45,17 +49,20 @@ type SGAIConfig struct {
 	Clip           bool   `json:"Clip"`
 	ExecuteOnce    bool   `json:"ExecuteOnce"`
 	SVTA           bool   `json:"SVTA,omitempty"` // add SVTA2053 signaling to the List MPD
+	// PrerollS is the duration of a preroll break signaled at presentationTime 0 (0 = none).
+	PrerollS int `json:"PrerollS,omitempty"`
 }
 
 // CreateSGAIConfig parses the value of an "sgai" URL option.
 //
 // Grammar: ( <off>:<dur>[,<off>:<dur>...] | p<period>:<dur> )[;key=val;...]
 // keys: skipafter=<s>, nojump=<0|1|2>, clip=<0|1>, once=<0|1>, resolve=<s>, ep=<path>,
-// svta=<0|1>
+// svta=<0|1>, preroll=<dur>
 //
 // Examples: 30:15;skipafter=5;nojump=2  => one 15s break 30s in, skippable after 5s,
 // not skippable by seeking, latest such event wins.
 // p60:20 => a 20s break at every start of a (UTC) minute, recurring forever.
+// p60:20;preroll=10 => as above, plus a 10s preroll break at presentationTime 0.
 func CreateSGAIConfig(val string) (*SGAIConfig, error) {
 	if val == "" {
 		return nil, fmt.Errorf("empty sgai config")
@@ -120,6 +127,12 @@ func CreateSGAIConfig(val string) (*SGAIConfig, error) {
 				return nil, fmt.Errorf("sgai resolve %q: must be >= 0", v)
 			}
 			cfg.ResolveOffsetS = n
+		case "preroll":
+			n, err := parseAdBreakSeconds(v)
+			if err != nil || n <= 0 {
+				return nil, fmt.Errorf("sgai preroll %q: must be > 0", v)
+			}
+			cfg.PrerollS = n
 		case "ep":
 			if !isCleanAbsPath(v) {
 				return nil, fmt.Errorf("sgai ep %q: must be a clean absolute path (e.g. /sgai/ads)", v)
@@ -131,6 +144,9 @@ func CreateSGAIConfig(val string) (*SGAIConfig, error) {
 	}
 	if cfg.empty() {
 		return nil, fmt.Errorf("sgai config %q has no breaks", val)
+	}
+	if cfg.PrerollS > 0 && len(cfg.Breaks) > 0 && cfg.Breaks[0].OffsetS < cfg.PrerollS {
+		return nil, fmt.Errorf("sgai config %q: first break overlaps the preroll", val)
 	}
 	return cfg, nil
 }
@@ -185,12 +201,21 @@ func sgaiAdURI(cfg *ResponseConfig, id uint64, durS int) string {
 // stable across MPD refreshes. With a stream started at availabilityStartTime≈now (e.g.
 // startrel_0) the break lands a fixed number of seconds after the viewer joins. Periodic
 // configs instead anchor the breaks to the wall clock (see breakInstances).
+//
+// With a preroll configured, an extra Event (id 0) is signaled at presentationTime 0, i.e. at
+// the period start. Players should treat an alternative-MPD event at time 0 as a
+// preroll and execute it when playback starts, wherever in the live timeline that is.
 func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, nowMS int) {
 	if cfg.SGAI == nil {
 		return
 	}
 	insts := cfg.SGAI.instances(nowMS, cfg.StartTimeS, cfg.SGAI.ResolveOffsetS, 0)
-	if len(insts) == 0 {
+	if pre := cfg.SGAI.PrerollS; pre > 0 {
+		// A periodic occurrence can land inside the preroll when the availabilityStartTime
+		// is aligned with the cycle; two Replace events must not cover the same time.
+		insts = slices.DeleteFunc(insts, func(b adBreakInst) bool { return b.offsetS < int64(pre) })
+	}
+	if len(insts) == 0 && cfg.SGAI.PrerollS == 0 {
 		return
 	}
 	ts := sgaiEventTimescale
@@ -198,7 +223,11 @@ func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, now
 		SchemeIdUri: AlternativeMPDReplaceScheme,
 		Timescale:   new(ts),
 	}
-	for _, b := range insts {
+	all := insts
+	if cfg.SGAI.PrerollS > 0 {
+		all = append([]adBreakInst{{id: sgaiPrerollID, offsetS: 0, durS: cfg.SGAI.PrerollS}}, insts...)
+	}
+	for _, b := range all {
 		inner := &m.AlternativeMPDEventType{
 			Uri:                          sgaiAdURI(cfg, b.id, b.durS),
 			EarliestResolutionTimeOffset: new(uint64(cfg.SGAI.ResolveOffsetS) * uint64(ts)),
@@ -220,11 +249,16 @@ func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, now
 		})
 	}
 	// Annex I: carry the main MPD URL query (e.g. the session id) onto the altmpd request
-	// and add the execution-delta state of the first signaled break.
+	// and add the execution-delta state of the first signaled regular break (the preroll
+	// only when there is none).
+	prtaID := all[0].id
+	if len(insts) > 0 {
+		prtaID = insts[0].id
+	}
 	es.RequestParam = []*m.ExtendedUrlInfoType{{
 		// prta first so the well-formed param is always present even when the MPD URL
 		// carries no query ($querypart$ then expands to empty rather than leaving a "&&").
-		QueryTemplate:     fmt.Sprintf("prta=$urn:mpeg:dash:state:execution-delta#%d$&$querypart$", insts[0].id),
+		QueryTemplate:     fmt.Sprintf("prta=$urn:mpeg:dash:state:execution-delta#%d$&$querypart$", prtaID),
 		UseMPDUrlQuery:    true,
 		IncludeInRequests: "altmpd",
 	}}

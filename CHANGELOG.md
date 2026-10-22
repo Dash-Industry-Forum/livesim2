@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   signing init segments with a C2PA manifest and media segments with C2PA 2.5 VSI `emsg` boxes.
 - `/assets` and urlgen flag MPDs that cannot be looped, since a Representation is more than a segment shorter than
   the asset loop, like the image subtitles of livesim-content's `testpic_2s/imsc1_img.mpd`.
+- New `preroll=<dur>` setting on the `sgai_` option, e.g. `sgai_p60:20;preroll=10`, that adds a preroll
+  ReplacePresentation event with `presentationTime="0"` and `id="0"`.
 
 ### Changed
 
