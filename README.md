@@ -141,8 +141,8 @@ Major values to configure are:
 
 Once the server is started, it will scan the file tree starting from
 `vodroot` and gather metadata about all DASH VoD assets it finds.
-Currently, only source VoD assets using SegmentTimeline with `$Time$` and
-SegmentTemplate with `$Number$`  are supported.
+Currently, only source VoD assets using SegmentTemplate with `$Number$`, and
+SegmentTimeline with `$Time$` or `$Number$`, are supported.
 
 ### Command-line parameters
 
@@ -286,9 +286,11 @@ and set the `port` to 443.`
 ## Content
 
 The content must be a DASH VoD asset in `isoff-live` format
-(individual segment files) with either `SegmentTimeline with $Time$` or
-`SegmentTemplate with $Number$`. The video segments duration must have an
-exact average duration so that the total duration is the number of segments
+(individual segment files) with `SegmentTemplate with $Number$`, or
+`SegmentTimeline` with `$Time$` or `$Number$` (as made by e.g. Shaka
+Packager). With `$Number$`, the segments are numbered from `startNumber`.
+The video segments duration must have an exact average duration so that
+the total duration is the number of segments
 time that average. The total duration must be an integral number of milliseconds.
 For example, an asset with alternating segment duration sof 8s and 4s, is fine
 as long as there are an equal number of each leading so that the avererage duration is
