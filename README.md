@@ -584,7 +584,7 @@ Enable it with the `sgai_` URL option, which schedules the breaks:
   wall-clock anchored, so all sessions share the schedule and a late joiner lands mid-break).
 - Options are appended with `;key=val`: `skipafter=<s>`, `nojump=<0|1|2>`, `clip=<0|1>`,
   `once=<0|1>`, `resolve=<s>` (earliest resolution offset), `ep=<path>` (ad endpoint),
-  `svta=<0|1>` (add SVTA2053 ad-creative signaling to the returned ad pod, see
+  `svta=<0|1|remote>` (add SVTA2053 ad-creative signaling to the returned ad pod, see
   [below](#svta2053-ad-creative-signaling)). For example `sgai_p60:20;skipafter=5`.
 
 The `/urlgen/` page and the [URL wiki page][urlparams] document the `sgai_` option and its
@@ -679,6 +679,7 @@ Enable it with the `svta_` URL option, which uses the same break schedule gramma
   | `verif=<0\|1>` | add an ad-verification resource | 0 |
   | `pod=<0\|1>` | also signal the whole break as a pod (`podStart`/`podEnd`) | 0 |
   | `ts=<n>` | `EventStream@timescale` (a positive 32-bit integer) | 90000 |
+  | `remote=<0\|1\|404\|wrongtype>` | give the tracking as a `$remote.tracking` URL (see below) | 0 |
 
 For example `svta_p60:20;ads=2` signals two 10 s creatives every UTC minute. As for `sgai_`, the
 video track serves the generated **AD BREAK** countdown slate inside each window, so the signaled
@@ -709,6 +710,24 @@ express: `start` is included, which the callback events leave out because it wou
 event at the same instant as the impression, and so are the interaction events, which no callback
 event can express. It is opt-in because a player acting on both signalings would report each
 timeline point twice.
+
+### Remote tracking
+
+SVTA2053-1 §5.2.2.2 lets a Pod or Slot give its tracking as a URL instead of inline: a
+`$remote.tracking` key whose URL resolves to a `trackingEvent` envelope, which the player should
+fetch when the creative is about to play. `svta_…;remote=1` signals every creative (and the pod
+with `pod=1`) that way, and declares `features.remoteFields` in the envelope as Table 15
+requires; `sgai_…;svta=remote` does the same in the List MPD. The URLs point at livesim2's
+`/svta/tracking/<adId>` endpoint, which answers with the same tracking set as the inline form,
+so the beacons are the same. Every fetch is recorded in the session, so
+`/sgai/session_status?sid=<sessionId>` shows when the player resolved each creative relative to
+its impression.
+
+`remote=404` and `remote=wrongtype` make the resolution fail, with a 404 response or with a valid
+envelope of the wrong type (`verification`), to test the error handling of §5.2.2.2.2: the player
+should discard the field and fire no tracking for that creative. Shaka Player supports remote
+tracking from 5.3.0: it resolves each creative as it starts, and discards the field after a
+failure.
 
 ## SCTE-35 ad-avail signaling
 

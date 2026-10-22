@@ -207,3 +207,22 @@ func TestSgaiSessionListOrderAndNoTimelines(t *testing.T) {
 	assert.Nil(t, list[0].Events, "list omits event timelines")
 	assert.Equal(t, "news", list[0].Interests)
 }
+
+// TestSgaiSessionRemoteNotDeduped checks that every $remote resolution is recorded, since when
+// and how often a player resolves the field is what is being tested, and that it counts apart
+// from the beacons.
+func TestSgaiSessionRemoteNotDeduped(t *testing.T) {
+	mgr := NewSgaiSessionMgr()
+	mgr.RecordRemote("alice", "svta-ad1", "tracking", "7", svtaRemoteOK)
+	mgr.RecordRemote("alice", "svta-ad1", "tracking", "7", svtaRemoteOK)
+	mgr.RecordRemote("", "svta-ad1", "tracking", "7", svtaRemote404)
+	s, ok := mgr.Get("alice")
+	require.True(t, ok)
+	assert.Equal(t, 2, s.RemoteCnt)
+	assert.Equal(t, 0, s.BeaconCnt)
+	require.Len(t, s.Events, 2)
+	assert.Equal(t, SgaiEventRemote, s.Events[1].Kind)
+	anon, ok := mgr.Get("anon")
+	require.True(t, ok)
+	assert.Equal(t, svtaRemote404, anon.Events[0].Result)
+}
