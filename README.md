@@ -171,11 +171,19 @@ The possibility to generate and read extra representation metadata files has
 therefore been added. For representation `repX`, the corresponding metadata file
 is `repX_data.json.gz`. As the file extensions indicates, these files are gzipped
 JSON files. To generate such files, turn on `writerepdata` (always (re)generates and
-overwrites the files) or `writemissingrepdata` (writes only the files that are missing,
-leaving existing ones untouched).
+overwrites the files) or `writemissingrepdata` (writes only the files that are missing
+or outdated, leaving current ones untouched).
 The root directory for such files is by default the same as the VoD root directory,
 meaning that the metadata files will be in the same directories as the corresponding
 MPDs. However, it is possible to use another path, by specifying `repdataroot`.
+
+Each file has a format version. When a livesim2 release derives more data from the
+segments, it raises the version, and files with an older version are ignored. The
+representation is then scanned at every start, with the log message
+`RepData cache is stale, regenerating`, until its file is rewritten. `writemissingrepdata`
+rewrites such files, and can stay on, since it writes nothing when all files are current.
+The files do not record which segments they were made from, so after changing the
+segments of an asset, regenerate its files once with `writerepdata`.
 
 Once the server has started, it is possible to find out information about the server and
 the assets using the root HTTP endpoint
