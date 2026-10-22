@@ -12,8 +12,8 @@
 		<Title>VVC 1280x720@25 400+600kbps, AAC 48kHz 48kbps, 2s segments</Title>
 	</ProgramInformation>
 	<Period id="0" start="PT0S">
-		<AdaptationSet id="0" contentType="video" startWithSAP="1" segmentAlignment="true" bitstreamSwitching="true" frameRate="25/1" maxWidth="1280" maxHeight="720" par="16:9">
-			<SegmentTemplate mimeType="video/mp4" timescale="1000" duration="2000" initialization="$RepresentationID$_init.mp4" media="$RepresentationID$_$Number$.m4s" startNumber="1"/>
+		<AdaptationSet id="0" contentType="video" mimeType="video/mp4" startWithSAP="1" segmentAlignment="true" bitstreamSwitching="true" frameRate="25/1" maxWidth="1280" maxHeight="720" par="16:9">
+			<SegmentTemplate timescale="1000" duration="2000" initialization="$RepresentationID$_init.mp4" media="$RepresentationID$_$Number$.m4s" startNumber="1"/>
 			<Representation id="vvc_600kbps"  codecs="vvc1.1.L51.00" bandwidth="600000" width="1280" height="720" sar="1:1"/>
 			<Representation id="vvc_400kbps"  codecs="vvc1.1.L51.00" bandwidth="400000" width="1280" height="720" sar="1:1"/>
 		</AdaptationSet>

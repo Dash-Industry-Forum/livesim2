@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -144,7 +145,9 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 
 	defaultDur := new(uint32(0))
 
+	nrReceived := 0 // Bytes received, which may differ from those written if the segment is changed
 	chunkParserCallback := func(cd chunkparser.ChunkData) error {
+		nrReceived += len(cd.Data)
 		// Set ofh to the write file output and then write data
 		data := cd.Data // Used so that you can overwrite cd.Data when needed
 		if cd.IsInitSegment {
@@ -305,34 +308,55 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 
 	log.Debug("Receiving file", "url", path, "contentLength", contentLength, "totSize", rsd.totSize)
 	const maxBufSize = 200 * 1024 * 1024 // 200MB
-	var buf []byte
 	if contentLength > maxBufSize {
 		log.Error("Content-Length exceeds maximum buffer size", "contentLength", contentLength, "maxBufSize", maxBufSize)
 		http.Error(w, "Content-Length too large", http.StatusRequestEntityTooLarge)
 		return
 	}
-	if contentLength > 0 {
-		buf = make([]byte, contentLength)
-	} else {
-		buf = make([]byte, 1024)
-	}
+	// The buffer grows with the data that arrives, so neither a Content-Length nor the size
+	// in a box header allocates memory before the data is there.
+	const initialBufSize = 64 * 1024
+	buf := make([]byte, initialBufSize)
 	if ch.receiveNrRaws == 0 {
 		p := chunkparser.NewMP4ChunkParser(req.Body, buf, chunkParserCallback)
+		p.SetMaxChunkSize(maxBufSize)
 		err = p.Parse()
-		if ofh != nil {
-			defer finalClose(ofh)
+		if err == nil && contentLength > 0 && nrReceived != int(contentLength) {
+			err = fmt.Errorf("received %d of %d bytes: %w", nrReceived, contentLength, io.ErrUnexpectedEOF)
 		}
 		if err != nil {
+			if ofh != nil {
+				// Do not keep the part of the segment that was written before the error.
+				finalClose(ofh)
+				if rmErr := os.Remove(filePath); rmErr != nil {
+					log.Warn("Failed to remove incomplete file", "path", filePath, "err", rmErr)
+				}
+			}
+			if errors.Is(err, chunkparser.ErrChunkTooLarge) {
+				log.Error("Chunk too large", "err", err)
+				http.Error(w, "Chunk too large", http.StatusRequestEntityTooLarge)
+				return
+			}
+			if errors.Is(err, io.ErrUnexpectedEOF) {
+				// The upload ended inside a box, so the segment is incomplete. With a 400 response,
+				// the ingest source should send it again (DASH-IF Ingest §4, items 14 and 19).
+				log.Error("Incomplete segment", "err", err)
+				http.Error(w, "Incomplete segment", http.StatusBadRequest)
+				return
+			}
 			log.Error("Failed to parse MP4 chunk", "err", err)
 			http.Error(w, "Failed to parse MP4 chunk", http.StatusInternalServerError)
 			return
 		}
-		if contentLength > 0 && rsd.totSize != uint32(contentLength) {
-			log.Error("Failed to receive all bytes", "nrBytesReceived", rsd.totSize, "contentLength", contentLength)
+		if ofh != nil {
+			defer finalClose(ofh)
 		}
 		if rsd.chunkNr > 0 {
 			rsd.isComplete = true
 			rsd.dur = rsd.totDur
+			if masterSegDur != 0 && !rsd.isLmsg {
+				warnIfShortSegment(log, ch.trDatas[trName], rsd, masterSegDur, masterTimescale)
+			}
 			ch.addCompleteSegData(*rsd)
 		}
 
@@ -409,6 +433,21 @@ func (r *Receiver) SegmentHandlerFunc(w http.ResponseWriter, req *http.Request) 
 }
 
 // DiscardUpload reads and discards the upload and returns the status code.
+// warnIfShortSegment logs a warning for a video or audio segment that is more than 10%
+// shorter than the segment duration of the channel. The bytes cannot show that the last
+// chunks of a segment are missing if it ends after a complete chunk, but its duration can.
+// A segment can also be short for other reasons, so it is still accepted.
+func warnIfShortSegment(log *slog.Logger, trd *trData, rsd *recSegData, masterSegDur, masterTimescale uint32) {
+	if trd == nil || (trd.contentType != "video" && trd.contentType != "audio") || masterTimescale == 0 {
+		return
+	}
+	segDur := uint64(masterSegDur) * uint64(trd.timeScaleOut) / uint64(masterTimescale)
+	if uint64(rsd.totDur)*10 < segDur*9 {
+		log.Warn("Segment shorter than the segment duration, possibly incomplete",
+			"seqNr", rsd.seqNr, "dur", rsd.totDur, "segDur", segDur, "timescale", trd.timeScaleOut)
+	}
+}
+
 func discardUpload(w http.ResponseWriter, req *http.Request, statusCode int) {
 	path := req.URL.Path
 	slog.Debug("Discarding upload", "path", path)

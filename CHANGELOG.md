@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Experimental C2PA live media signing: server option `--c2pa` (`--c2pacert`/`--c2pakey`) and URL option `c2pa_vsi`,
   signing init segments with a C2PA manifest and media segments with C2PA 2.5 VSI `emsg` boxes.
+- `/assets` and urlgen flag MPDs that cannot be looped, since a Representation is more than a segment shorter than
+  the asset loop, like the image subtitles of livesim-content's `testpic_2s/imsc1_img.mpd`.
 - New `preroll=<dur>` setting on the `sgai_` option, e.g. `sgai_p60:20;preroll=10`, that adds a preroll
   ReplacePresentation event with `presentationTime="0"` and `id="0"`.
 
@@ -24,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   build their sample data without extra copies, cutting allocated bytes per segment by 20-67% and time by up to 40%.
   VoD segments are read into reused buffers, and the chunks of a segment are made in one reused fragment, which
   cuts what is left by up to 98% (clear video) and the allocations of chunked segments by up to 69%.
+- Live MPDs give each Adaptation Set without an `@id` the lowest free id from 1, since period continuity, MPD patches
+  and MPD updates refer to Adaptation Sets by `@id`. Before, only `patch_ttl` added ids, to video and audio only.
+- The livesim2 CMAF ingester reports segment uploads that fail or get an error response, and sends them once more.
 
 ### Fixed
 
@@ -39,6 +44,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The livesim2 CMAF ingester no longer leaks a goroutine when an ingest stops on an error.
 - `timesubsstpc_` and `timesubswvtc_` sample entries carry their mandatory `ttma` box (5 s maximum activation).
 - `sgai_` with `resolve=0` writes `earliestResolutionTimeOffset="0"` instead of leaving the attribute out.
+- cmaf-ingest-receiver answers 400 to an upload that ends inside an MP4 box, and removes what it wrote, instead of
+  storing the truncated segment and listing it in the MPD. A box of size 0 or 1 no longer makes it hang.
+- `ssras_` Partial Segments use the `chunkdurssr_` duration of their own URL, not that of the last MPD request,
+  and no longer fail with 500 before any MPD has been requested.
+- `ssras_` Partial Segments become available after their own MPD duration, the sequence duration divided by `@k`,
+  instead of after the whole segment; an unavailable one gives 425 instead of an empty 200 response.
+- `continuous_1` period-continuity descriptors give the `@id` of the previous Period instead of `1`, and are left
+  out of the first Period.
+- cmaf-ingest-receiver no longer allocates the size that a box header or `Content-Length` claims before the data
+  arrives, and answers 413 to a chunk larger than 200 MB.
 
 ## [1.14.0] - 2026-09-30
 

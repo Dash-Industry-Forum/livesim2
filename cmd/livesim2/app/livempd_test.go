@@ -3035,3 +3035,88 @@ func TestProducerReferenceTimeFollowsUTCTiming(t *testing.T) {
 		})
 	}
 }
+
+// TestPeriodContinuity checks that continuous_1 relates each Period to the previous Period
+// in the MPD by its @id, and gives Adaptation Sets without an @id one, since continuity holds
+// between Adaptation Sets with the same @id (ISO/IEC 23009-1 5.3.2.4).
+func TestPeriodContinuity(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+	cases := []struct {
+		asset   string
+		mpdName string
+	}{
+		{"testpic_2s", "Manifest.mpd"},
+		{"ads/train_ad", "manifest.mpd"}, // Adaptation Sets without @id
+	}
+	const nowMS = 200_000 // 140-200 s in the time-shift buffer, so Periods P2 and P3
+	for _, c := range cases {
+		t.Run(c.asset, func(t *testing.T) {
+			asset, ok := am.findAsset(c.asset)
+			require.True(t, ok)
+			cfg, err := processURLCfg(fmt.Sprintf("/livesim2/periods_60/continuous_1/%s/%s", c.asset, c.mpdName), nowMS)
+			require.NoError(t, err)
+			liveMPD, err := LiveMPD(asset, c.mpdName, cfg, nil, nowMS)
+			require.NoError(t, err)
+			require.Len(t, liveMPD.Periods, 2)
+			for i, p := range liveMPD.Periods {
+				for _, as := range p.AdaptationSets {
+					require.NotNil(t, as.Id, "Period %s AdaptationSet @id", p.Id)
+					var values []string
+					for _, sp := range as.SupplementalProperties {
+						if sp.SchemeIdUri == "urn:mpeg:dash:period-continuity:2015" {
+							values = append(values, sp.Value)
+						}
+					}
+					if i == 0 {
+						require.Empty(t, values, "no earlier Period in the MPD for %s", p.Id)
+						continue
+					}
+					prev := liveMPD.Periods[i-1]
+					require.Equal(t, []string{prev.Id}, values, "continuity of Period %s", p.Id)
+					found := false
+					for _, prevAS := range prev.AdaptationSets {
+						found = found || (prevAS.Id != nil && *prevAS.Id == *as.Id)
+					}
+					require.True(t, found, "AdaptationSet %d in Period %s", *as.Id, prev.Id)
+				}
+			}
+		})
+	}
+}
+
+// TestAdaptationSetIDs checks that every Adaptation Set of a live MPD has a unique @id, the
+// same in every request, that the ids of the VoD MPD are kept, and that the others get the
+// lowest free ids from 1.
+func TestAdaptationSetIDs(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+	cases := []struct {
+		asset   string
+		mpdName string
+		wantIDs map[string]uint32 // contentType -> @id
+	}{
+		{"ads/train_ad", "manifest.mpd", map[string]uint32{"video": 1, "audio": 2}}, // no @id
+		{"mpegh_BL_1_6", "BL_1_6.mpd", map[string]uint32{"audio": 0, "video": 1}},   // audio has @id 0
+		{"testpic_2s", "Manifest.mpd", map[string]uint32{"video": 2, "audio": 1}},   // ids of the VoD MPD
+	}
+	const nowMS = 100_000
+	for _, c := range cases {
+		t.Run(c.asset, func(t *testing.T) {
+			asset, ok := am.findAsset(c.asset)
+			require.True(t, ok)
+			for range 2 {
+				liveMPD, err := LiveMPD(asset, c.mpdName, NewResponseConfig(), nil, nowMS)
+				require.NoError(t, err)
+				ids := make(map[string]uint32)
+				for _, as := range liveMPD.Periods[0].AdaptationSets {
+					require.NotNil(t, as.Id, "%s AdaptationSet @id", as.ContentType)
+					ids[string(as.ContentType)] = *as.Id
+				}
+				require.Equal(t, c.wantIDs, ids)
+			}
+		})
+	}
+}

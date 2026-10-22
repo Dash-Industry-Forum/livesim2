@@ -92,3 +92,41 @@ func TestHTMLTemplates(t *testing.T) {
 	require.Contains(t, steeringStr, `src="http://localhost:8888/static/steering_session_status.js"`)
 	require.Contains(t, steeringStr, `data-api="http://localhost:8888"`)
 }
+
+// TestNotLoopable checks that an MPD with a Representation that is more than a segment
+// shorter than the loop is detected and flagged on the assets and urlgen pages, while an
+// audio Representation that is slightly shorter, as is common, is not.
+func TestNotLoopable(t *testing.T) {
+	segs := func(n int, dur uint64) []Segment {
+		s := make([]Segment, n)
+		for i := range s {
+			s[i] = Segment{StartTime: uint64(i) * dur, EndTime: uint64(i+1) * dur, Nr: uint32(i)}
+		}
+		return s
+	}
+	a := newAsset("testpic")
+	a.LoopDurMS, a.SegmentDurMS = 3_600_000, 2000
+	a.Reps["V300"] = &RepData{ID: "V300", MediaTimescale: 1000, Segments: segs(1800, 2000)}
+	a.Reps["A48"] = &RepData{ID: "A48", MediaTimescale: 1000, Segments: segs(1800, 1999)}
+	a.Reps["img_eng"] = &RepData{ID: "img_eng", MediaTimescale: 1000, Segments: segs(30, 2000)}
+	a.mpdRepIDs["Manifest.mpd"] = []string{"V300", "A48"}
+	a.mpdRepIDs["imsc1_img.mpd"] = []string{"V300", "A48", "img_eng"}
+	require.Equal(t, "", a.notLoopable("Manifest.mpd"))
+	reason := a.notLoopable("imsc1_img.mpd")
+	require.Equal(t, "shorter than the 3600s loop: img_eng (60s)", reason)
+
+	aInfo := assetsInfo{Host: "http://localhost:8888", PlayURL: "%s", Assets: []*assetInfo{{
+		Path: "testpic", LoopDurMS: a.LoopDurMS,
+		MPDs: []mpdInfo{{Path: "Manifest.mpd"}, {Path: "imsc1_img.mpd", NotLoopable: reason}},
+	}}}
+	var buf bytes.Buffer
+	require.NoError(t, assetsPage(aInfo, false).Render(context.Background(), &buf))
+	page := buf.String()
+	require.Equal(t, 1, strings.Count(page, "data-not-loopable"), "one flagged MPD row")
+	require.Contains(t, page, "Not loopable, so the live stream has gaps: "+reason)
+
+	buf.Reset()
+	require.NoError(t, mpdsFragment(mpdsFromAssetInfo(aInfo.Assets[0])).Render(context.Background(), &buf))
+	require.Contains(t, buf.String(), `<option value="imsc1_img.mpd">imsc1_img.mpd (not loopable)</option>`)
+	require.Contains(t, buf.String(), `<option value="Manifest.mpd">Manifest.mpd</option>`)
+}

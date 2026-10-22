@@ -2,8 +2,17 @@ package chunkparser
 
 import (
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"io"
 )
+
+// ErrChunkTooLarge is returned by Parse when a chunk would be larger than the maximum set
+// with SetMaxChunkSize.
+var ErrChunkTooLarge = errors.New("chunk too large")
+
+// minGrowth is the smallest number of bytes by which the buffer grows.
+const minGrowth = 32 * 1024
 
 // MP4ChunkParser is a parser for fragmented mp4 content.
 // The callback is called on end of segment of end of fragment (chunk) if fragments are detected.
@@ -12,6 +21,8 @@ type MP4ChunkParser struct {
 	callBack   func(cd ChunkData) error
 	buf        []byte
 	contentEnd int
+	eof        bool // r has returned io.EOF
+	maxChunk   int  // maximum chunk size, 0 for no limit
 }
 
 // NewMP4ChunkParser creates a new MP4ChunkParser with an initial buffer.
@@ -24,74 +35,75 @@ func NewMP4ChunkParser(r io.Reader, buf []byte, callback func(cd ChunkData) erro
 	}
 }
 
+// SetMaxChunkSize limits the size of a chunk: the boxes up to and including an mdat, or all
+// boxes of content without mdat, such as an init segment. Parse returns ErrChunkTooLarge as
+// soon as a box header gives a larger size, before the data of the box is read.
+// The default 0 means no limit.
+func (p *MP4ChunkParser) SetMaxChunkSize(maxSize int) {
+	p.maxChunk = maxSize
+}
+
 // Parse parses mp4 content from a reader and sends fragments (ending with mdat) via callback.
 // Init segments are detected by the presence of a moov box.
-// The parsing always and when eof is reached, or an error occurs.
-// If io.EOF is returned at an end of a box, no error is returned.
+// The parsing continues until EOF is reached, or an error occurs.
+// The content must end with a complete box. Since the box sizes give the number of
+// bytes to expect, content that ends inside a box, such as a segment that was cut
+// short, gives io.ErrUnexpectedEOF. Box sizes 0 (to the end of the file) and 1
+// (64-bit size) are not supported and give an error.
 func (p *MP4ChunkParser) Parse() error {
-	// No content-length, so read multiple times until EOF
-	currBox := ""
-	nextBoxStart := uint32(0)
-	mdatEnd := uint32(0)
+	boxStart := 0 // start of the next box in buf
 	cd := ChunkData{
 		Start:         0,
 		IsInitSegment: false,
 		Data:          nil,
 	}
 	for {
-		err := p.readUntil(int(nextBoxStart) + 8)
-		if err != nil {
-			if err != io.EOF {
-				return err
+		err := p.readUntil(boxStart + 8)
+		if err == io.EOF {
+			if p.contentEnd > boxStart {
+				return fmt.Errorf("box header: %w", io.ErrUnexpectedEOF)
 			}
-			// EOF
+			// EOF at the end of a box. Send any boxes after the last mdat.
 			if p.contentEnd > 0 {
 				cd.Data = p.buf[:p.contentEnd]
-				err := p.callBack(cd)
-				if err != nil {
-					return err
-				}
+				return p.callBack(cd)
 			}
 			return nil
 		}
-		size := binary.BigEndian.Uint32(p.buf[nextBoxStart : nextBoxStart+4])
-		currBox = string(p.buf[nextBoxStart+4 : nextBoxStart+8])
-		nextBoxStart += size
-		switch currBox {
+		if err != nil {
+			return err
+		}
+		size := int(binary.BigEndian.Uint32(p.buf[boxStart : boxStart+4]))
+		boxType := string(p.buf[boxStart+4 : boxStart+8])
+		if size < 8 {
+			return fmt.Errorf("%s box size %d not supported", boxType, size)
+		}
+		boxEnd := boxStart + size
+		err = p.readUntil(boxEnd)
+		if err == io.EOF {
+			return fmt.Errorf("%s box with %d of %d bytes: %w", boxType, p.contentEnd-boxStart, size, io.ErrUnexpectedEOF)
+		}
+		if err != nil {
+			return err
+		}
+		switch boxType {
 		case "moov":
 			cd.IsInitSegment = true
 		case "mdat":
-			mdatEnd = nextBoxStart
-		}
-		err = p.readUntil(int(nextBoxStart))
-		if err != nil && err != io.EOF {
-			return err
-		}
-		if mdatEnd == uint32(p.contentEnd) {
 			// mdat is complete
-			cd.Data = p.buf[:mdatEnd]
+			cd.Data = p.buf[:boxEnd]
 			err := p.callBack(cd)
 			if err != nil {
 				return err
 			}
 			// Reset for next chunk
-			cd.Start += mdatEnd
+			cd.Start += uint32(boxEnd)
 			cd.Data = nil
-			copy(p.buf, p.buf[mdatEnd:p.contentEnd])
-			p.contentEnd -= int(mdatEnd)
-			nextBoxStart -= mdatEnd
-			mdatEnd = 0
+			copy(p.buf, p.buf[boxEnd:p.contentEnd])
+			p.contentEnd -= boxEnd
+			boxEnd = 0
 		}
-		if err == io.EOF {
-			if p.contentEnd > 0 {
-				cd.Data = p.buf[:p.contentEnd]
-				err := p.callBack(cd)
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		}
+		boxStart = boxEnd
 	}
 }
 
@@ -104,26 +116,33 @@ func (p *MP4ChunkParser) GetBuffer() []byte {
 }
 
 // readUntil reads from the reader until the contentEnd is reached.
-// The buffer is resized as needed.
+// It returns io.EOF if the reader ends before that.
+// The buffer grows as the data arrives, at most doubling, rather than to the contentEnd
+// that a box header gives, so a box size that no data backs cannot allocate much memory.
 func (p *MP4ChunkParser) readUntil(contentEnd int) error {
-	if p.contentEnd >= contentEnd {
-		return nil
+	if p.maxChunk > 0 && contentEnd > p.maxChunk {
+		return fmt.Errorf("%w: %d bytes, more than %d", ErrChunkTooLarge, contentEnd, p.maxChunk)
 	}
-	for {
-		if contentEnd > len(p.buf) {
-			// Resize buffer
-			newBuf := make([]byte, contentEnd-len(p.buf)+1024)
-			p.buf = append(p.buf, newBuf...)
+	for p.contentEnd < contentEnd {
+		if p.eof {
+			return io.EOF
 		}
-		n, err := p.r.Read(p.buf[p.contentEnd:contentEnd])
+		if p.contentEnd == len(p.buf) {
+			newBuf := make([]byte, min(contentEnd, max(2*len(p.buf), len(p.buf)+minGrowth)))
+			copy(newBuf, p.buf[:p.contentEnd])
+			p.buf = newBuf
+		}
+		n, err := p.r.Read(p.buf[p.contentEnd:min(contentEnd, len(p.buf))])
 		p.contentEnd += n
+		if err == io.EOF {
+			p.eof = true
+			continue
+		}
 		if err != nil {
 			return err
 		}
-		if p.contentEnd >= contentEnd {
-			return nil
-		}
 	}
+	return nil
 }
 
 // ChunkData provides a raw fmp4 chunk or a full segment.

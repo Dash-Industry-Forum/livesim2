@@ -146,6 +146,7 @@ func (am *assetMgr) loadAsset(logger *slog.Logger, mpdPath string) error {
 			if rep.SegmentTemplate != nil {
 				return fmt.Errorf("segmentTemplate on Representation level. Only supported on AdaptationSet level")
 			}
+			asset.mpdRepIDs[mpdName] = append(asset.mpdRepIDs[mpdName], rep.Id)
 			if _, ok := asset.Reps[rep.Id]; ok {
 				logger.Debug("Representation already loaded", "rep", rep.Id)
 				continue
@@ -182,11 +183,12 @@ func (am *assetMgr) loadAsset(logger *slog.Logger, mpdPath string) error {
 func (am *assetMgr) loadRep(logger *slog.Logger, assetPath string, as *m.AdaptationSetType, rep *m.RepresentationType) (*RepData, error) {
 	logger = logger.With("rep", rep.Id)
 	rp := RepData{
-		Version:      currentRepDataVersion,
-		ID:           rep.Id,
-		ContentType:  string(as.ContentType),
-		Codecs:       as.Codecs,
-		MpdTimescale: 1,
+		Version:         currentRepDataVersion,
+		ID:              rep.Id,
+		ContentType:     string(as.ContentType),
+		Codecs:          as.Codecs,
+		MpdTimescale:    1,
+		adaptationSetID: as.Id,
 	}
 	// Try to load from JSON unless writeRepData is true (which forces regeneration)
 	shouldTryLoadJSON := !am.writeRepData
@@ -195,6 +197,7 @@ func (am *assetMgr) loadRep(logger *slog.Logger, assetPath string, as *m.Adaptat
 		ok, err := rp.loadFromJSON(logger, am.vodFS, am.repDataDir, assetPath)
 		if ok {
 			logger.Debug("Loaded representation data from JSON")
+			rp.adaptationSetID = as.Id
 			return &rp, err
 		}
 	}
@@ -467,6 +470,7 @@ type asset struct {
 	LoopDurMS    int                         `json:"loopDurationMS"`
 	Reps         map[string]*RepData         `json:"representations"`
 	refRep       *RepData                    `json:"-"` // First video or audio representation
+	mpdRepIDs    map[string][]string         `json:"-"` // Representation ids of each MPD
 }
 
 func newAsset(assetPath string) *asset {
@@ -474,7 +478,30 @@ func newAsset(assetPath string) *asset {
 		AssetPath: assetPath,
 		MPDs:      make(map[string]internal.MPDData),
 		Reps:      make(map[string]*RepData),
+		mpdRepIDs: make(map[string][]string),
 	}
+}
+
+// notLoopable returns why an MPD of the asset cannot be looped: it lists the Representations
+// that are more than a segment duration shorter than the loop, for which a live stream has no
+// segments in the rest of each loop. Such content, like image subtitles that would take too
+// much space at full length, is not made for livesim2. It returns "" if the MPD can be looped.
+func (a *asset) notLoopable(mpdName string) string {
+	var short []string
+	for _, id := range a.mpdRepIDs[mpdName] {
+		rep, ok := a.Reps[id]
+		if !ok || rep.MediaTimescale == 0 {
+			continue
+		}
+		repDurMS := 1000 * rep.duration() / rep.MediaTimescale
+		if repDurMS < a.LoopDurMS-a.SegmentDurMS {
+			short = append(short, fmt.Sprintf("%s (%gs)", id, float64(repDurMS)/1000))
+		}
+	}
+	if len(short) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("shorter than the %gs loop: %s", float64(a.LoopDurMS)/1000, strings.Join(short, ", "))
 }
 
 func (a *asset) getVodMPD(mpdName string) (*m.MPD, error) {
@@ -916,8 +943,8 @@ type RepData struct {
 	ConstantSampleDuration *uint32          `json:"constantSampleDuration,omitempty"` // Non-zero if all samples have the same duration
 	EditListOffset         int64            `json:"editListOffset,omitempty"`
 	PreEncrypted           bool             `json:"preEncrypted"`
-	HasCEA608              bool             `json:"hasCEA608,omitempty"`    // Video samples already carry CEA-608 cc_data SEI (#321)
-	ChunkDurSSRS           *float64         `json:"chunkDurSSRS,omitempty"` // Low delay chunk duration in seconds
+	HasCEA608              bool             `json:"hasCEA608,omitempty"` // Video samples already carry CEA-608 cc_data SEI (#321)
+	adaptationSetID        *uint32          `json:"-"`                   // AdaptationSet@id in the VoD MPD, for the ssras_ options
 	mediaRegexp            *regexp.Regexp   `json:"-"`
 	initSeg                *mp4.InitSegment `json:"-"`
 	initBytes              []byte           `json:"-"`

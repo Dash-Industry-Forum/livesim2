@@ -218,6 +218,14 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 	}
 
 	adaptationSets := orderAdaptationSetsByContentType(period.AdaptationSets)
+	// Give each Adaptation Set without an @id one. The attribute is optional, but it is needed
+	// to refer to an Adaptation Set, as period continuity, MPD patches and MPD updates do.
+	// The ids of the VoD MPD are kept, so every request gets the same ids.
+	for _, as := range adaptationSets {
+		if as.Id == nil {
+			as.Id = new(nextFreeAdaptationSetID(period, 1))
+		}
+	}
 	var refSegEntries segEntries
 	for asIdx, as := range adaptationSets {
 		if as.SegmentTemplate != nil {
@@ -228,10 +236,6 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 
 		switch as.ContentType {
 		case "video", "audio":
-			if cfg.PatchTTL > 0 && as.Id == nil {
-				slog.Debug("Inserting ID for AdaptationSet for patch", "contentType", as.ContentType, "id", asIdx+1)
-				as.Id = new(uint32(asIdx + 1))
-			}
 			if cfg.DRM != "" {
 				if a.refRep.PreEncrypted {
 					return nil, fmt.Errorf("drm parameter %q, but pre-encrypted asset %s cannot be encrypted again",
@@ -386,16 +390,6 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 					}
 				}
 
-			}
-		}
-
-		// Update RepData with ChunkDurSSR if configured
-		if explicitChunkDurS != nil {
-			// Update all representations of this adaptation set
-			for _, rep := range as.Representations {
-				if repData, exists := a.Reps[rep.Id]; exists {
-					repData.ChunkDurSSRS = explicitChunkDurS
-				}
 			}
 		}
 
@@ -649,10 +643,11 @@ func splitPeriod(mpd *m.MPD, a *asset, cfg *ResponseConfig, wTimes wrapTimes) er
 			default:
 				return fmt.Errorf("unknown mpd type")
 			}
-			if cfg.ContMultiPeriodFlag {
+			if cfg.ContMultiPeriodFlag && pNr > startPeriodNr {
+				// The value is the @id of the earlier Period that this one continues (ISO/IEC 23009-1 5.3.2.4).
 				periodContinuity := m.DescriptorType{
 					SchemeIdUri: "urn:mpeg:dash:period-continuity:2015",
-					Value:       "1",
+					Value:       fmt.Sprintf("P%d", pNr-1),
 				}
 				as.SupplementalProperties = append(as.SupplementalProperties, &periodContinuity)
 			}

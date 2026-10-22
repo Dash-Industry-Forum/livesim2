@@ -531,7 +531,7 @@ func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, availMS
 	}
 	c.log.Debug("Start media segment", "nr", nextSegNr, "availMS", availMS, "nowMS", nowMS, "useChunked", c.useChunked)
 	wTimes := calcWrapTimes(c.asset, c.cfg, availMS+50, m.Duration(100*time.Millisecond))
-	wg := sync.WaitGroup{}
+	var uploads []mediaUpload
 	if c.cfg.HasSegmentTimelineTime() {
 		var segPart string
 		var refSegEntries segEntries
@@ -568,8 +568,7 @@ func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, availMS
 			if c.streamsURLs {
 				segPath = fmt.Sprintf("Streams(%s%s)", rd.repID, rd.extension)
 			}
-			wg.Add(1)
-			go c.sendMediaSegment(ctx, &wg, segPath, segPart, rd.contentType, nextSegNr, nowMS, isLast)
+			uploads = append(uploads, mediaUpload{segPath: segPath, segPart: segPart, contentType: rd.contentType})
 		}
 	} else {
 		for _, rd := range c.repsData {
@@ -578,19 +577,80 @@ func (c *cmafIngester) sendMediaSegments(ctx context.Context, nextSegNr, availMS
 			if c.streamsURLs {
 				segPath = fmt.Sprintf("Streams(%s%s)", rd.repID, rd.extension)
 			}
-			wg.Add(1)
-			go c.sendMediaSegment(ctx, &wg, segPath, segPart, rd.contentType, nextSegNr, nowMS, isLast)
+			uploads = append(uploads, mediaUpload{segPath: segPath, segPart: segPart, contentType: rd.contentType})
 		}
 	}
-	wg.Wait()
+	c.sendInParallel(ctx, uploads, nextSegNr, nowMS, isLast)
+	if ctx.Err() != nil {
+		return nil // The ingest has been stopped
+	}
+	var resends []mediaUpload
+	for _, u := range uploads {
+		if _, ok := errors.AsType[uploadError](u.err); !ok {
+			continue
+		}
+		msg := fmt.Sprintf("Upload of %s failed: %v", u.segPath, u.err)
+		c.report = append(c.report, msg)
+		c.log.Error(msg)
+		resends = append(resends, mediaUpload{segPath: u.segPath, segPart: u.segPart, contentType: u.contentType})
+	}
+	if len(resends) == 0 {
+		return nil
+	}
+	// Send the segments whose upload failed once more, as DASH-IF Ingest §4 item 14 recommends.
+	// They are available by now, so their chunks are sent at once.
+	if c.testNowMS == nil {
+		nowMS = max(availMS, unixMS())
+	}
+	c.sendInParallel(ctx, resends, nextSegNr, nowMS, isLast)
+	for _, u := range resends {
+		msg := fmt.Sprintf("Resent %s", u.segPath)
+		if u.err != nil {
+			msg = fmt.Sprintf("Resend of %s failed: %v", u.segPath, u.err)
+			c.log.Error(msg)
+		} else {
+			c.log.Info(msg)
+		}
+		c.report = append(c.report, msg)
+	}
 	return nil
 }
 
+// mediaUpload is the upload of the media segment of one representation.
+type mediaUpload struct {
+	segPath     string
+	segPart     string
+	contentType string
+	err         error
+}
+
+// sendInParallel sends the media segments of the uploads in parallel, since low-latency
+// mode requires parallel chunked-transfer encoding streams, and sets their errors.
+func (c *cmafIngester) sendInParallel(ctx context.Context, uploads []mediaUpload, segNr, nowMS int, isLast bool) {
+	var wg sync.WaitGroup
+	for i := range uploads {
+		u := &uploads[i]
+		wg.Go(func() {
+			u.err = c.sendMediaSegment(ctx, u.segPath, u.segPart, u.contentType, segNr, nowMS, isLast)
+		})
+	}
+	wg.Wait()
+}
+
+// uploadError is an error in sending a segment to the receiving entity, so that the
+// segment should be sent again.
+type uploadError struct {
+	err error
+}
+
+func (e uploadError) Error() string { return e.err.Error() }
+func (e uploadError) Unwrap() error { return e.err }
+
 // sendMediaSegment sends a media segment to the destination URL.
 // The segment may be written in chunks, rather than as a whole.
-func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup, segPath, segPart, contentType string,
-	segNr, nowMS int, isLast bool) {
-	defer wg.Done()
+// If sending it fails, or it gets an error response, an uploadError is returned.
+func (c *cmafIngester) sendMediaSegment(ctx context.Context, segPath, segPart, contentType string,
+	segNr, nowMS int, isLast bool) error {
 
 	u := fmt.Sprintf("%s/%s", c.dest(), segPath)
 	c.log.Info("send media segment", "path", segPath, "segNr", segNr, "nowMS", nowMS, "url", u, "chunked", c.useChunked)
@@ -598,12 +658,11 @@ func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup,
 	src := newCmafSource(c.log, c.client, u, contentType, c.user, c.passWord, c.useChunked)
 
 	// Create media segment based on number and send it to segPath
-	var sendDone chan struct{}
+	var sendDone chan error
 	if c.useChunked {
-		sendDone = make(chan struct{})
+		sendDone = make(chan error, 1)
 		go func() {
-			defer close(sendDone)
-			src.sendChunked(ctx)
+			sendDone <- src.sendChunked(ctx)
 		}()
 	}
 	code, err := writeSegment(ctx, src, c.log, c.cfg, c.mgr.s.Cfg.DrmCfg, c.mgr.s.assetMgr.vodFS,
@@ -616,7 +675,11 @@ func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup,
 		} else {
 			src.pw.Close()
 		}
-		<-sendDone
+		sendErr := <-sendDone
+		// When the upload fails, the pipe is closed, so that writeSegment cannot write the rest.
+		if sendErr != nil && (err == nil || errors.Is(err, io.ErrClosedPipe)) {
+			return uploadError{sendErr}
+		}
 	}
 	if err != nil {
 		c.log.Error("writeSegment", "code", code, "err", err)
@@ -624,36 +687,38 @@ func (c *cmafIngester) sendMediaSegment(ctx context.Context, wg *sync.WaitGroup,
 		switch {
 		case errors.Is(err, errNotFound):
 			c.log.Error("segment not found", "path", segPath)
-			return
 		case errors.As(err, &tooEarly):
 			c.log.Error("segment too early", "path", segPath)
-			return
 		case errors.Is(err, errGone):
 			c.log.Error("segment gone", "path", segPath)
-			return
-		default:
-			c.log.Error("writeSegment", "err", err)
-			http.Error(src, "writeSegment", http.StatusInternalServerError)
-			return
 		}
+		return err
 	}
-	if !c.useChunked {
-		// Write should have written everything to a c.buffer
-		req, err := http.NewRequestWithContext(ctx, "PUT", u, src.buffer)
-		if err != nil {
-			c.log.Error("creating request", "err", err)
-			http.Error(src, "writeSegment", http.StatusInternalServerError)
-			return
-		}
-		setReqHeaders(req, src.contentType, src.user, src.password)
-		slog.Info("Sending media segment", "url", u)
-		err = c.sendRequest(ctx, req, u)
-		if err != nil {
-			c.log.Error("sending request", "err", err)
-			http.Error(src, "writeSegment", http.StatusInternalServerError)
-			return
-		}
+	if c.useChunked {
+		return nil
 	}
+	// The segment is sent with its Content-Length, so all of it must have been written.
+	contentLength, err := src.contentLength()
+	if err != nil {
+		return err
+	}
+	if src.buffer == nil || src.buffer.Len() != contentLength {
+		nrWritten := 0
+		if src.buffer != nil {
+			nrWritten = src.buffer.Len()
+		}
+		return fmt.Errorf("%s: wrote %d of %d bytes", segPath, nrWritten, contentLength)
+	}
+	req, err := http.NewRequestWithContext(ctx, "PUT", u, src.buffer)
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	setReqHeaders(req, src.contentType, src.user, src.password)
+	slog.Info("Sending media segment", "url", u)
+	if err := c.sendRequest(ctx, req, u); err != nil {
+		return uploadError{err}
+	}
+	return nil
 }
 
 // cmafSource intermediates HTTP response writer and client push writer.
@@ -697,31 +762,30 @@ func newCmafSource(log *slog.Logger, client *http.Client, url string, contentTyp
 // Since the body has no known length, it is sent with chunked transfer encoding,
 // and the HTTP client flushes every chunk it reads from the pipe.
 // The pipe is closed on return, so that a writer is never left blocked.
-func (cs *cmafSource) sendChunked(ctx context.Context) {
+// An error is returned if the request fails or gets an error response.
+func (cs *cmafSource) sendChunked(ctx context.Context) error {
 	defer cs.pr.Close()
 	req, err := http.NewRequestWithContext(ctx, "PUT", cs.url, cs.pr)
 	if err != nil {
-		cs.log.Error("creating request", "err", err)
-		return
+		return fmt.Errorf("create request: %w", err)
 	}
 	setReqHeaders(req, cs.contentType, cs.user, cs.password)
 	resp, err := cs.client.Do(req)
 	if err != nil {
-		cs.log.Error("sending request", "url", cs.url, "err", err)
-		return
+		return fmt.Errorf("send request: %w", err)
 	}
 	defer func() {
 		cs.log.Debug("Closing body", "url", cs.url)
 		resp.Body.Close()
 	}()
 	if resp.StatusCode >= 300 {
-		cs.log.Warn("Bad status code", "code", resp.StatusCode)
-		return
+		return fmt.Errorf("bad status code: %d", resp.StatusCode)
 	}
 	_, err = io.ReadAll(resp.Body) // Normally no body, but ready to be sure that buffers are cleared
 	if err != nil {
 		cs.log.Warn("Error reading response body", "err", err)
 	}
+	return nil
 }
 
 func (cs *cmafSource) Header() http.Header {
@@ -734,34 +798,30 @@ func (cs *cmafSource) Flush() {
 	cs.log.Debug("Flush")
 }
 
+// Write sends b in the request body in chunked mode. Otherwise, it adds b to the buffer
+// that is sent with the Content-Length that was set, since a segment may be written in
+// several parts.
 func (cs *cmafSource) Write(b []byte) (int, error) {
 	if cs.useChunked {
 		return cs.pw.Write(b)
 	}
-	contentLength := -1 // Set to -1 to signal that we have checked once
-	if cl, ok := cs.h["Content-Length"]; ok {
-		cl, err := strconv.Atoi(cl[0])
-		if err != nil {
-			cs.log.Error("Content-Length", "err", err)
-		}
-		contentLength = cl
-	}
-	if contentLength <= 0 {
-		return 0, fmt.Errorf("bad content length: %d", contentLength)
-	}
-	if len(b) != contentLength {
-		cs.log.Warn("Content-Length mismatch", "length", len(b), "contentLength", contentLength)
-	}
 	if cs.buffer == nil {
+		contentLength, err := cs.contentLength()
+		if err != nil {
+			return 0, err
+		}
 		cs.buffer = bytes.NewBuffer(make([]byte, 0, contentLength))
-	} else {
-		cs.buffer.Reset()
 	}
-	n, err := cs.buffer.Write(b)
-	if err != nil {
-		cs.log.Error("Write", "err", err)
+	return cs.buffer.Write(b)
+}
+
+// contentLength returns the Content-Length that was set for the segment.
+func (cs *cmafSource) contentLength() (int, error) {
+	cl, err := strconv.Atoi(cs.h.Get("Content-Length"))
+	if err != nil || cl <= 0 {
+		return 0, fmt.Errorf("bad content length %q", cs.h.Get("Content-Length"))
 	}
-	return n, err
+	return cl, nil
 }
 
 func (cs *cmafSource) WriteHeader(status int) {
