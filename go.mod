@@ -4,6 +4,7 @@ go 1.27.0
 
 require (
 	github.com/Comcast/gots/v2 v2.3.0
+	github.com/Comcast/scte35-go v1.8.0
 	github.com/Eyevinn/dash-mpd v0.19.0
 	github.com/Eyevinn/go-608 v0.9.0
 	github.com/Eyevinn/hi264 v0.10.0
@@ -25,6 +26,7 @@ require (
 )
 
 require (
+	github.com/bamiaux/iobit v0.0.0-20170418073505-498159a04883 // indirect
 	github.com/barkimedes/go-deepcopy v0.0.0-20220514131651-17c30cfc62df // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/caddyserver/zerossl v0.1.5 // indirect
