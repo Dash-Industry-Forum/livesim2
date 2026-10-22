@@ -126,6 +126,74 @@ func TestLiveMPDStart(t *testing.T) {
 	}
 }
 
+// TestLiveMPDFromSegmentTimelineNumber checks the live MPD formats made from a VoD asset with
+// SegmentTimeline and $Number$, which has 2 s segments, 90 kHz video, and 48 kHz audio.
+func TestLiveMPDFromSegmentTimelineNumber(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, t.TempDir(), false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+	asset, ok := am.findAsset("timeline_number_2s")
+	require.True(t, ok)
+	require.Equal(t, 8000, asset.LoopDurMS)
+	nowMS := 100_000
+	timescales := map[string]uint32{"video": 90_000, "audio": 48_000}
+	for _, mode := range []SegTimelineMode{SegTimelineModeNone, SegTimelineModeTime, SegTimelineModeNr} {
+		name := string(mode)
+		if mode == SegTimelineModeNone {
+			name = "number"
+		}
+		t.Run(name, func(t *testing.T) {
+			cfg := NewResponseConfig()
+			cfg.SegTimelineMode = mode
+			liveMPD, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, nowMS)
+			require.NoError(t, err)
+			require.Len(t, liveMPD.Periods[0].AdaptationSets, 2)
+			for _, as := range liveMPD.Periods[0].AdaptationSets {
+				st := as.SegmentTemplate
+				ts := timescales[string(as.ContentType)]
+				require.Equal(t, ts, st.GetTimescale(), as.ContentType)
+				switch mode {
+				case SegTimelineModeNone:
+					require.Nil(t, st.SegmentTimeline)
+					require.Equal(t, "$RepresentationID$/$Number$.m4s", st.Media)
+					require.NotNil(t, st.Duration)
+					require.Equal(t, 2*ts, *st.Duration, as.ContentType)
+				case SegTimelineModeTime:
+					require.NotNil(t, st.SegmentTimeline)
+					require.Equal(t, "$RepresentationID$/$Time$.m4s", st.Media)
+					require.Nil(t, st.StartNumber)
+				case SegTimelineModeNr:
+					require.NotNil(t, st.SegmentTimeline)
+					require.Equal(t, "$RepresentationID$/$Number$.m4s", st.Media)
+					require.NotNil(t, st.StartNumber)
+				}
+				if st.SegmentTimeline != nil {
+					// The timeline ends with the last segment available at nowMS. An audio
+					// segment ends at the first frame at or after the video segment end, so
+					// up to one AAC frame (1024 samples) later.
+					maxEnd := uint64(nowMS) * uint64(ts) / 1000
+					if as.ContentType == "audio" {
+						maxEnd += 1024
+					}
+					s0 := st.SegmentTimeline.S[0]
+					require.NotNil(t, s0.T)
+					var end uint64
+					tm := *s0.T
+					for _, s := range st.SegmentTimeline.S {
+						if s.T != nil {
+							tm = *s.T
+						}
+						tm += s.D * uint64(s.R+1)
+						end = tm
+					}
+					require.LessOrEqual(t, end, maxEnd, as.ContentType)
+					require.Greater(t, end, uint64(nowMS-2_100)*uint64(ts)/1000, as.ContentType)
+				}
+			}
+		})
+	}
+}
+
 func TestLiveMPDWithTimeSubs(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	am := newAssetMgr(vodFS, "", false, false)

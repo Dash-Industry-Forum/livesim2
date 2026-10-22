@@ -5,6 +5,7 @@
 package app
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path"
@@ -93,6 +94,37 @@ func TestLoadAsset(t *testing.T) {
 					mpdTimescale:   1,
 					mediaTimescale: 48_000,
 					duration:       480_256,
+				},
+			},
+		},
+		{
+			desc:      "timeline_number_2s (SegmentTimeline with $Number$)",
+			assetPath: "assets/timeline_number_2s",
+			ad: wantedAssetData{
+				nrReps:         3,
+				loopDurationMS: 8000,
+			},
+			rds: map[string]wantedRepData{
+				"V400": {
+					nrSegs:         4,
+					initURI:        "V400/init.mp4",
+					mpdTimescale:   90_000,
+					mediaTimescale: 90_000,
+					duration:       720_000,
+				},
+				"V1600": {
+					nrSegs:         4,
+					initURI:        "V1600/init.mp4",
+					mpdTimescale:   90_000,
+					mediaTimescale: 90_000,
+					duration:       720_000,
+				},
+				"A128": {
+					nrSegs:         4,
+					initURI:        "A128/init.mp4",
+					mpdTimescale:   48_000,
+					mediaTimescale: 48_000,
+					duration:       384_000,
 				},
 			},
 		},
@@ -205,6 +237,90 @@ func TestLoadAsset(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSegmentTimelineNumber checks VoD assets with SegmentTimeline and $Number$: the segments
+// are numbered from startNumber, and an S@r < 0 (repeat until the next S) is an error.
+func TestSegmentTimelineNumber(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		return // Skip test on Windows since the tree copy does not work properly
+	}
+	logger := slog.Default()
+	const assetPath = "assets/timeline_number_2s"
+	reps := []string{"V400", "V1600", "A128"}
+	testCases := []struct {
+		desc     string
+		modify   func(t *testing.T, assetDir string)
+		startNr  uint32
+		firstURI string
+		loadErr  bool
+	}{
+		{
+			desc:     "startNumber 1",
+			modify:   func(t *testing.T, assetDir string) {},
+			startNr:  1,
+			firstURI: "V400/1.m4s",
+		},
+		{
+			desc: "startNumber 0",
+			modify: func(t *testing.T, assetDir string) {
+				replaceInMPD(t, assetDir, `startNumber="1"`, `startNumber="0"`)
+				for _, rep := range reps {
+					for nr := 1; nr <= 4; nr++ {
+						err := os.Rename(filepath.Join(assetDir, rep, fmt.Sprintf("%d.m4s", nr)),
+							filepath.Join(assetDir, rep, fmt.Sprintf("%d.m4s", nr-1)))
+						require.NoError(t, err)
+					}
+				}
+			},
+			startNr:  0,
+			firstURI: "V400/0.m4s",
+		},
+		{
+			desc: "S@r=-1",
+			modify: func(t *testing.T, assetDir string) {
+				replaceInMPD(t, assetDir, `r="3"`, `r="-1"`)
+			},
+			loadErr: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			vodRoot := t.TempDir()
+			assetDir := filepath.Join(vodRoot, assetPath)
+			require.NoError(t, copyDir(filepath.Join("testdata", assetPath), assetDir))
+			tc.modify(t, assetDir)
+			am := newAssetMgr(os.DirFS(vodRoot), t.TempDir(), false, false)
+			require.NoError(t, am.discoverAssets(logger))
+			asset, ok := am.findAsset(assetPath)
+			if tc.loadErr {
+				require.False(t, ok, "asset should not load")
+				return
+			}
+			require.True(t, ok)
+			for _, id := range reps {
+				rep := asset.Reps[id]
+				require.Len(t, rep.Segments, 4, id)
+				for i, seg := range rep.Segments {
+					require.Equal(t, tc.startNr+uint32(i), seg.Nr, "%s segment %d", id, i)
+					if i > 0 {
+						require.Equal(t, rep.Segments[i-1].EndTime, seg.StartTime, "%s segment %d", id, i)
+					}
+				}
+			}
+			require.Equal(t, tc.firstURI, asset.Reps["V400"].firstSegmentURI())
+		})
+	}
+}
+
+// replaceInMPD replaces oldStr with newStr in the Manifest.mpd of an asset directory.
+func replaceInMPD(t *testing.T, assetDir, oldStr, newStr string) {
+	t.Helper()
+	mpdPath := filepath.Join(assetDir, "Manifest.mpd")
+	data, err := os.ReadFile(mpdPath)
+	require.NoError(t, err)
+	require.Contains(t, string(data), oldStr)
+	require.NoError(t, os.WriteFile(mpdPath, []byte(strings.ReplaceAll(string(data), oldStr, newStr)), 0o644))
 }
 
 func TestWriteMissingRepData(t *testing.T) {

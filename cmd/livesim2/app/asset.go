@@ -252,7 +252,25 @@ func (am *assetMgr) loadRep(logger *slog.Logger, assetPath string, as *m.Adaptat
 			}
 		}
 	case st.SegmentTimeline != nil && rp.typeURI() == numberURI:
-		return nil, fmt.Errorf("SegmentTimeline with $Number$ not yet supported")
+		// The S elements give the number of segments, which are numbered from startNumber.
+		// The segment times are read from the segments, as for SegmentTemplate with $Number$.
+		nr := uint32(1)
+		if st.StartNumber != nil {
+			nr = *st.StartNumber
+		}
+		for _, s := range st.SegmentTimeline.S {
+			if s.R < 0 {
+				return nil, fmt.Errorf("SegmentTimeline S@r=%d is not supported", s.R)
+			}
+			for i := 0; i <= s.R; i++ {
+				seg, err := rp.readMP4Segment(am.vodFS, assetPath, 0, nr)
+				if err != nil {
+					return nil, fmt.Errorf("readMP4Segment: %w", err)
+				}
+				rp.Segments = append(rp.Segments, seg)
+				nr++
+			}
+		}
 	case rp.typeURI() == numberURI: // SegmentTemplate with Number$
 		startNr := uint32(1)
 		if st.StartNumber != nil {

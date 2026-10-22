@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- VoD assets with SegmentTimeline and `$Number$`, as made by e.g. Shaka Packager, are now supported (#152),
+  with the test asset `timeline_number_2s` made by the livesim-content `contentgen` tool.
 - Experimental C2PA live media signing: server option `--c2pa` (`--c2pacert`/`--c2pakey`) and URL option `c2pa_vsi`,
   signing init segments with a C2PA manifest and media segments with C2PA 2.5 VSI `emsg` boxes.
 - URL option `inbandps_1` signals AVC and HEVC video as `avc3`/`hev1` and adds the parameter sets in-band in front of
