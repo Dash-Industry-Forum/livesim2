@@ -7,6 +7,8 @@ code.pfad.fr/check v1.1.0/go.mod h1:NiUH13DtYsb7xp5wll0U4SXx7KhXQVCtRgdC96IPfoM=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/Comcast/gots/v2 v2.3.0 h1:UQ5zx90hTYg6cuyLPFwrts0J+MSpxDnjIrAtPi4zkVg=
 github.com/Comcast/gots/v2 v2.3.0/go.mod h1:firJ11on3eUiGHAhbY5cZNqG0OqhQ1+nSZHfsEEzVVU=
+github.com/Comcast/scte35-go v1.8.0 h1:dfb7v8vI9jEXdDffdP1SGbBAlq1T7lTf2vAG5lIGCOA=
+github.com/Comcast/scte35-go v1.8.0/go.mod h1:tKLQUIC/jaa60fGsxuzy/muLAT1cjmunM05W93kNgpE=
 github.com/Eyevinn/dash-mpd v0.19.0 h1:F9jvM375LKMZKPqa8VM9oD1Rsf8kvR3G6UGvL9ypJx0=
 github.com/Eyevinn/dash-mpd v0.19.0/go.mod h1:JcVboFRgbxl5gK/ppYzS5z35VsRi8wbwiZIOpDy6zmA=
 github.com/Eyevinn/go-608 v0.9.0 h1:vpU6s74i0bj5rjrUiqT2Qbf4abEwLRNHBdx4FU0RZE0=
@@ -37,6 +39,8 @@ github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.3.2/go.mod h1:72H
 github.com/aws/aws-sdk-go-v2/service/sso v1.4.2/go.mod h1:NBvT9R1MEF+Ud6ApJKM0G+IkPchKS7p7c2YPKwHmBOk=
 github.com/aws/aws-sdk-go-v2/service/sts v1.7.2/go.mod h1:8EzeIqfWt2wWT4rJVu3f21TfrhJ8AEMzVybRNSb/b4g=
 github.com/aws/smithy-go v1.8.0/go.mod h1:SObp3lf9smib00L/v3U2eAKG8FyQ7iLrJnQiAmR5n+E=
+github.com/bamiaux/iobit v0.0.0-20170418073505-498159a04883 h1:XNtOMwxmV2PI/vuTHDZnFzGIFNUh8MK73q7+Kna7AXs=
+github.com/bamiaux/iobit v0.0.0-20170418073505-498159a04883/go.mod h1:9IjZnSQGh45J46HHS45pxuMJ6WFTtSXbaX0FoHDvxh8=
 github.com/barkimedes/go-deepcopy v0.0.0-20220514131651-17c30cfc62df h1:GSoSVRLoBaFpOOds6QyY1L8AX7uoY+Ln3BHc22W40X0=
 github.com/barkimedes/go-deepcopy v0.0.0-20220514131651-17c30cfc62df/go.mod h1:hiVxq5OP2bUGBRNS3Z/bt/reCLFNbdcST6gISi1fiOM=
 github.com/beevik/etree v1.7.0 h1:xjBk9O4p4x7D1YajePjfLzdaFC4/uYUENA7P0pv6gXA=
