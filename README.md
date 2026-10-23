@@ -24,7 +24,7 @@ screen presentation. The very short example assets bundled with the code are onl
 relative to the Epoch start 1970-01-01:00:00:00Z.
 
 To provide full UTC time stamps on-screen and the possibility to test subtitles,
-livesim2 has a new feature for generating subtitles for any number of languages.
+livesim2 can generate subtitles for any number of languages.
 This is done by a URL parameter like `/timesubsstpp_en,sv` which will result in
 two `stpp` (segmented TTML) subtitle tracks with with language codes "en" and "sv", respectively.
 There is a corresponding setting for `wvtt` (segmented WebVTT) subtitles using `/timesubswvtt_en,sv`.
@@ -103,7 +103,7 @@ one. Use `-pop` for frame-accurate timing, `-pop-sc` to test a player against po
 captions that are decodable segment by segment. `-sc` applies to pop-on only; paint-on and
 roll-up are self-contained by construction.
 
-The new `livesim2` software is written in Go instead of Python and designed to handle
+Unlike [livesim1][1], which is written in Python, `livesim2` is written in Go and designed to handle
 content in a more flexible and versatile way. It is intended to be very easy to install and deploy locally
 since it is compiled into a single binary that serves the content via a built-in
 performant HTTP/2 server. There is also a very simple way of setting up HTTPS
@@ -114,7 +114,7 @@ These parameters are included not only in the MPD requests, but in
 all segment requests allowing the server to be stateless, and
 be able to generate streams with a huge number of
 parameter variations. Currently, not all parameters of [livesim1][1] are implemented,
-but there are also new parameters like the generated subtitles mentioned above.
+but livesim2 has many parameters that livesim1 lacks, like the generated subtitles mentioned above.
 
 The [URL wiki page][urlparams] lists what is available and the served page `/urlgen`
 makes it easy to construct URLs to play the content with specific parameters set.
@@ -438,7 +438,7 @@ That is an easy way to have variants with different representation combinations.
 
 #### Running dashfetcher
 
-`dashfetcher` was created to facilitate download of DASH assets with lots of small segment files. One particular such source was the CTA-WAVE test content. However, that content is now also available as zip-files, so it is more efficient to download an unzip these files instead of making individual downloads of the segments.
+`dashfetcher` was created to facilitate download of DASH assets with lots of small segment files. One particular such source was the CTA-WAVE test content. However, that content is also available as zip-files, so it is more efficient to download an unzip these files instead of making individual downloads of the segments.
 
 For example, the asset above is also
 available at `https://dash.akamaized.net/WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17/t3.zip`.
