@@ -5,10 +5,12 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -42,6 +44,7 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		Host:    fh,
 		PlayURL: playURL,
 		Assets:  make([]*assetInfo, 0, len(assets)),
+		C2PA:    s.Cfg.C2PA,
 	}
 	for _, asset := range assets {
 		mpds := make([]mpdInfo, 0, len(asset.MPDs))
@@ -167,6 +170,9 @@ type urlGenData struct {
 	TimeSubsSegNr               string // 1 to show the segment number in the cue text, 0 to leave it out
 	TimeCC608                   string // in-band CTA-608 caption channel and language (e.g. CC1-eng)
 	InbandPS                    bool   // in-band parameter sets (avc3/hev1)
+	C2PA                        string // C2PA signing method of the c2pa_ option, "" for none
+	C2PAAvailable               bool   // the server runs with --c2pa, so the C2PA settings are shown
+	C2PAMethods                 []nameWithSelect
 	Drm                         string // empty means no DRM setup
 	UTCTiming                   string
 	Periods                     string   // number of periods per hour (1-60)
@@ -242,7 +248,59 @@ func (s *Server) createInitData(aInfo assetsInfo) (data urlGenData, err error) {
 	}
 	data.Host = aInfo.Host
 	data.DRMs = drmsFromAssetInfo(nil, s.Cfg.DrmCfg, "")
+	data.C2PAAvailable = aInfo.C2PA
+	data.C2PAMethods = c2paMethodsWithSelect("")
 	return data, nil
+}
+
+// c2paMethods are the signing methods of the c2pa_ URL option, as configurl.go parses them.
+var c2paMethods = []nameWithSelect{
+	{Name: "vsi", Desc: "VSI: a C2PA manifest in each init segment and a Verifiable Segment Info emsg in each media segment"},
+}
+
+// checkURLGenC2PA checks the C2PA method of d against the server and the other settings of d,
+// with the rules that a URL is checked with (verifyC2PAConfig).
+func checkURLGenC2PA(d *urlGenData, available, chunked bool, drm string) error {
+	switch {
+	case !available:
+		return errors.New("c2pa needs a server started with --c2pa")
+	case !slices.ContainsFunc(c2paMethods, func(m nameWithSelect) bool { return m.Name == d.C2PA }):
+		return fmt.Errorf("c2pa: unknown method %q", d.C2PA)
+	}
+	cfg := &ResponseConfig{
+		C2PAVSI:  d.C2PA == "vsi",
+		InbandPS: d.InbandPS,
+		SSRFlag:  d.SSRASConfig != "",
+	}
+	if chunked {
+		cfg.ChunkDurS = new(0.0)
+	}
+	if drm != "" && drm != "None" {
+		cfg.DRM = drm
+	}
+	if d.TimeSubsStpp != "" {
+		cfg.TimeSubsStpp = strings.Split(d.TimeSubsStpp, ",")
+	}
+	if d.TimeSubsWvtt != "" {
+		cfg.TimeSubsWvtt = strings.Split(d.TimeSubsWvtt, ",")
+	}
+	if d.TimeSubsStpc != "" {
+		cfg.TimeSubsStpc = &TimeSubsPaintConfig{}
+	}
+	if d.TimeSubsWvtc != "" {
+		cfg.TimeSubsWvtc = &TimeSubsPaintConfig{}
+	}
+	return verifyC2PAConfig(cfg)
+}
+
+// c2paMethodsWithSelect returns the choices of the C2PA select, None first, with selected marked.
+func c2paMethodsWithSelect(selected string) []nameWithSelect {
+	methods := []nameWithSelect{{Name: "", Desc: "None", Selected: selected == ""}}
+	for _, m := range c2paMethods {
+		m.Selected = m.Name == selected
+		methods = append(methods, m)
+	}
+	return methods
 }
 
 // createURL creates a URL from the request parameters. Errors are returned in ErrorMsg field.
@@ -548,6 +606,18 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 		} else {
 			data.ChunkDurSSR = chunkDurSSR
 			fmt.Fprintf(&sb, "chunkdurssr_%s/", chunkDurSSR)
+		}
+	}
+
+	data.C2PAAvailable = aInfo.C2PA
+	c2pa := q.Get("c2pa")
+	data.C2PAMethods = c2paMethodsWithSelect(c2pa)
+	if c2pa != "" {
+		data.C2PA = c2pa
+		if err := checkURLGenC2PA(&data, aInfo.C2PA, chunkDur != "", drm); err != nil {
+			data.Errors = append(data.Errors, err.Error())
+		} else {
+			fmt.Fprintf(&sb, "c2pa_%s/", c2pa)
 		}
 	}
 

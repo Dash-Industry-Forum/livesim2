@@ -328,6 +328,19 @@ templ urlgenPage(d urlGenData) {
 							<input type="checkbox" id="inbandps" name="inbandps" checked?={ d.InbandPS }/>
 						</label>
 					</details>
+					if d.C2PAAvailable {
+						<details>
+							<summary>C2PA signing (experimental)...</summary>
+							<label for="c2pa">
+								Sign the live stream with C2PA. Not with encryption, chunked low-latency delivery, generated time subtitles or in-band parameter sets.
+								<select id="c2pa" name="c2pa">
+									for _, m := range d.C2PAMethods {
+										<option value={ m.Name } selected?={ m.Selected }>{ m.Desc }</option>
+									}
+								</select>
+							</label>
+						</details>
+					}
 					<details>
 						<summary>Encryption and DRM</summary>
 						<fieldset>
