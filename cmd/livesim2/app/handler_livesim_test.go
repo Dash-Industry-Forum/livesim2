@@ -142,6 +142,13 @@ func TestParamToMPD(t *testing.T) {
 			wantedInMPD:      nil,
 		},
 		{
+			desc:             "annexI pair without =",
+			mpd:              "testpic_2s/Manifest.mpd?a",
+			params:           "annexI_a/",
+			wantedStatusCode: http.StatusBadRequest,
+			wantedInMPD:      nil,
+		},
+		{
 			desc:             "annexI with url query",
 			mpd:              "testpic_2s/Manifest.mpd?a=1&b=3&a=3",
 			params:           "annexI_a=1,b=3,a=3/",

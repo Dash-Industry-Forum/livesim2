@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `/favicon.ico` returned an HTML page instead of an icon.
+- An `annexI_` URL value with a pair that is not `key=value`, such as `annexI_a`, gave 500 (a recovered panic) instead of 400.
 
 ## [1.15.1] - 2026-10-23
 
