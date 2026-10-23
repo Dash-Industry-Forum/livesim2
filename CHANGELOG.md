@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Nothing yet
+
+## [1.15.1] - 2026-10-23
+
 ### Added
 
 - `/urlgen/` has C2PA settings, shown only when the server runs with `--c2pa`, with a select for the `c2pa_` method.
@@ -716,7 +720,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - features and URLs listed at livesim2 root page
 - configurable generated stpp subtitles with timing info
 
-[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.15.0...HEAD
+[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.15.1...HEAD
+[1.15.1]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.15.0...v1.15.1
 [1.15.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.12.0...v1.13.0
