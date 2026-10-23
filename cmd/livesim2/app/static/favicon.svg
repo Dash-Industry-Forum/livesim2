@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- The gopher is adapted from the Go gopher by Renée French (https://reneefrench.blogspot.com/), licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). -->
+  <!-- Rounded Dark Background for contrast on both light/dark browser tabs -->
+  <rect width="64" height="64" rx="14" fill="#0f172a" />
+
+  <!-- Gopher Ears -->
+  <circle cx="13" cy="16" r="7" fill="#2a63f6" stroke="#0f172a" stroke-width="2.5" />
+  <circle cx="45" cy="16" r="7" fill="#2a63f6" stroke="#0f172a" stroke-width="2.5" />
+
+  <!-- Gopher Head -->
+  <path d="M 8 34 C 8 10, 50 10, 50 34 L 52 56 C 52 60, 44 62, 29 62 C 14 62, 6 60, 6 56 Z"
+        fill="#2a63f6" stroke="#0f172a" stroke-width="2.5" />
+
+  <!-- Big Go Eyes -->
+  <circle cx="20" cy="28" r="9.5" fill="#ffffff" stroke="#0f172a" stroke-width="2.5" />
+  <circle cx="38" cy="28" r="9.5" fill="#ffffff" stroke="#0f172a" stroke-width="2.5" />
+  <circle cx="22" cy="28" r="4" fill="#0f172a" />
+  <circle cx="40" cy="28" r="4" fill="#0f172a" />
+  <circle cx="23.5" cy="26.5" r="1.5" fill="#ffffff" />
+  <circle cx="41.5" cy="26.5" r="1.5" fill="#ffffff" />
+
+  <!-- Snout & Teeth -->
+  <rect x="25" y="40" width="4.5" height="7" rx="1" fill="#ffffff" stroke="#0f172a" stroke-width="1.5" />
+  <rect x="29.5" y="40" width="4.5" height="7" rx="1" fill="#ffffff" stroke="#0f172a" stroke-width="1.5" />
+  <ellipse cx="29" cy="38" rx="8.5" ry="4.5" fill="#e2d1b5" stroke="#0f172a" stroke-width="2" />
+  <ellipse cx="29" cy="36" rx="4" ry="2.2" fill="#0f172a" />
+
+  <!-- Red LIVE Badge (Bottom-Right Corner) -->
+  <circle cx="48" cy="48" r="14" fill="#ef4444" stroke="#0f172a" stroke-width="3.5" />
+  <circle cx="48" cy="48" r="5.5" fill="#ffffff" />
+</svg>

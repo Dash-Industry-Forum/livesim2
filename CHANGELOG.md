@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Nothing yet
+### Added
+
+- A livesim2 logo in the README and on the welcome page, with a favicon and a link preview image.
+
+### Fixed
+
+- `/favicon.ico` returned an HTML page instead of an icon.
 
 ## [1.15.1] - 2026-10-23
 

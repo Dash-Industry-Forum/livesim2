@@ -58,3 +58,31 @@ func TestIndexPageWithoutHostAndVersion(t *testing.T) {
 	bodyStr := string(body)
 	require.Equal(t, fmt.Sprintf("{\"Version\":\"%s\"}", internal.Version()), bodyStr)
 }
+
+func TestLogoAndFavicon(t *testing.T) {
+	cfg := ServerConfig{
+		VodRoot:   "testdata/assets",
+		TimeoutS:  0,
+		LogFormat: logging.LogDiscard,
+	}
+	err := logging.InitSlog(cfg.LogLevel, cfg.LogFormat)
+	require.NoError(t, err)
+	server, err := SetupServer(context.Background(), &cfg)
+	require.NoError(t, err)
+	ts := httptest.NewServer(server.Router)
+	defer ts.Close()
+
+	resp, body := testFullRequest(t, ts, "GET", "/", nil)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Contains(t, string(body), fmt.Sprintf(`src="%s/static/livesim2-logo-animated.svg"`, ts.URL))
+	for _, name := range []string{"livesim2-logo-animated.svg", "livesim2-logo.svg"} {
+		resp, _ = testFullRequest(t, ts, "GET", "/static/"+name, nil)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+	}
+
+	// The favicon was once an HTML page, so check that it is an ICO file.
+	resp, body = testFullRequest(t, ts, "GET", "/favicon.ico", nil)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, "image/x-icon", resp.Header.Get("Content-Type"))
+	require.Equal(t, []byte{0, 0, 1, 0}, body[:4], "ICO header")
+}
