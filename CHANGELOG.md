@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Nothing yet
+### Fixed
+
+- Builds with `make build` or `make forlinux` no longer report a `+dirty` version just because `out/` or
+  `out-linux/` exists: `.gitignore` now ignores both.
 
 ## [1.15.0] - 2026-10-23
 
