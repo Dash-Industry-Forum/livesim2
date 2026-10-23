@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Nothing yet
+
+## [1.15.2] - 2026-10-23
+
 ### Added
 
 - A livesim2 logo in the README and on the welcome page, with a favicon and a link preview image.
@@ -727,7 +731,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - features and URLs listed at livesim2 root page
 - configurable generated stpp subtitles with timing info
 
-[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.15.1...HEAD
+[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.15.2...HEAD
+[1.15.2]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.15.1...v1.15.2
 [1.15.1]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.15.0...v1.15.1
 [1.15.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.13.0...v1.14.0
