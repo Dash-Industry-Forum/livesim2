@@ -191,6 +191,12 @@ rewrites such files, and can stay on, since it writes nothing when all files are
 The files do not record which segments they were made from, so after changing the
 segments of an asset, regenerate its files once with `writerepdata`.
 
+The current format is version 2, which adds the SAP grid of video representations that
+`ssras_` derives the `SegmentSequenceProperties@cadence` from. Files written by livesim2 v1.14.0
+or earlier have version 1, or no version at all, so they are scanned again at every start until
+they are rewritten. livesim2 v1.14.0 still reads version 2 files. The files in
+[livesim-content][livesim-content] are version 2 from its v2.0.0 release.
+
 Once the server has started, it is possible to find out information about the server and
 the assets using the root HTTP endpoint
 
@@ -321,8 +327,10 @@ such representation data from a file. The generation of such data is controlled 
 
 If such files are detected at startup, they will be used instead of scanning the files,
 unless the `writerepdata` parameter is set, which forces a re-scan and overwrites the
-files. Use `writemissingrepdata` instead to generate only the files that are missing
-without overwriting (and still use any existing files).
+files. Use `writemissingrepdata` instead to generate only the files that are missing or
+outdated (and still use the current ones). See
+[Quicker load by using metadata files](#quicker-load-by-using-metadata-files) for the format
+versions.
 
 ### Bundled test streams with the livesim2 server
 
@@ -371,21 +379,30 @@ There are two test assets included for these cases
 
 ### livesim-content at Github
 
-In the repo [livesim-content][livesim-content], the content that was used for the
-[livesim1 online][1-online] service is being gathered to make it easy to reproduce
-the same use cases.
-
-All content and features are not yet (2023-08-08) in place, but should be so before end
-of October 2023.
-
-To download and use that content, run
+The repo [livesim-content][livesim-content] has the content of the
+[livesim1 online][1-online] service, and more, so the same use cases can be reproduced.
+Each representation is stored as a zip archive in Git LFS, so install
+[git-lfs](https://git-lfs.com) first, then clone the repo and unpack the archives:
 
 ```sh
+git lfs install
 git clone https://github.com/Dash-Industry-Forum/livesim-content.git
+cd livesim-content
+./unpack_all.sh
 ```
 
 and then set `--vodroot` to the `livesim-content` top directory or include that in
-a bigger file tree.
+a bigger file tree. Its README describes how to fetch only some of the assets.
+
+livesim-content v2.0.0 (2026-10-22) has these changes:
+
+- Edit lists in testpic_2s and testpic_6s make video and audio start at time 0.
+- `testpic_2s/Manifest_avc3.mpd` is removed; use the `inbandps_1` URL option instead.
+- The representation data files are in format version 2.
+- A `contentgen` tool generates new test assets.
+
+When updating an older clone, unpack the zip files that changed again, overwriting the old
+files (`unzip -o`), since the representation data files describe the new segments.
 
 ### dashfetcher tool
 
