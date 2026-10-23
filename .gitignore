@@ -14,3 +14,7 @@ coverage.*
 
 # Dependency directories (remove the comment below to include it)
 vendor/
+
+# Build output of make build and make forlinux
+/out/
+/out-linux/
