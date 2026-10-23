@@ -7,10 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `/urlgen/` has C2PA settings, shown only when the server runs with `--c2pa`, with a select for the `c2pa_` method.
+
 ### Fixed
 
 - Builds with `make build` or `make forlinux` no longer report a `+dirty` version just because `out/` or
   `out-linux/` exists: `.gitignore` now ignores both.
+- `--help` shows the `--timeoutS` default and says that `--writemissingrepdata` also rewrites outdated files.
+  The README lists every command-line option and describes C2PA signing.
 
 ## [1.15.0] - 2026-10-23
 

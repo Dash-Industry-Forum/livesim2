@@ -17,6 +17,7 @@ type assetsInfo struct {
 	Host    string
 	PlayURL string
 	Assets  []*assetInfo
+	C2PA    bool // the server signs with C2PA (--c2pa), so the c2pa_ URL option works
 }
 
 type assetInfo struct {

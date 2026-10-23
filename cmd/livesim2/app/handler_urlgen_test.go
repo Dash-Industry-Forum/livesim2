@@ -411,3 +411,76 @@ func TestCreateURLInbandPS(t *testing.T) {
 	require.Contains(t, data.URL, "/inbandps_1/")
 	require.Contains(t, data.URL, "/testpic_2s/Manifest.mpd")
 }
+
+func TestCreateURLC2PA(t *testing.T) {
+	cases := []struct {
+		desc      string
+		params    map[string]string
+		noC2PA    bool // the server runs without --c2pa
+		wantInURL string
+		wantErr   string
+	}{
+		{desc: "vsi", params: map[string]string{"c2pa": "vsi"}, wantInURL: "/livesim2/c2pa_vsi/testpic_2s/Manifest.mpd"},
+		{desc: "none", params: map[string]string{"c2pa": ""}, wantInURL: "/livesim2/testpic_2s/Manifest.mpd"},
+		{desc: "server without --c2pa", params: map[string]string{"c2pa": "vsi"}, noC2PA: true,
+			wantErr: "c2pa needs a server started with --c2pa"},
+		{desc: "unknown method", params: map[string]string{"c2pa": "foo"}, wantErr: `c2pa: unknown method "foo"`},
+		{desc: "with ECCP", params: map[string]string{"c2pa": "vsi", "drm": "eccp-cbcs"},
+			wantErr: "c2pa_vsi cannot be combined with drm or eccp"},
+		{desc: "with chunks", params: map[string]string{"c2pa": "vsi", "chunkdur": "0.5"},
+			wantErr: "c2pa_vsi cannot be combined with chunked delivery (chunkdur, ssras)"},
+		{desc: "with time subtitles", params: map[string]string{"c2pa": "vsi", "timesubswvtt": "en"},
+			wantErr: "c2pa_vsi cannot be combined with generated time subtitles"},
+		{desc: "with inbandps", params: map[string]string{"c2pa": "vsi", "inbandps": "on"},
+			wantErr: "c2pa_vsi cannot be combined with inbandps"},
+	}
+	for _, c := range cases {
+		t.Run(c.desc, func(t *testing.T) {
+			q := url.Values{}
+			q.Set("asset", "testpic_2s")
+			q.Set("mpd", "Manifest.mpd")
+			q.Set("stl", "nr")
+			for k, v := range c.params {
+				q.Set(k, v)
+			}
+			aInfo := testAssetsInfo()
+			aInfo.C2PA = !c.noC2PA
+			data := createURL(httptest.NewRequest("GET", "/urlgen/create?"+q.Encode(), nil), aInfo, nil)
+			if c.wantErr != "" {
+				require.Equal(t, []string{c.wantErr}, data.Errors)
+				require.Empty(t, data.URL)
+				return
+			}
+			require.Empty(t, data.Errors)
+			require.Contains(t, data.URL, c.wantInURL)
+			// The URL is accepted by the live handler's own parser.
+			_, err := processURLCfg(strings.TrimPrefix(data.URL, aInfo.Host), 0)
+			require.NoError(t, err)
+		})
+	}
+}
+
+// TestURLGenTemplateC2PA checks that the C2PA settings are only shown when the server runs with
+// --c2pa, with the chosen method selected.
+func TestURLGenTemplateC2PA(t *testing.T) {
+	render := func(c2pa bool, query string) string {
+		aInfo := testAssetsInfo()
+		aInfo.C2PA = c2pa
+		data := createURL(httptest.NewRequest("GET", "/urlgen/create?asset=testpic_2s&mpd=Manifest.mpd&stl=nr"+query, nil),
+			aInfo, nil)
+		var buf bytes.Buffer
+		require.NoError(t, urlgenPage(data).Render(context.Background(), &buf))
+		return buf.String()
+	}
+	require.NotContains(t, render(false, ""), `name="c2pa"`, "hidden without --c2pa")
+	out := render(true, "&c2pa=vsi")
+	require.Contains(t, out, `<select id="c2pa" name="c2pa">`)
+	require.Contains(t, out, `<option value="vsi" selected>`)
+	require.Contains(t, out, "c2pa_vsi/testpic_2s/Manifest.mpd")
+
+	aInfo := testAssetsInfo()
+	aInfo.C2PA = true
+	data, err := (&Server{Cfg: &ServerConfig{}}).createInitData(aInfo)
+	require.NoError(t, err)
+	require.True(t, data.C2PAAvailable, "the start page shows the settings too")
+}

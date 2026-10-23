@@ -150,24 +150,29 @@ A complete list of parameters, and their access
 via the command line looks like:
 
 ```sh
-  --certpath string      path to TLS certificate file (for HTTPS). Use domains instead if possible
-  --cfg string           path to a JSON config file
-  --domains string       One or more DNS domains (comma-separated) for auto certificate from Lets Encrypt
-  --host string          full scheme://host used in MPD Location/BaseURL. If empty, auto-detected from the request (honors X-Forwarded-Proto)
-  --keypath string       path to TLS private key file (for HTTPS). Use domains instead if possible.
-  --livewindow int       default live window (seconds) (default 300)
-  --logformat string     log format [text, json, pretty, discard] (default "text")
-  --loglevel string      log level [DEBUG, INFO, WARN, ERROR] (default "INFO")
-  --maxrequests int      max nr of request per IP address per 24 hours
-  --playurl string       URL template to play mpd. %s will be replaced by MPD URL (default "https://reference.dashif.org/dash.js/nightly/samples/dash-if-reference-player/index.html?mpd=%s&autoLoad=true&muted=true")
-  --port int             HTTP port (default 8888)
-  --repdataroot string   Representation metadata root directory. "+" copies vodroot value. "-" disables usage. (default "+")
-  --reqlimitint int      interval for request limit i seconds (only used if maxrequests > 0) (default 86400)
-  --reqlimitlog string   path to request limit log file (only written if maxrequests > 0)
-  --timeout int          timeout for all requests (seconds) (default 60)
-  --vodroot string       VoD root directory (default "./vod")
-  --writemissingrepdata  Write representation metadata only if missing (does not override existing)
-  --writerepdata         (Re)generate and write representation metadata, overwriting any existing files
+  --c2pa                     Experimental: enable C2PA live media signing (the c2pa_vsi URL option). Signs every clear audio and video init segment at startup
+  --c2pacert string          C2PA claim-signing certificate chain (PEM), with --c2pa. Default: a generated test certificate
+  --c2pakey string           C2PA claim-signing private key (PEM), with --c2pa
+  --certpath string          path to TLS certificate file (for HTTPS). Use domains instead if possible
+  --cfg string               path to a JSON config file
+  --domains string           One or more DNS domains (comma-separated) for auto certificate from Let's Encrypt
+  --drmcfgfile string        DRM config file path
+  --host string              full scheme://host used in MPD Location/BaseURL. If empty, auto-detected from the request (honors X-Forwarded-Proto)
+  --keypath string           path to TLS private key file (for HTTPS). Use domains instead if possible.
+  --livewindow int           default live window (seconds) (default 300)
+  --logformat string         log format [text, json, pretty, discard] (default "text")
+  --loglevel string          log level [DEBUG, INFO, WARN, ERROR] (default "INFO")
+  --maxrequests int          max nr of request per IP address per 24 hours
+  --playurl string           URL template to play mpd. %s will be replaced by MPD URL (default "https://reference.dashif.org/dash.js/nightly/samples/dash-if-reference-player/index.html?mpd=%s&autoLoad=true&muted=true")
+  --port int                 HTTP port (default 8888)
+  --repdataroot string       Representation metadata root directory. "+" copies vodroot value. "-" disables usage. (default "+")
+  --reqlimitint int          interval for request limit i seconds (only used if maxrequests > 0) (default 86400)
+  --reqlimitlog string       path to request limit log file (only written if maxrequests > 0)
+  --timeoutS int             timeout for all requests (seconds) (default 60)
+  --vodroot string           VoD root directory (default "./vod")
+  --whitelistblocks string   comma-separated list of CIDR blocks that are not rate limited
+  --writemissingrepdata      Write representation metadata only if missing or outdated
+  --writerepdata             (Re)generate and overwrite all representation metadata
 ```
 
 ### Quicker load by using metadata files
@@ -852,6 +857,27 @@ schedule (the legacy presets count as their `p60` schedules, so `scte35_1` goes 
 or that SVTA2053 describes for measurement. Inband-only signaling (`mpd=off`, the default) also
 works with the multi-period options; MPD events do not, since the event stream lives in the first
 Period.
+
+## C2PA live media signing (experimental)
+
+livesim2 can sign live streams with [C2PA](https://c2pa.org) content credentials, so that a client
+can check that every segment comes from the signer of the stream.
+
+- Start the server with `--c2pa`. When it loads the assets, it signs the init segment of each clear
+  audio and video representation with a C2PA manifest, whose `c2pa.session-keys` assertion
+  announces a new Ed25519 session key for that representation.
+- Add `c2pa_vsi` to the URL, as in `/livesim2/c2pa_vsi/testpic_2s/Manifest.mpd`. The signed init
+  segments are served, and each media segment gets a C2PA Verifiable Segment Info (VSI) `emsg` box
+  (scheme `urn:c2pa:verifiable-segment-info`, value `fseg`) signed with the session key. The MPD
+  announces it with an `InbandEventStream`.
+- `--c2pacert` and `--c2pakey` give the claim-signing certificate chain and private key (PEM).
+  Without them, livesim2 creates a test CA and certificate at startup, which validators report as
+  untrusted.
+- The session keys are new at every start and differ between server instances, so serve a stream
+  from one instance, and fetch the init segment again after a restart.
+- `c2pa_vsi` cannot be combined with encryption (`drm_`, `eccp_`), chunked low-latency delivery
+  (`chunkdur_`, `ssras_`), generated time subtitles or `inbandps_1`, and needs a server started
+  with `--c2pa`. The `/urlgen/` page shows the C2PA settings only on such a server.
 
 ## DASH Content Steering
 
