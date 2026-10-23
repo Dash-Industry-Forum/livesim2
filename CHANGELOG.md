@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Nothing yet
+
+## [1.15.0] - 2026-10-23
+
 ### Added
 
 - VoD assets with SegmentTimeline and `$Number$`, as made by e.g. Shaka Packager, are now supported (#152),
@@ -62,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Repdata files are now version 2; older ones are re-scanned at each start until `--writemissingrepdata` rewrites them.
 - The closing `splice_insert` of `scte35_…;end=1` carries a `break_duration()` of 0, which DVB A178-3 requires in
   every `splice_insert`.
+- Bundled test MPDs: the broken `profiles` attribute of two `testpic_2s` manifests, the `mimeType` of the VVC MPD, and
+  the codecs of two WAVE MPDs, which are `avc3`.
 
 ## [1.14.0] - 2026-09-30
 
@@ -701,7 +707,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - features and URLs listed at livesim2 root page
 - configurable generated stpp subtitles with timing info
 
-[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.14.0...HEAD
+[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.15.0...HEAD
+[1.15.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.11.0...v1.12.0
