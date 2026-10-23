@@ -19,6 +19,23 @@ templ-check:
 	go run github.com/a-h/templ/cmd/templ@$(TEMPL_VERSION) generate
 	git diff --exit-code -- '*_templ.go'
 
+# The favicon and the social preview image are rendered from the SVGs in the
+# static directory, which the server embeds. The social preview is also the
+# repository's link preview, uploaded in the GitHub settings. Needs rsvg-convert
+# and ImageMagick.
+STATIC := cmd/livesim2/app/static
+
+.PHONY: images
+images: $(STATIC)/favicon.ico $(STATIC)/social-preview.png
+
+$(STATIC)/favicon.ico: $(STATIC)/favicon.svg
+	for s in 16 32 48; do rsvg-convert -w $$s -h $$s $< -o $@.$$s.png; done
+	magick $@.16.png $@.32.png $@.48.png $@
+	rm -f $@.16.png $@.32.png $@.48.png
+
+$(STATIC)/social-preview.png: $(STATIC)/livesim2-logo.svg
+	rsvg-convert -w 1200 $< | magick - -background '#0f172a' -gravity center -extent 1280x640 -strip $@
+
 .PHONY: prepare
 prepare:
 	go mod tidy

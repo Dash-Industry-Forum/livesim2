@@ -1,11 +1,10 @@
+<img src="cmd/livesim2/app/static/livesim2-logo-animated.svg" alt="livesim2 – DASH Live Source Simulator" width="720">
+
 ![Test](https://github.com/Dash-Industry-Forum/livesim2/workflows/Go/badge.svg)
 [![golangci-lint](https://github.com/Dash-Industry-Forum/livesim2/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/Dash-Industry-Forum/livesim2/actions/workflows/golangci-lint.yml)
 [![GoDoc](https://godoc.org/github.com/Dash-Industry-Forum/livesim2?status.svg)](http://godoc.org/github.com/Dash-Industry-Forum/livesim2)
 
-# livesim2 - the second generation DASH Live Source Simulator
-
-`livesim2` is a new and improved version of the
-[DASH-IF live source simulator][1].
+`livesim2` is the second generation of the [DASH-IF live source simulator][1].
 
 *Test it at [https://livesim2.dashif.org](https://livesim2.dashif.org) or set up your own server
 using your own DASH content or test content available
@@ -1251,6 +1250,10 @@ It is possible to sponsor the project for further development. See the
 ## License
 
 See [LICENSE.md](LICENSE.md).
+
+The gopher in the logo and favicon is adapted from the Go gopher, created by
+[Renée French](https://reneefrench.blogspot.com/) and licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 [1]: https://github.com/Dash-Industry-Forum/dash-live-source-simulator
 [1-online]: https://livesim.dashif.org

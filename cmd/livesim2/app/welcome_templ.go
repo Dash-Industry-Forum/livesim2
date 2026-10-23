@@ -62,202 +62,241 @@ func welcomePage(wi welcomeInfo) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"><title>livesim2</title></head><body><main class=\"container\"><hgroup><h1>Welcome to livesim2!</h1><p>Running at ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"><link rel=\"icon\" href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var4 string
-		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(wi.Host)
+		var templ_7745c5c3_Var4 templ.SafeURL
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/static/favicon.svg")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 22, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 16, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</p></hgroup><p>livesim2 is a simulator for MPEG-DASH live streaming developed by DASH-IF. It uses VoD assets and converts them to wall-clock synchronized \"live\" streams, by rewriting timestamps, segment numbers, and segment URLs. It also re-fragments segments so that they can be used for low-latency DASH streaming.</p><p>The live stream URLs start with /livesim2/. After that comes an big optional set of parameters, followed by the asset name, and finally the MPD. There may be multiple MPDs for one asset corresponding to different sets of media tracks or other fixed settings in the MPD. The available parameters are listed on the <a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters\" target=\"_blank\">Wiki parameters page</a>. The easiest way to configure the URLs to with such parameters is the <a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" type=\"image/svg+xml\"><meta property=\"og:title\" content=\"livesim2\"><meta property=\"og:description\" content=\"DASH live source simulator: wall-clock synchronized live DASH streams from VoD assets\"><meta property=\"og:image\" content=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var5 templ.SafeURL
-		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/urlgen")
+		var templ_7745c5c3_Var5 string
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(wi.Host + "/static/social-preview.png")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 35, Col: 103}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 19, Col: 77}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\">URL generator</a> page. Note, the URL generator and other pages include links for direct playback using online versions of <a href=\"https://reference.dashif.org/dash.js/nightly/samples/dash-if-reference-player/index.html\">dash.js </a> or any other configured player. However, some restrictions may apply as discussed on the Wiki page <a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki/Direct-Playback\">Direct Playback</a>.</p><p>A new feature is <strong>CMAF ingest generation</strong>. For testing reception of such streams, there is also a separate component \"cmaf-ingest-receiver\" available in the livesim2 Github repo.</p><h4>Useful local URLs</h4><p>The following URLs should work at ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\"><meta name=\"twitter:card\" content=\"summary_large_image\"><title>livesim2</title></head><body><main class=\"container\"><hgroup><h1><img src=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var6 string
-		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(wi.Host)
+		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(wi.Host + "/static/livesim2-logo-animated.svg")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 47, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 27, Col: 63}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, ". Some of them provides streaming URLs or even URLs that start a DASH player with the corresponding asset URL. Others provide information about the server.</p><ul><li><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\" alt=\"livesim2 – DASH Live Source Simulator\" width=\"720\" height=\"317\"></h1><p>Running at ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var7 templ.SafeURL
-		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/urlgen")
+		var templ_7745c5c3_Var7 string
+		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(wi.Host)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 51, Col: 38}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 29, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\">/urlgen</a> is a form to generate URLs for live streaming from this host</li><li><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</p></hgroup><p>livesim2 is a simulator for MPEG-DASH live streaming developed by DASH-IF. It uses VoD assets and converts them to wall-clock synchronized \"live\" streams, by rewriting timestamps, segment numbers, and segment URLs. It also re-fragments segments so that they can be used for low-latency DASH streaming.</p><p>The live stream URLs start with /livesim2/. After that comes an big optional set of parameters, followed by the asset name, and finally the MPD. There may be multiple MPDs for one asset corresponding to different sets of media tracks or other fixed settings in the MPD. The available parameters are listed on the <a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters\" target=\"_blank\">Wiki parameters page</a>. The easiest way to configure the URLs to with such parameters is the <a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var8 templ.SafeURL
-		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/assets")
+		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/urlgen")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 52, Col: 38}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 42, Col: 103}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\">/assets</a> provides a list of all loaded assets and their MPDs</li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters\">livesim2-wiki</a> compares url parameters between livesim2 and livesim1</li><li><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\">URL generator</a> page. Note, the URL generator and other pages include links for direct playback using online versions of <a href=\"https://reference.dashif.org/dash.js/nightly/samples/dash-if-reference-player/index.html\">dash.js </a> or any other configured player. However, some restrictions may apply as discussed on the Wiki page <a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki/Direct-Playback\">Direct Playback</a>.</p><p>A new feature is <strong>CMAF ingest generation</strong>. For testing reception of such streams, there is also a separate component \"cmaf-ingest-receiver\" available in the livesim2 Github repo.</p><h4>Useful local URLs</h4><p>The following URLs should work at ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var9 templ.SafeURL
-		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/vod")
+		var templ_7745c5c3_Var9 string
+		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(wi.Host)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 54, Col: 35}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 54, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\">/vod</a> provides a list of all VoD assets and their MPDs</li><li><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, ". Some of them provides streaming URLs or even URLs that start a DASH player with the corresponding asset URL. Others provide information about the server.</p><ul><li><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var10 templ.SafeURL
-		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/healthz")
+		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/urlgen")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 55, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 58, Col: 38}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\">/healthz</a> returns true if server is running</li><li><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\">/urlgen</a> is a form to generate URLs for live streaming from this host</li><li><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var11 templ.SafeURL
-		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/config")
+		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/assets")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 56, Col: 38}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 59, Col: 38}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\">/config</a> return the current config of the server in JSON format</li><li><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\">/assets</a> provides a list of all loaded assets and their MPDs</li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters\">livesim2-wiki</a> compares url parameters between livesim2 and livesim1</li><li><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var12 templ.SafeURL
-		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/metrics")
+		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/vod")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 57, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 61, Col: 35}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\">/metrics</a> return  Prometheus metrics for the system and all streaming content requests</li><li><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\">/vod</a> provides a list of all VoD assets and their MPDs</li><li><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var13 templ.SafeURL
-		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/reqcount")
+		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/healthz")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 58, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 62, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\">/reqcount</a> returns the number of requests if a limit is set</li><li><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\">/healthz</a> returns true if server is running</li><li><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var14 templ.SafeURL
-		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/version")
+		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/config")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 59, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 63, Col: 38}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\">/version</a> returns the software version in JSON format</li><li><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\">/config</a> return the current config of the server in JSON format</li><li><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var15 templ.SafeURL
-		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/api/docs#/")
+		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/metrics")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 61, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 64, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\">/api/docs</a> provides documentation for a REST API for <strong>CMAF ingest generation</strong> of streams to specified hosts and for <strong>SGAI ads</strong> (the ad catalog with interest tags, and per-session ad decisions and impression beacons)</li><li><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\">/metrics</a> return  Prometheus metrics for the system and all streaming content requests</li><li><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var16 templ.SafeURL
-		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/sgai/session_status")
+		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/reqcount")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 67, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 65, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\">/sgai/session_status</a> shows Server-Guided Ad Insertion (SGAI) ad decisions and impression beacons live per session</li><li><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\">/reqcount</a> returns the number of requests if a limit is set</li><li><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var17 templ.SafeURL
-		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/steering/session_status")
+		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/version")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 71, Col: 52}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 66, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\">/steering/session_status</a> shows DASH Content Steering live: per-CDN segment requests, current pathway priority, and client-message verification per session or group</li></ul><h4>Further information</h4><p>For more information about the project, see</p><ul><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2\" target=\"_blank\">livesim2 Github project</a></li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki\" target=\"_blank\">livesim2 Github Wiki</a></li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki/Preparing-Content-for-livesim2\" target=\"_blank\">Preparing Content for livesim2</a></li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters\" target=\"_blank\">wiki list of url parameters</a></li><li><a href=\"https://github.com/orgs/Dash-Industry-Forum/projects/7\" target=\"_blank\">Github project for planning new features</a></li><li><a href=\"https://dashif.slack.com\" target=\"_blank\">The livesim channel in the DASH-IF slack</a></li></ul><p>Version: ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\">/version</a> returns the software version in JSON format</li><li><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var18 string
-		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(wi.Version)
+		var templ_7745c5c3_Var18 templ.SafeURL
+		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/api/docs#/")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 86, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 68, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</p></main></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\">/api/docs</a> provides documentation for a REST API for <strong>CMAF ingest generation</strong> of streams to specified hosts and for <strong>SGAI ads</strong> (the ad catalog with interest tags, and per-session ad decisions and impression beacons)</li><li><a href=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var19 templ.SafeURL
+		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/sgai/session_status")
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 74, Col: 48}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\">/sgai/session_status</a> shows Server-Guided Ad Insertion (SGAI) ad decisions and impression beacons live per session</li><li><a href=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var20 templ.SafeURL
+		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinURLErrs(wi.Host + "/steering/session_status")
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 78, Col: 52}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\">/steering/session_status</a> shows DASH Content Steering live: per-CDN segment requests, current pathway priority, and client-message verification per session or group</li></ul><h4>Further information</h4><p>For more information about the project, see</p><ul><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2\" target=\"_blank\">livesim2 Github project</a></li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki\" target=\"_blank\">livesim2 Github Wiki</a></li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki/Preparing-Content-for-livesim2\" target=\"_blank\">Preparing Content for livesim2</a></li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters\" target=\"_blank\">wiki list of url parameters</a></li><li><a href=\"https://github.com/orgs/Dash-Industry-Forum/projects/7\" target=\"_blank\">Github project for planning new features</a></li><li><a href=\"https://dashif.slack.com\" target=\"_blank\">The livesim channel in the DASH-IF slack</a></li></ul><p>Version: ")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var21 string
+		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(wi.Version)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 93, Col: 28}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</p><p><small>The gopher in the logo and favicon is adapted from the Go gopher, created by <a href=\"https://reneefrench.blogspot.com/\" target=\"_blank\">Renée French</a> and licensed under <a href=\"https://creativecommons.org/licenses/by/4.0/\" target=\"_blank\">CC BY 4.0</a>.</small></p></main></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

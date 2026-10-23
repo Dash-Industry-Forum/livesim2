@@ -1,0 +1,355 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1000 440" width="100%" height="100%">
+  <!-- The gopher is adapted from the Go gopher by Renée French (https://reneefrench.blogspot.com/), licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). -->
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="gopherBlue" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4a7dff" />
+      <stop offset="100%" stop-color="#2a63f6" />
+    </linearGradient>
+    <linearGradient id="steel" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#64748b" />
+      <stop offset="100%" stop-color="#475569" />
+    </linearGradient>
+    <radialGradient id="lampGlow">
+      <stop offset="0%" stop-color="#ef4444" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#ef4444" stop-opacity="0" />
+    </radialGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="125%" height="125%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000000" flood-opacity="0.35" />
+    </filter>
+    <clipPath id="lane1Clip"><rect x="438" y="212" width="404" height="48" /></clipPath>
+    <clipPath id="lane2Clip"><rect x="438" y="282" width="404" height="48" /></clipPath>
+    <clipPath id="lane3Clip"><rect x="438" y="352" width="404" height="48" /></clipPath>
+
+    <!-- The DASH-IF logo: three columns of full, half and quarter height rows (68 x 43) -->
+    <g id="dashif">
+      <rect x="2" y="2" width="20" height="20" fill="#2a63f6" />
+      <rect x="24" y="2" width="20" height="20" fill="#2a63f6" />
+      <rect x="46" y="2" width="20" height="20" fill="#2a63f6" />
+      <rect x="2" y="24" width="20" height="10" fill="#2a63f6" />
+      <rect x="24" y="24" width="20" height="10" fill="#2a63f6" />
+      <rect x="46" y="24" width="20" height="10" fill="#2a63f6" />
+      <rect x="2" y="36" width="20" height="5" fill="#2a63f6" />
+      <rect x="24" y="36" width="20" height="5" fill="#2a63f6" />
+      <rect x="46" y="36" width="20" height="5" fill="#2a63f6" />
+    </g>
+
+    <!-- A video segment: a film frame showing the DASH-IF logo, its border in the lane color -->
+    <g id="frame">
+      <rect x="0" y="0" width="48" height="34" rx="3" fill="#0b1220" stroke="currentColor" stroke-width="2" />
+      <g fill="#cbd5e1" opacity="0.8">
+        <rect x="5" y="2.5" width="4" height="3" rx="0.8" />
+        <rect x="13" y="2.5" width="4" height="3" rx="0.8" />
+        <rect x="21" y="2.5" width="4" height="3" rx="0.8" />
+        <rect x="29" y="2.5" width="4" height="3" rx="0.8" />
+        <rect x="37" y="2.5" width="4" height="3" rx="0.8" />
+        <rect x="5" y="28.5" width="4" height="3" rx="0.8" />
+        <rect x="13" y="28.5" width="4" height="3" rx="0.8" />
+        <rect x="21" y="28.5" width="4" height="3" rx="0.8" />
+        <rect x="29" y="28.5" width="4" height="3" rx="0.8" />
+        <rect x="37" y="28.5" width="4" height="3" rx="0.8" />
+      </g>
+      <rect x="4" y="7" width="40" height="20" rx="1" fill="#ffffff" />
+      <use href="#dashif" xlink:href="#dashif" transform="translate(10.4, 7.4) scale(0.4)" />
+    </g>
+
+    <!-- An MPD document -->
+    <g id="mpd">
+      <path d="M 0 0 L 22 0 L 30 8 L 30 38 L 0 38 Z" fill="#1e293b" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+      <path d="M 22 0 L 22 8 L 30 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+      <text x="15" y="24" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="9" font-weight="700" fill="currentColor" text-anchor="middle">MPD</text>
+      <rect x="5" y="29" width="20" height="2" rx="1" fill="currentColor" opacity="0.5" />
+    </g>
+
+    <!-- A gear, centered on 0,0 -->
+    <g id="gear">
+      <g fill="#94a3b8" stroke="#0f172a" stroke-width="2.5">
+        <rect x="-5" y="-31" width="10" height="12" rx="2" />
+        <rect x="-5" y="-31" width="10" height="12" rx="2" transform="rotate(40)" />
+        <rect x="-5" y="-31" width="10" height="12" rx="2" transform="rotate(80)" />
+        <rect x="-5" y="-31" width="10" height="12" rx="2" transform="rotate(120)" />
+        <rect x="-5" y="-31" width="10" height="12" rx="2" transform="rotate(160)" />
+        <rect x="-5" y="-31" width="10" height="12" rx="2" transform="rotate(200)" />
+        <rect x="-5" y="-31" width="10" height="12" rx="2" transform="rotate(240)" />
+        <rect x="-5" y="-31" width="10" height="12" rx="2" transform="rotate(280)" />
+        <rect x="-5" y="-31" width="10" height="12" rx="2" transform="rotate(320)" />
+      </g>
+      <circle r="23" fill="#94a3b8" stroke="#0f172a" stroke-width="2.5" />
+      <circle r="15" fill="none" stroke="#64748b" stroke-width="2" />
+      <circle r="6" fill="#1e293b" stroke="#0f172a" stroke-width="2" />
+    </g>
+    <clipPath id="pic"><rect x="0" y="0" width="160" height="90" /></clipPath>
+    <linearGradient id="ramp"><stop offset="0" stop-color="#000" /><stop offset="1" stop-color="#fff" /></linearGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4f86d0" /><stop offset="0.4" stop-color="#9cc3ea" /></linearGradient>
+    <!-- Test pictures in a 160 x 90 design space, from livesim-content -->
+    <g id="testpic"><rect x="0" y="0" width="20.5" height="90" fill="#f2f2f2" /><rect x="20" y="0" width="20.5" height="90" fill="#f2f200" /><rect x="40" y="0" width="20.5" height="90" fill="#00f2f2" /><rect x="60" y="0" width="20.5" height="90" fill="#00e000" /><rect x="80" y="0" width="20.5" height="90" fill="#f200f2" /><rect x="100" y="0" width="20.5" height="90" fill="#f20000" /><rect x="120" y="0" width="20.5" height="90" fill="#0000f2" /><rect x="140" y="0" width="20.5" height="90" fill="#111111" /><rect x="30" y="38" width="100" height="15" fill="#000" /><rect x="10" y="70" width="140" height="12" fill="url(#ramp)" /></g>
+    <g id="testpic48"><rect x="0" y="0" width="160" height="90" fill="#262626" /><rect x="0" y="0" width="20.3" height="52" fill="#666666" /><rect x="20" y="0" width="17.0" height="52" fill="#c0c0c0" /><rect x="36.7" y="0" width="16.9" height="52" fill="#c0c000" /><rect x="53.3" y="0" width="17.7" height="52" fill="#00c0c0" /><rect x="70.7" y="0" width="16.9" height="52" fill="#00c000" /><rect x="87.3" y="0" width="18.0" height="52" fill="#c000c0" /><rect x="105" y="0" width="17.0" height="52" fill="#c00000" /><rect x="121.7" y="0" width="17.3" height="52" fill="#0000c0" /><rect x="138.7" y="0" width="21.6" height="52" fill="#666666" /><rect x="0" y="52" width="20" height="5" fill="#00ffff" /><rect x="20" y="52" width="16.7" height="5" fill="#0c2a50" /><rect x="36.7" y="52" width="102" height="5" fill="#c0c0c0" /><rect x="138.7" y="52" width="21.3" height="5" fill="#0000ff" /><rect x="0" y="57" width="20" height="5" fill="#ffff00" /><rect x="20" y="57" width="16.7" height="5" fill="#3a1a6a" /><rect x="36.7" y="57" width="102" height="5" fill="url(#ramp)" /><rect x="138.7" y="57" width="21.3" height="5" fill="#ff0000" /><rect x="20" y="62" width="118.7" height="28" fill="#000" /><rect x="45" y="62" width="34" height="28" fill="#fff" /><rect x="59" y="5" width="41" height="8" fill="#000" /><text x="79.5" y="11.2" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="5.4" fill="#fff" text-anchor="middle">640x360@30fps</text><rect x="47.2" y="20.7" width="65.6" height="11.3" fill="#000" /><rect x="65" y="33.7" width="30" height="5.6" fill="#000" /><text x="80" y="38.2" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="4.6" fill="#fff" text-anchor="middle">300 kbit/s</text><rect x="47.2" y="41.7" width="65.6" height="5.6" fill="#000" /></g>
+    <g id="ad"><rect x="0" y="0" width="160" height="90" fill="url(#sky)" /><path d="M 0 30 C 30 22, 60 30, 90 26 C 120 22, 140 28, 160 26 L 160 50 L 0 50 Z" fill="#c8653a" /><path d="M 0 40 C 40 30, 80 38, 160 34 L 160 60 L 0 60 Z" fill="#d9773f" /><ellipse cx="78" cy="56" rx="58" ry="9" fill="#ece6da" /><path d="M 0 90 L 0 70 C 50 60, 100 66, 160 52 L 160 90 Z" fill="#e0844a" /><path d="M 90 90 C 105 75, 130 62, 160 58 L 160 90 Z" fill="#b9542b" /><g fill="#3b2a20"><circle cx="40" cy="57" r="1.6" /><circle cx="58" cy="55" r="1.3" /><circle cx="104" cy="58" r="1.5" /></g><rect x="4" y="4" width="54" height="22" rx="1.5" fill="#000" opacity="0.6" /><text x="7" y="12" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="6.5" font-weight="700" fill="#fff">Namibia Dunes Ad</text><text x="7" y="21" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="5.5" fill="#e2e8f0">640x360 24fps</text><rect x="128" y="5" width="27" height="13" rx="2.5" fill="#facc15" /><text x="141.5" y="15" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="9.5" font-weight="800" fill="#111" text-anchor="middle">AD</text></g>
+    <g id="holes" fill="#cbd5e1" opacity="0.8"><rect x="5" y="1.5" width="4" height="3" rx="0.8" /><rect x="5" y="33.5" width="4" height="3" rx="0.8" /><rect x="13" y="1.5" width="4" height="3" rx="0.8" /><rect x="13" y="33.5" width="4" height="3" rx="0.8" /><rect x="21" y="1.5" width="4" height="3" rx="0.8" /><rect x="21" y="33.5" width="4" height="3" rx="0.8" /><rect x="29" y="1.5" width="4" height="3" rx="0.8" /><rect x="29" y="33.5" width="4" height="3" rx="0.8" /><rect x="37" y="1.5" width="4" height="3" rx="0.8" /><rect x="37" y="33.5" width="4" height="3" rx="0.8" /><rect x="45" y="1.5" width="4" height="3" rx="0.8" /><rect x="45" y="33.5" width="4" height="3" rx="0.8" /></g>
+    <g id="seg11"><rect x="0" y="0" width="54" height="38" rx="3" fill="#0b1220" stroke="currentColor" stroke-width="2" /><use href="#holes" xlink:href="#holes" /><g transform="translate(4, 6) scale(0.2875, 0.2889)" clip-path="url(#pic)"><use href="#testpic" xlink:href="#testpic" /><text x="80" y="49.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">00:00:10:00</text></g></g>
+    <g id="seg12"><rect x="0" y="0" width="54" height="38" rx="3" fill="#0b1220" stroke="currentColor" stroke-width="2" /><use href="#holes" xlink:href="#holes" /><g transform="translate(4, 6) scale(0.2875, 0.2889)" clip-path="url(#pic)"><use href="#testpic" xlink:href="#testpic" /><text x="80" y="49.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">00:00:08:00</text></g></g>
+    <g id="seg13"><rect x="0" y="0" width="54" height="38" rx="3" fill="#0b1220" stroke="currentColor" stroke-width="2" /><use href="#holes" xlink:href="#holes" /><g transform="translate(4, 6) scale(0.2875, 0.2889)" clip-path="url(#pic)"><use href="#testpic" xlink:href="#testpic" /><text x="80" y="49.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">00:00:06:00</text></g></g>
+    <g id="seg14"><rect x="0" y="0" width="54" height="38" rx="3" fill="#0b1220" stroke="currentColor" stroke-width="2" /><use href="#holes" xlink:href="#holes" /><g transform="translate(4, 6) scale(0.2875, 0.2889)" clip-path="url(#pic)"><use href="#testpic" xlink:href="#testpic" /><text x="80" y="49.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">00:00:04:00</text></g></g>
+    <g id="seg15"><rect x="0" y="0" width="54" height="38" rx="3" fill="#0b1220" stroke="currentColor" stroke-width="2" /><use href="#holes" xlink:href="#holes" /><g transform="translate(4, 6) scale(0.2875, 0.2889)" clip-path="url(#pic)"><use href="#testpic" xlink:href="#testpic" /><text x="80" y="49.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">00:00:02:00</text></g></g>
+    <g id="seg21"><rect x="0" y="0" width="54" height="38" rx="3" fill="#0b1220" stroke="currentColor" stroke-width="2" /><use href="#holes" xlink:href="#holes" /><g transform="translate(4, 6) scale(0.2875, 0.2889)" clip-path="url(#pic)"><use href="#testpic48" xlink:href="#testpic48" /><text x="80" y="30.3" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#fff" text-anchor="middle">00:00:40:00</text><rect x="49.60" y="41.7" width="0.8" height="5.6" fill="#fff" /><rect x="84.85" y="41.7" width="0.8" height="5.6" fill="#fff" /></g></g>
+    <g id="seg22"><rect x="0" y="0" width="54" height="38" rx="3" fill="#0b1220" stroke="currentColor" stroke-width="2" /><use href="#holes" xlink:href="#holes" /><g transform="translate(4, 6) scale(0.2875, 0.2889)" clip-path="url(#pic)"><use href="#testpic48" xlink:href="#testpic48" /><text x="80" y="30.3" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#fff" text-anchor="middle">00:00:32:00</text><rect x="55.10" y="41.7" width="0.8" height="5.6" fill="#fff" /><rect x="90.35" y="41.7" width="0.8" height="5.6" fill="#fff" /></g></g>
+    <g id="seg23"><rect x="0" y="0" width="54" height="38" rx="3" fill="#0b1220" stroke="currentColor" stroke-width="2" /><use href="#holes" xlink:href="#holes" /><g transform="translate(4, 6) scale(0.2875, 0.2889)" clip-path="url(#pic)"><use href="#testpic48" xlink:href="#testpic48" /><text x="80" y="30.3" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#fff" text-anchor="middle">00:00:24:00</text><rect x="60.60" y="41.7" width="0.8" height="5.6" fill="#fff" /><rect x="95.85" y="41.7" width="0.8" height="5.6" fill="#fff" /></g></g>
+    <g id="seg24"><rect x="0" y="0" width="54" height="38" rx="3" fill="#0b1220" stroke="currentColor" stroke-width="2" /><use href="#holes" xlink:href="#holes" /><g transform="translate(4, 6) scale(0.2875, 0.2889)" clip-path="url(#pic)"><use href="#testpic48" xlink:href="#testpic48" /><text x="80" y="30.3" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#fff" text-anchor="middle">00:00:16:00</text><rect x="66.10" y="41.7" width="0.8" height="5.6" fill="#fff" /><rect x="101.35" y="41.7" width="0.8" height="5.6" fill="#fff" /></g></g>
+    <g id="seg25"><rect x="0" y="0" width="54" height="38" rx="3" fill="#0b1220" stroke="currentColor" stroke-width="2" /><use href="#holes" xlink:href="#holes" /><g transform="translate(4, 6) scale(0.2875, 0.2889)" clip-path="url(#pic)"><use href="#testpic48" xlink:href="#testpic48" /><text x="80" y="30.3" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#fff" text-anchor="middle">00:00:08:00</text><rect x="71.60" y="41.7" width="0.8" height="5.6" fill="#fff" /><rect x="106.85" y="41.7" width="0.8" height="5.6" fill="#fff" /></g></g>
+    <g id="seg31"><rect x="0" y="0" width="54" height="38" rx="3" fill="#0b1220" stroke="currentColor" stroke-width="2" /><use href="#holes" xlink:href="#holes" /><g transform="translate(4, 6) scale(0.2875, 0.2889)" clip-path="url(#pic)"><use href="#testpic" xlink:href="#testpic" /><text x="80" y="49.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">00:00:10:00</text></g></g>
+    <g id="seg32"><rect x="0" y="0" width="54" height="38" rx="3" fill="#0b1220" stroke="currentColor" stroke-width="2" /><use href="#holes" xlink:href="#holes" /><g transform="translate(4, 6) scale(0.2875, 0.2889)" clip-path="url(#pic)"><use href="#ad" xlink:href="#ad" /></g></g>
+    <g id="seg33"><rect x="0" y="0" width="54" height="38" rx="3" fill="#0b1220" stroke="currentColor" stroke-width="2" /><use href="#holes" xlink:href="#holes" /><g transform="translate(4, 6) scale(0.2875, 0.2889)" clip-path="url(#pic)"><use href="#ad" xlink:href="#ad" /></g></g>
+    <g id="seg34"><rect x="0" y="0" width="54" height="38" rx="3" fill="#0b1220" stroke="currentColor" stroke-width="2" /><use href="#holes" xlink:href="#holes" /><g transform="translate(4, 6) scale(0.2875, 0.2889)" clip-path="url(#pic)"><use href="#testpic" xlink:href="#testpic" /><text x="80" y="49.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">00:00:04:00</text></g></g>
+    <g id="seg35"><rect x="0" y="0" width="54" height="38" rx="3" fill="#0b1220" stroke="currentColor" stroke-width="2" /><use href="#holes" xlink:href="#holes" /><g transform="translate(4, 6) scale(0.2875, 0.2889)" clip-path="url(#pic)"><use href="#testpic" xlink:href="#testpic" /><text x="80" y="49.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">00:00:02:00</text></g></g>
+  </defs>
+
+  <!-- Rounded Background Card -->
+  <rect x="8" y="8" width="984" height="424" rx="24" fill="url(#bgGrad)" stroke="#334155" stroke-width="2" />
+
+  <!-- ==================== TITLE ==================== -->
+  <text x="48" y="108" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="84" font-weight="800" letter-spacing="-1.5">
+    <tspan fill="#f8fafc">live</tspan><tspan fill="#3d7bff">sim2</tspan>
+  </text>
+  <text x="51" y="150" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="24" font-weight="700" fill="#7fd5ea" letter-spacing="2.5">DASH LIVE SOURCE SIMULATOR</text>
+
+  <!-- Top right pills: <MPD>, segments, LIVE -->
+  <g transform="translate(626, 44)">
+    <rect x="0" y="0" width="88" height="32" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="2" />
+    <text x="44" y="21" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16" font-weight="700" fill="#38bdf8" text-anchor="middle">&lt;MPD&gt;</text>
+    <g transform="translate(104, 4)">
+      <rect x="0" y="0" width="28" height="24" rx="4" fill="#0284c7" />
+      <rect x="34" y="0" width="28" height="24" rx="4" fill="#0ea5e9" />
+      <rect x="68" y="0" width="28" height="24" rx="4" fill="#38bdf8" />
+      <rect x="102" y="0" width="28" height="24" rx="4" fill="#7dd3fc" />
+    </g>
+    <g transform="translate(252, 0)">
+      <rect x="0" y="0" width="80" height="32" rx="16" fill="#1e293b" stroke="#ef4444" stroke-width="2" />
+      <circle cx="20" cy="16" r="5" fill="#ef4444">
+        <animate attributeName="opacity" values="1;0.25;1" dur="1.6s" repeatCount="indefinite" />
+      </circle>
+      <text x="32" y="21" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="700" fill="#fca5a5" letter-spacing="0.8">LIVE</text>
+    </g>
+  </g>
+
+  <!-- ==================== LANES: URL -> MPD + segments -> client ==================== -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="600">
+    <!-- Lane 1: /livesim2/segtimeline_1/testpic_2s/… -->
+    <g color="#38bdf8">
+      <line x1="436" y1="236" x2="858" y2="236" stroke="currentColor" stroke-width="2" opacity="0.45" />
+      <text x="444" y="209" fill="currentColor">/livesim2/segtimeline_1/testpic_2s/…</text>
+      <g clip-path="url(#lane1Clip)">
+        <g>
+          <animateTransform attributeName="transform" type="translate" from="0 0" to="360 0" dur="12s" begin="0s" repeatCount="indefinite" />
+          <use href="#mpd" xlink:href="#mpd" x="88" y="217" />
+          <use href="#seg11" xlink:href="#seg11" x="136" y="217" />
+          <use href="#seg12" xlink:href="#seg12" x="196" y="217" />
+          <use href="#seg13" xlink:href="#seg13" x="256" y="217" />
+          <use href="#seg14" xlink:href="#seg14" x="316" y="217" />
+          <use href="#seg15" xlink:href="#seg15" x="376" y="217" />
+          <use href="#mpd" xlink:href="#mpd" x="448" y="217" />
+          <use href="#seg11" xlink:href="#seg11" x="496" y="217" />
+          <use href="#seg12" xlink:href="#seg12" x="556" y="217" />
+          <use href="#seg13" xlink:href="#seg13" x="616" y="217" />
+          <use href="#seg14" xlink:href="#seg14" x="676" y="217" />
+          <use href="#seg15" xlink:href="#seg15" x="736" y="217" />
+          <use href="#mpd" xlink:href="#mpd" x="808" y="217" />
+        </g>
+      </g>
+      <path d="M 846 229 L 860 236 L 846 243 Z" fill="currentColor" />
+    </g>
+    <!-- Lane 2: /livesim2/chunkdur_1/ato_7/testpic4_8s/… -->
+    <g color="#22c55e">
+      <line x1="436" y1="306" x2="858" y2="306" stroke="currentColor" stroke-width="2" opacity="0.45" />
+      <text x="444" y="279" fill="currentColor">/livesim2/chunkdur_1/ato_7/testpic4_8s/…</text>
+      <g clip-path="url(#lane2Clip)">
+        <g>
+          <animateTransform attributeName="transform" type="translate" from="0 0" to="360 0" dur="12s" begin="-4s" repeatCount="indefinite" />
+          <use href="#mpd" xlink:href="#mpd" x="88" y="287" />
+          <use href="#seg21" xlink:href="#seg21" x="136" y="287" />
+          <use href="#seg22" xlink:href="#seg22" x="196" y="287" />
+          <use href="#seg23" xlink:href="#seg23" x="256" y="287" />
+          <use href="#seg24" xlink:href="#seg24" x="316" y="287" />
+          <use href="#seg25" xlink:href="#seg25" x="376" y="287" />
+          <use href="#mpd" xlink:href="#mpd" x="448" y="287" />
+          <use href="#seg21" xlink:href="#seg21" x="496" y="287" />
+          <use href="#seg22" xlink:href="#seg22" x="556" y="287" />
+          <use href="#seg23" xlink:href="#seg23" x="616" y="287" />
+          <use href="#seg24" xlink:href="#seg24" x="676" y="287" />
+          <use href="#seg25" xlink:href="#seg25" x="736" y="287" />
+          <use href="#mpd" xlink:href="#mpd" x="808" y="287" />
+        </g>
+      </g>
+      <path d="M 846 299 L 860 306 L 846 313 Z" fill="currentColor" />
+    </g>
+    <!-- Lane 3: /livesim2/sgai_p60:20/testpic_2s/… -->
+    <g color="#f59e0b">
+      <line x1="436" y1="376" x2="858" y2="376" stroke="currentColor" stroke-width="2" opacity="0.45" />
+      <text x="444" y="349" fill="currentColor">/livesim2/sgai_p60:20/testpic_2s/…</text>
+      <g clip-path="url(#lane3Clip)">
+        <g>
+          <animateTransform attributeName="transform" type="translate" from="0 0" to="360 0" dur="12s" begin="-8s" repeatCount="indefinite" />
+          <use href="#mpd" xlink:href="#mpd" x="88" y="357" />
+          <use href="#seg31" xlink:href="#seg31" x="136" y="357" />
+          <use href="#seg32" xlink:href="#seg32" x="196" y="357" />
+          <use href="#seg33" xlink:href="#seg33" x="256" y="357" />
+          <use href="#seg34" xlink:href="#seg34" x="316" y="357" />
+          <use href="#seg35" xlink:href="#seg35" x="376" y="357" />
+          <use href="#mpd" xlink:href="#mpd" x="448" y="357" />
+          <use href="#seg31" xlink:href="#seg31" x="496" y="357" />
+          <use href="#seg32" xlink:href="#seg32" x="556" y="357" />
+          <use href="#seg33" xlink:href="#seg33" x="616" y="357" />
+          <use href="#seg34" xlink:href="#seg34" x="676" y="357" />
+          <use href="#seg35" xlink:href="#seg35" x="736" y="357" />
+          <use href="#mpd" xlink:href="#mpd" x="808" y="357" />
+        </g>
+      </g>
+      <path d="M 846 369 L 860 376 L 846 383 Z" fill="currentColor" />
+    </g>
+  </g>
+
+  <!-- ==================== CLIENTS: each shows what its lane delivers ==================== -->
+  <!-- TV -->
+  <g>
+    <rect x="872" y="206" width="96" height="58" rx="5" fill="#0b1220" stroke="#94a3b8" stroke-width="3" />
+    <g transform="translate(878, 212) scale(0.5250, 0.5111)" clip-path="url(#pic)"><use href="#testpic" xlink:href="#testpic" /><text x="80" y="49.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">00:00:02:00</text></g>
+    <rect x="913" y="264" width="14" height="8" fill="#94a3b8" />
+    <rect x="898" y="272" width="44" height="4" rx="2" fill="#94a3b8" />
+  </g>
+  <!-- Laptop -->
+  <g>
+    <rect x="880" y="280" width="80" height="50" rx="4" fill="#0b1220" stroke="#94a3b8" stroke-width="3" />
+    <g transform="translate(886, 286) scale(0.4250, 0.4222)" clip-path="url(#pic)"><use href="#testpic48" xlink:href="#testpic48" /><text x="80" y="30.3" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#fff" text-anchor="middle">00:00:08:00</text><rect x="71.60" y="41.7" width="0.8" height="5.6" fill="#fff" /><rect x="106.85" y="41.7" width="0.8" height="5.6" fill="#fff" /></g>
+    <path d="M 870 330 L 970 330 L 964 338 L 876 338 Z" fill="#94a3b8" />
+  </g>
+  <!-- Phone -->
+  <g>
+    <rect x="900" y="346" width="40" height="70" rx="7" fill="#0b1220" stroke="#94a3b8" stroke-width="3" />
+    <g transform="translate(905, 372) scale(0.1875, 0.1889)" clip-path="url(#pic)"><use href="#ad" xlink:href="#ad" /></g>
+    <rect x="913" y="351" width="14" height="2.5" rx="1.25" fill="#334155" />
+  </g>
+
+  <!-- ==================== MACHINE ==================== -->
+  <g filter="url(#shadow)">
+    <!-- LIVE lamp -->
+    <circle cx="338" cy="190" r="28" fill="url(#lampGlow)">
+      <animate attributeName="opacity" values="1;0.3;1" dur="1.6s" repeatCount="indefinite" />
+    </circle>
+    <rect x="328" y="194" width="20" height="14" rx="2" fill="#334155" stroke="#0f172a" stroke-width="3" />
+    <path d="M 326 196 A 12 12 0 0 1 350 196 Z" fill="#ef4444" stroke="#0f172a" stroke-width="3" stroke-linejoin="round" />
+
+    <!-- Body -->
+    <rect x="252" y="206" width="172" height="204" rx="14" fill="url(#steel)" stroke="#0f172a" stroke-width="4" />
+    <rect x="266" y="220" width="144" height="176" rx="8" fill="#1e293b" stroke="#0f172a" stroke-width="2" />
+    <g fill="#94a3b8">
+      <circle cx="260" cy="214" r="2.5" /><circle cx="416" cy="214" r="2.5" />
+      <circle cx="260" cy="402" r="2.5" /><circle cx="416" cy="402" r="2.5" />
+    </g>
+
+    <!-- Output ports, one per lane -->
+    <g stroke="#0f172a" stroke-width="2.5">
+      <rect x="418" y="227" width="16" height="18" rx="2" fill="#64748b" />
+      <rect x="418" y="297" width="16" height="18" rx="2" fill="#64748b" />
+      <rect x="418" y="367" width="16" height="18" rx="2" fill="#64748b" />
+    </g>
+    <rect x="431" y="225" width="7" height="22" rx="2" fill="#38bdf8" stroke="#0f172a" stroke-width="2" />
+    <rect x="431" y="295" width="7" height="22" rx="2" fill="#22c55e" stroke="#0f172a" stroke-width="2" />
+    <rect x="431" y="365" width="7" height="22" rx="2" fill="#f59e0b" stroke="#0f172a" stroke-width="2" />
+
+    <!-- UTC clock: livesim2 maps wall-clock time to segments -->
+    <circle cx="338" cy="258" r="26" fill="#f8fafc" stroke="#0f172a" stroke-width="3" />
+    <g stroke="#0f172a" stroke-width="2.2" stroke-linecap="round">
+      <line x1="338" y1="236" x2="338" y2="241" />
+      <line x1="360" y1="258" x2="355" y2="258" />
+      <line x1="338" y1="280" x2="338" y2="275" />
+      <line x1="316" y1="258" x2="321" y2="258" />
+    </g>
+    <text x="338" y="274" font-family="system-ui, -apple-system, sans-serif" font-size="7.5" font-weight="800" fill="#2a63f6" text-anchor="middle" letter-spacing="0.5">UTC</text>
+    <line x1="338" y1="258" x2="338" y2="243" stroke="#0f172a" stroke-width="3" stroke-linecap="round" />
+    <line x1="338" y1="258" x2="350" y2="253" stroke="#0f172a" stroke-width="2.2" stroke-linecap="round" />
+    <line x1="338" y1="258" x2="328" y2="268" stroke="#ef4444" stroke-width="1.4" stroke-linecap="round">
+      <animateTransform attributeName="transform" type="rotate" from="0 338 258" to="360 338 258" dur="60s" repeatCount="indefinite" />
+    </line>
+    <circle cx="338" cy="258" r="2.6" fill="#0f172a" />
+
+    <!-- VoD assets that the machine loops -->
+    <text x="338" y="299" font-family="system-ui, -apple-system, sans-serif" font-size="8.5" font-weight="800" fill="#94a3b8" text-anchor="middle" letter-spacing="1.6">VOD ASSETS</text>
+    <rect x="272" y="306" width="132" height="24" rx="4" fill="#0b1220" stroke="#38bdf8" stroke-width="1.5" />
+    <g transform="translate(276, 309.5) scale(0.1875, 0.1889)" clip-path="url(#pic)"><use href="#testpic" xlink:href="#testpic" /><text x="80" y="49.5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" font-weight="700" fill="#fff" text-anchor="middle">00:00:00:00</text></g>
+    <text x="312" y="322" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" font-weight="600" fill="#e2e8f0">testpic_2s</text>
+    <g transform="translate(392, 318)"><g><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="8s" repeatCount="indefinite" /><path d="M 4.6 -2 A 5 5 0 1 1 1.5 -4.8" fill="none" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round" /><path d="M 0 -7.6 L 4.2 -4.6 L -0.2 -2.2 Z" fill="#38bdf8" /></g></g>
+    <rect x="272" y="334" width="132" height="24" rx="4" fill="#0b1220" stroke="#22c55e" stroke-width="1.5" />
+    <g transform="translate(276, 337.5) scale(0.1875, 0.1889)" clip-path="url(#pic)"><use href="#testpic48" xlink:href="#testpic48" /><text x="80" y="30.3" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#fff" text-anchor="middle">00:00:00:00</text><rect x="46.85" y="41.7" width="0.8" height="5.6" fill="#fff" /><rect x="77.10" y="41.7" width="0.8" height="5.6" fill="#fff" /></g>
+    <text x="312" y="350" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" font-weight="600" fill="#e2e8f0">testpic4_8s</text>
+    <g transform="translate(392, 346)"><g><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="8s" repeatCount="indefinite" /><path d="M 4.6 -2 A 5 5 0 1 1 1.5 -4.8" fill="none" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" /><path d="M 0 -7.6 L 4.2 -4.6 L -0.2 -2.2 Z" fill="#22c55e" /></g></g>
+    <rect x="272" y="362" width="132" height="24" rx="4" fill="#0b1220" stroke="#f59e0b" stroke-width="1.5" />
+    <g transform="translate(276, 365.5) scale(0.1875, 0.1889)" clip-path="url(#pic)"><use href="#ad" xlink:href="#ad" /></g>
+    <text x="312" y="378" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" font-weight="600" fill="#e2e8f0">namibia_ad</text>
+    <g transform="translate(392, 374)"><g><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="8s" repeatCount="indefinite" /><path d="M 4.6 -2 A 5 5 0 1 1 1.5 -4.8" fill="none" stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round" /><path d="M 0 -7.6 L 4.2 -4.6 L -0.2 -2.2 Z" fill="#f59e0b" /></g></g>
+
+    <!-- Crank: hub on the left side, bar down to the grip the gopher turns -->
+    <line x1="256" y1="312" x2="221" y2="338" stroke="#0f172a" stroke-width="15" stroke-linecap="round" />
+    <line x1="256" y1="312" x2="221" y2="338" stroke="#cbd5e1" stroke-width="8" stroke-linecap="round" />
+    <circle cx="256" cy="312" r="13" fill="#94a3b8" stroke="#0f172a" stroke-width="3.5" />
+    <circle cx="256" cy="312" r="4.5" fill="#0f172a" />
+    <rect x="209" y="315" width="16" height="48" rx="8" fill="#f59e0b" stroke="#0f172a" stroke-width="3" />
+  </g>
+
+  <!-- Turning arrow around the crank hub -->
+  <path d="M 217.9 294.3 A 42 42 0 0 1 241.6 272.5" fill="none" stroke="#7fd5ea" stroke-width="3" stroke-linecap="round" opacity="0.85" />
+  <path d="M 249.1 269.8 L 241.8 278.8 L 237.6 267.6 Z" fill="#7fd5ea" opacity="0.85" />
+
+  <!-- ==================== GOPHER MASCOT ==================== -->
+  <g transform="translate(40, 182) scale(0.95)" filter="url(#shadow)">
+    <!-- Ears -->
+    <circle cx="38" cy="42" r="18" fill="#2a63f6" stroke="#0f172a" stroke-width="4.5" />
+    <circle cx="38" cy="42" r="8" fill="#1d4ed8" />
+    <circle cx="152" cy="42" r="18" fill="#2a63f6" stroke="#0f172a" stroke-width="4.5" />
+    <circle cx="152" cy="42" r="8" fill="#1d4ed8" />
+
+    <!-- Body -->
+    <path d="M 28 110 C 28 32, 162 32, 162 110 L 168 215 C 168 235, 148 242, 95 242 C 42 242, 22 235, 22 215 Z"
+          fill="url(#gopherBlue)" stroke="#0f172a" stroke-width="5" />
+    <!-- Belly markings in the shape of the DASH-IF logo -->
+    <g fill="#ffffff">
+      <rect x="55" y="156" width="24" height="24" rx="3" />
+      <rect x="83" y="156" width="24" height="24" rx="3" />
+      <rect x="111" y="156" width="24" height="24" rx="3" />
+      <rect x="55" y="184" width="24" height="12" rx="2.5" />
+      <rect x="83" y="184" width="24" height="12" rx="2.5" />
+      <rect x="111" y="184" width="24" height="12" rx="2.5" />
+      <rect x="55" y="200" width="24" height="6" rx="2" />
+      <rect x="83" y="200" width="24" height="6" rx="2" />
+      <rect x="111" y="200" width="24" height="6" rx="2" />
+    </g>
+
+    <!-- Feet -->
+    <ellipse cx="52" cy="238" rx="18" ry="10" fill="#e2d1b5" stroke="#0f172a" stroke-width="4" />
+    <ellipse cx="138" cy="238" rx="18" ry="10" fill="#e2d1b5" stroke="#0f172a" stroke-width="4" />
+
+    <!-- Eyes, looking right toward the machine -->
+    <circle cx="67" cy="88" r="26" fill="#ffffff" stroke="#0f172a" stroke-width="4.5" />
+    <circle cx="123" cy="88" r="26" fill="#ffffff" stroke="#0f172a" stroke-width="4.5" />
+    <circle cx="77" cy="86" r="10" fill="#0f172a" />
+    <circle cx="80" cy="82" r="3.5" fill="#ffffff" />
+    <circle cx="133" cy="86" r="10" fill="#0f172a" />
+    <circle cx="136" cy="82" r="3.5" fill="#ffffff" />
+
+    <!-- Snout & Teeth -->
+    <rect x="83" y="118" width="11" height="16" rx="2.5" fill="#ffffff" stroke="#0f172a" stroke-width="3.5" />
+    <rect x="95" y="118" width="11" height="16" rx="2.5" fill="#ffffff" stroke="#0f172a" stroke-width="3.5" />
+    <ellipse cx="95" cy="114" rx="22" ry="12" fill="#e2d1b5" stroke="#0f172a" stroke-width="4" />
+    <ellipse cx="95" cy="108" rx="10" ry="6" fill="#0f172a" />
+
+    <!-- Left Arm -->
+    <path d="M 26 142 C 8 155, 12 182, 34 185" fill="#2a63f6" stroke="#0f172a" stroke-width="4.5" stroke-linecap="round" />
+  </g>
+
+
+  <!-- Right arm, gripping the crank handle -->
+  <path d="M 190 318 C 199 326, 206 333, 214 338" fill="none" stroke="#0f172a" stroke-width="24" stroke-linecap="round" />
+  <path d="M 190 318 C 199 326, 206 333, 214 338" fill="none" stroke="#2a63f6" stroke-width="15" stroke-linecap="round" />
+  <circle cx="217" cy="339" r="11" fill="#2a63f6" stroke="#0f172a" stroke-width="4" />
+</svg>

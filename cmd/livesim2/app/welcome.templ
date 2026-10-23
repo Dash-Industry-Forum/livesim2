@@ -13,12 +13,19 @@ templ welcomePage(wi welcomeInfo) {
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<link rel="stylesheet" href={ wi.Host + "/static/pico.min.css" }/>
 			<link rel="stylesheet" href={ wi.Host + "/static/custom.css" }/>
+			<link rel="icon" href={ wi.Host + "/static/favicon.svg" } type="image/svg+xml"/>
+			<meta property="og:title" content="livesim2"/>
+			<meta property="og:description" content="DASH live source simulator: wall-clock synchronized live DASH streams from VoD assets"/>
+			<meta property="og:image" content={ wi.Host + "/static/social-preview.png" }/>
+			<meta name="twitter:card" content="summary_large_image"/>
 			<title>livesim2</title>
 		</head>
 		<body>
 			<main class="container">
 				<hgroup>
-					<h1>Welcome to livesim2!</h1>
+					<h1>
+						<img src={ wi.Host + "/static/livesim2-logo-animated.svg" } alt="livesim2 – DASH Live Source Simulator" width="720" height="317"/>
+					</h1>
 					<p>Running at { wi.Host }</p>
 				</hgroup>
 				<p>
@@ -84,6 +91,13 @@ templ welcomePage(wi welcomeInfo) {
 					<li><a href="https://dashif.slack.com" target="_blank">The livesim channel in the DASH-IF slack</a></li>
 				</ul>
 				<p>Version: { wi.Version }</p>
+				<p>
+					<small>
+						The gopher in the logo and favicon is adapted from the Go gopher, created by
+						<a href="https://reneefrench.blogspot.com/" target="_blank">Renée French</a> and licensed under
+						<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC BY 4.0</a>.
+					</small>
+				</p>
 			</main>
 		</body>
 	</html>
