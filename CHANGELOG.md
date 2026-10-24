@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The MPD with the `Location` now has a `@publishTime` one second earlier (#391).
 - `/assets` offered MPDs that cannot be made live, such as those with side-loaded subtitles, and their live
   URLs gave 500. They are now marked as VoD only, `/urlgen` leaves them out, and their live URLs give 404 (#392).
+- In SegmentTimeline modes, an AdaptationSet with a BaseURL to another asset, such as the 2 s video of
+  `testpic_6s/mixeddur.mpd`, got the timeline of its own asset. It now gets that of the other asset (#393).
 
 ## [1.15.2] - 2026-10-23
 

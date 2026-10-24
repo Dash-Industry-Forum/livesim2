@@ -584,3 +584,78 @@ func TestMPDNotLive(t *testing.T) {
 	_, err = LiveMPD(a, "missing.mpd", NewResponseConfig(), nil, 100_000)
 	require.ErrorIs(t, err, errNotFound)
 }
+
+// mixedDurMPD is like testpic_6s/mixeddur.mpd in livesim-content: 6 s audio segments of its
+// own asset, and 2 s video segments of testpic_2s by a BaseURL.
+const mixedDurMPD = `<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" profiles="urn:mpeg:dash:profile:isoff-live:2011" type="static"
+  mediaPresentationDuration="PT12S" minBufferTime="PT2S">
+  <Period id="p0" start="PT0S">
+    <AdaptationSet contentType="audio" mimeType="audio/mp4" lang="en" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate startNumber="1" initialization="$RepresentationID$/init.mp4" duration="6" media="$RepresentationID$/$Number$.m4s"/>
+      <Representation id="A48" codecs="mp4a.40.2" bandwidth="48000" audioSamplingRate="48000"/>
+    </AdaptationSet>
+    <AdaptationSet contentType="video" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1">
+      <BaseURL>../testpic_2s/</BaseURL>
+      <SegmentTemplate startNumber="1" initialization="$RepresentationID$/init.mp4" duration="2" media="$RepresentationID$/$Number$.m4s"/>
+      <Representation id="V300" codecs="avc1.64001e" bandwidth="300000" width="640" height="360" frameRate="30"/>
+    </AdaptationSet>
+  </Period>
+</MPD>`
+
+// TestBaseURLOtherAsset checks that an AdaptationSet whose BaseURL points to another asset, as
+// the video of testpic_6s/mixeddur.mpd does, gets the SegmentTimeline of that asset, which makes
+// its segments, and that the other AdaptationSets keep that of their own asset (#393).
+func TestBaseURLOtherAsset(t *testing.T) {
+	base := os.DirFS("testdata/assets")
+	vodFS := fstest.MapFS{}
+	for _, dir := range []string{"testpic_2s", "testpic_6s"} {
+		require.NoError(t, fs.WalkDir(base, dir, func(p string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return err
+			}
+			data, err := fs.ReadFile(base, p)
+			vodFS[p] = &fstest.MapFile{Data: data}
+			return err
+		}))
+	}
+	vodFS["testpic_6s/mixeddur.mpd"] = &fstest.MapFile{Data: []byte(mixedDurMPD)}
+	am := newAssetMgr(vodFS, "", false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+	a6, ok := am.findAsset("testpic_6s")
+	require.True(t, ok)
+	a2, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+	require.Empty(t, a6.mpdNotLive["mixeddur.mpd"])
+	require.Empty(t, a6.repConflicts("mixeddur.mpd"), "the video Representation is that of testpic_2s")
+
+	template := func(a *asset, mpdName string, cfg *ResponseConfig, nowMS int, contentType string) *m.SegmentTemplateType {
+		t.Helper()
+		mpd, err := LiveMPD(a, mpdName, cfg, nil, nowMS)
+		require.NoError(t, err)
+		for _, as := range mpd.Periods[0].AdaptationSets {
+			if string(as.ContentType) == contentType {
+				return as.SegmentTemplate
+			}
+		}
+		t.Fatalf("no %s AdaptationSet", contentType)
+		return nil
+	}
+	for _, mode := range []SegTimelineMode{SegTimelineModeTime, SegTimelineModeNr} {
+		for _, nowMS := range []int{100_000, 1_000_000} {
+			cfg := NewResponseConfig()
+			cfg.SegTimelineMode = mode
+			for _, c := range []struct {
+				contentType string
+				a           *asset
+			}{{"video", a2}, {"audio", a6}} {
+				want := template(c.a, "Manifest.mpd", cfg, nowMS, c.contentType)
+				got := template(a6, "mixeddur.mpd", cfg, nowMS, c.contentType)
+				desc := fmt.Sprintf("%s %s at %dms", mode, c.contentType, nowMS)
+				require.Equal(t, want.GetTimescale(), got.GetTimescale(), desc)
+				require.Equal(t, want.StartNumber, got.StartNumber, desc)
+				require.Equal(t, want.SegmentTimeline.S, got.SegmentTimeline.S, desc)
+			}
+		}
+	}
+}

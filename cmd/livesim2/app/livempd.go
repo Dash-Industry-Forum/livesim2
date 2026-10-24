@@ -230,6 +230,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		}
 	}
 	var refSegEntries segEntries
+	otherPublishS := 0.0 // For AdaptationSets with segments in another asset
 	for asIdx, as := range adaptationSets {
 		if as.SegmentTemplate != nil {
 			as.SegmentTemplate.EndNumber = nil // Never output endNumber
@@ -410,32 +411,49 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		if err != nil {
 			return nil, err
 		}
+		// The segments of an AdaptationSet with a BaseURL to another asset come from that asset.
+		segAsset, segWTimes := a, wTimes
+		if target, ok := baseURLAssetPath(a.AssetPath, as); ok {
+			segAsset = a.baseURLAssets[target]
+			segWTimes = calcWrapTimes(segAsset, cfg, endTimeMS, *mpd.TimeShiftBufferDepth)
+		}
 		var se segEntries
 		if asIdx == 0 {
-			// Assume that first representation is as good as any, so can be reference
-			var err error
-			refSegEntries, err = a.generateTimelineEntries(as.Representations[0].Id, wTimes, atoMS, explicitChunkDurS)
+			// Assume that first representation is as good as any, so can be reference.
+			// Audio follows the reference representation of the asset that makes its segments.
+			refID := as.Representations[0].Id
+			if segAsset != a {
+				refID = a.refRep.ID
+			}
+			refSegEntries, err = a.generateTimelineEntries(refID, wTimes, atoMS, explicitChunkDurS)
 			if err != nil {
 				return nil, err
 			}
+		}
+		switch {
+		case asIdx == 0 && segAsset == a:
 			se = refSegEntries
-		} else {
-			switch as.ContentType {
-			case "video", "text", "image":
-				var err error
-				se, err = a.generateTimelineEntries(as.Representations[0].Id, wTimes, atoMS, explicitChunkDurS)
+		case as.ContentType == "video", as.ContentType == "text", as.ContentType == "image",
+			asIdx == 0 && as.ContentType == "audio":
+			se, err = segAsset.generateTimelineEntries(as.Representations[0].Id, segWTimes, atoMS, explicitChunkDurS)
+		case as.ContentType == "audio":
+			ref := refSegEntries
+			if segAsset != a {
+				ref, err = segAsset.generateTimelineEntries(segAsset.refRep.ID, segWTimes, atoMS, explicitChunkDurS)
 				if err != nil {
 					return nil, err
 				}
-			case "audio":
-				var err error
-				se, err = a.generateTimelineEntriesFromRef(refSegEntries, as.Representations[0].Id, explicitChunkDurS)
-				if err != nil {
-					return nil, err
-				}
-			default:
-				return nil, fmt.Errorf("unknown content type %s", as.ContentType)
 			}
+			se, err = segAsset.generateTimelineEntriesFromRef(ref, as.Representations[0].Id, explicitChunkDurS)
+		default:
+			return nil, fmt.Errorf("unknown content type %s", as.ContentType)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if segAsset != a {
+			// Its segments end at other times than those of the reference.
+			otherPublishS = max(otherPublishS, calcPublishTime(cfg, se.lsi))
 		}
 
 		templateType := cfg.liveMPDType()
@@ -444,12 +462,12 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		}
 		switch templateType {
 		case timeLineTime, timeLineNumber:
-			err := adjustAdaptationSetForTimeline(cfg, se, as, refSegEntries, a)
+			err := adjustAdaptationSetForTimeline(cfg, se, as, refSegEntries, segAsset)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASFor %s: %w", templateType, err)
 			}
 		case segmentNumber:
-			err := adjustAdaptationSetForSegmentNumber(cfg, a, as, explicitChunkDurS)
+			err := adjustAdaptationSetForSegmentNumber(cfg, segAsset, as, explicitChunkDurS)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForSegmentNumber: %w", err)
 			}
@@ -460,7 +478,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 	// Set from the MPD type, since image AdaptationSets always use $Number$
 	// MPD EventStreams change with time too, and each change needs a new publishTime.
 	eventsChangeS := float64(eventStreamsChangeS(cfg, endTimeMS))
-	mpd.PublishTime = publishTime(cfg, max(calcPublishTime(cfg, refSegEntries.lsi), eventsChangeS))
+	mpd.PublishTime = publishTime(cfg, max(calcPublishTime(cfg, refSegEntries.lsi), otherPublishS, eventsChangeS))
 	if maxSegDur := maxLiveSegmentDuration(a, period); maxSegDur != nil {
 		mpd.MaxSegmentDuration = maxSegDur
 	}
