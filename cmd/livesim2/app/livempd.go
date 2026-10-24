@@ -737,6 +737,12 @@ func splitPeriod(mpd *m.MPD, a *asset, cfg *ResponseConfig, wTimes wrapTimes) er
 		}
 		periods = append(periods, p)
 	}
+	// A SegmentTimeline needs at least one S (ISO/IEC 23009-1 5.3.9.6.1), so a new Period is added
+	// once its first segments are complete, as a new S is within a Period. Until then, the
+	// timeline of the previous Period ends at the boundary.
+	if len(periods) > 1 && hasEmptySegmentTimeline(periods[len(periods)-1]) {
+		periods = periods[:len(periods)-1]
+	}
 	mpd.Periods = nil
 	for i, p := range periods {
 		if cfg.XlinkPeriods && cfg.PeriodId == "" && i < len(periods)-1 {
@@ -753,6 +759,16 @@ func splitPeriod(mpd *m.MPD, a *asset, cfg *ResponseConfig, wTimes wrapTimes) er
 		}
 	}
 	return nil
+}
+
+// hasEmptySegmentTimeline returns true if an AdaptationSet of p has a SegmentTimeline without S elements.
+func hasEmptySegmentTimeline(p *m.Period) bool {
+	for _, as := range p.AdaptationSets {
+		if st := as.SegmentTemplate; st != nil && st.SegmentTimeline != nil && len(st.SegmentTimeline.S) == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func reduceS(entries []*m.S, startNr *uint32, timescale int, periodStartS, periodEndS uint64) ([]*m.S, *uint32) {
