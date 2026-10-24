@@ -316,15 +316,18 @@ func TestWriteChunkedSegment(t *testing.T) {
 
 // TestChunkSegmentAcrossFragments checks that a chunk with samples from two fragments of
 // a segment gets their data in order, both as samples and as the encoded mdat payload.
+// The chunks also keep the trun version 0 of the segment, since the track has an edit list (#386).
 func TestChunkSegmentAcrossFragments(t *testing.T) {
 	init := mp4.CreateEmptyInit()
 	init.AddEmptyTrack(1000, "video", "und")
+	init.Moov.Trak.Edts = &mp4.EdtsBox{}
 	trackID := init.Moov.Trak.Tkhd.TrackID
 	// Two fragments with three 100ms samples each. The data of sample n is {n, n}.
 	var buf bytes.Buffer
 	for nr := range uint32(2) {
 		frag, err := mp4.CreateFragment(nr+1, trackID)
 		require.NoError(t, err)
+		frag.Moof.Traf.Trun.Version = 0
 		for i := range uint32(3) {
 			n := byte(3*nr + i + 1)
 			frag.AddFullSample(mp4.FullSample{
@@ -356,6 +359,7 @@ func TestChunkSegmentAcrossFragments(t *testing.T) {
 		require.Equal(t, wantData[i], out.Bytes()[out.Len()-len(wantData[i]):], "chunk %d", i)
 		require.Equal(t, wantDur[i], chk.dur, "chunk %d", i)
 		require.Equal(t, wantTime[i], chk.frag.Moof.Traf.Tfdt.BaseMediaDecodeTime(), "chunk %d", i)
+		require.Equal(t, byte(0), chk.frag.Moof.Traf.Trun.Version, "chunk %d", i)
 		fss, err := chk.frag.GetFullSamples(init.Moov.Mvex.Trex)
 		require.NoError(t, err)
 		require.Len(t, fss, len(wantData[i])/2)
@@ -366,7 +370,8 @@ func TestChunkSegmentAcrossFragments(t *testing.T) {
 	}
 	require.Equal(t, len(wantData), i, "number of chunks")
 
-	// Only the requested chunk is made.
+	// Only the requested chunk is made. Without an edit list, it has trun version 1.
+	init.Moov.Trak.Edts = nil
 	chunks, err = chunkSegment(init, seg, meta, 400, new(1), nil)
 	require.NoError(t, err)
 	nrChunks := 0
@@ -374,9 +379,17 @@ func TestChunkSegmentAcrossFragments(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, chk.styp)
 		require.Equal(t, wantData[1], chk.frag.Mdat.Payload())
+		require.Equal(t, byte(1), chk.frag.Moof.Traf.Trun.Version)
 		nrChunks++
 	}
 	require.Equal(t, 1, nrChunks)
+}
+
+func TestNewTrunVersion(t *testing.T) {
+	require.Equal(t, byte(0), newTrunVersion(true, 0))
+	require.Equal(t, byte(1), newTrunVersion(false, 0), "version 0 with composition offsets needs an edit list")
+	require.Equal(t, byte(1), newTrunVersion(true, 1))
+	require.Equal(t, byte(1), newTrunVersion(false, 1))
 }
 
 func TestAvailabilityTime(t *testing.T) {

@@ -1057,6 +1057,17 @@ func createChunk(styp *mp4.StypBox, trackID, seqNr uint32) chunk {
 	}
 }
 
+// newTrunVersion returns the trun version of the fragments that livesim2 makes for a track whose
+// segments have trun version segVersion. CMAF uses version 0 with composition offsets only
+// together with an edit list, and version 1 without one. Version 1 is also what mp4ff's
+// CreateFragment and Fragment.Reset make.
+func newTrunVersion(hasEditList bool, segVersion byte) byte {
+	if segVersion == 0 && hasEditList {
+		return 0
+	}
+	return 1
+}
+
 // chunkSegment splits a segment into chunks of specified duration, and returns them as an iterator.
 // The first chunk gets an styp box if one is available in the incoming segment.
 // If chunkIndex is non-nil, only the chunk at that specific index (0-based) is made.
@@ -1110,6 +1121,7 @@ func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta,
 		first, last = *chunkIndex, *chunkIndex
 	}
 	trackID := init.Moov.Trak.Tkhd.TrackID
+	trunVersion := newTrunVersion(init.Moov.Trak.Edts != nil, seg.Fragments[0].Moof.Traf.Trun.Version)
 
 	return func(yield func(chunk, error) bool) {
 		var frag *mp4.Fragment
@@ -1124,6 +1136,7 @@ func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta,
 				yield(chunk{}, fmt.Errorf("chunk %d: %w", k, err))
 				return
 			}
+			frag.Moof.Traf.Trun.Version = trunVersion
 			start := 0
 			if k > 0 {
 				start = ends[k-1]

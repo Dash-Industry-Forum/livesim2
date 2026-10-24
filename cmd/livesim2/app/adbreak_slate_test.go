@@ -131,6 +131,9 @@ func TestApplySGAISlate(t *testing.T) {
 	assert.Equal(t, origNrSamples, int(frag.Moof.Traf.Trun.SampleCount()),
 		"slate mirrors the original sample count")
 	assert.Nil(t, slate.Sidx, "sidx dropped for slate segments")
+	// The test asset has trun version 0 without an edit list, which CMAF does not allow (#386).
+	assert.Equal(t, byte(0), seg.Fragments[0].Moof.Traf.Trun.Version)
+	assert.Equal(t, byte(1), frag.Moof.Traf.Trun.Version, "trun version 1 without an edit list")
 	first := frag.Moof.Traf.Trun.Samples[0]
 	assert.Equal(t, mp4.SyncSampleFlags, first.Flags, "slate starts with an IDR")
 

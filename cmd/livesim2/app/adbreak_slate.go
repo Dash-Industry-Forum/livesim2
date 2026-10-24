@@ -47,9 +47,10 @@ const slateBlockSize = 8
 
 // slateGen generates slate frames for one video representation, reusing its SPS/PPS.
 type slateGen struct {
-	sps    *avc.SPS
-	pps    *avc.PPS
-	params encode.EncodeParams
+	sps      *avc.SPS
+	pps      *avc.PPS
+	params   encode.EncodeParams
+	editList bool // The init segment has an edit list
 }
 
 // newSlateGen builds a slate generator from a representation's init segment. It returns
@@ -94,6 +95,7 @@ func newSlateGen(initData []byte) (*slateGen, error) {
 			Height: int(sps.Height),
 			CABAC:  pps.EntropyCodingModeFlag,
 		},
+		editList: iFile.Init.Moov.Traks[0].Edts != nil,
 	}, nil
 }
 
@@ -354,6 +356,7 @@ func applyAdBreakSlate(vodFS fs.FS, a *asset, cfg *ResponseConfig, meta segMeta,
 	if err != nil {
 		return nil, fmt.Errorf("create fragment: %w", err)
 	}
+	newFrag.Moof.Traf.Trun.Version = newTrunVersion(g.editList, trun.Version)
 	for _, s := range samples {
 		newFrag.AddFullSample(s)
 	}
