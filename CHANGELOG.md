@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and an edit list (#386).
 - After the `stop_` time, the segments of the now static MPD gave 410 outside the time-shift buffer, and
   segments after the stop time were served. All segments of the event are now available, and none after it (#387).
+- MPD EventStreams of `scte35_` (with `mpd=`), `sgai_` and `svta_` changed without a new `MPD@publishTime` (#388).
 
 ## [1.15.2] - 2026-10-23
 

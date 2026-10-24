@@ -237,6 +237,37 @@ func (a *AdBreaks) instances(nowMS, astS, lookAheadS, lookBackS int) []adBreakIn
 	return out
 }
 
+// lastChangeS returns the latest whole second since the epoch, at or before nowMS, at which a
+// break entered or left the window of instances with the same arguments, or astS if none did
+// since then. If at is not nil, it returns further times at which the signaling of a break
+// changes, such as when an SCTE-35 cue is announced. Fixed breaks are always all signaled.
+func (a *AdBreaks) lastChangeS(nowMS, astS, lookAheadS, lookBackS int, at func(adBreakInst) []int) int {
+	last := astS
+	nowS := nowMS / 1000
+	p, d := 0, 0
+	if a.Periodic != nil {
+		p, d = a.Periodic.PeriodS, a.Periodic.DurationS
+	}
+	// A periodic break leaves the window at least once per period, so the latest change is
+	// in the window extended by one period.
+	for _, b := range a.instances(nowMS, astS, lookAheadS, lookBackS+p) {
+		var times []int
+		if a.Periodic != nil {
+			startS := astS + int(b.offsetS)
+			times = append(times, startS-lookAheadS-p, startS+d+lookBackS)
+		}
+		if at != nil {
+			times = append(times, at(b)...)
+		}
+		for _, t := range times {
+			if t <= nowS {
+				last = max(last, t)
+			}
+		}
+	}
+	return last
+}
+
 // windowAt returns the end (in ms since the epoch) and the occurrence/event id of the break
 // whose window contains wallMS, or ok=false when wallMS is outside every break. The id matches
 // the event id signaled for that break (periodic: breakStart/period + 1; fixed: 1-based index —
