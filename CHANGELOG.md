@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `periods_` each new Period started without audio for about 2 s (#385).
 - `chunkdur_` chunks and ad-break slate segments had `trun` version 1 also when the content has version 0
   and an edit list (#386).
+- After the `stop_` time, the segments of the now static MPD gave 410 outside the time-shift buffer, and
+  segments after the stop time were served. All segments of the event are now available, and none after it (#387).
 
 ## [1.15.2] - 2026-10-23
 
