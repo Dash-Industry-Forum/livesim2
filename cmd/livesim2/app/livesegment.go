@@ -184,6 +184,25 @@ func CheckTimeValidity(availTimeS, nowS, timeShiftBufferDepthS, availabilityTime
 	return nil
 }
 
+// checkSegmentTime checks that a segment, or a part of one, that starts at startS and is
+// available at availTimeS can be served at nowS, all in seconds since the epoch. A stop_ event
+// has no segments that start at or after the stop time. Once the stop time has passed, the MPD
+// is static and describes the whole event, so its segments are not limited by the
+// time-shift buffer depth.
+func (rc *ResponseConfig) checkSegmentTime(startS, availTimeS, nowS float64) error {
+	tsbdS := float64(*rc.TimeShiftBufferDepthS)
+	if rc.StopTimeS != nil {
+		stopS := float64(*rc.StopTimeS)
+		if startS >= stopS {
+			return fmt.Errorf("segment after the stop time: %w", errNotFound)
+		}
+		if nowS > stopS {
+			tsbdS = max(tsbdS, nowS-float64(rc.StartTimeS))
+		}
+	}
+	return CheckTimeValidity(availTimeS, nowS, tsbdS, rc.getAvailabilityTimeOffsetS())
+}
+
 // segMeta provides meta data information about a segment.
 // For audio it may be a combination of several segments and sampleNrOffset may be non-zero.
 type segMeta struct {
@@ -222,9 +241,10 @@ func findSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseConfi
 	}
 
 	// Check interval validity
+	segStartS := float64(int(seg.StartTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
 	segAvailTimeS := float64(int(seg.EndTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
 	nowS := float64(nowMS) * 0.001
-	err = CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
+	err = cfg.checkSegmentTime(segStartS, segAvailTimeS, nowS)
 	if err != nil {
 		return segMeta{}, err
 	}
@@ -290,9 +310,10 @@ func findRefSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseCo
 
 	// Check interval validity
 	mediaRef := uint64(cfg.StartTimeS) * uint64(refRep.MediaTimescale) // TODO. Add period offset
+	segStartS := float64(refStartTime+mediaRef) / float64(refRep.MediaTimescale)
 	segAvailTimeS := float64(refEndTime+mediaRef) / float64(refRep.MediaTimescale)
 	nowS := float64(nowMS) * 0.001
-	err := CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
+	err := cfg.checkSegmentTime(segStartS, segAvailTimeS, nowS)
 	if err != nil {
 		return segMeta{}, err
 	}
@@ -349,9 +370,10 @@ func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, n
 	mediaRef := uint64(cfg.StartTimeS) * uint64(rep.MediaTimescale) // TODO. Add period offset
 
 	// Check interval validity
+	segStartS := float64(segTime+mediaRef) / float64(rep.MediaTimescale)
 	segAvailTimeS := float64(seg.EndTime+wrapTime+mediaRef) / float64(rep.MediaTimescale)
 	nowS := float64(nowMS) * 0.001
-	err := CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
+	err := cfg.checkSegmentTime(segStartS, segAvailTimeS, nowS)
 	if err != nil {
 		return segMeta{}, err
 	}
@@ -1032,10 +1054,10 @@ func checkPartialSegmentAvailability(cfg *ResponseConfig, meta segMeta, subNr, n
 		return fmt.Errorf("sub-number %d with @k=%d: %w", subNr, nrParts, errNotFound)
 	}
 	mediaRef := uint64(cfg.StartTimeS) * uint64(meta.timescale)
+	partStart := meta.newTime + mediaRef + uint64(subNr)*uint64(meta.newDur)/nrParts
 	partEnd := meta.newTime + mediaRef + uint64(subNr+1)*uint64(meta.newDur)/nrParts
-	availTimeS := float64(partEnd) / float64(meta.timescale)
-	return CheckTimeValidity(availTimeS, float64(nowMS)*0.001, float64(*cfg.TimeShiftBufferDepthS),
-		cfg.getAvailabilityTimeOffsetS())
+	return cfg.checkSegmentTime(float64(partStart)/float64(meta.timescale), float64(partEnd)/float64(meta.timescale),
+		float64(nowMS)*0.001)
 }
 
 func unixMS() int {

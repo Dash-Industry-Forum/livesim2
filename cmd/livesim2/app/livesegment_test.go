@@ -126,6 +126,50 @@ func TestLiveSegment(t *testing.T) {
 	}
 }
 
+// TestStoppedEventSegments checks that once the stop_ time has passed, all segments of the event
+// are available, as the static MPD describes them, and that none after the stop time are (#387).
+func TestStoppedEventSegments(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	log := slog.Default()
+	require.NoError(t, am.discoverAssets(log))
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	const startS, stopS = 1000, 2140 // 570 segments of 2 s
+	for _, mpdType := range []string{"Number", "TimelineTime"} {
+		for _, rep := range []struct {
+			media     string
+			timescale int
+			frameDur  uint64
+		}{{"V300/%d.m4s", 90000, 1}, {"A48/%d.m4s", 48000, 1024}} {
+			cfg := NewResponseConfig()
+			cfg.StartTimeS = startS
+			cfg.StopTimeS = new(stopS)
+			if mpdType == "TimelineTime" {
+				cfg.SegTimelineMode = SegTimelineModeTime
+			}
+			segment := func(idx int, nowS int) error {
+				id := int(cfg.getStartNr()) + idx
+				if mpdType == "TimelineTime" {
+					// Audio segments start at the first AAC frame at or after the video segment.
+					id = int(calcAudioTimeFromRef(uint64(idx*2*90000), 90000, rep.frameDur, uint64(rep.timescale)))
+				}
+				_, err := genLiveSegment(log, vodFS, asset, cfg, fmt.Sprintf(rep.media, id), nowS*1000, false)
+				return err
+			}
+			desc := fmt.Sprintf("%s %s", mpdType, rep.media)
+			// While live, the time-shift buffer applies.
+			require.ErrorIs(t, segment(0, startS+600), errGone, desc)
+			require.NoError(t, segment(290, startS+600), desc)
+			// A minute after the stop, the whole event is available, and nothing after it.
+			require.NoError(t, segment(0, stopS+60), desc)
+			require.NoError(t, segment(569, stopS+60), desc)
+			require.ErrorIs(t, segment(570, stopS+60), errNotFound, desc)
+		}
+	}
+}
+
 // TestAc3Timing checks that the generated segments end within one frame from nominal segment duration.
 func TestAc3Timing(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
