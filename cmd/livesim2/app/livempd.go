@@ -739,12 +739,15 @@ func reduceS(entries []*m.S, startNr *uint32, timescale int, periodStartS, perio
 		}
 		d := e.D
 		for i := 0; i <= e.R; i++ {
-			if t < pStart {
+			// A segment belongs to the Period that has its midpoint. An audio segment can
+			// start a little before the Period, for example because of an edit list.
+			mid := t + d/2
+			if mid < pStart {
 				t += d
 				nr++
 				continue
 			}
-			if t >= pEnd {
+			if mid >= pEnd {
 				return newS, &nr
 			}
 			if currS == nil {

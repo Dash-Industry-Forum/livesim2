@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Nothing yet
+### Fixed
+
+- Audio with an edit list in SegmentTimeline modes: audio-only MPDs had `S@t` 1024 ticks late, and with
+  `periods_` each new Period started without audio for about 2 s (#385).
 
 ## [1.15.2] - 2026-10-23
 
