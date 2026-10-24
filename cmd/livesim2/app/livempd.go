@@ -110,6 +110,9 @@ func genLaURL(cfg *ResponseConfig) string {
 
 // LiveMPD generates a dynamic configured MPD for a VoD asset.
 func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfig, nowMS int) (*m.MPD, error) {
+	if reason := a.mpdNotLive[mpdName]; reason != "" {
+		return nil, fmt.Errorf("%w: %s", errNotLive, reason)
+	}
 	mpd, err := a.getVodMPD(mpdName)
 	if err != nil {
 		return nil, err

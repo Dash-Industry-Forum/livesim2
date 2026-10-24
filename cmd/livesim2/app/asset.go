@@ -138,6 +138,22 @@ func (am *assetMgr) loadAsset(logger *slog.Logger, mpdPath string) error {
 
 	fillContentTypes(assetPath, mpd.Periods[0])
 
+	if err := am.loadMPDReps(logger, asset, mpdName, mpd); err != nil {
+		// The MPD stays listed as a VoD MPD, but cannot be made live.
+		asset.mpdNotLive[mpdName] = err.Error()
+		return err
+	}
+	if err := asset.setC2PAEventIDs(); err != nil {
+		return fmt.Errorf("c2pa event ids: %w", err)
+	}
+	logger.Info("Asset MPD loaded")
+	return nil
+}
+
+// loadMPDReps loads the Representations of the MPD mpdName of the asset, which must all be
+// usable for a live stream.
+func (am *assetMgr) loadMPDReps(logger *slog.Logger, asset *asset, mpdName string, mpd *m.MPD) error {
+	assetPath := asset.AssetPath
 	for _, as := range mpd.Periods[0].AdaptationSets {
 		if as.SegmentTemplate == nil {
 			return fmt.Errorf("no SegmentTemplate in adaptation set")
@@ -178,10 +194,6 @@ func (am *assetMgr) loadAsset(logger *slog.Logger, mpdPath string) error {
 			}
 		}
 	}
-	if err := asset.setC2PAEventIDs(); err != nil {
-		return fmt.Errorf("c2pa event ids: %w", err)
-	}
-	logger.Info("Asset MPD loaded")
 	return nil
 }
 
@@ -502,6 +514,8 @@ type asset struct {
 	mpdRepIDs    map[string][]string         `json:"-"` // Representation ids of each MPD
 	// mpdRepConflicts lists, for each MPD, its Representations that another MPD defines differently
 	mpdRepConflicts map[string][]string `json:"-"`
+	// mpdNotLive gives, for each MPD that cannot be made live, the reason. It is still a VoD MPD.
+	mpdNotLive map[string]string `json:"-"`
 }
 
 func newAsset(assetPath string) *asset {
@@ -511,6 +525,7 @@ func newAsset(assetPath string) *asset {
 		Reps:            make(map[string]*RepData),
 		mpdRepIDs:       make(map[string][]string),
 		mpdRepConflicts: make(map[string][]string),
+		mpdNotLive:      make(map[string]string),
 	}
 }
 
@@ -570,7 +585,7 @@ func (a *asset) notLoopable(mpdName string) string {
 func (a *asset) getVodMPD(mpdName string) (*m.MPD, error) {
 	md, ok := a.MPDs[mpdName]
 	if !ok {
-		return nil, fmt.Errorf("unknown mpd name")
+		return nil, fmt.Errorf("unknown mpd name %q: %w", mpdName, errNotFound)
 	}
 	return m.ReadFromString(md.MPDStr)
 }

@@ -6,6 +6,7 @@ package app
 
 import (
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path"
@@ -13,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	m "github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/stretchr/testify/require"
@@ -545,4 +547,40 @@ func setSegmentEndNr(assetDir string, endNumber uint32) error {
 		}
 	}
 	return nil
+}
+
+// TestMPDNotLive checks that an MPD that cannot be made live, such as one with side-loaded
+// subtitles without a SegmentTemplate, stays listed as a VoD MPD but is marked as not live,
+// and that its live MPD gives errNotLive (#392).
+func TestMPDNotLive(t *testing.T) {
+	base := os.DirFS("testdata/assets")
+	vodFS := fstest.MapFS{}
+	require.NoError(t, fs.WalkDir(base, "testpic_2s", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		data, err := fs.ReadFile(base, p)
+		vodFS[p] = &fstest.MapFile{Data: data}
+		return err
+	}))
+	sideLoaded := `<AdaptationSet contentType="text" mimeType="text/vtt" lang="en">` +
+		`<Representation id="subs" bandwidth="256"><BaseURL>subs.vtt</BaseURL></Representation>` +
+		`</AdaptationSet></Period>`
+	manifest := string(vodFS["testpic_2s/Manifest.mpd"].Data)
+	vodFS["testpic_2s/side_subs.mpd"] = &fstest.MapFile{Data: []byte(strings.Replace(manifest, "</Period>", sideLoaded, 1))}
+
+	am := newAssetMgr(vodFS, "", false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+	a, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+	require.Contains(t, a.MPDs, "side_subs.mpd")
+	require.Contains(t, a.mpdNotLive["side_subs.mpd"], "no SegmentTemplate")
+	require.Empty(t, a.mpdNotLive["Manifest.mpd"])
+
+	_, err := LiveMPD(a, "side_subs.mpd", NewResponseConfig(), nil, 100_000)
+	require.ErrorIs(t, err, errNotLive)
+	_, err = LiveMPD(a, "Manifest.mpd", NewResponseConfig(), nil, 100_000)
+	require.NoError(t, err)
+	_, err = LiveMPD(a, "missing.mpd", NewResponseConfig(), nil, 100_000)
+	require.ErrorIs(t, err, errNotFound)
 }

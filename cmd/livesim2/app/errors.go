@@ -12,6 +12,7 @@ import (
 var (
 	errNotFound       = errors.New("not found")
 	errGone           = errors.New("gone")
+	errNotLive        = errors.New("the MPD cannot be made live")
 	ErrAtoInfTimeline = errors.New("infinite availabilityTimeOffset for SegmentTimeline")
 )
 

@@ -149,6 +149,11 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
+			if errors.Is(err, errNotLive) || errors.Is(err, errNotFound) {
+				log.Info("liveMPD not found", "err", err)
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
 			log.Error("liveMPD", "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
