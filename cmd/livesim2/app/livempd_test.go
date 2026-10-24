@@ -1111,19 +1111,52 @@ func TestRelStartStopTimeIntoLocation(t *testing.T) {
 			wantedLocation: "http://localhost:8888/livesim2/start_980/mup_3/stop_1020/testpic_2s/Manifest.mpd",
 			host:           "http://localhost:8888",
 		},
+		{
+			url:            "/livesim2/startrel_-60/testpic_2s/Manifest.mpd",
+			nowMS:          1_000_000,
+			wantedLocation: "http://localhost:8888/livesim2/start_940/testpic_2s/Manifest.mpd",
+			host:           "http://localhost:8888",
+		},
+		{
+			url:            "/livesim2/startrel_-60/segtimeline_1/testpic_2s/Manifest.mpd",
+			nowMS:          1_000_000,
+			wantedLocation: "http://localhost:8888/livesim2/start_940/segtimeline_1/testpic_2s/Manifest.mpd",
+			host:           "http://localhost:8888",
+		},
 	}
 
-	for _, c := range cases {
-		cfg, err := processURLCfg(c.url, c.nowMS)
+	liveMPD := func(url, host string, nowMS int) *m.MPD {
+		t.Helper()
+		cfg, err := processURLCfg(url, nowMS)
 		require.NoError(t, err)
-		cfg.SetHost(c.host, nil)
+		cfg.SetHost(host, nil)
 		contentPart := cfg.URLContentPart()
 		asset, ok := am.findAsset(contentPart)
 		require.True(t, ok)
 		_, mpdName := path.Split(contentPart)
-		liveMPD, err := LiveMPD(asset, mpdName, cfg, nil, c.nowMS)
+		mpd, err := LiveMPD(asset, mpdName, cfg, nil, nowMS)
 		require.NoError(t, err)
-		require.Equal(t, c.wantedLocation, string(liveMPD.Location[0].Value), "the right location element is not inserted")
+		return mpd
+	}
+	for _, c := range cases {
+		relMPD := liveMPD(c.url, c.host, c.nowMS)
+		require.Equal(t, c.wantedLocation, string(relMPD.Location[0].Value), "the right location element is not inserted")
+
+		// The MPD at the Location is the same without the Location element, so it is a
+		// later version with a later publishTime (#391).
+		absMPD := liveMPD(strings.TrimPrefix(c.wantedLocation, c.host), c.host, c.nowMS)
+		require.Empty(t, absMPD.Location)
+		relS, err := relMPD.PublishTime.ConvertToSeconds()
+		require.NoError(t, err)
+		absS, err := absMPD.PublishTime.ConvertToSeconds()
+		require.NoError(t, err)
+		require.Greater(t, absS, relS, c.url)
+		relMPD.Location, relMPD.PublishTime = nil, absMPD.PublishTime
+		relXML, err := xml.Marshal(relMPD)
+		require.NoError(t, err)
+		absXML, err := xml.Marshal(absMPD)
+		require.NoError(t, err)
+		require.Equal(t, string(absXML), string(relXML), c.url)
 	}
 }
 

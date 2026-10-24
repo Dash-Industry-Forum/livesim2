@@ -457,7 +457,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 	// Set from the MPD type, since image AdaptationSets always use $Number$
 	// MPD EventStreams change with time too, and each change needs a new publishTime.
 	eventsChangeS := float64(eventStreamsChangeS(cfg, endTimeMS))
-	mpd.PublishTime = m.ConvertToDateTime(max(calcPublishTime(cfg, refSegEntries.lsi), eventsChangeS))
+	mpd.PublishTime = publishTime(cfg, max(calcPublishTime(cfg, refSegEntries.lsi), eventsChangeS))
 	if maxSegDur := maxLiveSegmentDuration(a, period); maxSegDur != nil {
 		mpd.MaxSegmentDuration = maxSegDur
 	}
@@ -514,7 +514,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		if err != nil {
 			return nil, fmt.Errorf("lastPeriodStartTime: %w", err)
 		}
-		mpd.PublishTime = m.ConvertToDateTime(max(lastStartS, eventsChangeS))
+		mpd.PublishTime = publishTime(cfg, max(lastStartS, eventsChangeS))
 	}
 
 	if afterStop {
@@ -608,6 +608,16 @@ func ssrCadence(a *asset, as *m.AdaptationSetType, chunkDurS *float64) (cadence 
 func updateSwitchingAdaptationSet(as *m.AdaptationSetType, prevID uint32) {
 	sp := m.NewDescriptor(AdaptationSetSwitchingSchemeIdUri, strconv.FormatUint(uint64(prevID), 10), "")
 	as.SupplementalProperties = append(as.SupplementalProperties, sp)
+}
+
+// publishTime returns MPD@publishTime given the time of the latest change in seconds. An MPD
+// with a Location made from startrel_ or stoprel_ differs from the MPD at the Location only in
+// that element. It is the earlier version, so its publishTime is one second earlier.
+func publishTime(cfg *ResponseConfig, lastChangeS float64) m.DateTime {
+	if cfg.AddLocationFlag {
+		lastChangeS--
+	}
+	return m.ConvertToDateTime(lastChangeS)
 }
 
 // lastPeriodStartTime returns the absolute startTime of the last Period in seconds.
