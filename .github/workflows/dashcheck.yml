@@ -1,0 +1,91 @@
+name: dashcheck
+
+# Checks the MPDs and segments that livesim2 serves with dashcheck (https://github.com/tobbee/dashcheck):
+# a server built from this commit with the test assets of the repository, and livesim2.dashif.org.
+# Errors listed in scripts/dashcheck/known-failures-*.txt do not fail the run, see scripts/dashcheck/run.sh.
+# The nightly run uses dashcheck main, so its new checks and fixes apply at once. When a run fails, run the
+# workflow by hand with dashcheck "latest" (the latest release) to tell a dashcheck change from a livesim2 one.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      dashcheck:
+        description: "dashcheck version: main, latest (the latest release) or a tag such as v0.2.1"
+        default: main
+permissions:
+  contents: read
+env:
+  DASHCHECK_VERSION: ${{ inputs.dashcheck || 'main' }}
+jobs:
+  testdata:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.27"
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install dashcheck
+        run: |
+          go install "github.com/tobbee/dashcheck/cmd/dashcheck@${DASHCHECK_VERSION}"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Build and start livesim2
+        run: |
+          go build -o out/livesim2 ./cmd/livesim2
+          out/livesim2 --vodroot=cmd/livesim2/app/testdata/assets --drmcfgfile=pkg/drm/testdata/drm_config_test.json \
+            --c2pa --port=8888 --logformat=json --loglevel=WARN > livesim2.log 2>&1 &
+          for i in $(seq 30); do
+            curl -fs http://localhost:8888/healthz > /dev/null && exit 0
+            sleep 1
+          done
+          cat livesim2.log
+          exit 1
+
+      - name: Check with dashcheck
+        env:
+          DRM: EZDRM-1-key-cbcs-test
+        run: scripts/dashcheck/run.sh http://localhost:8888 testdata scripts/dashcheck/known-failures-testdata.txt
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashcheck-testdata
+          path: |
+            dashcheck-report.json
+            livesim2.log
+
+  production:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.27"
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install dashcheck
+        run: |
+          go install "github.com/tobbee/dashcheck/cmd/dashcheck@${DASHCHECK_VERSION}"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      # Two media segments per Representation keep the run at about 1000 requests
+      - name: Check livesim2.dashif.org with dashcheck
+        env:
+          DRM: EZDRM-1-key-cbcs
+        run: scripts/dashcheck/run.sh https://livesim2.dashif.org production scripts/dashcheck/known-failures-production.txt -n 2
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashcheck-production
+          path: dashcheck-report.json
