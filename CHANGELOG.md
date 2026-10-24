@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MPD EventStreams of `scte35_` (with `mpd=`), `sgai_` and `svta_` changed without a new `MPD@publishTime` (#388).
 - `ssras_` without a `chunkdurssr_` entry for a low-delay AdaptationSet gave 500 for its Partial Segments. The
   URL now gets 400, and `/urlgen` says what is missing (#389).
+- Low-latency `$Number$` MPDs (`chunkdur_`, `ssras_`) kept the `@timescale` of the VoD MPD. They now use the
+  media timescale (#390).
 
 ## [1.15.2] - 2026-10-23
 

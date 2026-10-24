@@ -948,6 +948,10 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 		}
 		as.SegmentTemplate.Duration = new(uint32(dur))
 		as.SegmentTemplate.Timescale = new(uint32(timeScale))
+	} else if cfg.ChunkDurS != nil || cfg.SSRFlag {
+		// The low-latency modes use the DASH profile for CMAF content, where @timescale is
+		// the mdhd timescale (ISO/IEC 23009-1 8.12.4.2).
+		setMediaTimescale(a, as.SegmentTemplate, as.Representations)
 	}
 	as.SegmentTemplate.SegmentTimeline = nil
 	if cfg.StartNr != nil {
@@ -967,6 +971,38 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 	}
 
 	return nil
+}
+
+// setMediaTimescale changes the @timescale of a $Number$ SegmentTemplate to the media timescale
+// of its Representations, and scales @duration and @presentationTimeOffset with it. It leaves
+// the template as it is if the Representations have different media timescales, or if a value
+// cannot be scaled exactly, since a rounded @duration makes the segment times drift.
+func setMediaTimescale(a *asset, st *m.SegmentTemplateType, reps []*m.RepresentationType) {
+	mediaTS := uint64(0)
+	for _, r := range reps {
+		rd, ok := a.Reps[r.Id]
+		if !ok || (mediaTS != 0 && uint64(rd.MediaTimescale) != mediaTS) {
+			return
+		}
+		mediaTS = uint64(rd.MediaTimescale)
+	}
+	oldTS := uint64(st.GetTimescale())
+	if mediaTS == 0 || mediaTS == oldTS {
+		return
+	}
+	dur := uint64(*st.Duration) * mediaTS
+	pto := uint64(0)
+	if st.PresentationTimeOffset != nil {
+		pto = *st.PresentationTimeOffset * mediaTS
+	}
+	if dur%oldTS != 0 || pto%oldTS != 0 || dur/oldTS > math.MaxUint32 {
+		return
+	}
+	st.Duration = new(uint32(dur / oldTS))
+	if st.PresentationTimeOffset != nil {
+		st.PresentationTimeOffset = new(pto / oldTS)
+	}
+	st.Timescale = new(uint32(mediaTS))
 }
 
 // nextFreeAdaptationSetID returns the lowest AdaptationSet id that is at least minID and

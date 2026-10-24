@@ -1866,6 +1866,49 @@ func TestEditListOffsetMPD(t *testing.T) {
 	})
 }
 
+// TestLowLatencyMediaTimescale checks that low-latency $Number$ MPDs have the media timescale
+// in SegmentTemplate, and other MPDs the timescale of the VoD MPD (#390).
+func TestLowLatencyMediaTimescale(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+
+	cases := []struct {
+		asset, mpdName string
+		vodTimescale   uint32
+	}{
+		{"testpic_2s", "Manifest.mpd", 1},
+		{"testpic_2s_low_delay", "Manifest.mpd", 1000},
+		{"dolby-ac4/2997fps", "Living_Room_1080p_51_192k_2997fps.mpd", 1000},
+	}
+	for _, c := range cases {
+		a, ok := am.findAsset(c.asset)
+		require.True(t, ok)
+		for _, opts := range []string{"", "chunkdur_0.5/ato_1.5/", "ssras_2,1/chunkdurssr_2,0.5/"} {
+			if strings.HasPrefix(opts, "ssras") && c.asset != "testpic_2s_low_delay" {
+				continue
+			}
+			nowMS := 100_000
+			cfg, err := processURLCfg("/livesim2/"+opts+c.asset+"/"+c.mpdName, nowMS)
+			require.NoError(t, err)
+			mpd, err := LiveMPD(a, c.mpdName, cfg, nil, nowMS)
+			require.NoError(t, err)
+			for _, as := range mpd.Periods[0].AdaptationSets {
+				st := as.SegmentTemplate
+				rep := a.Reps[as.Representations[0].Id]
+				desc := fmt.Sprintf("%s %s%s", as.ContentType, opts, c.asset)
+				wantTimescale := c.vodTimescale
+				if opts != "" {
+					wantTimescale = uint32(rep.MediaTimescale)
+				}
+				require.Equal(t, wantTimescale, st.GetTimescale(), desc)
+				// The nominal segment duration is unchanged.
+				require.Equal(t, a.SegmentDurMS, int(*st.Duration)*1000/int(st.GetTimescale()), desc)
+			}
+		}
+	}
+}
+
 // TestEventStreamPublishTime checks that MPD@publishTime changes whenever the MPD EventStreams
 // do, as ad breaks and SCTE-35 cues enter and leave the MPD (#388).
 func TestEventStreamPublishTime(t *testing.T) {
