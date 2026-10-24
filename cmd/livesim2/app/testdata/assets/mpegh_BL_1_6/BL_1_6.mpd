@@ -5,8 +5,8 @@
   minBufferTime="PT3.2S" type="static" mediaPresentationDuration="PT8S">
   <Period start="PT0S" id="0">
     <AdaptationSet id="0" codecs="mhm1.0x10" contentType="audio" mimeType="audio/mp4" segmentAlignment="true" bitstreamSwitching="true" audioSamplingRate="48000">
-      <SegmentTemplate initialization="$RepresentationID$_init.mp4" media="$RepresentationID$_$Number$.m4s" timescale="48000" duration="76800" startNumber="0"/>
       <AudioChannelConfiguration schemeIdUri="urn:mpeg:mpegB:cicp:ChannelConfiguration" value="2"/>
+      <SegmentTemplate initialization="$RepresentationID$_init.mp4" media="$RepresentationID$_$Number$.m4s" timescale="48000" duration="76800" startNumber="0"/>
       <Representation id="mhm1_64kbps_per_signal" bandwidth="130319"/>
     </AdaptationSet>
     <AdaptationSet codecs="hvc1.1.6.L123.90" contentType="video" width="1920" height="1080" mimeType="video/mp4" segmentAlignment="true" bitstreamSwitching="true">
