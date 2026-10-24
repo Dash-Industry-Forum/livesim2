@@ -411,6 +411,20 @@ func TestProcessURLCfg(t *testing.T) {
 			err:         "url config: chunkDurSSR requires ssrAS to be configured",
 		},
 		{
+			url:         "/livesim2/ssras_2,1/asset.mpd",
+			nowMS:       0,
+			contentPart: "",
+			wantedCfg:   nil,
+			err:         "url config: ssras_ needs a chunkdurssr_ entry for the low-delay AdaptationSet 2",
+		},
+		{
+			url:         "/livesim2/ssras_2,1;4,3/chunkdurssr_2,0.5/asset.mpd",
+			nowMS:       0,
+			contentPart: "",
+			wantedCfg:   nil,
+			err:         "url config: ssras_ needs a chunkdurssr_ entry for the low-delay AdaptationSet 4",
+		},
+		{
 			url:         "/livesim2/ssras_1,2/chunkdurssr_1,0.2/asset.mpd",
 			nowMS:       0,
 			contentPart: "asset.mpd",

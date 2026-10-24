@@ -6,9 +6,11 @@ package app
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 )
@@ -562,6 +564,9 @@ func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 	if cfg.ChunkDurSSR != "" && cfg.SSRAS == "" {
 		return fmt.Errorf("chunkDurSSR requires ssrAS to be configured")
 	}
+	if err := verifySSRConfig(cfg); err != nil {
+		return err
+	}
 	if err := verifyAdSignaling(cfg); err != nil {
 		return err
 	}
@@ -572,6 +577,25 @@ func verifyAndFillConfig(cfg *ResponseConfig, nowMS int) error {
 		// Content Steering owns BaseURL generation; the traffic feature also adds BaseURLs.
 		if len(cfg.Traffic) > 0 {
 			return fmt.Errorf("steer cannot be combined with traffic (both generate BaseURLs)")
+		}
+	}
+	return nil
+}
+
+// verifySSRConfig checks that each low-delay AdaptationSet of ssras_ has a chunk duration in
+// chunkdurssr_, since its Partial Segments cannot be made without one.
+func verifySSRConfig(cfg *ResponseConfig) error {
+	nextMap, _, err := parseSSRAS(cfg.SSRAS)
+	if err != nil {
+		return fmt.Errorf("ssras: %w", err)
+	}
+	chunkDurs, err := parseChunkDurSSR(cfg.ChunkDurSSR)
+	if err != nil {
+		return fmt.Errorf("chunkdurssr: %w", err)
+	}
+	for _, asID := range slices.Sorted(maps.Keys(nextMap)) {
+		if _, ok := chunkDurs[asID]; !ok {
+			return fmt.Errorf("ssras_ needs a chunkdurssr_ entry for the low-delay AdaptationSet %d", asID)
 		}
 	}
 	return nil

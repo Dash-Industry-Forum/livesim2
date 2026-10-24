@@ -412,6 +412,26 @@ func TestCreateURLInbandPS(t *testing.T) {
 	require.Contains(t, data.URL, "/testpic_2s/Manifest.mpd")
 }
 
+// TestCreateURLSSR checks that a low-delay AdaptationSet of ssrAS needs a chunk duration (#389).
+func TestCreateURLSSR(t *testing.T) {
+	create := func(chunkDurSSR string) urlGenData {
+		q := url.Values{}
+		q.Set("asset", "testpic_2s")
+		q.Set("mpd", "Manifest.mpd")
+		q.Set("stl", "nr")
+		q.Set("ssrAS", "2,1")
+		q.Set("chunkDurSSR", chunkDurSSR)
+		return createURL(httptest.NewRequest("GET", "/urlgen/create?"+q.Encode(), nil), testAssetsInfo(), nil)
+	}
+	data := create("")
+	require.Equal(t, []string{"ssras_ needs a chunkdurssr_ entry for the low-delay AdaptationSet 2"}, data.Errors)
+	data = create("2,0.5")
+	require.Empty(t, data.Errors)
+	require.Contains(t, data.URL, "/ssras_2,1/chunkdurssr_2,0.5/")
+	_, err := processURLCfg(strings.TrimPrefix(data.URL, testAssetsInfo().Host), 0)
+	require.NoError(t, err)
+}
+
 func TestCreateURLC2PA(t *testing.T) {
 	cases := []struct {
 		desc      string
