@@ -83,8 +83,7 @@ func cfgFromRequest(r *http.Request, log *slog.Logger) (nowMS int, cfg *Response
 	}
 
 	if nowMS < cfg.StartTimeS*1000 {
-		tooEarlyMS := cfg.StartTimeS - nowMS
-		msg := fmt.Sprintf("%dms too early", tooEarlyMS)
+		msg := newErrTooEarly(cfg.StartTimeS*1000 - nowMS).Error()
 		return 0, nil, generateAndLogHttpError(log, msg, http.StatusTooEarly)
 	}
 
@@ -152,6 +151,11 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, errNotLive) || errors.Is(err, errNotFound) {
 				log.Info("liveMPD not found", "err", err)
 				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
+			if tooEarly, ok := errors.AsType[errTooEarly](err); ok {
+				log.Info("liveMPD too early", "err", err)
+				http.Error(w, tooEarly.Error(), http.StatusTooEarly)
 				return
 			}
 			log.Error("liveMPD", "err", err)

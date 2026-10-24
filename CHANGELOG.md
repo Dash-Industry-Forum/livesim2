@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   segment that does not exist. It is now `PT2.002S`.
 - The `mpegh_BL_1_6` and `mpegh_LC_1_6` test assets had the `AudioChannelConfiguration` after the
   `SegmentTemplate`, so their VoD MPDs were not schema-valid.
+- `start_` in SegmentTimeline modes: the MPD had an empty `SegmentTimeline` until the first segment was
+  available. It now gives 425 Too Early until then, as before the start time, where the message now has the
+  right time (#399).
 
 ## [1.15.2] - 2026-10-23
 

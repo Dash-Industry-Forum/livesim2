@@ -728,6 +728,9 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int, e
 	if wt.nowWraps < 0 { // no segment finished yet. Return an empty list and set startNr and lsi.nr = -1
 		se.startNr = -1
 		se.lsi.nr = -1
+		timescale := uint64(rep.MediaTimescale)
+		firstEndMS := int((segs[0].EndTime*1000 + timescale - 1) / timescale)
+		se.untilFirstMS = max(firstEndMS-atoMS-wt.nowRelMS, 1)
 		return se, nil
 	}
 
@@ -797,6 +800,7 @@ func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string, e
 		mediaTimescale: uint32(rep.MediaTimescale),
 		startNr:        refSE.startNr,
 		lsi:            refSE.lsi, // This is good enough since availability time should be very close
+		untilFirstMS:   refSE.untilFirstMS,
 		entries:        make([]*m.S, 0, nrSegs),
 	}
 

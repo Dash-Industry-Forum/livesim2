@@ -462,6 +462,11 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		}
 		switch templateType {
 		case timeLineTime, timeLineNumber:
+			if se.startNr < 0 {
+				// A SegmentTimeline needs at least one S (ISO/IEC 23009-1 5.3.9.6.1), so there is
+				// no MPD until the first segment is available.
+				return nil, newErrTooEarly(se.untilFirstMS)
+			}
 			err := adjustAdaptationSetForTimeline(cfg, se, as, refSegEntries, segAsset)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASFor %s: %w", templateType, err)
@@ -882,6 +887,7 @@ type segEntries struct {
 	lsi            lastSegInfo
 	startNr        int
 	mediaTimescale uint32
+	untilFirstMS   int // time until the first segment is available, if no segment is (startNr < 0)
 }
 
 func (s segEntries) lastNr() int {
