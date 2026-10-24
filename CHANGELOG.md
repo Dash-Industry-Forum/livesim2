@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   media timescale (#390).
 - `startrel_`/`stoprel_`: the MPD at the `Location` lacks the `Location` element but had the same `@publishTime`.
   The MPD with the `Location` now has a `@publishTime` one second earlier (#391).
+- `/assets` offered MPDs that cannot be made live, such as those with side-loaded subtitles, and their live
+  URLs gave 500. They are now marked as VoD only, `/urlgen` leaves them out, and their live URLs give 404 (#392).
 
 ## [1.15.2] - 2026-10-23
 

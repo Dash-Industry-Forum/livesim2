@@ -49,6 +49,9 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	for _, asset := range assets {
 		mpds := make([]mpdInfo, 0, len(asset.MPDs))
 		for _, mpd := range asset.MPDs {
+			if asset.mpdNotLive[mpd.Name] != "" {
+				continue // The URLs are for live streams
+			}
 			mpds = append(mpds, mpdInfo{
 				Path:         mpd.Name,
 				Desc:         mpd.Title,
