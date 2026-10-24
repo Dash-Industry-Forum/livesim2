@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   URLs gave 500. They are now marked as VoD only, `/urlgen` leaves them out, and their live URLs give 404 (#392).
 - In SegmentTimeline modes, an AdaptationSet with a BaseURL to another asset, such as the 2 s video of
   `testpic_6s/mixeddur.mpd`, got the timeline of its own asset. It now gets that of the other asset (#393).
+- `periods_` in the SegmentTimeline modes: a new Period had an empty `SegmentTimeline` until its first
+  segment was complete. The Period is now added when its first segments are complete (#399).
 - The `dolby-ac4/2997fps` test asset had `mediaPresentationDuration="PT2.0028S"`, which implies a second
   segment that does not exist. It is now `PT2.002S`.
 - The `mpegh_BL_1_6` and `mpegh_LC_1_6` test assets had the `AudioChannelConfiguration` after the
