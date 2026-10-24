@@ -666,7 +666,12 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int, e
 		return se, err
 	}
 
-	s := &m.S{T: new(t), D: d, K: k}
+	// S@t is the presentation time, so an audio edit list moves it, as in generateTimelineEntriesFromRef.
+	presT, presD := t, d
+	if rep.ContentType == "audio" && rep.EditListOffset > 0 {
+		presT, presD = applyEditListOffset(t, d, uint64(rep.EditListOffset))
+	}
+	s := &m.S{T: new(presT), D: presD, K: k}
 	lsi := lastSegInfo{
 		timescale: uint64(rep.MediaTimescale),
 		startTime: t,
@@ -677,20 +682,32 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int, e
 	for nr := se.startNr + 1; nr <= nowNr; nr++ {
 		lsi.startTime += d
 		relIdx := nr % nrSegs
-		seg := segs[relIdx]
-		if seg.dur() == d {
-			s.R++
-			lsi.nr = nr
-			continue
-		}
-		d = seg.dur()
-		s = &m.S{D: d, K: k}
-		se.entries = append(se.entries, s)
+		d = segs[relIdx].dur()
 		lsi.dur = d
 		lsi.nr = nr
+		if d == s.D {
+			s.R++
+			continue
+		}
+		s = &m.S{D: d, K: k}
+		se.entries = append(se.entries, s)
 	}
 	se.lsi = lsi
 	return se, nil
+}
+
+// applyEditListOffset returns the presentation time and duration of a segment with decode time t
+// and duration d in a track whose edit list starts at offset. A segment that would start before 0
+// starts at 0 and is shortened accordingly.
+func applyEditListOffset(t, d, offset uint64) (presT, presD uint64) {
+	switch {
+	case t >= offset:
+		return t - offset, d
+	case d > offset-t:
+		return 0, d - (offset - t)
+	default:
+		return 0, 0
+	}
 }
 
 // generateTimelineEntriesFromRef generates timeline entries for the given representation given reference.
@@ -740,24 +757,7 @@ func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string, e
 				}
 
 				// First segment: apply editListOffset adjustment
-				adjustedT := t
-				adjustedD := d
-
-				if editListOffset > 0 {
-					if t >= editListOffset {
-						// Normal case: shift time down by editListOffset
-						adjustedT = t - editListOffset
-					} else {
-						// Special case: time would be negative, so clamp to 0 and shorten duration
-						adjustedT = 0
-						if d > editListOffset-t {
-							adjustedD = d - (editListOffset - t)
-						} else {
-							adjustedD = 0
-						}
-					}
-				}
-
+				adjustedT, adjustedD := applyEditListOffset(t, d, editListOffset)
 				s = &m.S{T: new(adjustedT), D: adjustedD, K: k}
 				se.entries = append(se.entries, s)
 				expectedTime = adjustedT + adjustedD // Update expected time after first segment

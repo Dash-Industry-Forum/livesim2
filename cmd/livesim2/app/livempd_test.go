@@ -1866,6 +1866,64 @@ func TestEditListOffsetMPD(t *testing.T) {
 	})
 }
 
+// TestEditListOffsetOwnTimeline tests that an audio timeline that is not made from a video
+// reference, as in an audio-only MPD, also has presentation times as S@t (issue #385).
+func TestEditListOffsetOwnTimeline(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, t.TempDir(), false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+	asset, ok := am.findAsset("WAVE/av")
+	require.True(t, ok)
+	rep := asset.Reps["aac"]
+	require.Equal(t, int64(2048), rep.EditListOffset)
+
+	cfg := NewResponseConfig()
+	cfg.SegTimelineMode = SegTimelineModeTime
+	tsbd := m.Duration(60 * time.Second)
+	timeline := func(nowMS int, editListOffset int64) segEntries {
+		t.Helper()
+		rep.EditListOffset = editListOffset
+		defer func() { rep.EditListOffset = 2048 }()
+		se, err := asset.generateTimelineEntries("aac", calcWrapTimes(asset, cfg, nowMS, tsbd), 0, nil)
+		require.NoError(t, err)
+		return se
+	}
+
+	// At the start, the first segment starts at 0 and is shortened by the offset.
+	se := timeline(10_000, 2048)
+	require.Equal(t, uint64(0), *se.entries[0].T)
+	require.Equal(t, uint64(95232-2048), se.entries[0].D)
+	require.Equal(t, 0, se.entries[0].R)
+	require.Equal(t, uint64(95232), se.entries[1].D)
+
+	// Later, the whole timeline is shifted by the offset.
+	se = timeline(70_000, 2048)
+	noOffset := timeline(70_000, 0)
+	require.Equal(t, *noOffset.entries[0].T-2048, *se.entries[0].T)
+	require.Equal(t, noOffset.entries[0].D, se.entries[0].D)
+	require.Equal(t, noOffset.lastNr(), se.lastNr())
+}
+
+// TestReduceSAtPeriodBoundary tests that a segment that starts a little before a Period
+// boundary, as audio with an edit list does, is listed in the Period where it mostly plays (#385).
+func TestReduceSAtPeriodBoundary(t *testing.T) {
+	const timescale = 48000
+	pStart := uint64(60 * timescale)
+	entries := []*m.S{{T: new(pStart - 1024 - 2*96000), D: 96000, R: 5}}
+
+	first, firstNr := reduceS(entries, new(uint32(10)), timescale, 0, 60)
+	require.Len(t, first, 1)
+	require.Equal(t, pStart-1024-2*96000, *first[0].T)
+	require.Equal(t, 1, first[0].R)
+	require.Equal(t, uint32(10), *firstNr)
+
+	second, secondNr := reduceS(entries, new(uint32(10)), timescale, 60, 120)
+	require.Len(t, second, 1)
+	require.Equal(t, pStart-1024, *second[0].T)
+	require.Equal(t, 3, second[0].R)
+	require.Equal(t, uint32(12), *secondNr)
+}
+
 // TestEditListOffsetAvailabilityTime tests that editListOffset affects availability time calculations
 func TestEditListOffsetAvailabilityTime(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
