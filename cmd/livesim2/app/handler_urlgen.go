@@ -608,6 +608,11 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 			fmt.Fprintf(&sb, "chunkdurssr_%s/", chunkDurSSR)
 		}
 	}
+	if data.SSRASConfig != "" {
+		if err := verifySSRConfig(&ResponseConfig{SSRAS: data.SSRASConfig, ChunkDurSSR: data.ChunkDurSSR}); err != nil {
+			data.Errors = append(data.Errors, err.Error())
+		}
+	}
 
 	data.C2PAAvailable = aInfo.C2PA
 	c2pa := q.Get("c2pa")
