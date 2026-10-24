@@ -455,7 +455,9 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		}
 	}
 	// Set from the MPD type, since image AdaptationSets always use $Number$
-	mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, refSegEntries.lsi))
+	// MPD EventStreams change with time too, and each change needs a new publishTime.
+	eventsChangeS := float64(eventStreamsChangeS(cfg, endTimeMS))
+	mpd.PublishTime = m.ConvertToDateTime(max(calcPublishTime(cfg, refSegEntries.lsi), eventsChangeS))
 	if maxSegDur := maxLiveSegmentDuration(a, period); maxSegDur != nil {
 		mpd.MaxSegmentDuration = maxSegDur
 	}
@@ -508,10 +510,11 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 	}
 
 	if cfg.liveMPDType() == segmentNumber {
-		mpd.PublishTime, err = lastPeriodStartTime(mpd)
+		lastStartS, err := lastPeriodStartTime(mpd)
 		if err != nil {
 			return nil, fmt.Errorf("lastPeriodStartTime: %w", err)
 		}
+		mpd.PublishTime = m.ConvertToDateTime(max(lastStartS, eventsChangeS))
 	}
 
 	if afterStop {
@@ -607,16 +610,15 @@ func updateSwitchingAdaptationSet(as *m.AdaptationSetType, prevID uint32) {
 	as.SupplementalProperties = append(as.SupplementalProperties, sp)
 }
 
-// lastPeriodStartTime returns the absolute startTime of the last Period.
-func lastPeriodStartTime(mpd *m.MPD) (m.DateTime, error) {
+// lastPeriodStartTime returns the absolute startTime of the last Period in seconds.
+func lastPeriodStartTime(mpd *m.MPD) (float64, error) {
 	lastPeriod := mpd.Periods[len(mpd.Periods)-1]
 	lastRelStartS := time.Duration(*lastPeriod.Start).Seconds()
 	ast, err := mpd.AvailabilityStartTime.ConvertToSeconds()
 	if err != nil {
-		return "", err
+		return 0, err
 	}
-	lastAbsStart := ast + lastRelStartS
-	return m.ConvertToDateTime(lastAbsStart), nil
+	return ast + lastRelStartS, nil
 }
 
 func addPatchLocation(mpd *m.MPD, cfg *ResponseConfig) {
@@ -1090,6 +1092,36 @@ func addCC608Accessibility(cfg *ResponseConfig, period *m.Period) error {
 		return fmt.Errorf("no video adaptation set found")
 	}
 	return nil
+}
+
+// eventStreamsChangeS returns the latest time, at or before nowMS, at which the MPD EventStreams
+// of the sgai_, svta_ and scte35_ options changed, or the availabilityStartTime. Events enter
+// and leave the MPD as time goes on, and each change needs a new MPD@publishTime.
+func eventStreamsChangeS(cfg *ResponseConfig, nowMS int) int {
+	astS := cfg.StartTimeS
+	last := astS
+	lookBackS := 0
+	if cfg.TimeShiftBufferDepthS != nil {
+		lookBackS = *cfg.TimeShiftBufferDepthS
+	}
+	if sc := cfg.SGAI; sc != nil {
+		last = max(last, sc.lastChangeS(nowMS, astS, sc.ResolveOffsetS, 0, nil))
+	}
+	if sc := cfg.SVTA; sc != nil {
+		last = max(last, sc.lastChangeS(nowMS, astS, svtaLookAheadS, lookBackS, nil))
+	}
+	if sc := cfg.SCTE35; sc != nil && sc.MPDForm != "off" {
+		// Each cue appears LeadS before its splice point, as in addSCTE35Events.
+		announced := func(b adBreakInst) []int {
+			var times []int
+			for _, cp := range sc.cuePoints(b, astS) {
+				times = append(times, astS+int(cp.atS)-sc.LeadS)
+			}
+			return times
+		}
+		last = max(last, sc.lastChangeS(nowMS, astS, sc.LeadS, lookBackS, announced))
+	}
+	return last
 }
 
 // calcPublishTime calculates the last time there was a change in the manifest in seconds.

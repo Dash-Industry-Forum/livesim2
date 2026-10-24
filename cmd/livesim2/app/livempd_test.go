@@ -1866,6 +1866,55 @@ func TestEditListOffsetMPD(t *testing.T) {
 	})
 }
 
+// TestEventStreamPublishTime checks that MPD@publishTime changes whenever the MPD EventStreams
+// do, as ad breaks and SCTE-35 cues enter and leave the MPD (#388).
+func TestEventStreamPublishTime(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	for _, opts := range []string{
+		"sgai_p60:20",
+		"svta_p60:20",
+		"scte35_p60:20@10;mpd=xml",
+		"scte35_30:10,90:10;mpd=bin",
+		"segtimeline_1/svta_p60:20",
+		"segtimelinenr_1/scte35_p60:20@10;mpd=bin",
+	} {
+		t.Run(opts, func(t *testing.T) {
+			var prevEvents string
+			var prevPublishS float64
+			nrChanges := 0
+			for nowS := 10; nowS < 200; nowS++ {
+				nowMS := nowS*1000 + 500
+				cfg, err := processURLCfg("/livesim2/"+opts+"/testpic_2s/Manifest.mpd", nowMS)
+				require.NoError(t, err)
+				mpd, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, nowMS)
+				require.NoError(t, err)
+				var events strings.Builder
+				for _, p := range mpd.Periods {
+					for _, es := range p.EventStreams {
+						out, err := xml.Marshal(es)
+						require.NoError(t, err)
+						events.Write(out)
+					}
+				}
+				publishS, err := mpd.PublishTime.ConvertToSeconds()
+				require.NoError(t, err)
+				require.LessOrEqual(t, publishS, float64(nowS), "publishTime after now at %ds", nowS)
+				if nowS > 10 && events.String() != prevEvents {
+					nrChanges++
+					require.Greater(t, publishS, prevPublishS, "EventStreams changed at %ds", nowS)
+				}
+				prevEvents, prevPublishS = events.String(), publishS
+			}
+			require.Positive(t, nrChanges, "no EventStream change to check")
+		})
+	}
+}
+
 // TestEditListOffsetOwnTimeline tests that an audio timeline that is not made from a video
 // reference, as in an audio-only MPD, also has presentation times as S@t (issue #385).
 func TestEditListOffsetOwnTimeline(t *testing.T) {
