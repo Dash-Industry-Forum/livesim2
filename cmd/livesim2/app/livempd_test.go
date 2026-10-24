@@ -5,6 +5,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -505,24 +506,25 @@ func TestPublishTime(t *testing.T) {
 		periodsPerHour         int
 		nowMS                  int
 		wantedPublishTime      string
+		wantedErr              string
 	}{
 		{
-			desc:                  "Timeline with $Time$ 1s after start. No segments",
+			desc:                  "Timeline with $Time$ at start. No segments => too early",
 			asset:                 "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
 			mpdName:               "stream.mpd",
 			segTimelineTime:       true,
 			availabilityStartTime: 0,
 			nowMS:                 0,
-			wantedPublishTime:     "1970-01-01T00:00:00Z",
+			wantedErr:             "too early by 2000ms",
 		},
 		{
-			desc:                  "Timeline with $Time$ 1s after start. No segments",
+			desc:                  "Timeline with $Time$ 1s after start. No segments => too early",
 			asset:                 "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
 			mpdName:               "stream.mpd",
 			segTimelineTime:       true,
 			availabilityStartTime: 1682341800,
 			nowMS:                 1682341801_000,
-			wantedPublishTime:     "2023-04-24T13:10:00Z",
+			wantedErr:             "too early by 1000ms",
 		},
 		{
 			desc:                   "Timeline with $Time$ 3s, ato=1.5, 1 1/4 segments available",
@@ -669,7 +671,11 @@ func TestPublishTime(t *testing.T) {
 			err := verifyAndFillConfig(cfg, tc.nowMS)
 			require.NoError(t, err)
 			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nil, tc.nowMS)
-			assert.NoError(t, err)
+			if tc.wantedErr != "" {
+				require.EqualError(t, err, tc.wantedErr)
+				return
+			}
+			require.NoError(t, err)
 			assert.Equal(t, m.ConvertToDateTimeS(int64(tc.availabilityStartTime)), liveMPD.AvailabilityStartTime)
 			assert.Equal(t, m.DateTime(tc.wantedPublishTime), liveMPD.PublishTime)
 		})
@@ -3367,6 +3373,54 @@ func TestAdaptationSetIDs(t *testing.T) {
 					ids[string(as.ContentType)] = *as.Id
 				}
 				require.Equal(t, c.wantIDs, ids)
+			}
+		})
+	}
+}
+
+func TestSessionStartBeforeFirstSegment(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	logger := slog.Default()
+	err := am.discoverAssets(logger)
+	require.NoError(t, err)
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	// The session starts at 100s, and its first 2s segments are complete at 102s.
+	cases := []struct {
+		desc      string
+		mode      SegTimelineMode
+		atoS      float64
+		nowMS     int
+		wantedErr string
+	}{
+		{"timelineTime, first segment not complete", SegTimelineModeTime, 0, 101_000, "too early by 1000ms"},
+		{"timelineTime, first segment complete", SegTimelineModeTime, 0, 102_000, ""},
+		{"timelineNumber, first segment not complete", SegTimelineModeNr, 0, 101_000, "too early by 1000ms"},
+		{"timelineNumber, first segment complete", SegTimelineModeNr, 0, 102_000, ""},
+		{"timelineTime with ato, first segment not available", SegTimelineModeTime, 1.5, 100_400, "too early by 100ms"},
+		{"timelineTime with ato, first segment available", SegTimelineModeTime, 1.5, 100_500, ""},
+		{"$Number$, first segment not complete", SegTimelineModeNone, 0, 101_000, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			cfg := NewResponseConfig()
+			cfg.StartTimeS = 100
+			cfg.SegTimelineMode = tc.mode
+			cfg.AvailabilityTimeOffsetS = tc.atoS
+			liveMPD, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, tc.nowMS)
+			if tc.wantedErr != "" {
+				_, ok := errors.AsType[errTooEarly](err)
+				require.True(t, ok, "error %v", err)
+				require.EqualError(t, err, tc.wantedErr)
+				return
+			}
+			require.NoError(t, err)
+			for _, as := range liveMPD.Periods[0].AdaptationSets {
+				if stl := as.SegmentTemplate.SegmentTimeline; stl != nil {
+					assert.NotEmpty(t, stl.S, "SegmentTimeline of AS %d", *as.Id)
+				}
 			}
 		})
 	}
