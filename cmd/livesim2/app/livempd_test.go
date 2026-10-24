@@ -1091,6 +1091,51 @@ func TestMultiPeriod(t *testing.T) {
 	}
 }
 
+// TestNewPeriodBeforeFirstSegment checks that, in the SegmentTimeline modes, a new Period is only
+// in the MPD once its first segments are complete, since a SegmentTimeline needs an S element.
+func TestNewPeriodBeforeFirstSegment(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	logger := slog.Default()
+	err := am.discoverAssets(logger)
+	require.NoError(t, err)
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	// The Period P16 starts at 960s, and its first 2s segments are complete at 962s.
+	cases := []struct {
+		desc          string
+		mode          SegTimelineMode
+		nowMS         int
+		wantedPeriods []string
+	}{
+		{"timelineTime, first segment not complete", SegTimelineModeTime, 961_000, []string{"P15"}},
+		{"timelineTime, first segment complete", SegTimelineModeTime, 963_000, []string{"P15", "P16"}},
+		{"timelineNumber, first segment not complete", SegTimelineModeNr, 961_000, []string{"P15"}},
+		{"timelineNumber, first segment complete", SegTimelineModeNr, 963_000, []string{"P15", "P16"}},
+		{"$Number$, first segment not complete", SegTimelineModeNone, 961_000, []string{"P15", "P16"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			cfg := NewResponseConfig()
+			cfg.PeriodsPerHour = new(60)
+			cfg.SegTimelineMode = tc.mode
+			liveMPD, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, tc.nowMS)
+			require.NoError(t, err)
+			ids := make([]string, 0, len(liveMPD.Periods))
+			for _, p := range liveMPD.Periods {
+				ids = append(ids, p.Id)
+				for _, as := range p.AdaptationSets {
+					if stl := as.SegmentTemplate.SegmentTimeline; stl != nil {
+						assert.NotEmpty(t, stl.S, "SegmentTimeline of %s AS %d", p.Id, *as.Id)
+					}
+				}
+			}
+			assert.Equal(t, tc.wantedPeriods, ids)
+		})
+	}
+}
+
 func TestRelStartStopTimeIntoLocation(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	am := newAssetMgr(vodFS, "", false, false)
