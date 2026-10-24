@@ -238,7 +238,8 @@ The following restrictions apply to the VoD manifest to be used with livesim2
 
 * live-profile (separate segments)
 * one Period with all representations of "same" duration
-* no BaseURL elements
+* no BaseURL elements, except a relative AdaptationSet BaseURL to another asset, such as `../testpic_2s/`,
+  which then provides the segments of that AdaptationSet (`testpic_6s/mixeddur.mpd` in livesim-content)
 * no Location elements
 * initialization and media attributes in SegmentTemplate on AdaptationSet level
 

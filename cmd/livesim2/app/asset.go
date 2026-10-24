@@ -15,6 +15,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"math"
+	"net/url"
 	"os"
 	"path"
 	"regexp"
@@ -96,6 +97,7 @@ func (am *assetMgr) discoverAssets(logger *slog.Logger) error {
 		}
 		logger.Info("Asset consolidated", "loopDurMS", a.LoopDurMS)
 	}
+	am.linkBaseURLAssets()
 	return nil
 }
 
@@ -157,6 +159,9 @@ func (am *assetMgr) loadMPDReps(logger *slog.Logger, asset *asset, mpdName strin
 	for _, as := range mpd.Periods[0].AdaptationSets {
 		if as.SegmentTemplate == nil {
 			return fmt.Errorf("no SegmentTemplate in adaptation set")
+		}
+		if _, ok := baseURLAssetPath(assetPath, as); ok {
+			continue // The Representations are those of another asset, see linkBaseURLAssets
 		}
 		for _, rep := range as.Representations {
 			if rep.SegmentTemplate != nil {
@@ -516,6 +521,8 @@ type asset struct {
 	mpdRepConflicts map[string][]string `json:"-"`
 	// mpdNotLive gives, for each MPD that cannot be made live, the reason. It is still a VoD MPD.
 	mpdNotLive map[string]string `json:"-"`
+	// baseURLAssets are the other assets that AdaptationSet BaseURLs of the MPDs point to, by path
+	baseURLAssets map[string]*asset `json:"-"`
 }
 
 func newAsset(assetPath string) *asset {
@@ -526,6 +533,59 @@ func newAsset(assetPath string) *asset {
 		mpdRepIDs:       make(map[string][]string),
 		mpdRepConflicts: make(map[string][]string),
 		mpdNotLive:      make(map[string]string),
+		baseURLAssets:   make(map[string]*asset),
+	}
+}
+
+// baseURLAssetPath returns the path of the asset that a relative BaseURL of an AdaptationSet
+// points to, such as testpic_2s for ../testpic_2s/ in testpic_6s, or ok=false if the
+// AdaptationSet has no BaseURL that leads out of the asset.
+func baseURLAssetPath(assetPath string, as *m.AdaptationSetType) (string, bool) {
+	if len(as.BaseURLs) == 0 {
+		return "", false
+	}
+	u, err := url.Parse(string(as.BaseURLs[0].Value))
+	if err != nil || u.IsAbs() || u.Host != "" || strings.HasPrefix(u.Path, "/") {
+		return "", false
+	}
+	target := path.Clean(path.Join(assetPath, u.Path))
+	if target == assetPath || strings.HasPrefix(target, assetPath+"/") {
+		return "", false
+	}
+	return target, true
+}
+
+// linkBaseURLAssets links the AdaptationSets whose BaseURL points to another asset, from
+// which the segments then come, to that asset. An MPD whose BaseURL points to no asset, or
+// to one without the Representations, cannot be made live.
+func (am *assetMgr) linkBaseURLAssets() {
+	for _, a := range am.assets {
+		for mpdName := range a.MPDs {
+			if a.mpdNotLive[mpdName] != "" {
+				continue
+			}
+			mpd, err := a.getVodMPD(mpdName)
+			if err != nil {
+				continue
+			}
+			for _, as := range mpd.Periods[0].AdaptationSets {
+				target, ok := baseURLAssetPath(a.AssetPath, as)
+				if !ok {
+					continue
+				}
+				b, ok := am.assets[target]
+				if !ok {
+					a.mpdNotLive[mpdName] = fmt.Sprintf("BaseURL %s points to no asset", as.BaseURLs[0].Value)
+					break
+				}
+				for _, rep := range as.Representations {
+					if _, ok := b.Reps[rep.Id]; !ok {
+						a.mpdNotLive[mpdName] = fmt.Sprintf("asset %s has no Representation %s", target, rep.Id)
+					}
+				}
+				a.baseURLAssets[target] = b
+			}
+		}
 	}
 }
 
