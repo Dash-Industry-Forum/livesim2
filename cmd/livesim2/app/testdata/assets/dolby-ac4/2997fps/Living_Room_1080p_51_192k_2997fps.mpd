@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <MPD
-  mediaPresentationDuration="PT2.0028S"
+  mediaPresentationDuration="PT2.002S"
   minBufferTime="PT2.00S"
   profiles="urn:mpeg:dash:profile:isoff-live:2011"
   type="static"
