@@ -1,0 +1,15 @@
+# dashcheck errors that are known for the testdata profile (cmd/livesim2/app/testdata/assets).
+# Format: <rule> <path regex (ERE, matched against the whole path)>  # cause. See run.sh.
+# A ~ before the rule marks an error that depends on when the check runs.
+# Remove a line when its cause is fixed; run.sh lists the lines that matched nothing.
+# The overview of the open causes is livesim2 issue #394.
+
+# livesim2 #399: until the first segment of a new Period is complete, its SegmentTimeline is empty (segtimeline_ modes)
+~MPD-XSD /livesim2/periods_.*segtimeline.*
+# The same, plus with dashcheck v0.2.1 and earlier at the edges of every live Period (tobbee/dashcheck#9)
+~LIVE-NO-SEGMENTS /livesim2/periods_.*
+# dashcheck: cannot pick segments when @availabilityTimeOffset is INF
+ADDR-SEGMENTS /livesim2/ato_inf/testpic_2s/Manifest\.mpd
+
+# Test assets: cea608.mpd lists 1 h, but only the first segments are in the repository
+HTTP-SEGMENT /vod/testpic_2s/cea608\.mpd
