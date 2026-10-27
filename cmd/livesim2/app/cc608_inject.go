@@ -249,7 +249,7 @@ func applyCC608(seg *mp4.MediaSegment, meta segMeta, cfg *ResponseConfig) error 
 	}
 	codec, ok := cc608CodecFor(rep.Codecs)
 	if !ok {
-		return fmt.Errorf("cc608: codec %q is not AVC or HEVC", rep.Codecs)
+		return fmt.Errorf("%w: codec %q", errCC608Unsupported, rep.Codecs)
 	}
 	if rep.initSeg == nil || rep.initSeg.Moov == nil || rep.initSeg.Moov.Mvex == nil {
 		return fmt.Errorf("cc608: missing init/trex for representation %q", rep.ID)

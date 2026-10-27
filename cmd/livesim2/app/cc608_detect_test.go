@@ -122,7 +122,8 @@ func TestGenLiveSegmentCC608RejectCaptioned(t *testing.T) {
 }
 
 // TestCC608RejectHTTP checks the end-to-end status codes: 400 for a timecc608 request
-// against the captioned manifest and one of its segments, 200 for the plain manifest.
+// against the captioned manifest and one of its segments, and against AV1 and VVC video,
+// which cannot carry the captions, 200 for the plain manifest.
 func TestCC608RejectHTTP(t *testing.T) {
 	cfg := ServerConfig{VodRoot: "testdata/assets", TimeoutS: 0, LogFormat: logging.LogDiscard}
 	require.NoError(t, logging.InitSlog(cfg.LogLevel, cfg.LogFormat))
@@ -139,6 +140,9 @@ func TestCC608RejectHTTP(t *testing.T) {
 		{"captioned mpd rejected", "/livesim2/timecc608_CC1-eng/testpic_2s/cea608.mpd", http.StatusBadRequest},
 		{"captioned segment rejected", "/livesim2/timecc608_CC1-eng/testpic_2s/V300_with_cc1_and_cc3/40.m4s?nowMS=100000", http.StatusBadRequest},
 		{"plain mpd accepted", "/livesim2/timecc608_CC1-eng/testpic_2s/Manifest.mpd", http.StatusOK},
+		{"av1 mpd rejected", "/livesim2/timecc608_CC1-eng/testpic_2s_av1/Manifest.mpd", http.StatusBadRequest},
+		{"av1 segment rejected", "/livesim2/timecc608_CC1-eng/testpic_2s_av1/av1/40.m4s?nowMS=100000", http.StatusBadRequest},
+		{"vvc mpd rejected", "/livesim2/timecc608_CC1-eng/testpic_2s_vvc/Manifest.mpd", http.StatusBadRequest},
 	}
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
