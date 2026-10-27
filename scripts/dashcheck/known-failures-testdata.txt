@@ -4,8 +4,6 @@
 # Remove a line when its cause is fixed; run.sh lists the lines that matched nothing.
 # The overview of the open causes is livesim2 issue #394.
 
-# dashcheck v0.2.1 and earlier: at the edges of every live Period (tobbee/dashcheck#9, fixed on dashcheck main)
-~LIVE-NO-SEGMENTS /livesim2/periods_.*
 # dashcheck: cannot pick segments when @availabilityTimeOffset is INF
 ADDR-SEGMENTS /livesim2/ato_inf/testpic_2s/Manifest\.mpd
 

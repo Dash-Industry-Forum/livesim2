@@ -4,28 +4,6 @@
 # Remove a line when its cause is fixed; run.sh lists the lines that matched nothing.
 # The overview of the open causes is livesim2 issue #394.
 
-# The livesim2 lines below are fixed on main by #396. Remove them once livesim2.dashif.org runs a release with it.
-# livesim2 #391: the Location MPD of startrel_ drops the Location element but keeps @publishTime
-MPD-UPDATE-PUBLISHTIME /livesim2/startrel_.*
-# livesim2 #388: MPD EventStreams (scte35_ with mpd=, sgai_, svta_) change the MPD without a new @publishTime
-~MPD-UPDATE-PUBLISHTIME /livesim2/.*(mpd=|sgai_|svta_).*
-# livesim2 #390: low-latency $Number$ MPDs have @timescale 1 or 1000 instead of the media timescale
-SEG-LL-TIMESCALE /livesim2/.*ato_.*
-# livesim2 #386: on-the-fly chunks get trun version 1 even when the source has version 0 and an edit list
-SEG-CMAF-COMPTIME /livesim2/chunkdur_.*
-# livesim2 #385: the audio-only SegmentTimeline ignores the audio edit list, so S@t is the tfdt, not the presentation time
-SEG-EPT /livesim2/segtimeline(nr)?_1/testpic_2s/audio\.mpd
-# livesim2 #393: in SegmentTimeline modes, the video of mixeddur.mpd (2 s, from testpic_2s) gets testpic_6s's 6 s timeline
-SEG-CONTINUITY /livesim2/segtimeline(nr)?_1/testpic_6s/mixeddur\.mpd
-SEG-DURATION /livesim2/segtimeline(nr)?_1/testpic_6s/mixeddur\.mpd
-# livesim2 #392: /assets lists the MPDs with side-loaded subtitles, which cannot be made live (500)
-HTTP-MPD /livesim2/(segtimeline(nr)?_1/)?testpic_2s/(img|ttml|webvtt)_subs\.mpd
-
-# livesim2 #399: until the first segment of a new Period is complete, its SegmentTimeline is empty (segtimeline_ modes)
-~MPD-XSD /livesim2/periods_.*segtimeline.*
-# The same, plus with dashcheck v0.2.1 and earlier at the edges of every live Period (tobbee/dashcheck#9)
-~LIVE-NO-SEGMENTS /livesim2/periods_.*
-
 # Content: imsc1_img has 64 s of image subtitles in a 1 h asset, by design
 HTTP-SEGMENT /livesim2/(segtimeline(nr)?_1/)?testpic_2s/imsc1_img\.mpd
 LIVE-NO-SEGMENTS /livesim2/(segtimeline(nr)?_1/)?testpic_2s/imsc1_img\.mpd
