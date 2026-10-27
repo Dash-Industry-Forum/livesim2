@@ -50,8 +50,6 @@ jobs:
 
       # Regenerate *_templ.go from *.templ and fail if it differs from what is
       # committed, so a forgotten `templ generate` cannot land stale code.
-      # Pinned to the github.com/a-h/templ version in go.mod / Makefile.
+      # The templ version is TEMPL_VERSION in the Makefile, as for pre-commit.
       - name: Verify templ generated code is up to date
-        run: |
-          go run github.com/a-h/templ/cmd/templ@v0.3.1020 generate
-          git diff --exit-code
+        run: make templ-check
