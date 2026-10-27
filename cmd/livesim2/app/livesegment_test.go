@@ -1431,3 +1431,42 @@ func TestUpdateSidx(t *testing.T) {
 		})
 	}
 }
+
+// TestEncryptHEVCInbandPPS checks that HEVC video whose samples carry a PPS that the hvcC lacks,
+// as bbb_hevc_ac3_8s has, is encrypted, and that its samples decrypt to those of the clear segment.
+// cbcs needs that PPS to find the end of the slice headers.
+func TestEncryptHEVCInbandPPS(t *testing.T) {
+	server, get := testLiveServer(t)
+	a, ok := server.assetMgr.findAsset("bbb_hevc_ac3_8s")
+	require.True(t, ok)
+	rep := a.Reps["1"]
+	const nr = 50
+	nowMS := (nr + 5) * a.SegmentDurMS
+	status, clearBody := get(fmt.Sprintf("/livesim2/bbb_hevc_ac3_8s/video_%d.m4s", nr), nowMS)
+	require.Equal(t, http.StatusOK, status)
+	clear := decodeSegmentSamples(t, clearBody, rep.initSeg)
+	for _, scheme := range []string{"cenc", "cbcs"} {
+		t.Run(scheme, func(t *testing.T) {
+			base := "/livesim2/eccp_" + scheme + "/bbb_hevc_ac3_8s/"
+			status, body := get(base+"video_init.mp4", nowMS)
+			require.Equal(t, http.StatusOK, status)
+			initFile, err := mp4.DecodeFile(bytes.NewReader(body))
+			require.NoError(t, err)
+			di, err := mp4.DecryptInit(initFile.Init)
+			require.NoError(t, err)
+
+			status, body = get(base+fmt.Sprintf("video_%d.m4s", nr), nowMS)
+			require.Equal(t, http.StatusOK, status, string(body))
+			encFile, err := mp4.DecodeFile(bytes.NewReader(body))
+			require.NoError(t, err)
+			require.NoError(t, mp4.DecryptSegment(encFile.Segments[0], di, rep.encData.key[:]))
+			var decrypted bytes.Buffer
+			require.NoError(t, encFile.Segments[0].Encode(&decrypted))
+			dec := decodeSegmentSamples(t, decrypted.Bytes(), rep.initSeg)
+			require.Len(t, dec, len(clear))
+			for i := range clear {
+				require.Equal(t, clear[i].Data, dec[i].Data, "sample %d", i)
+			}
+		})
+	}
+}
