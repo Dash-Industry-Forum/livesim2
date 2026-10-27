@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Go 1.27.3 or later is required (`go.mod`), for the security fixes of Go 1.27.2 and 1.27.3 in `crypto/tls`,
+  `crypto/x509`, `net/http` and other packages.
+
 ### Fixed
 
 - Audio with an edit list in SegmentTimeline modes: audio-only MPDs had `S@t` 1024 ticks late, and with
