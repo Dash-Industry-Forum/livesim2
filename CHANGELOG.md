@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Nothing yet
+
+## [1.15.3] - 2026-10-27
+
 ### Changed
 
 - Go 1.27.3 or later is required (`go.mod`), for the security fixes of Go 1.27.2 and 1.27.3 in `crypto/tls`,
@@ -769,7 +773,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - features and URLs listed at livesim2 root page
 - configurable generated stpp subtitles with timing info
 
-[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.15.2...HEAD
+[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.15.3...HEAD
+[1.15.3]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.15.2...v1.15.3
 [1.15.2]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.15.1...v1.15.2
 [1.15.1]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.15.0...v1.15.1
 [1.15.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.14.0...v1.15.0
