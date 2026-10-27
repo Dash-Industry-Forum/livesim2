@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!-- MPD file Generated with GPAC version 2.1-DEV-rev420-g9f8725974-master at 2022-10-17T09:54:19.217Z -->
-<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" minBufferTime="PT2.002S" type="static" mediaPresentationDuration="PT0H0M8.008S" maxSegmentDuration="PT0H0M2.002S" profiles="urn:mpeg:dash:profile:isoff-live:2011,urn:mpeg:dash:profile:cmaf:2019,urn:cta:wave:test-content-media-profile:2022">
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" minBufferTime="PT2.002S" type="static" mediaPresentationDuration="PT0H0M8.008S" maxSegmentDuration="PT0H0M2.006S" profiles="urn:mpeg:dash:profile:isoff-live:2011,urn:mpeg:dash:profile:cmaf:2019,urn:cta:wave:test-content-media-profile:2022">
   <ProgramInformation>
     <Title>tos, 1920x1080, 29.97002997002997fps, cfhd, Test Vector 1 for 8008ms + livesim beeps</Title>
     <Source>tos_L1_1920x1080@29.97_30 version 3 (2022-04-20)</Source>
