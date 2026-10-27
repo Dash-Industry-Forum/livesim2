@@ -143,7 +143,8 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		_, mpdName := path.Split(contentPart)
 		err := writeLiveMPD(log, w, cfg, s.Cfg.DrmCfg, a, mpdName, nowMS)
 		if err != nil {
-			if errors.Is(err, errCC608AlreadyCaptioned) || errors.Is(err, errC2PAUnavailable) {
+			if errors.Is(err, errCC608AlreadyCaptioned) || errors.Is(err, errC2PAUnavailable) ||
+				errors.Is(err, errCannotEncrypt) {
 				log.Info("liveMPD rejected", "err", err)
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return

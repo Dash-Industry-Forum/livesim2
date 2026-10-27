@@ -1315,6 +1315,30 @@ func TestWriteSubSegmentWithChunkDuration(t *testing.T) {
 	}
 }
 
+// TestEncryptUnsupportedTracks checks eccp_ on tracks that livesim2 does not encrypt.
+// An MPD with video or audio of such a codec (MPEG-H, VVC) is refused, and subtitle
+// tracks keep their clear segments, as their init segments already did, also when chunked.
+func TestEncryptUnsupportedTracks(t *testing.T) {
+	_, get := testLiveServer(t)
+	const nowMS = 100_000
+	for _, mpd := range []string{"mpegh_BL_1_6/BL_1_6.mpd", "testpic_2s_vvc/Manifest.mpd"} {
+		status, body := get("/livesim2/eccp_cenc/"+mpd, nowMS)
+		require.Equal(t, http.StatusBadRequest, status, mpd)
+		require.Contains(t, string(body), "cannot be encrypted", mpd)
+	}
+	status, _ := get("/livesim2/eccp_cenc/testpic_2s/Manifest_imsc1.mpd", nowMS)
+	require.Equal(t, http.StatusOK, status)
+	for _, prefix := range []string{"", "chunkdur_0.5/"} {
+		for _, seg := range []string{"imsc1_txt_sv/init.mp4", "imsc1_txt_sv/40.m4s"} {
+			status, clear := get("/livesim2/"+prefix+"testpic_2s/"+seg, nowMS)
+			require.Equal(t, http.StatusOK, status, prefix+seg)
+			status, body := get("/livesim2/"+prefix+"eccp_cenc/testpic_2s/"+seg, nowMS)
+			require.Equal(t, http.StatusOK, status, prefix+seg)
+			require.Equal(t, clear, body, "%s%s is in the clear", prefix, seg)
+		}
+	}
+}
+
 // TestLiveSegmentSidx checks that the sidx a VoD segment brings describes the live segment
 // as sent, also when a larger tfdt, emsg boxes, captions or encryption grow it, and for
 // audio segments built from other samples than the VoD segment.

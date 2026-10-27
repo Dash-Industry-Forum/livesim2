@@ -252,14 +252,18 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		case "video", "audio":
 			if cfg.DRM != "" {
 				if a.refRep.PreEncrypted {
-					return nil, fmt.Errorf("drm parameter %q, but pre-encrypted asset %s cannot be encrypted again",
-						cfg.DRM, a.AssetPath)
+					return nil, fmt.Errorf("%w: drm parameter %q, but pre-encrypted asset %s cannot be encrypted again",
+						errCannotEncrypt, cfg.DRM, a.AssetPath)
+				}
+				// Only codecs that prepareForEncryption accepts get the encryption data.
+				for _, rep := range as.Representations {
+					if rd, ok := a.Reps[rep.Id]; ok && rd.encData == nil {
+						return nil, fmt.Errorf("%w: drm parameter %q, but codec %s of representation %s is not supported",
+							errCannotEncrypt, cfg.DRM, rd.Codecs, rep.Id)
+					}
 				}
 				switch cfg.DRM {
 				case "eccp-cenc", "eccp-cbcs":
-					if a.refRep.PreEncrypted {
-						return nil, fmt.Errorf("pre-encrypted asset %s cannot be encrypted again", a.AssetPath)
-					}
 					laURL := genLaURL(cfg)
 					cp := m.NewContentProtection()
 					cp.SchemeIdUri = "urn:mpeg:dash:mp4protection:2011"
