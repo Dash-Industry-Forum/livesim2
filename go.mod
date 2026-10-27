@@ -1,6 +1,6 @@
 module github.com/Dash-Industry-Forum/livesim2
 
-go 1.27.0
+go 1.27.3
 
 require (
 	github.com/Comcast/gots/v2 v2.3.0
