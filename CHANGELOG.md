@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   content. The captions of a segment now run across its fragments.
 - `eccp_` and `drm_`: subtitle segments gave 500 instead of staying clear like their init segments, and MPDs
   with tracks that livesim2 cannot encrypt, such as MPEG-H and VVC, were served. Such MPDs now get 400.
+- `timecc608_` on AV1 or VVC video gave 500 for every segment. The MPD and its segments now get 400.
 
 ## [1.15.2] - 2026-10-23
 
