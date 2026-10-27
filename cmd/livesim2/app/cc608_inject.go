@@ -229,17 +229,16 @@ func isVCLNalu(nalu []byte, codec carriage.Codec) bool {
 }
 
 // applyCC608 injects in-band CTA-608 captions into a decoded video segment in
-// place. For each fragment it reads the full samples, splices the per-frame SEI
-// (via injectCC608), and writes the grown samples back into the fragment's trun
+// place. It reads the full samples of all fragments, splices the per-frame SEI
+// (via injectCC608), and writes the grown samples back into each fragment's trun
 // sizes and mdat. It is only called for clear (non-DRM, non-pre-encrypted) video,
-// so there is no senc/saio to adjust; and since only per-sample size *values*
-// change, the moof size is unchanged and trun.DataOffset / mdat.StartPos stay
-// valid (mirroring the tfdt-shift bookkeeping in genLiveSegment).
+// so there is no senc/saio to adjust; and Fragment.Encode sets trun.DataOffset, so a
+// trun that writeBackSamples gives per-sample sizes may grow the moof.
 //
-// Each fragment is one caption unit. Every mode but flip-at-cue-start pop-on keeps a
-// cue's data inside its own unit; that one transmits a cue's build ahead of its flip (see
-// cc608UnitFrames), so a fragment also carries the build for the first cue of whatever
-// follows it: the next fragment of this segment, or — for the last fragment — the first
+// The segment is one caption unit, whatever its fragments: low-latency content can have
+// fragments of a single frame, too short to hold a cue. Every mode but flip-at-cue-start
+// pop-on keeps a cue's data inside its own unit; that one transmits a cue's build ahead
+// of its flip (see cc608UnitFrames), so a segment also carries the build for the first
 // cue of the next segment, which is why that unit's number and start time are passed
 // down too.
 func applyCC608(seg *mp4.MediaSegment, meta segMeta, cfg *ResponseConfig) error {
@@ -260,41 +259,53 @@ func applyCC608(seg *mp4.MediaSegment, meta segMeta, cfg *ResponseConfig) error 
 	mediaMS := func(ticks uint64) int64 {
 		return int64(cfg.StartTimeS)*1000 + int64(ticks)*1000/int64(meta.timescale)
 	}
-	var samples []mp4.FullSample // reused for all fragments
+	var samples []mp4.FullSample
+	fragEnds := make([]int, len(seg.Fragments)) // index after each fragment's last sample
 	for i, frag := range seg.Fragments {
 		var err error
-		samples, err = frag.AppendFullSamples(samples[:0], trex)
+		samples, err = frag.AppendFullSamples(samples, trex)
 		if err != nil {
 			return fmt.Errorf("cc608 appendFullSamples: %w", err)
 		}
-		if len(samples) == 0 {
+		fragEnds[i] = len(samples)
+	}
+	if len(samples) == 0 {
+		return nil
+	}
+	fps, err := cc608FPS(rep, samples)
+	if err != nil {
+		return err
+	}
+	start := samples[0].DecodeTime
+	var dur uint64
+	for _, s := range samples {
+		dur += uint64(s.Dur)
+	}
+	unit := generate.Unit{Nr: int64(meta.newNr), StartMS: mediaMS(start), Frames: len(samples)}
+	// The next segment starts where this one ends, computed in media ticks like this
+	// segment's own start so a non-integer frame duration cannot drift.
+	next := generate.Unit{Nr: unit.Nr + 1, StartMS: mediaMS(start + dur)}
+	payload, err := injectCC608(samples, fps, unit, next, codec, cc)
+	if err != nil {
+		return err
+	}
+	// The payload holds the samples in decode order, so each fragment's share follows
+	// the one of the fragment before.
+	first, offset := 0, 0
+	for i, frag := range seg.Fragments {
+		fragSamples := samples[first:fragEnds[i]]
+		if len(fragSamples) == 0 {
 			continue
 		}
-		fps, err := cc608FPS(rep, samples)
-		if err != nil {
-			return err
+		size := 0
+		for _, s := range fragSamples {
+			size += int(s.Size)
 		}
-		fragStart := frag.Moof.Traf.Tfdt.BaseMediaDecodeTime()
-		var fragDur uint64
-		for _, s := range samples {
-			fragDur += uint64(s.Dur)
-		}
-		unit := generate.Unit{Nr: int64(meta.newNr), StartMS: mediaMS(fragStart), Frames: len(samples)}
-		// The unit after the last fragment is the next segment; earlier fragments are
-		// followed by another fragment of this segment, which keeps the same number.
-		// Either way it starts where this fragment ends, computed in media ticks like
-		// the fragment's own start so a non-integer frame duration cannot drift.
-		next := generate.Unit{Nr: unit.Nr, StartMS: mediaMS(fragStart + fragDur)}
-		if i == len(seg.Fragments)-1 {
-			next.Nr++
-		}
-		payload, err := injectCC608(samples, fps, unit, next, codec, cc)
-		if err != nil {
-			return err
-		}
-		if err := writeBackSamples(frag, samples, payload); err != nil {
+		end := offset + size
+		if err := writeBackSamples(frag, fragSamples, payload[offset:end:end]); err != nil {
 			return fmt.Errorf("cc608: %w", err)
 		}
+		first, offset = fragEnds[i], end
 	}
 	// Injection grows each fragment; writeLiveSegment updates the sidx sizes (updateSidx).
 	return nil
@@ -315,14 +326,15 @@ func cc608FPS(rep *RepData, samples []mp4.FullSample) (float64, error) {
 
 // writeBackSamples writes grown samples back into a fragment: it updates each
 // trun per-sample size and makes payload, the samples' data in decode order, the mdat data.
+// A trun that takes its sample size from tfhd or trex, as in a fragment of one frame,
+// gets per-sample sizes; it grows by 4 bytes per sample, and Fragment.Encode sets its
+// data offset after the larger moof.
 func writeBackSamples(frag *mp4.Fragment, samples []mp4.FullSample, payload []byte) error {
 	trun := frag.Moof.Traf.Trun
-	if !trun.HasSampleSize() {
-		return fmt.Errorf("trun without per-sample sizes is not supported")
-	}
 	if len(trun.Samples) != len(samples) {
 		return fmt.Errorf("trun has %d samples but got %d", len(trun.Samples), len(samples))
 	}
+	trun.Flags |= mp4.TrunSampleSizePresentFlag
 	for i := range samples {
 		trun.Samples[i].Size = samples[i].Size
 	}
