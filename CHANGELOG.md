@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Go 1.27.3 or later is required (`go.mod`), for the security fixes of Go 1.27.2 and 1.27.3 in `crypto/tls`,
   `crypto/x509`, `net/http` and other packages.
 - mp4ff dependency bumped to v0.61.0, which fixes cbcs encryption (500) of video whose samples carry a PPS that the
-  sample entry lacks, such as `bbb_hevc_ac3_8s`; hi264 bumped to v0.12.1.
+  sample entry lacks, such as `bbb_hevc_ac3_8s`; also hi264 v0.12.1, templ v0.3.1100, chi v5.5.0, huma v2.40.0,
+  certmagic v0.25.6 and Prometheus client_golang v1.25.0.
 
 ### Fixed
 

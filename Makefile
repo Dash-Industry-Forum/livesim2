@@ -3,7 +3,7 @@ all: test check coverage build
 
 # templ version used to generate *_templ.go from *.templ. Keep in sync with the
 # github.com/a-h/templ require in go.mod.
-TEMPL_VERSION := v0.3.1020
+TEMPL_VERSION := v0.3.1100
 
 .PHONY: build
 build: templ livesim2 dashfetcher cmaf-ingest-receiver
