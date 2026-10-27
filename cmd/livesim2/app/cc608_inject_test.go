@@ -721,6 +721,33 @@ func TestGenLiveSegmentCC608_2997fps(t *testing.T) {
 	}, flips)
 }
 
+// TestGenLiveSegmentCC608OneFrameFragments checks timecc608 on the 25 fps WAVE video, whose
+// 2 s segments are made of 50 one-frame fragments. The segment is one caption unit, so its
+// two 1 s cues are painted across the fragments; a one-frame unit has room for no cue.
+func TestGenLiveSegmentCC608OneFrameFragments(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	logger := slog.Default()
+	require.NoError(t, am.discoverAssets(logger))
+	asset, ok := am.findAsset("WAVE/av")
+	require.True(t, ok)
+
+	const nowMS = 100_000
+	const nr = 40 // 2s segments at 25fps -> 50 frames, two 25-frame cues
+	media := fmt.Sprintf("video25fps/%d.m4s", nr)
+	so, err := genLiveSegment(logger, vodFS, asset, NewResponseConfig(), media, nowMS, false)
+	require.NoError(t, err)
+	require.Len(t, so.seg.Fragments, 50)
+
+	cfg := NewResponseConfig()
+	cfg.CC608 = cc608Cfg(t, "CC1-eng")
+	samples := cc608SegSamples(t, vodFS, asset, cfg, media, nowMS, true)
+	require.Len(t, samples, 50)
+	screens := decodeScreens(t, samples, carriage.CodecAVC)
+	require.Equal(t, "00:01:20.000|SEG 40", cc608ScreenLines(screens[24], cc608Line1Row, cc608Line2Row))
+	require.Equal(t, "00:01:21.000|SEG 40", cc608ScreenLines(screens[49], cc608Line1Row, cc608Line2Row))
+}
+
 // TestGenLiveSegmentCC608AudioUnchanged confirms timecc608 is a no-op for audio
 // (contentType != "video"): the audio segment is byte-for-byte identical with and
 // without the option.

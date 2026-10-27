@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `start_` in SegmentTimeline modes: the MPD had an empty `SegmentTimeline` until the first segment was
   available. It now gives 425 Too Early until then, as before the start time, where the message now has the
   right time (#399).
+- `timecc608_` gave 500 for video whose segments consist of one-frame fragments, such as the WAVE 25 fps
+  content. The captions of a segment now run across its fragments.
 
 ## [1.15.2] - 2026-10-23
 
