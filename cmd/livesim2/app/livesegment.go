@@ -580,7 +580,7 @@ func updateSidx(seg *mp4.MediaSegment, meta segMeta) {
 func encryptFrags(log *slog.Logger, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
 	rp *RepData, frags []*mp4.Fragment) error {
 	enc, err := fragmentEncryptor(log, cfg, drmCfg, rp)
-	if err != nil {
+	if err != nil || enc == nil {
 		return err
 	}
 	for i, f := range frags {
@@ -596,12 +596,17 @@ func encryptFrags(log *slog.Logger, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
 // encryptor, in order. mp4ff makes a fresh per-sequence sample protector for it, which
 // keeps AV1 reference-frame state consistent across the fragments and safe under
 // concurrent requests (ipd itself is immutable and shared).
+// It returns nil for a track without encryption data, such as a subtitle track, whose
+// init segment matchInit serves in the clear.
 func fragmentEncryptor(log *slog.Logger, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
 	rp *RepData) (*mp4.FragmentEncryptor, error) {
 	var ipd *mp4.InitProtectData
 	var key, kid, iv []byte
 	var scheme string
 	ed := rp.encData
+	if ed == nil {
+		return nil, nil
+	}
 	switch cfg.DRM {
 	case "eccp-cenc", "eccp-cbcs":
 		scheme = strings.TrimPrefix(cfg.DRM, "eccp-")

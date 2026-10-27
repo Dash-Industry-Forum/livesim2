@@ -14,6 +14,9 @@ var (
 	errGone           = errors.New("gone")
 	errNotLive        = errors.New("the MPD cannot be made live")
 	ErrAtoInfTimeline = errors.New("infinite availabilityTimeOffset for SegmentTimeline")
+	// errCannotEncrypt is returned when drm or eccp is requested for a video or audio
+	// track that livesim2 cannot encrypt. It maps to HTTP 400.
+	errCannotEncrypt = errors.New("drm: track cannot be encrypted")
 )
 
 type errTooEarly struct {
