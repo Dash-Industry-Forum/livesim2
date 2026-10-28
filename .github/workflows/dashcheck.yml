@@ -22,13 +22,13 @@ jobs:
   testdata:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
           go-version: "1.27"
-
-      - name: Checkout
-        uses: actions/checkout@v7
 
       - name: Install dashcheck
         run: |
@@ -54,7 +54,7 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dashcheck-testdata
           path: |
@@ -64,13 +64,13 @@ jobs:
   production:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
           go-version: "1.27"
-
-      - name: Checkout
-        uses: actions/checkout@v7
 
       - name: Install dashcheck
         run: |
@@ -85,7 +85,7 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dashcheck-production
           path: dashcheck-report.json
