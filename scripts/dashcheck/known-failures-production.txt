@@ -7,3 +7,7 @@
 # Content: imsc1_img has 64 s of image subtitles in a 1 h asset, by design
 HTTP-SEGMENT /livesim2/(segtimeline(nr)?_1/)?testpic_2s/imsc1_img\.mpd
 LIVE-NO-SEGMENTS /livesim2/(segtimeline(nr)?_1/)?testpic_2s/imsc1_img\.mpd
+
+# Content: the testpic4_8s video has maxWidth 1280 and maxHeight 720, but is at most 960x540.
+# livesim-content PR #18 generates the asset with the right values.
+XCHK-CMAF-SIZE /livesim2/chunkdur_1/ato_7/testpic4_8s/Manifest(300)?\.mpd

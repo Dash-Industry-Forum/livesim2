@@ -6,10 +6,13 @@
 #   host     the livesim2 server, e.g. http://localhost:8888 or https://livesim2.dashif.org
 #   profile  testdata:   every MPD live, VoD, with segtimeline_1 and segtimelinenr_1, plus all URL options
 #            production: every MPD live, VoD and with segtimeline_1, plus a smaller set of options
+#                        and the DASH-IF test vectors of livesim-content assets
 #
 # The MPDs are taken from the server's /assets and /vod pages, so new content is checked
 # without changing this script. /vod also lists the MPDs that cannot be made live. The options use testpic_2s, testpic_6s, testpic_2s_low_delay and
 # testpic_2s_av1, which are both in cmd/livesim2/app/testdata/assets and on livesim2.dashif.org.
+# The production profile also checks the URLs of the DASH-IF test vectors that use other
+# livesim-content assets, such as testpic4_8s.
 # DRM names the DRM package for the drm_ option (none if unset).
 # Negative tests (statuscode_, traffic_, timeoffset_, modulo_) are left out, since they fail by design.
 set -eu
@@ -81,6 +84,10 @@ if [ -n "${DRM:-}" ]; then
 fi
 
 if [ "$PROFILE" = production ]; then
+	# DASH-IF test vectors (livesim.dashif.org/livesim/... redirects here). Only chunked
+	# output gets the checks of the DASH profile for CMAF content, such as @maxWidth.
+	opt "chunkdur_1/ato_7" testpic4_8s/Manifest.mpd
+	opt "chunkdur_1/ato_7" testpic4_8s/Manifest300.mpd
 	exit 0
 fi
 
