@@ -6,6 +6,3 @@
 
 # dashcheck: cannot pick segments when @availabilityTimeOffset is INF
 ADDR-SEGMENTS /livesim2/ato_inf/testpic_2s/Manifest\.mpd
-
-# Test assets: cea608.mpd lists 1 h, but only the first segments are in the repository
-HTTP-SEGMENT /vod/testpic_2s/cea608\.mpd
