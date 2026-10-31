@@ -84,8 +84,8 @@ if [ -n "${DRM:-}" ]; then
 fi
 
 if [ "$PROFILE" = production ]; then
-	# DASH-IF test vectors (livesim.dashif.org/livesim/... redirects here). Only chunked
-	# output gets the checks of the DASH profile for CMAF content, such as @maxWidth.
+	# DASH-IF test vectors (livesim.dashif.org/livesim/... redirects here). The URLs above
+	# check testpic4_8s live, as VoD and with segtimeline_1, but not as chunked output.
 	opt "chunkdur_1/ato_7" testpic4_8s/Manifest.mpd
 	opt "chunkdur_1/ato_7" testpic4_8s/Manifest300.mpd
 	exit 0
