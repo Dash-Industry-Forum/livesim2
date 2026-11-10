@@ -60,7 +60,7 @@ func sgaiSessionStatusPage(host string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"><style>\r\n\t\t  td { vertical-align: top; }\r\n\t\t  button:hover:enabled { background: #e74c3c; }\r\n\t\t  tr.decision td.kind { color: var(--ss-info); font-weight: 700; }\r\n\t\t  tr.beacon td.kind { color: var(--ss-good); font-weight: 700; }\r\n\t\t  tr.remote td.kind { font-weight: 700; }\r\n\t\t</style></head><body data-api=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"><style>\n\t\t  td { vertical-align: top; }\n\t\t  button:hover:enabled { background: #e74c3c; }\n\t\t  tr.decision td.kind { color: var(--ss-info); font-weight: 700; }\n\t\t  tr.beacon td.kind { color: var(--ss-good); font-weight: 700; }\n\t\t  tr.remote td.kind { font-weight: 700; }\n\t\t</style></head><body data-api=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
