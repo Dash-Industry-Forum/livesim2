@@ -15,6 +15,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"math"
+	"net/url"
 	"os"
 	"path"
 	"regexp"
@@ -96,6 +97,7 @@ func (am *assetMgr) discoverAssets(logger *slog.Logger) error {
 		}
 		logger.Info("Asset consolidated", "loopDurMS", a.LoopDurMS)
 	}
+	am.linkBaseURLAssets()
 	return nil
 }
 
@@ -138,17 +140,41 @@ func (am *assetMgr) loadAsset(logger *slog.Logger, mpdPath string) error {
 
 	fillContentTypes(assetPath, mpd.Periods[0])
 
+	if err := am.loadMPDReps(logger, asset, mpdName, mpd); err != nil {
+		// The MPD stays listed as a VoD MPD, but cannot be made live.
+		asset.mpdNotLive[mpdName] = err.Error()
+		return err
+	}
+	if err := asset.setC2PAEventIDs(); err != nil {
+		return fmt.Errorf("c2pa event ids: %w", err)
+	}
+	logger.Info("Asset MPD loaded")
+	return nil
+}
+
+// loadMPDReps loads the Representations of the MPD mpdName of the asset, which must all be
+// usable for a live stream.
+func (am *assetMgr) loadMPDReps(logger *slog.Logger, asset *asset, mpdName string, mpd *m.MPD) error {
+	assetPath := asset.AssetPath
 	for _, as := range mpd.Periods[0].AdaptationSets {
 		if as.SegmentTemplate == nil {
 			return fmt.Errorf("no SegmentTemplate in adaptation set")
+		}
+		if _, ok := baseURLAssetPath(assetPath, as); ok {
+			continue // The Representations are those of another asset, see linkBaseURLAssets
 		}
 		for _, rep := range as.Representations {
 			if rep.SegmentTemplate != nil {
 				return fmt.Errorf("segmentTemplate on Representation level. Only supported on AdaptationSet level")
 			}
 			asset.mpdRepIDs[mpdName] = append(asset.mpdRepIDs[mpdName], rep.Id)
-			if _, ok := asset.Reps[rep.Id]; ok {
-				logger.Debug("Representation already loaded", "rep", rep.Id)
+			if loaded, ok := asset.Reps[rep.Id]; ok {
+				if diff := repDiff(loaded, as, rep); diff != "" {
+					logger.Warn("Representation defined differently by another MPD, which is used", "rep", rep.Id, "diff", diff)
+					asset.mpdRepConflicts[mpdName] = append(asset.mpdRepConflicts[mpdName], rep.Id+" ("+diff+")")
+				} else {
+					logger.Debug("Representation already loaded", "rep", rep.Id)
+				}
 				continue
 			}
 			r, err := am.loadRep(logger, assetPath, as, rep)
@@ -173,10 +199,6 @@ func (am *assetMgr) loadAsset(logger *slog.Logger, mpdPath string) error {
 			}
 		}
 	}
-	if err := asset.setC2PAEventIDs(); err != nil {
-		return fmt.Errorf("c2pa event ids: %w", err)
-	}
-	logger.Info("Asset MPD loaded")
 	return nil
 }
 
@@ -247,7 +269,25 @@ func (am *assetMgr) loadRep(logger *slog.Logger, assetPath string, as *m.Adaptat
 			}
 		}
 	case st.SegmentTimeline != nil && rp.typeURI() == numberURI:
-		return nil, fmt.Errorf("SegmentTimeline with $Number$ not yet supported")
+		// The S elements give the number of segments, which are numbered from startNumber.
+		// The segment times are read from the segments, as for SegmentTemplate with $Number$.
+		nr := uint32(1)
+		if st.StartNumber != nil {
+			nr = *st.StartNumber
+		}
+		for _, s := range st.SegmentTimeline.S {
+			if s.R < 0 {
+				return nil, fmt.Errorf("SegmentTimeline S@r=%d is not supported", s.R)
+			}
+			for i := 0; i <= s.R; i++ {
+				seg, err := rp.readMP4Segment(am.vodFS, assetPath, 0, nr)
+				if err != nil {
+					return nil, fmt.Errorf("readMP4Segment: %w", err)
+				}
+				rp.Segments = append(rp.Segments, seg)
+				nr++
+			}
+		}
 	case rp.typeURI() == numberURI: // SegmentTemplate with Number$
 		startNr := uint32(1)
 		if st.StartNumber != nil {
@@ -293,6 +333,12 @@ func (am *assetMgr) loadRep(logger *slog.Logger, assetPath string, as *m.Adaptat
 		}
 	default:
 		return nil, fmt.Errorf("unknown type of representation")
+	}
+	if rp.ContentType == "video" {
+		rp.SAPGrid = sapGrid(rp.Segments)
+	}
+	for i := range rp.Segments {
+		rp.Segments[i].syncOffsets = nil
 	}
 	commonSampleDur := -1
 segLoop:
@@ -471,15 +517,107 @@ type asset struct {
 	Reps         map[string]*RepData         `json:"representations"`
 	refRep       *RepData                    `json:"-"` // First video or audio representation
 	mpdRepIDs    map[string][]string         `json:"-"` // Representation ids of each MPD
+	// mpdRepConflicts lists, for each MPD, its Representations that another MPD defines differently
+	mpdRepConflicts map[string][]string `json:"-"`
+	// mpdNotLive gives, for each MPD that cannot be made live, the reason. It is still a VoD MPD.
+	mpdNotLive map[string]string `json:"-"`
+	// baseURLAssets are the other assets that AdaptationSet BaseURLs of the MPDs point to, by path
+	baseURLAssets map[string]*asset `json:"-"`
 }
 
 func newAsset(assetPath string) *asset {
 	return &asset{
-		AssetPath: assetPath,
-		MPDs:      make(map[string]internal.MPDData),
-		Reps:      make(map[string]*RepData),
-		mpdRepIDs: make(map[string][]string),
+		AssetPath:       assetPath,
+		MPDs:            make(map[string]internal.MPDData),
+		Reps:            make(map[string]*RepData),
+		mpdRepIDs:       make(map[string][]string),
+		mpdRepConflicts: make(map[string][]string),
+		mpdNotLive:      make(map[string]string),
+		baseURLAssets:   make(map[string]*asset),
 	}
+}
+
+// baseURLAssetPath returns the path of the asset that a relative BaseURL of an AdaptationSet
+// points to, such as testpic_2s for ../testpic_2s/ in testpic_6s, or ok=false if the
+// AdaptationSet has no BaseURL that leads out of the asset.
+func baseURLAssetPath(assetPath string, as *m.AdaptationSetType) (string, bool) {
+	if len(as.BaseURLs) == 0 {
+		return "", false
+	}
+	u, err := url.Parse(string(as.BaseURLs[0].Value))
+	if err != nil || u.IsAbs() || u.Host != "" || strings.HasPrefix(u.Path, "/") {
+		return "", false
+	}
+	target := path.Clean(path.Join(assetPath, u.Path))
+	if target == assetPath || strings.HasPrefix(target, assetPath+"/") {
+		return "", false
+	}
+	return target, true
+}
+
+// linkBaseURLAssets links the AdaptationSets whose BaseURL points to another asset, from
+// which the segments then come, to that asset. An MPD whose BaseURL points to no asset, or
+// to one without the Representations, cannot be made live.
+func (am *assetMgr) linkBaseURLAssets() {
+	for _, a := range am.assets {
+		for mpdName := range a.MPDs {
+			if a.mpdNotLive[mpdName] != "" {
+				continue
+			}
+			mpd, err := a.getVodMPD(mpdName)
+			if err != nil {
+				continue
+			}
+			for _, as := range mpd.Periods[0].AdaptationSets {
+				target, ok := baseURLAssetPath(a.AssetPath, as)
+				if !ok {
+					continue
+				}
+				b, ok := am.assets[target]
+				if !ok {
+					a.mpdNotLive[mpdName] = fmt.Sprintf("BaseURL %s points to no asset", as.BaseURLs[0].Value)
+					break
+				}
+				for _, rep := range as.Representations {
+					if _, ok := b.Reps[rep.Id]; !ok {
+						a.mpdNotLive[mpdName] = fmt.Sprintf("asset %s has no Representation %s", target, rep.Id)
+					}
+				}
+				a.baseURLAssets[target] = b
+			}
+		}
+	}
+}
+
+// repConflicts returns which Representations of an MPD of the asset another MPD of the asset
+// defines differently, or "" if there are none. All MPDs of an asset share a Representation
+// by its @id, so the definition of the MPD that is loaded first is used for all of them.
+func (a *asset) repConflicts(mpdName string) string {
+	conflicts := a.mpdRepConflicts[mpdName]
+	if len(conflicts) == 0 {
+		return ""
+	}
+	return "defined differently by another MPD of the asset: " + strings.Join(conflicts, "; ")
+}
+
+// repDiff returns how rep of an MPD differs from the Representation with the same @id that
+// another MPD of the asset has defined, or "" if they are the same.
+func repDiff(loaded *RepData, as *m.AdaptationSetType, rep *m.RepresentationType) string {
+	codecs := as.Codecs
+	if rep.Codecs != "" {
+		codecs = rep.Codecs
+	}
+	var diffs []string
+	if initURI := replaceIdentifiers(rep, as.SegmentTemplate.Initialization); initURI != loaded.InitURI {
+		diffs = append(diffs, fmt.Sprintf("init %s, not %s", initURI, loaded.InitURI))
+	}
+	if mediaURI := replaceIdentifiers(rep, as.SegmentTemplate.Media); mediaURI != loaded.MediaURI {
+		diffs = append(diffs, fmt.Sprintf("media %s, not %s", mediaURI, loaded.MediaURI))
+	}
+	if codecs != loaded.Codecs {
+		diffs = append(diffs, fmt.Sprintf("codecs %s, not %s", codecs, loaded.Codecs))
+	}
+	return strings.Join(diffs, ", ")
 }
 
 // notLoopable returns why an MPD of the asset cannot be looped: it lists the Representations
@@ -507,7 +645,7 @@ func (a *asset) notLoopable(mpdName string) string {
 func (a *asset) getVodMPD(mpdName string) (*m.MPD, error) {
 	md, ok := a.MPDs[mpdName]
 	if !ok {
-		return nil, fmt.Errorf("unknown mpd name")
+		return nil, fmt.Errorf("unknown mpd name %q: %w", mpdName, errNotFound)
 	}
 	return m.ReadFromString(md.MPDStr)
 }
@@ -590,6 +728,9 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int, e
 	if wt.nowWraps < 0 { // no segment finished yet. Return an empty list and set startNr and lsi.nr = -1
 		se.startNr = -1
 		se.lsi.nr = -1
+		timescale := uint64(rep.MediaTimescale)
+		firstEndMS := int((segs[0].EndTime*1000 + timescale - 1) / timescale)
+		se.untilFirstMS = max(firstEndMS-atoMS-wt.nowRelMS, 1)
 		return se, nil
 	}
 
@@ -603,7 +744,12 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int, e
 		return se, err
 	}
 
-	s := &m.S{T: new(t), D: d, K: k}
+	// S@t is the presentation time, so an audio edit list moves it, as in generateTimelineEntriesFromRef.
+	presT, presD := t, d
+	if rep.ContentType == "audio" && rep.EditListOffset > 0 {
+		presT, presD = applyEditListOffset(t, d, uint64(rep.EditListOffset))
+	}
+	s := &m.S{T: new(presT), D: presD, K: k}
 	lsi := lastSegInfo{
 		timescale: uint64(rep.MediaTimescale),
 		startTime: t,
@@ -614,20 +760,32 @@ func (a *asset) generateTimelineEntries(repID string, wt wrapTimes, atoMS int, e
 	for nr := se.startNr + 1; nr <= nowNr; nr++ {
 		lsi.startTime += d
 		relIdx := nr % nrSegs
-		seg := segs[relIdx]
-		if seg.dur() == d {
-			s.R++
-			lsi.nr = nr
-			continue
-		}
-		d = seg.dur()
-		s = &m.S{D: d, K: k}
-		se.entries = append(se.entries, s)
+		d = segs[relIdx].dur()
 		lsi.dur = d
 		lsi.nr = nr
+		if d == s.D {
+			s.R++
+			continue
+		}
+		s = &m.S{D: d, K: k}
+		se.entries = append(se.entries, s)
 	}
 	se.lsi = lsi
 	return se, nil
+}
+
+// applyEditListOffset returns the presentation time and duration of a segment with decode time t
+// and duration d in a track whose edit list starts at offset. A segment that would start before 0
+// starts at 0 and is shortened accordingly.
+func applyEditListOffset(t, d, offset uint64) (presT, presD uint64) {
+	switch {
+	case t >= offset:
+		return t - offset, d
+	case d > offset-t:
+		return 0, d - (offset - t)
+	default:
+		return 0, 0
+	}
 }
 
 // generateTimelineEntriesFromRef generates timeline entries for the given representation given reference.
@@ -642,6 +800,7 @@ func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string, e
 		mediaTimescale: uint32(rep.MediaTimescale),
 		startNr:        refSE.startNr,
 		lsi:            refSE.lsi, // This is good enough since availability time should be very close
+		untilFirstMS:   refSE.untilFirstMS,
 		entries:        make([]*m.S, 0, nrSegs),
 	}
 
@@ -677,24 +836,7 @@ func (a *asset) generateTimelineEntriesFromRef(refSE segEntries, repID string, e
 				}
 
 				// First segment: apply editListOffset adjustment
-				adjustedT := t
-				adjustedD := d
-
-				if editListOffset > 0 {
-					if t >= editListOffset {
-						// Normal case: shift time down by editListOffset
-						adjustedT = t - editListOffset
-					} else {
-						// Special case: time would be negative, so clamp to 0 and shorten duration
-						adjustedT = 0
-						if d > editListOffset-t {
-							adjustedD = d - (editListOffset - t)
-						} else {
-							adjustedD = 0
-						}
-					}
-				}
-
+				adjustedT, adjustedD := applyEditListOffset(t, d, editListOffset)
 				s = &m.S{T: new(adjustedT), D: adjustedD, K: k}
 				se.entries = append(se.entries, s)
 				expectedTime = adjustedT + adjustedD // Update expected time after first segment
@@ -926,7 +1068,8 @@ const (
 // new field must be derived from the media (not just read from an older cache) so that
 // stale <id>_data.json.gz files are regenerated instead of silently lacking the field.
 // v1 added HasCEA608 (caption detection, #321).
-const currentRepDataVersion = 1
+// v2 added SAPGrid (SegmentSequenceProperties cadence).
+const currentRepDataVersion = 2
 
 // RepData provides information about a representation
 type RepData struct {
@@ -944,6 +1087,7 @@ type RepData struct {
 	EditListOffset         int64            `json:"editListOffset,omitempty"`
 	PreEncrypted           bool             `json:"preEncrypted"`
 	HasCEA608              bool             `json:"hasCEA608,omitempty"` // Video samples already carry CEA-608 cc_data SEI (#321)
+	SAPGrid                uint64           `json:"sapGrid,omitempty"`   // Sync sample period of all segments, see sapGrid
 	adaptationSetID        *uint32          `json:"-"`                   // AdaptationSet@id in the VoD MPD, for the ssras_ options
 	mediaRegexp            *regexp.Regexp   `json:"-"`
 	initSeg                *mp4.InitSegment `json:"-"`
@@ -1248,8 +1392,61 @@ func (r *RepData) readMP4Segment(vodFS fs.FS, assetPath string, time uint64, nr 
 	if err == nil {
 		seg.CommonSampleDur = commonSampleDur
 	}
+	if r.ContentType == "video" {
+		// Without the offsets, no SAPGrid is derived, which is safe.
+		seg.syncOffsets, _ = syncOffsets(s, r.initSeg.Moov.Mvex.Trex, t)
+	}
 
 	return seg, nil
+}
+
+// syncOffsets returns the decode times of the sync samples of a segment, relative to its start.
+func syncOffsets(seg *mp4.MediaSegment, trex *mp4.TrexBox, start uint64) ([]uint64, error) {
+	var offsets []uint64
+	for _, frag := range seg.Fragments {
+		samples, err := frag.GetFullSamples(trex)
+		if err != nil {
+			return nil, err
+		}
+		for _, s := range samples {
+			if s.IsSync() {
+				offsets = append(offsets, s.DecodeTime-start)
+			}
+		}
+	}
+	return offsets, nil
+}
+
+// sapGrid returns the smallest period P such that every segment has a sync sample at each
+// multiple of P from its start, or 0 if there is no such P shorter than the segments.
+// The candidates are the sync sample offsets of the first segment.
+func sapGrid(segs []Segment) uint64 {
+	if len(segs) == 0 {
+		return 0
+	}
+	for _, p := range segs[0].syncOffsets {
+		if p > 0 && sapGridHolds(segs, p) {
+			return p
+		}
+	}
+	return 0
+}
+
+// sapGridHolds reports whether every segment has a sync sample at each multiple of p.
+func sapGridHolds(segs []Segment, p uint64) bool {
+	for _, s := range segs {
+		offsets := s.syncOffsets // in increasing order
+		j := 0
+		for t := uint64(0); t < s.dur(); t += p {
+			for j < len(offsets) && offsets[j] < t {
+				j++
+			}
+			if j == len(offsets) || offsets[j] != t {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // readThumbSegment reads a thumbnail segment, and returns an error if file does not exist.
@@ -1286,10 +1483,11 @@ func replaceTimeOrNr(str string, val int) string {
 }
 
 type Segment struct {
-	StartTime       uint64 `json:"startTime"`
-	EndTime         uint64 `json:"endTime"`
-	Nr              uint32 `json:"nr"`
-	CommonSampleDur uint32 `json:"-"`
+	StartTime       uint64   `json:"startTime"`
+	EndTime         uint64   `json:"endTime"`
+	Nr              uint32   `json:"nr"`
+	CommonSampleDur uint32   `json:"-"`
+	syncOffsets     []uint64 // Sync sample offsets of video segments while the representation is read
 }
 
 func (s Segment) dur() uint64 {

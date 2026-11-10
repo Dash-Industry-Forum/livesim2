@@ -110,6 +110,9 @@ func genLaURL(cfg *ResponseConfig) string {
 
 // LiveMPD generates a dynamic configured MPD for a VoD asset.
 func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfig, nowMS int) (*m.MPD, error) {
+	if reason := a.mpdNotLive[mpdName]; reason != "" {
+		return nil, fmt.Errorf("%w: %s", errNotLive, reason)
+	}
 	mpd, err := a.getVodMPD(mpdName)
 	if err != nil {
 		return nil, err
@@ -227,6 +230,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		}
 	}
 	var refSegEntries segEntries
+	otherPublishS := 0.0 // For AdaptationSets with segments in another asset
 	for asIdx, as := range adaptationSets {
 		if as.SegmentTemplate != nil {
 			as.SegmentTemplate.EndNumber = nil // Never output endNumber
@@ -234,18 +238,32 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 
 		var explicitChunkDurS = (*float64)(nil)
 
+		if cfg.InbandPS && as.ContentType == "video" {
+			if a.refRep.PreEncrypted {
+				return nil, fmt.Errorf("inbandps, but the samples of pre-encrypted asset %s cannot be changed", a.AssetPath)
+			}
+			as.Codecs = inbandCodecs(as.Codecs)
+			for _, rep := range as.Representations {
+				rep.Codecs = inbandCodecs(rep.Codecs)
+			}
+		}
+
 		switch as.ContentType {
 		case "video", "audio":
 			if cfg.DRM != "" {
 				if a.refRep.PreEncrypted {
-					return nil, fmt.Errorf("drm parameter %q, but pre-encrypted asset %s cannot be encrypted again",
-						cfg.DRM, a.AssetPath)
+					return nil, fmt.Errorf("%w: drm parameter %q, but pre-encrypted asset %s cannot be encrypted again",
+						errCannotEncrypt, cfg.DRM, a.AssetPath)
+				}
+				// Only codecs that prepareForEncryption accepts get the encryption data.
+				for _, rep := range as.Representations {
+					if rd, ok := a.Reps[rep.Id]; ok && rd.encData == nil {
+						return nil, fmt.Errorf("%w: drm parameter %q, but codec %s of representation %s is not supported",
+							errCannotEncrypt, cfg.DRM, rd.Codecs, rep.Id)
+					}
 				}
 				switch cfg.DRM {
 				case "eccp-cenc", "eccp-cbcs":
-					if a.refRep.PreEncrypted {
-						return nil, fmt.Errorf("pre-encrypted asset %s cannot be encrypted again", a.AssetPath)
-					}
 					laURL := genLaURL(cfg)
 					cp := m.NewContentProtection()
 					cp.SchemeIdUri = "urn:mpeg:dash:mp4protection:2011"
@@ -370,7 +388,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 
 			if nextIDExists {
 				//Low Delay Adaptation Set
-				updateSSRAdaptationSet(as, nextID, prevIDPtr, chunkDurSSRMap, &explicitChunkDurS)
+				updateSSRAdaptationSet(a, as, nextID, prevIDPtr, chunkDurSSRMap, &explicitChunkDurS)
 			} else if prevIDExists {
 				// Regular Adaptation Set for switching
 				updateSwitchingAdaptationSet(as, prevID)
@@ -397,32 +415,49 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		if err != nil {
 			return nil, err
 		}
+		// The segments of an AdaptationSet with a BaseURL to another asset come from that asset.
+		segAsset, segWTimes := a, wTimes
+		if target, ok := baseURLAssetPath(a.AssetPath, as); ok {
+			segAsset = a.baseURLAssets[target]
+			segWTimes = calcWrapTimes(segAsset, cfg, endTimeMS, *mpd.TimeShiftBufferDepth)
+		}
 		var se segEntries
 		if asIdx == 0 {
-			// Assume that first representation is as good as any, so can be reference
-			var err error
-			refSegEntries, err = a.generateTimelineEntries(as.Representations[0].Id, wTimes, atoMS, explicitChunkDurS)
+			// Assume that first representation is as good as any, so can be reference.
+			// Audio follows the reference representation of the asset that makes its segments.
+			refID := as.Representations[0].Id
+			if segAsset != a {
+				refID = a.refRep.ID
+			}
+			refSegEntries, err = a.generateTimelineEntries(refID, wTimes, atoMS, explicitChunkDurS)
 			if err != nil {
 				return nil, err
 			}
+		}
+		switch {
+		case asIdx == 0 && segAsset == a:
 			se = refSegEntries
-		} else {
-			switch as.ContentType {
-			case "video", "text", "image":
-				var err error
-				se, err = a.generateTimelineEntries(as.Representations[0].Id, wTimes, atoMS, explicitChunkDurS)
+		case as.ContentType == "video", as.ContentType == "text", as.ContentType == "image",
+			asIdx == 0 && as.ContentType == "audio":
+			se, err = segAsset.generateTimelineEntries(as.Representations[0].Id, segWTimes, atoMS, explicitChunkDurS)
+		case as.ContentType == "audio":
+			ref := refSegEntries
+			if segAsset != a {
+				ref, err = segAsset.generateTimelineEntries(segAsset.refRep.ID, segWTimes, atoMS, explicitChunkDurS)
 				if err != nil {
 					return nil, err
 				}
-			case "audio":
-				var err error
-				se, err = a.generateTimelineEntriesFromRef(refSegEntries, as.Representations[0].Id, explicitChunkDurS)
-				if err != nil {
-					return nil, err
-				}
-			default:
-				return nil, fmt.Errorf("unknown content type %s", as.ContentType)
 			}
+			se, err = segAsset.generateTimelineEntriesFromRef(ref, as.Representations[0].Id, explicitChunkDurS)
+		default:
+			return nil, fmt.Errorf("unknown content type %s", as.ContentType)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if segAsset != a {
+			// Its segments end at other times than those of the reference.
+			otherPublishS = max(otherPublishS, calcPublishTime(cfg, se.lsi))
 		}
 
 		templateType := cfg.liveMPDType()
@@ -431,12 +466,17 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		}
 		switch templateType {
 		case timeLineTime, timeLineNumber:
-			err := adjustAdaptationSetForTimeline(cfg, se, as, refSegEntries, a)
+			if se.startNr < 0 {
+				// A SegmentTimeline needs at least one S (ISO/IEC 23009-1 5.3.9.6.1), so there is
+				// no MPD until the first segment is available.
+				return nil, newErrTooEarly(se.untilFirstMS)
+			}
+			err := adjustAdaptationSetForTimeline(cfg, se, as, refSegEntries, segAsset)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASFor %s: %w", templateType, err)
 			}
 		case segmentNumber:
-			err := adjustAdaptationSetForSegmentNumber(cfg, a, as, explicitChunkDurS)
+			err := adjustAdaptationSetForSegmentNumber(cfg, segAsset, as, explicitChunkDurS)
 			if err != nil {
 				return nil, fmt.Errorf("adjustASForSegmentNumber: %w", err)
 			}
@@ -445,7 +485,9 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		}
 	}
 	// Set from the MPD type, since image AdaptationSets always use $Number$
-	mpd.PublishTime = m.ConvertToDateTime(calcPublishTime(cfg, refSegEntries.lsi))
+	// MPD EventStreams change with time too, and each change needs a new publishTime.
+	eventsChangeS := float64(eventStreamsChangeS(cfg, endTimeMS))
+	mpd.PublishTime = publishTime(cfg, max(calcPublishTime(cfg, refSegEntries.lsi), otherPublishS, eventsChangeS))
 	if maxSegDur := maxLiveSegmentDuration(a, period); maxSegDur != nil {
 		mpd.MaxSegmentDuration = maxSegDur
 	}
@@ -477,6 +519,9 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 		if cc608AlreadyCaptioned(a, period) {
 			return nil, errCC608AlreadyCaptioned
 		}
+		if err = checkCC608Codecs(a, period); err != nil {
+			return nil, err
+		}
 		if err = addCC608Accessibility(cfg, period); err != nil {
 			return nil, fmt.Errorf("addCC608Accessibility: %w", err)
 		}
@@ -498,10 +543,11 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 	}
 
 	if cfg.liveMPDType() == segmentNumber {
-		mpd.PublishTime, err = lastPeriodStartTime(mpd)
+		lastStartS, err := lastPeriodStartTime(mpd)
 		if err != nil {
 			return nil, fmt.Errorf("lastPeriodStartTime: %w", err)
 		}
+		mpd.PublishTime = publishTime(cfg, max(lastStartS, eventsChangeS))
 	}
 
 	if afterStop {
@@ -514,7 +560,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 	return mpd, nil
 }
 
-func updateSSRAdaptationSet(as *m.AdaptationSetType, nextID uint32, prevID *uint32,
+func updateSSRAdaptationSet(a *asset, as *m.AdaptationSetType, nextID uint32, prevID *uint32,
 	chunkDurSSRMap map[uint32]float64, explicitChunkDurS **float64) {
 	// Add SubNumber to SegmentTemplate
 	if as.SegmentTemplate != nil {
@@ -536,11 +582,14 @@ func updateSSRAdaptationSet(as *m.AdaptationSetType, nextID uint32, prevID *uint
 	}
 
 	if as.ContentType == "video" {
-		// Add SegmentSequenceProperties to signal Low-Delay
-		as.SegmentSequenceProperties = []*m.SegmentSequencePropertiesType{{
-			SapType: 1,
-			Cadence: 1,
-		}}
+		// Add SegmentSequenceProperties to signal Low-Delay, if the content allows any.
+		// dash.js uses cadence 1 and sapType 1 as the L3D bootstrap configuration.
+		if cadence, ok := ssrCadence(a, as, *explicitChunkDurS); ok {
+			as.SegmentSequenceProperties = []*m.SegmentSequencePropertiesType{{
+				SapType: 1,
+				Cadence: cadence,
+			}}
+		}
 
 		// AdaptationSet@startWithSAP = 1
 		as.StartWithSAP = 1
@@ -552,21 +601,67 @@ func updateSSRAdaptationSet(as *m.AdaptationSetType, nextID uint32, prevID *uint
 	}
 }
 
+// ssrCadence returns the cadence of the Partial Segments of as that start with a sync sample,
+// which is signalled as SAP type 1, for all Representations of as. A Partial Segment starts with
+// the first sample at or after n times the chunk duration c, which is a sync sample if that is a
+// multiple of the SAP grid P of the Representation, so the cadence is P/gcd(P, c). Without
+// chunks, each Segment Sequence is a single segment, which starts with a SAP. ok is false if
+// only the first Partial Segment of each Segment Sequence is known to start with a SAP, which
+// @startWithSAP already says.
+func ssrCadence(a *asset, as *m.AdaptationSetType, chunkDurS *float64) (cadence uint32, ok bool) {
+	if chunkDurS == nil {
+		return 1, true
+	}
+	c := uint64(1)
+	for _, r := range as.Representations {
+		rd, exists := a.Reps[r.Id]
+		if !exists || len(rd.Segments) == 0 {
+			return 0, false
+		}
+		k, err := calculateK(rd.Segments[0].dur(), rd.MediaTimescale, chunkDurS)
+		if err != nil {
+			return 0, false
+		}
+		if k == nil {
+			continue // One Partial Segment per Segment Sequence
+		}
+		chunkDur := uint64(*chunkDurS * float64(rd.MediaTimescale)) // as the chunks are made
+		if rd.SAPGrid == 0 || chunkDur == 0 {
+			return 0, false
+		}
+		repCadence := rd.SAPGrid / gcd(rd.SAPGrid, chunkDur)
+		c = c / gcd(c, repCadence) * repCadence
+		if c >= *k {
+			return 0, false
+		}
+	}
+	return uint32(c), true
+}
+
 func updateSwitchingAdaptationSet(as *m.AdaptationSetType, prevID uint32) {
 	sp := m.NewDescriptor(AdaptationSetSwitchingSchemeIdUri, strconv.FormatUint(uint64(prevID), 10), "")
 	as.SupplementalProperties = append(as.SupplementalProperties, sp)
 }
 
-// lastPeriodStartTime returns the absolute startTime of the last Period.
-func lastPeriodStartTime(mpd *m.MPD) (m.DateTime, error) {
+// publishTime returns MPD@publishTime given the time of the latest change in seconds. An MPD
+// with a Location made from startrel_ or stoprel_ differs from the MPD at the Location only in
+// that element. It is the earlier version, so its publishTime is one second earlier.
+func publishTime(cfg *ResponseConfig, lastChangeS float64) m.DateTime {
+	if cfg.AddLocationFlag {
+		lastChangeS--
+	}
+	return m.ConvertToDateTime(lastChangeS)
+}
+
+// lastPeriodStartTime returns the absolute startTime of the last Period in seconds.
+func lastPeriodStartTime(mpd *m.MPD) (float64, error) {
 	lastPeriod := mpd.Periods[len(mpd.Periods)-1]
 	lastRelStartS := time.Duration(*lastPeriod.Start).Seconds()
 	ast, err := mpd.AvailabilityStartTime.ConvertToSeconds()
 	if err != nil {
-		return "", err
+		return 0, err
 	}
-	lastAbsStart := ast + lastRelStartS
-	return m.ConvertToDateTime(lastAbsStart), nil
+	return ast + lastRelStartS, nil
 }
 
 func addPatchLocation(mpd *m.MPD, cfg *ResponseConfig) {
@@ -654,6 +749,12 @@ func splitPeriod(mpd *m.MPD, a *asset, cfg *ResponseConfig, wTimes wrapTimes) er
 		}
 		periods = append(periods, p)
 	}
+	// A SegmentTimeline needs at least one S (ISO/IEC 23009-1 5.3.9.6.1), so a new Period is added
+	// once its first segments are complete, as a new S is within a Period. Until then, the
+	// timeline of the previous Period ends at the boundary.
+	if len(periods) > 1 && hasEmptySegmentTimeline(periods[len(periods)-1]) {
+		periods = periods[:len(periods)-1]
+	}
 	mpd.Periods = nil
 	for i, p := range periods {
 		if cfg.XlinkPeriods && cfg.PeriodId == "" && i < len(periods)-1 {
@@ -670,6 +771,16 @@ func splitPeriod(mpd *m.MPD, a *asset, cfg *ResponseConfig, wTimes wrapTimes) er
 		}
 	}
 	return nil
+}
+
+// hasEmptySegmentTimeline returns true if an AdaptationSet of p has a SegmentTimeline without S elements.
+func hasEmptySegmentTimeline(p *m.Period) bool {
+	for _, as := range p.AdaptationSets {
+		if st := as.SegmentTemplate; st != nil && st.SegmentTimeline != nil && len(st.SegmentTimeline.S) == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func reduceS(entries []*m.S, startNr *uint32, timescale int, periodStartS, periodEndS uint64) ([]*m.S, *uint32) {
@@ -689,12 +800,15 @@ func reduceS(entries []*m.S, startNr *uint32, timescale int, periodStartS, perio
 		}
 		d := e.D
 		for i := 0; i <= e.R; i++ {
-			if t < pStart {
+			// A segment belongs to the Period that has its midpoint. An audio segment can
+			// start a little before the Period, for example because of an edit list.
+			mid := t + d/2
+			if mid < pStart {
 				t += d
 				nr++
 				continue
 			}
-			if t >= pEnd {
+			if mid >= pEnd {
 				return newS, &nr
 			}
 			if currS == nil {
@@ -780,6 +894,7 @@ type segEntries struct {
 	lsi            lastSegInfo
 	startNr        int
 	mediaTimescale uint32
+	untilFirstMS   int // time until the first segment is available, if no segment is (startNr < 0)
 }
 
 func (s segEntries) lastNr() int {
@@ -893,6 +1008,10 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 		}
 		as.SegmentTemplate.Duration = new(uint32(dur))
 		as.SegmentTemplate.Timescale = new(uint32(timeScale))
+	} else if cfg.ChunkDurS != nil || cfg.SSRFlag {
+		// The low-latency modes use the DASH profile for CMAF content, where @timescale is
+		// the mdhd timescale (ISO/IEC 23009-1 8.12.4.2).
+		setMediaTimescale(a, as.SegmentTemplate, as.Representations)
 	}
 	as.SegmentTemplate.SegmentTimeline = nil
 	if cfg.StartNr != nil {
@@ -912,6 +1031,38 @@ func adjustAdaptationSetForSegmentNumber(cfg *ResponseConfig, a *asset, as *m.Ad
 	}
 
 	return nil
+}
+
+// setMediaTimescale changes the @timescale of a $Number$ SegmentTemplate to the media timescale
+// of its Representations, and scales @duration and @presentationTimeOffset with it. It leaves
+// the template as it is if the Representations have different media timescales, or if a value
+// cannot be scaled exactly, since a rounded @duration makes the segment times drift.
+func setMediaTimescale(a *asset, st *m.SegmentTemplateType, reps []*m.RepresentationType) {
+	mediaTS := uint64(0)
+	for _, r := range reps {
+		rd, ok := a.Reps[r.Id]
+		if !ok || (mediaTS != 0 && uint64(rd.MediaTimescale) != mediaTS) {
+			return
+		}
+		mediaTS = uint64(rd.MediaTimescale)
+	}
+	oldTS := uint64(st.GetTimescale())
+	if mediaTS == 0 || mediaTS == oldTS {
+		return
+	}
+	dur := uint64(*st.Duration) * mediaTS
+	pto := uint64(0)
+	if st.PresentationTimeOffset != nil {
+		pto = *st.PresentationTimeOffset * mediaTS
+	}
+	if dur%oldTS != 0 || pto%oldTS != 0 || dur/oldTS > math.MaxUint32 {
+		return
+	}
+	st.Duration = new(uint32(dur / oldTS))
+	if st.PresentationTimeOffset != nil {
+		st.PresentationTimeOffset = new(pto / oldTS)
+	}
+	st.Timescale = new(uint32(mediaTS))
 }
 
 // nextFreeAdaptationSetID returns the lowest AdaptationSet id that is at least minID and
@@ -1037,6 +1188,36 @@ func addCC608Accessibility(cfg *ResponseConfig, period *m.Period) error {
 		return fmt.Errorf("no video adaptation set found")
 	}
 	return nil
+}
+
+// eventStreamsChangeS returns the latest time, at or before nowMS, at which the MPD EventStreams
+// of the sgai_, svta_ and scte35_ options changed, or the availabilityStartTime. Events enter
+// and leave the MPD as time goes on, and each change needs a new MPD@publishTime.
+func eventStreamsChangeS(cfg *ResponseConfig, nowMS int) int {
+	astS := cfg.StartTimeS
+	last := astS
+	lookBackS := 0
+	if cfg.TimeShiftBufferDepthS != nil {
+		lookBackS = *cfg.TimeShiftBufferDepthS
+	}
+	if sc := cfg.SGAI; sc != nil {
+		last = max(last, sc.lastChangeS(nowMS, astS, sc.ResolveOffsetS, 0, nil))
+	}
+	if sc := cfg.SVTA; sc != nil {
+		last = max(last, sc.lastChangeS(nowMS, astS, svtaLookAheadS, lookBackS, nil))
+	}
+	if sc := cfg.SCTE35; sc != nil && sc.MPDForm != "off" {
+		// Each cue appears LeadS before its splice point, as in addSCTE35Events.
+		announced := func(b adBreakInst) []int {
+			var times []int
+			for _, cp := range sc.cuePoints(b, astS) {
+				times = append(times, astS+int(cp.atS)-sc.LeadS)
+			}
+			return times
+		}
+		last = max(last, sc.lastChangeS(nowMS, astS, sc.LeadS, lookBackS, announced))
+	}
+	return last
 }
 
 // calcPublishTime calculates the last time there was a change in the manifest in seconds.

@@ -1,0 +1,37 @@
+# Settings used by livesim-content tools/contentgen to generate this asset.
+name: timeline_number_2s
+title: 'timeline_number_2s: generated test content with 2s segments'
+duration: 8
+segmentDuration: 2
+addressing: timeline-number
+startNumber: 1
+minBufferTime: 2
+mpdName: Manifest.mpd
+video:
+    fps: 25
+    bframes: 0
+    noise: 0
+    representations:
+        - id: V400
+          codec: avc
+          width: 640
+          height: 360
+          bitrate: 400
+          color: white
+        - id: V1600
+          codec: avc
+          width: 1280
+          height: 720
+          bitrate: 1600
+          color: yellow
+audio:
+    priming: strip
+    representations:
+        - id: A128
+          codec: aac
+          encoder: aac
+          bitrate: 128
+          signal: beep
+          noise: -50
+          lang: en
+          label: beep aac

@@ -126,6 +126,50 @@ func TestLiveSegment(t *testing.T) {
 	}
 }
 
+// TestStoppedEventSegments checks that once the stop_ time has passed, all segments of the event
+// are available, as the static MPD describes them, and that none after the stop time are (#387).
+func TestStoppedEventSegments(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	log := slog.Default()
+	require.NoError(t, am.discoverAssets(log))
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	const startS, stopS = 1000, 2140 // 570 segments of 2 s
+	for _, mpdType := range []string{"Number", "TimelineTime"} {
+		for _, rep := range []struct {
+			media     string
+			timescale int
+			frameDur  uint64
+		}{{"V300/%d.m4s", 90000, 1}, {"A48/%d.m4s", 48000, 1024}} {
+			cfg := NewResponseConfig()
+			cfg.StartTimeS = startS
+			cfg.StopTimeS = new(stopS)
+			if mpdType == "TimelineTime" {
+				cfg.SegTimelineMode = SegTimelineModeTime
+			}
+			segment := func(idx int, nowS int) error {
+				id := int(cfg.getStartNr()) + idx
+				if mpdType == "TimelineTime" {
+					// Audio segments start at the first AAC frame at or after the video segment.
+					id = int(calcAudioTimeFromRef(uint64(idx*2*90000), 90000, rep.frameDur, uint64(rep.timescale)))
+				}
+				_, err := genLiveSegment(log, vodFS, asset, cfg, fmt.Sprintf(rep.media, id), nowS*1000, false)
+				return err
+			}
+			desc := fmt.Sprintf("%s %s", mpdType, rep.media)
+			// While live, the time-shift buffer applies.
+			require.ErrorIs(t, segment(0, startS+600), errGone, desc)
+			require.NoError(t, segment(290, startS+600), desc)
+			// A minute after the stop, the whole event is available, and nothing after it.
+			require.NoError(t, segment(0, stopS+60), desc)
+			require.NoError(t, segment(569, stopS+60), desc)
+			require.ErrorIs(t, segment(570, stopS+60), errNotFound, desc)
+		}
+	}
+}
+
 // TestAc3Timing checks that the generated segments end within one frame from nominal segment duration.
 func TestAc3Timing(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
@@ -316,15 +360,18 @@ func TestWriteChunkedSegment(t *testing.T) {
 
 // TestChunkSegmentAcrossFragments checks that a chunk with samples from two fragments of
 // a segment gets their data in order, both as samples and as the encoded mdat payload.
+// The chunks also keep the trun version 0 of the segment, since the track has an edit list (#386).
 func TestChunkSegmentAcrossFragments(t *testing.T) {
 	init := mp4.CreateEmptyInit()
 	init.AddEmptyTrack(1000, "video", "und")
+	init.Moov.Trak.Edts = &mp4.EdtsBox{}
 	trackID := init.Moov.Trak.Tkhd.TrackID
 	// Two fragments with three 100ms samples each. The data of sample n is {n, n}.
 	var buf bytes.Buffer
 	for nr := range uint32(2) {
 		frag, err := mp4.CreateFragment(nr+1, trackID)
 		require.NoError(t, err)
+		frag.Moof.Traf.Trun.Version = 0
 		for i := range uint32(3) {
 			n := byte(3*nr + i + 1)
 			frag.AddFullSample(mp4.FullSample{
@@ -356,6 +403,7 @@ func TestChunkSegmentAcrossFragments(t *testing.T) {
 		require.Equal(t, wantData[i], out.Bytes()[out.Len()-len(wantData[i]):], "chunk %d", i)
 		require.Equal(t, wantDur[i], chk.dur, "chunk %d", i)
 		require.Equal(t, wantTime[i], chk.frag.Moof.Traf.Tfdt.BaseMediaDecodeTime(), "chunk %d", i)
+		require.Equal(t, byte(0), chk.frag.Moof.Traf.Trun.Version, "chunk %d", i)
 		fss, err := chk.frag.GetFullSamples(init.Moov.Mvex.Trex)
 		require.NoError(t, err)
 		require.Len(t, fss, len(wantData[i])/2)
@@ -366,7 +414,8 @@ func TestChunkSegmentAcrossFragments(t *testing.T) {
 	}
 	require.Equal(t, len(wantData), i, "number of chunks")
 
-	// Only the requested chunk is made.
+	// Only the requested chunk is made. Without an edit list, it has trun version 1.
+	init.Moov.Trak.Edts = nil
 	chunks, err = chunkSegment(init, seg, meta, 400, new(1), nil)
 	require.NoError(t, err)
 	nrChunks := 0
@@ -374,9 +423,17 @@ func TestChunkSegmentAcrossFragments(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, chk.styp)
 		require.Equal(t, wantData[1], chk.frag.Mdat.Payload())
+		require.Equal(t, byte(1), chk.frag.Moof.Traf.Trun.Version)
 		nrChunks++
 	}
 	require.Equal(t, 1, nrChunks)
+}
+
+func TestNewTrunVersion(t *testing.T) {
+	require.Equal(t, byte(0), newTrunVersion(true, 0))
+	require.Equal(t, byte(1), newTrunVersion(false, 0), "version 0 with composition offsets needs an edit list")
+	require.Equal(t, byte(1), newTrunVersion(true, 1))
+	require.Equal(t, byte(1), newTrunVersion(false, 1))
 }
 
 func TestAvailabilityTime(t *testing.T) {
@@ -646,6 +703,47 @@ func TestLLSegmentAvailability(t *testing.T) {
 			expectedNr:         26,
 			expectedDecodeTime: 50 * 90000,
 			expectedErr:        "",
+		},
+		// VoD asset with SegmentTimeline and $Number$, in all three live formats.
+		{
+			asset:              "timeline_number_2s",
+			media:              "V400/$NrOrTime$.m4s",
+			nowMS:              50_500,
+			startNr:            1,
+			mpdType:            "Number",
+			requestMedia:       26,
+			expectedNr:         26,
+			expectedDecodeTime: 50 * 90000,
+		},
+		{
+			asset:              "timeline_number_2s",
+			media:              "V400/$NrOrTime$.m4s",
+			nowMS:              50_500,
+			startNr:            1,
+			mpdType:            "TimelineNumber",
+			requestMedia:       26,
+			expectedNr:         26,
+			expectedDecodeTime: 50 * 90000,
+		},
+		{
+			asset:              "timeline_number_2s",
+			media:              "V400/$NrOrTime$.m4s",
+			nowMS:              50_500,
+			startNr:            1,
+			mpdType:            "TimelineTime",
+			requestMedia:       4_500_000,
+			expectedNr:         26,
+			expectedDecodeTime: 50 * 90000,
+		},
+		{
+			asset:              "timeline_number_2s",
+			media:              "A128/$NrOrTime$.m4s",
+			nowMS:              51_000,
+			startNr:            1,
+			mpdType:            "TimelineTime",
+			requestMedia:       6*384_000 + 96_256, // second segment of the seventh loop
+			expectedNr:         26,
+			expectedDecodeTime: 6*384_000 + 96_256,
 		},
 		{
 			asset:              "WAVE/av",
@@ -1217,6 +1315,30 @@ func TestWriteSubSegmentWithChunkDuration(t *testing.T) {
 	}
 }
 
+// TestEncryptUnsupportedTracks checks eccp_ on tracks that livesim2 does not encrypt.
+// An MPD with video or audio of such a codec (MPEG-H, VVC) is refused, and subtitle
+// tracks keep their clear segments, as their init segments already did, also when chunked.
+func TestEncryptUnsupportedTracks(t *testing.T) {
+	_, get := testLiveServer(t)
+	const nowMS = 100_000
+	for _, mpd := range []string{"mpegh_BL_1_6/BL_1_6.mpd", "testpic_2s_vvc/Manifest.mpd"} {
+		status, body := get("/livesim2/eccp_cenc/"+mpd, nowMS)
+		require.Equal(t, http.StatusBadRequest, status, mpd)
+		require.Contains(t, string(body), "cannot be encrypted", mpd)
+	}
+	status, _ := get("/livesim2/eccp_cenc/testpic_2s/Manifest_imsc1.mpd", nowMS)
+	require.Equal(t, http.StatusOK, status)
+	for _, prefix := range []string{"", "chunkdur_0.5/"} {
+		for _, seg := range []string{"imsc1_txt_sv/init.mp4", "imsc1_txt_sv/40.m4s"} {
+			status, clear := get("/livesim2/"+prefix+"testpic_2s/"+seg, nowMS)
+			require.Equal(t, http.StatusOK, status, prefix+seg)
+			status, body := get("/livesim2/"+prefix+"eccp_cenc/testpic_2s/"+seg, nowMS)
+			require.Equal(t, http.StatusOK, status, prefix+seg)
+			require.Equal(t, clear, body, "%s%s is in the clear", prefix, seg)
+		}
+	}
+}
+
 // TestLiveSegmentSidx checks that the sidx a VoD segment brings describes the live segment
 // as sent, also when a larger tfdt, emsg boxes, captions or encryption grow it, and for
 // audio segments built from other samples than the VoD segment.
@@ -1330,6 +1452,45 @@ func TestUpdateSidx(t *testing.T) {
 				want = []mp4.SidxRef{{ReferencedSize: size0 + size1, SubSegmentDuration: 6000}}
 			}
 			assert.Equal(t, want, sidx.SidxRefs)
+		})
+	}
+}
+
+// TestEncryptHEVCInbandPPS checks that HEVC video whose samples carry a PPS that the hvcC lacks,
+// as bbb_hevc_ac3_8s has, is encrypted, and that its samples decrypt to those of the clear segment.
+// cbcs needs that PPS to find the end of the slice headers.
+func TestEncryptHEVCInbandPPS(t *testing.T) {
+	server, get := testLiveServer(t)
+	a, ok := server.assetMgr.findAsset("bbb_hevc_ac3_8s")
+	require.True(t, ok)
+	rep := a.Reps["1"]
+	const nr = 50
+	nowMS := (nr + 5) * a.SegmentDurMS
+	status, clearBody := get(fmt.Sprintf("/livesim2/bbb_hevc_ac3_8s/video_%d.m4s", nr), nowMS)
+	require.Equal(t, http.StatusOK, status)
+	clear := decodeSegmentSamples(t, clearBody, rep.initSeg)
+	for _, scheme := range []string{"cenc", "cbcs"} {
+		t.Run(scheme, func(t *testing.T) {
+			base := "/livesim2/eccp_" + scheme + "/bbb_hevc_ac3_8s/"
+			status, body := get(base+"video_init.mp4", nowMS)
+			require.Equal(t, http.StatusOK, status)
+			initFile, err := mp4.DecodeFile(bytes.NewReader(body))
+			require.NoError(t, err)
+			di, err := mp4.DecryptInit(initFile.Init)
+			require.NoError(t, err)
+
+			status, body = get(base+fmt.Sprintf("video_%d.m4s", nr), nowMS)
+			require.Equal(t, http.StatusOK, status, string(body))
+			encFile, err := mp4.DecodeFile(bytes.NewReader(body))
+			require.NoError(t, err)
+			require.NoError(t, mp4.DecryptSegment(encFile.Segments[0], di, rep.encData.key[:]))
+			var decrypted bytes.Buffer
+			require.NoError(t, encFile.Segments[0].Encode(&decrypted))
+			dec := decodeSegmentSamples(t, decrypted.Bytes(), rep.initSeg)
+			require.Len(t, dec, len(clear))
+			for i := range clear {
+				require.Equal(t, clear[i].Data, dec[i].Data, "sample %d", i)
+			}
 		})
 	}
 }

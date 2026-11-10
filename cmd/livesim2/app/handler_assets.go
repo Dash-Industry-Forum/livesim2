@@ -17,6 +17,7 @@ type assetsInfo struct {
 	Host    string
 	PlayURL string
 	Assets  []*assetInfo
+	C2PA    bool // the server signs with C2PA (--c2pa), so the c2pa_ URL option works
 }
 
 type assetInfo struct {
@@ -27,10 +28,12 @@ type assetInfo struct {
 }
 
 type mpdInfo struct {
-	Path        string
-	Desc        string
-	Dur         string
-	NotLoopable string // Why the MPD cannot be looped, if so
+	Path         string
+	Desc         string
+	Dur          string
+	NotLoopable  string // Why the MPD cannot be looped, if so
+	RepConflicts string // Its Representations that another MPD defines differently, if any
+	NotLive      string // Why the MPD cannot be made live, if so. It is still a VoD MPD.
 }
 
 // assetHandlerFunc returns information about assets
@@ -59,10 +62,12 @@ func (s *Server) assetsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		mpds := make([]mpdInfo, 0, len(asset.MPDs))
 		for _, mpd := range asset.MPDs {
 			mpds = append(mpds, mpdInfo{
-				Path:        mpd.Name,
-				Desc:        mpd.Title,
-				Dur:         mpd.Dur,
-				NotLoopable: asset.notLoopable(mpd.Name),
+				Path:         mpd.Name,
+				Desc:         mpd.Title,
+				Dur:          mpd.Dur,
+				NotLoopable:  asset.notLoopable(mpd.Name),
+				RepConflicts: asset.repConflicts(mpd.Name),
+				NotLive:      asset.mpdNotLive[mpd.Name],
 			})
 		}
 		sort.Slice(mpds, func(i, j int) bool {

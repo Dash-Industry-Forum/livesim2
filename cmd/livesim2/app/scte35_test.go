@@ -5,11 +5,13 @@
 package app
 
 import (
+	stdxml "encoding/xml"
 	"fmt"
 	"strings"
 	"testing"
 
 	gotsscte35 "github.com/Comcast/gots/v2/scte35"
+	refscte35 "github.com/Comcast/scte35-go/pkg/scte35"
 	"github.com/Dash-Industry-Forum/livesim2/pkg/scte35"
 	m "github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/Eyevinn/dash-mpd/xml"
@@ -485,6 +487,95 @@ func TestVerifyAdSignaling(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
+		})
+	}
+}
+
+// TestSCTE35MessagesDecodeIndependently decodes every message of a break with scte35-go, an
+// implementation independent of the gots encoder behind scte35.Cue, for a range of scte35_
+// settings. It checks the decoded fields against the cue and against the DVB A178-3r2 rules
+// that livesim2 follows (Tables 2 and 3, and the Event duration of §4.4.5). It also checks that
+// the XML form (urn:scte:scte35:2013:xml) describes the same message as the binary one, by
+// letting scte35-go encode it.
+func TestSCTE35MessagesDecodeIndependently(t *testing.T) {
+	for _, val := range []string{
+		"1",
+		"30:16;end=1",
+		"30:16;cmd=timesignal;seg=break,po;ads=2",
+		"30:16;cmd=timesignal;seg=dpo;ads=3;adseg=dad",
+		"30:16;cmd=timesignal;seg=po;upid=3:ABCD01234567",
+		"30:16;cmd=timesignal;seg=break;upid=0:",
+	} {
+		t.Run(val, func(t *testing.T) {
+			sc, err := CreateSCTE35Config(val)
+			require.NoError(t, err)
+			for _, cp := range sc.cuePoints(adBreakInst{id: 7, offsetS: 30, durS: 16}, 0) {
+				bin := cp.cue.Binary()
+				sis, err := refscte35.DecodeBytes(bin)
+				require.NoError(t, err, "decode, including the CRC_32")
+				assert.Zero(t, sis.PTSAdjustment, "pts_adjustment")
+				assert.Equal(t, uint32(cp.cue.Tier), sis.Tier, "tier")
+				assert.Equal(t, cp.cue.PTS, sis.SpliceTimePTS(), "splice time")
+				eventDur := uint64(cp.durS) * scte35.TimescaleHz
+				switch cmd := sis.SpliceCommand.(type) {
+				case *refscte35.SpliceInsert:
+					require.Equal(t, scte35.SpliceInsert, cp.cue.Cmd)
+					assert.Equal(t, cp.cue.EventID, cmd.SpliceEventID, "splice_event_id")
+					assert.Equal(t, cp.cue.OutOfNetwork, cmd.OutOfNetworkIndicator, "out_of_network_indicator")
+					assert.NotNil(t, cmd.Program, "program_splice_flag")
+					require.NotNil(t, cmd.BreakDuration, "duration_flag")
+					assert.Equal(t, cmd.OutOfNetworkIndicator, cmd.BreakDuration.AutoReturn,
+						"auto_return is 1 for OUT and 0 for IN")
+					assert.Equal(t, cp.cue.BreakDurPTS, cmd.BreakDuration.Duration, "break_duration")
+					assert.Equal(t, eventDur, cmd.BreakDuration.Duration, "the Event duration is the break_duration")
+				case *refscte35.TimeSignal:
+					require.Equal(t, scte35.TimeSignal, cp.cue.Cmd)
+					require.Len(t, sis.SpliceDescriptors, len(cp.cue.Levels))
+					longest := uint64(0)
+					for i, l := range cp.cue.Levels {
+						sd, ok := sis.SpliceDescriptors[i].(*refscte35.SegmentationDescriptor)
+						require.True(t, ok, "segmentation_descriptor %d", i)
+						assert.Equal(t, l.EventID, sd.SegmentationEventID, "segmentation_event_id %d", i)
+						assert.Equal(t, uint32(l.TypeID), sd.SegmentationTypeID, "segmentation_type_id %d", i)
+						assert.False(t, sd.SegmentationEventCancelIndicator, "cancel indicator %d", i)
+						assert.Nil(t, sd.DeliveryRestrictions, "delivery_not_restricted_flag %d", i)
+						if l.DurationPTS == 0 {
+							assert.Nil(t, sd.SegmentationDuration, "segmentation_duration %d", i)
+						} else {
+							require.NotNil(t, sd.SegmentationDuration, "segmentation_duration %d", i)
+							assert.Equal(t, l.DurationPTS, *sd.SegmentationDuration, "segmentation_duration %d", i)
+							longest = max(longest, l.DurationPTS)
+						}
+						if l.UPIDType == 0 {
+							assert.Empty(t, sd.SegmentationUPIDs, "segmentation_upid %d", i)
+						} else {
+							require.Len(t, sd.SegmentationUPIDs, 1, "segmentation_upid %d", i)
+							assert.Equal(t, uint32(l.UPIDType), sd.SegmentationUPIDs[0].Type, "segmentation_upid_type %d", i)
+							assert.Equal(t, string(l.UPID), sd.SegmentationUPIDs[0].Value, "segmentation_upid %d", i)
+						}
+						assert.Equal(t, uint32(l.Num), sd.SegmentNum, "segment_num %d", i)
+						assert.Equal(t, uint32(l.Expected), sd.SegmentsExpected, "segments_expected %d", i)
+						if l.HasSubSegments {
+							require.NotNil(t, sd.SubSegmentNum, "sub_segment_num %d", i)
+							assert.Equal(t, uint32(l.SubNum), *sd.SubSegmentNum, "sub_segment_num %d", i)
+							assert.Equal(t, uint32(l.SubExpected), *sd.SubSegmentsExpected, "sub_segments_expected %d", i)
+						} else {
+							assert.Nil(t, sd.SubSegmentNum, "sub_segment_num %d", i)
+						}
+					}
+					assert.Equal(t, longest, eventDur, "the Event duration is the longest segmentation_duration")
+				default:
+					t.Fatalf("unexpected splice command %T", cmd)
+				}
+
+				x, err := xml.Marshal(cp.cue.XMLSignal().SpliceInfoSection)
+				require.NoError(t, err)
+				var fromXML refscte35.SpliceInfoSection
+				require.NoError(t, stdxml.Unmarshal(x, &fromXML), "decode the XML form")
+				enc, err := fromXML.Encode()
+				require.NoError(t, err)
+				assert.Equal(t, bin, enc, "the XML form describes the binary message: %s", x)
+			}
 		})
 	}
 }

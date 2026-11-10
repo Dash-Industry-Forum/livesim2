@@ -1,0 +1,8 @@
+# dashcheck errors that are known for the testdata profile (cmd/livesim2/app/testdata/assets).
+# Format: <rule> <path regex (ERE, matched against the whole path)>  # cause. See run.sh.
+# A ~ before the rule marks an error that depends on when the check runs.
+# Remove a line when its cause is fixed; run.sh lists the lines that matched nothing.
+# The overview of the open causes is livesim2 issue #394.
+
+# dashcheck: cannot pick segments when @availabilityTimeOffset is INF
+ADDR-SEGMENTS /livesim2/ato_inf/testpic_2s/Manifest\.mpd

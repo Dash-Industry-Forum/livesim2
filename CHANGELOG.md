@@ -7,12 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Test-asset MPDs: `testpic_2s/Manifest_thumbs.mpd`, `testpic_2s/cea608.mpd` and `testpic_6s/Manifest.mpd` signal
+  DASH-IF IOP simple instead of the unknown profile `urn:com:dashif:dash264`, the thumbnail Adaptation Set has
+  `segmentAlignment`, and `cea608.mpd` has the 8 s duration of its segments instead of 1 h.
+
+## [1.15.3] - 2026-10-27
+
+### Changed
+
+- Go 1.27.3 or later is required (`go.mod`), for the security fixes of Go 1.27.2 and 1.27.3 in `crypto/tls`,
+  `crypto/x509`, `net/http` and other packages.
+- mp4ff dependency bumped to v0.61.0, which fixes cbcs encryption (500) of video whose samples carry a PPS that the
+  sample entry lacks, such as `bbb_hevc_ac3_8s`; also hi264 v0.12.1, templ v0.3.1100, chi v5.5.0, huma v2.40.0,
+  certmagic v0.25.6 and Prometheus client_golang v1.25.0.
+
+### Fixed
+
+- Audio with an edit list in SegmentTimeline modes: audio-only MPDs had `S@t` 1024 ticks late, and with
+  `periods_` each new Period started without audio for about 2 s (#385).
+- `chunkdur_` chunks and ad-break slate segments had `trun` version 1 also when the content has version 0
+  and an edit list (#386).
+- After the `stop_` time, the segments of the now static MPD gave 410 outside the time-shift buffer, and
+  segments after the stop time were served. All segments of the event are now available, and none after it (#387).
+- MPD EventStreams of `scte35_` (with `mpd=`), `sgai_` and `svta_` changed without a new `MPD@publishTime` (#388).
+- `ssras_` without a `chunkdurssr_` entry for a low-delay AdaptationSet gave 500 for its Partial Segments. The
+  URL now gets 400, and `/urlgen` says what is missing (#389).
+- Low-latency `$Number$` MPDs (`chunkdur_`, `ssras_`) kept the `@timescale` of the VoD MPD. They now use the
+  media timescale (#390).
+- `startrel_`/`stoprel_`: the MPD at the `Location` lacks the `Location` element but had the same `@publishTime`.
+  The MPD with the `Location` now has a `@publishTime` one second earlier (#391).
+- `/assets` offered MPDs that cannot be made live, such as those with side-loaded subtitles, and their live
+  URLs gave 500. They are now marked as VoD only, `/urlgen` leaves them out, and their live URLs give 404 (#392).
+- In SegmentTimeline modes, an AdaptationSet with a BaseURL to another asset, such as the 2 s video of
+  `testpic_6s/mixeddur.mpd`, got the timeline of its own asset. It now gets that of the other asset (#393).
+- `periods_` in the SegmentTimeline modes: a new Period had an empty `SegmentTimeline` until its first
+  segment was complete. The Period is now added when its first segments are complete (#399).
+- Test-asset VoD MPDs: `dolby-ac4/2997fps` implied a second segment that does not exist, `mpegh_BL_1_6` and
+  `mpegh_LC_1_6` were not schema-valid, and the WAVE `stream_w_beeps.mpd` had a too short `@maxSegmentDuration`.
+- `start_` in SegmentTimeline modes: the MPD had an empty `SegmentTimeline` until the first segment was
+  available. It now gives 425 Too Early until then, as before the start time, where the message now has the
+  right time (#399).
+- `timecc608_` gave 500 for video whose segments consist of one-frame fragments, such as the WAVE 25 fps
+  content. The captions of a segment now run across its fragments.
+- `eccp_` and `drm_`: subtitle segments gave 500 instead of staying clear like their init segments, and MPDs
+  with tracks that livesim2 cannot encrypt, such as MPEG-H and VVC, were served. Such MPDs now get 400.
+- `timecc608_` on AV1 or VVC video gave 500 for every segment. The MPD and its segments now get 400.
+
+## [1.15.2] - 2026-10-23
+
 ### Added
 
+- A livesim2 logo in the README and on the welcome page, with a favicon and a link preview image.
+
+### Fixed
+
+- `/favicon.ico` returned an HTML page instead of an icon.
+- An `annexI_` URL value with a pair that is not `key=value`, such as `annexI_a`, gave 500 (a recovered panic) instead of 400.
+
+## [1.15.1] - 2026-10-23
+
+### Added
+
+- `/urlgen/` has C2PA settings, shown only when the server runs with `--c2pa`, with a select for the `c2pa_` method.
+
+### Fixed
+
+- Builds with `make build` or `make forlinux` no longer report a `+dirty` version just because `out/` or
+  `out-linux/` exists: `.gitignore` now ignores both.
+- `--help` shows the `--timeoutS` default and says that `--writemissingrepdata` also rewrites outdated files.
+  The README lists every command-line option and describes C2PA signing.
+
+## [1.15.0] - 2026-10-23
+
+### Added
+
+- VoD assets with SegmentTimeline and `$Number$`, as made by e.g. Shaka Packager, are now supported (#152),
+  with the test asset `timeline_number_2s` made by the livesim-content `contentgen` tool.
 - Experimental C2PA live media signing: server option `--c2pa` (`--c2pacert`/`--c2pakey`) and URL option `c2pa_vsi`,
   signing init segments with a C2PA manifest and media segments with C2PA 2.5 VSI `emsg` boxes.
-- `/assets` and urlgen flag MPDs that cannot be looped, since a Representation is more than a segment shorter than
-  the asset loop, like the image subtitles of livesim-content's `testpic_2s/imsc1_img.mpd`.
+- URL option `inbandps_1` signals AVC and HEVC video as `avc3`/`hev1` and adds the parameter sets in-band in front of
+  the slices of each IDR or IRAP picture, instead of needing separate avc3 content.
+- SVTA2053 remote tracking (#332): `svta_…;remote=1` and `sgai_…;svta=remote` give the tracking as a `$remote.tracking`
+  URL, `remote=404|wrongtype` makes its resolution fail, and `/sgai/session_status` shows each fetch.
+- `/assets` and urlgen flag MPDs that cannot be looped, since a Representation is more than a segment shorter than the
+  loop, and MPDs that define a Representation differently from another MPD of the asset, which is also logged.
 - New `preroll=<dur>` setting on the `sgai_` option, e.g. `sgai_p60:20;preroll=10`, that adds a preroll
   ReplacePresentation event with `presentationTime="0"` and `id="0"`.
 
@@ -54,6 +134,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   out of the first Period.
 - cmaf-ingest-receiver no longer allocates the size that a box header or `Content-Length` claims before the data
   arrives, and answers 413 to a chunk larger than 200 MB.
+- `ssras_` signals the `SegmentSequenceProperties@cadence` that the IDR pictures of the content allow, not always 1.
+  Repdata files are now version 2; older ones are re-scanned at each start until `--writemissingrepdata` rewrites them.
+- The closing `splice_insert` of `scte35_…;end=1` carries a `break_duration()` of 0, which DVB A178-3 requires in
+  every `splice_insert`.
+- Bundled test MPDs: the broken `profiles` attribute of two `testpic_2s` manifests, the `mimeType` of the VVC MPD, and
+  the codecs of two WAVE MPDs, which are `avc3`.
 
 ## [1.14.0] - 2026-09-30
 
@@ -693,7 +779,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - features and URLs listed at livesim2 root page
 - configurable generated stpp subtitles with timing info
 
-[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.14.0...HEAD
+[Unreleased]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.15.3...HEAD
+[1.15.3]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.15.2...v1.15.3
+[1.15.2]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.15.1...v1.15.2
+[1.15.1]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.15.0...v1.15.1
+[1.15.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/Dash-Industry-Forum/livesim2/compare/v1.11.0...v1.12.0

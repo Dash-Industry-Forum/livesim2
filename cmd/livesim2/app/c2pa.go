@@ -238,6 +238,9 @@ func verifyC2PAConfig(cfg *ResponseConfig) error {
 	case len(cfg.TimeSubsStpp) > 0 || len(cfg.TimeSubsWvtt) > 0 || cfg.TimeSubsStpc != nil || cfg.TimeSubsWvtc != nil:
 		// Generated subtitle tracks have no signed init segment.
 		return errors.New("c2pa_vsi cannot be combined with generated time subtitles")
+	case cfg.InbandPS:
+		// The signed init segments cannot get another sample entry.
+		return errors.New("c2pa_vsi cannot be combined with inbandps")
 	}
 	return nil
 }

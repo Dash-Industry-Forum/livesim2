@@ -5,6 +5,8 @@
 package app
 
 import (
+	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path"
@@ -12,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	m "github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/stretchr/testify/require"
@@ -93,6 +96,37 @@ func TestLoadAsset(t *testing.T) {
 					mpdTimescale:   1,
 					mediaTimescale: 48_000,
 					duration:       480_256,
+				},
+			},
+		},
+		{
+			desc:      "timeline_number_2s (SegmentTimeline with $Number$)",
+			assetPath: "assets/timeline_number_2s",
+			ad: wantedAssetData{
+				nrReps:         3,
+				loopDurationMS: 8000,
+			},
+			rds: map[string]wantedRepData{
+				"V400": {
+					nrSegs:         4,
+					initURI:        "V400/init.mp4",
+					mpdTimescale:   90_000,
+					mediaTimescale: 90_000,
+					duration:       720_000,
+				},
+				"V1600": {
+					nrSegs:         4,
+					initURI:        "V1600/init.mp4",
+					mpdTimescale:   90_000,
+					mediaTimescale: 90_000,
+					duration:       720_000,
+				},
+				"A128": {
+					nrSegs:         4,
+					initURI:        "A128/init.mp4",
+					mpdTimescale:   48_000,
+					mediaTimescale: 48_000,
+					duration:       384_000,
 				},
 			},
 		},
@@ -205,6 +239,90 @@ func TestLoadAsset(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSegmentTimelineNumber checks VoD assets with SegmentTimeline and $Number$: the segments
+// are numbered from startNumber, and an S@r < 0 (repeat until the next S) is an error.
+func TestSegmentTimelineNumber(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		return // Skip test on Windows since the tree copy does not work properly
+	}
+	logger := slog.Default()
+	const assetPath = "assets/timeline_number_2s"
+	reps := []string{"V400", "V1600", "A128"}
+	testCases := []struct {
+		desc     string
+		modify   func(t *testing.T, assetDir string)
+		startNr  uint32
+		firstURI string
+		loadErr  bool
+	}{
+		{
+			desc:     "startNumber 1",
+			modify:   func(t *testing.T, assetDir string) {},
+			startNr:  1,
+			firstURI: "V400/1.m4s",
+		},
+		{
+			desc: "startNumber 0",
+			modify: func(t *testing.T, assetDir string) {
+				replaceInMPD(t, assetDir, `startNumber="1"`, `startNumber="0"`)
+				for _, rep := range reps {
+					for nr := 1; nr <= 4; nr++ {
+						err := os.Rename(filepath.Join(assetDir, rep, fmt.Sprintf("%d.m4s", nr)),
+							filepath.Join(assetDir, rep, fmt.Sprintf("%d.m4s", nr-1)))
+						require.NoError(t, err)
+					}
+				}
+			},
+			startNr:  0,
+			firstURI: "V400/0.m4s",
+		},
+		{
+			desc: "S@r=-1",
+			modify: func(t *testing.T, assetDir string) {
+				replaceInMPD(t, assetDir, `r="3"`, `r="-1"`)
+			},
+			loadErr: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			vodRoot := t.TempDir()
+			assetDir := filepath.Join(vodRoot, assetPath)
+			require.NoError(t, copyDir(filepath.Join("testdata", assetPath), assetDir))
+			tc.modify(t, assetDir)
+			am := newAssetMgr(os.DirFS(vodRoot), t.TempDir(), false, false)
+			require.NoError(t, am.discoverAssets(logger))
+			asset, ok := am.findAsset(assetPath)
+			if tc.loadErr {
+				require.False(t, ok, "asset should not load")
+				return
+			}
+			require.True(t, ok)
+			for _, id := range reps {
+				rep := asset.Reps[id]
+				require.Len(t, rep.Segments, 4, id)
+				for i, seg := range rep.Segments {
+					require.Equal(t, tc.startNr+uint32(i), seg.Nr, "%s segment %d", id, i)
+					if i > 0 {
+						require.Equal(t, rep.Segments[i-1].EndTime, seg.StartTime, "%s segment %d", id, i)
+					}
+				}
+			}
+			require.Equal(t, tc.firstURI, asset.Reps["V400"].firstSegmentURI())
+		})
+	}
+}
+
+// replaceInMPD replaces oldStr with newStr in the Manifest.mpd of an asset directory.
+func replaceInMPD(t *testing.T, assetDir, oldStr, newStr string) {
+	t.Helper()
+	mpdPath := filepath.Join(assetDir, "Manifest.mpd")
+	data, err := os.ReadFile(mpdPath)
+	require.NoError(t, err)
+	require.Contains(t, string(data), oldStr)
+	require.NoError(t, os.WriteFile(mpdPath, []byte(strings.ReplaceAll(string(data), oldStr, newStr)), 0o644))
 }
 
 func TestWriteMissingRepData(t *testing.T) {
@@ -429,4 +547,115 @@ func setSegmentEndNr(assetDir string, endNumber uint32) error {
 		}
 	}
 	return nil
+}
+
+// TestMPDNotLive checks that an MPD that cannot be made live, such as one with side-loaded
+// subtitles without a SegmentTemplate, stays listed as a VoD MPD but is marked as not live,
+// and that its live MPD gives errNotLive (#392).
+func TestMPDNotLive(t *testing.T) {
+	base := os.DirFS("testdata/assets")
+	vodFS := fstest.MapFS{}
+	require.NoError(t, fs.WalkDir(base, "testpic_2s", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		data, err := fs.ReadFile(base, p)
+		vodFS[p] = &fstest.MapFile{Data: data}
+		return err
+	}))
+	sideLoaded := `<AdaptationSet contentType="text" mimeType="text/vtt" lang="en">` +
+		`<Representation id="subs" bandwidth="256"><BaseURL>subs.vtt</BaseURL></Representation>` +
+		`</AdaptationSet></Period>`
+	manifest := string(vodFS["testpic_2s/Manifest.mpd"].Data)
+	vodFS["testpic_2s/side_subs.mpd"] = &fstest.MapFile{Data: []byte(strings.Replace(manifest, "</Period>", sideLoaded, 1))}
+
+	am := newAssetMgr(vodFS, "", false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+	a, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+	require.Contains(t, a.MPDs, "side_subs.mpd")
+	require.Contains(t, a.mpdNotLive["side_subs.mpd"], "no SegmentTemplate")
+	require.Empty(t, a.mpdNotLive["Manifest.mpd"])
+
+	_, err := LiveMPD(a, "side_subs.mpd", NewResponseConfig(), nil, 100_000)
+	require.ErrorIs(t, err, errNotLive)
+	_, err = LiveMPD(a, "Manifest.mpd", NewResponseConfig(), nil, 100_000)
+	require.NoError(t, err)
+	_, err = LiveMPD(a, "missing.mpd", NewResponseConfig(), nil, 100_000)
+	require.ErrorIs(t, err, errNotFound)
+}
+
+// mixedDurMPD is like testpic_6s/mixeddur.mpd in livesim-content: 6 s audio segments of its
+// own asset, and 2 s video segments of testpic_2s by a BaseURL.
+const mixedDurMPD = `<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" profiles="urn:mpeg:dash:profile:isoff-live:2011" type="static"
+  mediaPresentationDuration="PT12S" minBufferTime="PT2S">
+  <Period id="p0" start="PT0S">
+    <AdaptationSet contentType="audio" mimeType="audio/mp4" lang="en" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate startNumber="1" initialization="$RepresentationID$/init.mp4" duration="6" media="$RepresentationID$/$Number$.m4s"/>
+      <Representation id="A48" codecs="mp4a.40.2" bandwidth="48000" audioSamplingRate="48000"/>
+    </AdaptationSet>
+    <AdaptationSet contentType="video" mimeType="video/mp4" segmentAlignment="true" startWithSAP="1">
+      <BaseURL>../testpic_2s/</BaseURL>
+      <SegmentTemplate startNumber="1" initialization="$RepresentationID$/init.mp4" duration="2" media="$RepresentationID$/$Number$.m4s"/>
+      <Representation id="V300" codecs="avc1.64001e" bandwidth="300000" width="640" height="360" frameRate="30"/>
+    </AdaptationSet>
+  </Period>
+</MPD>`
+
+// TestBaseURLOtherAsset checks that an AdaptationSet whose BaseURL points to another asset, as
+// the video of testpic_6s/mixeddur.mpd does, gets the SegmentTimeline of that asset, which makes
+// its segments, and that the other AdaptationSets keep that of their own asset (#393).
+func TestBaseURLOtherAsset(t *testing.T) {
+	base := os.DirFS("testdata/assets")
+	vodFS := fstest.MapFS{}
+	for _, dir := range []string{"testpic_2s", "testpic_6s"} {
+		require.NoError(t, fs.WalkDir(base, dir, func(p string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return err
+			}
+			data, err := fs.ReadFile(base, p)
+			vodFS[p] = &fstest.MapFile{Data: data}
+			return err
+		}))
+	}
+	vodFS["testpic_6s/mixeddur.mpd"] = &fstest.MapFile{Data: []byte(mixedDurMPD)}
+	am := newAssetMgr(vodFS, "", false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+	a6, ok := am.findAsset("testpic_6s")
+	require.True(t, ok)
+	a2, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+	require.Empty(t, a6.mpdNotLive["mixeddur.mpd"])
+	require.Empty(t, a6.repConflicts("mixeddur.mpd"), "the video Representation is that of testpic_2s")
+
+	template := func(a *asset, mpdName string, cfg *ResponseConfig, nowMS int, contentType string) *m.SegmentTemplateType {
+		t.Helper()
+		mpd, err := LiveMPD(a, mpdName, cfg, nil, nowMS)
+		require.NoError(t, err)
+		for _, as := range mpd.Periods[0].AdaptationSets {
+			if string(as.ContentType) == contentType {
+				return as.SegmentTemplate
+			}
+		}
+		t.Fatalf("no %s AdaptationSet", contentType)
+		return nil
+	}
+	for _, mode := range []SegTimelineMode{SegTimelineModeTime, SegTimelineModeNr} {
+		for _, nowMS := range []int{100_000, 1_000_000} {
+			cfg := NewResponseConfig()
+			cfg.SegTimelineMode = mode
+			for _, c := range []struct {
+				contentType string
+				a           *asset
+			}{{"video", a2}, {"audio", a6}} {
+				want := template(c.a, "Manifest.mpd", cfg, nowMS, c.contentType)
+				got := template(a6, "mixeddur.mpd", cfg, nowMS, c.contentType)
+				desc := fmt.Sprintf("%s %s at %dms", mode, c.contentType, nowMS)
+				require.Equal(t, want.GetTimescale(), got.GetTimescale(), desc)
+				require.Equal(t, want.StartNumber, got.StartNumber, desc)
+				require.Equal(t, want.SegmentTimeline.S, got.SegmentTimeline.S, desc)
+			}
+		}
+	}
 }

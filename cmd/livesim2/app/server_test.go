@@ -47,6 +47,16 @@ func TestServer(t *testing.T) {
 	require.Equal(t, http.StatusTooEarly, resp.StatusCode, "too early response code")
 	require.Equal(t, "too early by 22000ms\n", string(respBody))
 
+	// An MPD before the start, and a SegmentTimeline MPD before the first segment is complete
+	resp, respBody = testRequest(t, ts, "GET", "/livesim2/start_100/testpic_2s/Manifest.mpd?nowMS=99500", nil)
+	require.Equal(t, http.StatusTooEarly, resp.StatusCode, "MPD before start")
+	require.Equal(t, "too early by 500ms\n", string(respBody))
+	resp, respBody = testRequest(t, ts, "GET", "/livesim2/start_100/segtimeline_1/testpic_2s/Manifest.mpd?nowMS=101000", nil)
+	require.Equal(t, http.StatusTooEarly, resp.StatusCode, "SegmentTimeline MPD before first segment")
+	require.Equal(t, "too early by 1000ms\n", string(respBody))
+	resp, _ = testRequest(t, ts, "GET", "/livesim2/start_100/segtimeline_1/testpic_2s/Manifest.mpd?nowMS=102000", nil)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "SegmentTimeline MPD after first segment")
+
 	// Test healthz
 	resp, _ = testRequest(t, ts, "GET", "/healthz", nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "healthz")

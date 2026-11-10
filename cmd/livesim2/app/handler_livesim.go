@@ -83,8 +83,7 @@ func cfgFromRequest(r *http.Request, log *slog.Logger) (nowMS int, cfg *Response
 	}
 
 	if nowMS < cfg.StartTimeS*1000 {
-		tooEarlyMS := cfg.StartTimeS - nowMS
-		msg := fmt.Sprintf("%dms too early", tooEarlyMS)
+		msg := newErrTooEarly(cfg.StartTimeS*1000 - nowMS).Error()
 		return 0, nil, generateAndLogHttpError(log, msg, http.StatusTooEarly)
 	}
 
@@ -144,9 +143,20 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		_, mpdName := path.Split(contentPart)
 		err := writeLiveMPD(log, w, cfg, s.Cfg.DrmCfg, a, mpdName, nowMS)
 		if err != nil {
-			if errors.Is(err, errCC608AlreadyCaptioned) || errors.Is(err, errC2PAUnavailable) {
+			if errors.Is(err, errCC608AlreadyCaptioned) || errors.Is(err, errCC608Unsupported) ||
+				errors.Is(err, errC2PAUnavailable) || errors.Is(err, errCannotEncrypt) {
 				log.Info("liveMPD rejected", "err", err)
 				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if errors.Is(err, errNotLive) || errors.Is(err, errNotFound) {
+				log.Info("liveMPD not found", "err", err)
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
+			if tooEarly, ok := errors.AsType[errTooEarly](err); ok {
+				log.Info("liveMPD too early", "err", err)
+				http.Error(w, tooEarly.Error(), http.StatusTooEarly)
 				return
 			}
 			log.Error("liveMPD", "err", err)
@@ -203,7 +213,8 @@ func (s *Server) livesimHandlerFunc(w http.ResponseWriter, r *http.Request) {
 			case errors.Is(err, errNotFound):
 				http.Error(w, "Not Found", http.StatusNotFound)
 				return
-			case errors.Is(err, errCC608AlreadyCaptioned), errors.Is(err, errC2PAUnavailable):
+			case errors.Is(err, errCC608AlreadyCaptioned), errors.Is(err, errCC608Unsupported),
+				errors.Is(err, errC2PAUnavailable):
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			case errors.As(err, &tooEarly):

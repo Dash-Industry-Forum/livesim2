@@ -1,11 +1,10 @@
+<img src="cmd/livesim2/app/static/livesim2-logo-animated.svg" alt="livesim2 – DASH Live Source Simulator" width="720">
+
 ![Test](https://github.com/Dash-Industry-Forum/livesim2/workflows/Go/badge.svg)
 [![golangci-lint](https://github.com/Dash-Industry-Forum/livesim2/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/Dash-Industry-Forum/livesim2/actions/workflows/golangci-lint.yml)
 [![GoDoc](https://godoc.org/github.com/Dash-Industry-Forum/livesim2?status.svg)](http://godoc.org/github.com/Dash-Industry-Forum/livesim2)
 
-# livesim2 - the second generation DASH Live Source Simulator
-
-`livesim2` is a new and improved version of the
-[DASH-IF live source simulator][1].
+`livesim2` is the second generation of the [DASH-IF live source simulator][1].
 
 *Test it at [https://livesim2.dashif.org](https://livesim2.dashif.org) or set up your own server
 using your own DASH content or test content available
@@ -25,7 +24,7 @@ screen presentation. The very short example assets bundled with the code are onl
 relative to the Epoch start 1970-01-01:00:00:00Z.
 
 To provide full UTC time stamps on-screen and the possibility to test subtitles,
-livesim2 has a new feature for generating subtitles for any number of languages.
+livesim2 can generate subtitles for any number of languages.
 This is done by a URL parameter like `/timesubsstpp_en,sv` which will result in
 two `stpp` (segmented TTML) subtitle tracks with with language codes "en" and "sv", respectively.
 There is a corresponding setting for `wvtt` (segmented WebVTT) subtitles using `/timesubswvtt_en,sv`.
@@ -37,6 +36,12 @@ into the AVC/HEVC video itself, showing a ticking UTC clock and the segment numb
 channel CC1, and advertises it with a CEA-608 `Accessibility` descriptor. The value is
 `<channel>-<lang>[-<mode>[-<modifier>]]` (only `CC1` is supported so far). It cannot be
 combined with encryption and is rejected for assets that already carry captions.
+
+With `/inbandps_1`, AVC and HEVC video carries its parameter sets in-band: `avc1` and `hvc1` are
+signaled as `avc3` and `hev1` in the MPD and the init segment, and the SPS and PPS (plus VPS for
+HEVC) of the init segment are added in front of the slices of each IDR or IRAP picture that lacks
+them. Since all MPDs of an asset share its Representations, this replaces separate avc3 copies of the
+content. It works with encryption, but not with pre-encrypted assets or `c2pa_vsi`.
 
 `<lang>` is a three-letter ISO 639-2 code, since it ends up in the SCTE 214-1 descriptor
 value — `<Accessibility schemeIdUri="urn:scte:dash:cc:cea-608:2015" value="CC1=eng"/>` —
@@ -98,7 +103,7 @@ one. Use `-pop` for frame-accurate timing, `-pop-sc` to test a player against po
 captions that are decodable segment by segment. `-sc` applies to pop-on only; paint-on and
 roll-up are self-contained by construction.
 
-The new `livesim2` software is written in Go instead of Python and designed to handle
+Unlike [livesim1][1], which is written in Python, `livesim2` is written in Go and designed to handle
 content in a more flexible and versatile way. It is intended to be very easy to install and deploy locally
 since it is compiled into a single binary that serves the content via a built-in
 performant HTTP/2 server. There is also a very simple way of setting up HTTPS
@@ -109,7 +114,7 @@ These parameters are included not only in the MPD requests, but in
 all segment requests allowing the server to be stateless, and
 be able to generate streams with a huge number of
 parameter variations. Currently, not all parameters of [livesim1][1] are implemented,
-but there are also new parameters like the generated subtitles mentioned above.
+but livesim2 has many parameters that livesim1 lacks, like the generated subtitles mentioned above.
 
 The [URL wiki page][urlparams] lists what is available and the served page `/urlgen`
 makes it easy to construct URLs to play the content with specific parameters set.
@@ -135,8 +140,8 @@ Major values to configure are:
 
 Once the server is started, it will scan the file tree starting from
 `vodroot` and gather metadata about all DASH VoD assets it finds.
-Currently, only source VoD assets using SegmentTimeline with `$Time$` and
-SegmentTemplate with `$Number$`  are supported.
+Currently, only source VoD assets using SegmentTemplate with `$Number$`, and
+SegmentTimeline with `$Time$` or `$Number$`, are supported.
 
 ### Command-line parameters
 
@@ -144,24 +149,29 @@ A complete list of parameters, and their access
 via the command line looks like:
 
 ```sh
-  --certpath string      path to TLS certificate file (for HTTPS). Use domains instead if possible
-  --cfg string           path to a JSON config file
-  --domains string       One or more DNS domains (comma-separated) for auto certificate from Lets Encrypt
-  --host string          full scheme://host used in MPD Location/BaseURL. If empty, auto-detected from the request (honors X-Forwarded-Proto)
-  --keypath string       path to TLS private key file (for HTTPS). Use domains instead if possible.
-  --livewindow int       default live window (seconds) (default 300)
-  --logformat string     log format [text, json, pretty, discard] (default "text")
-  --loglevel string      log level [DEBUG, INFO, WARN, ERROR] (default "INFO")
-  --maxrequests int      max nr of request per IP address per 24 hours
-  --playurl string       URL template to play mpd. %s will be replaced by MPD URL (default "https://reference.dashif.org/dash.js/nightly/samples/dash-if-reference-player/index.html?mpd=%s&autoLoad=true&muted=true")
-  --port int             HTTP port (default 8888)
-  --repdataroot string   Representation metadata root directory. "+" copies vodroot value. "-" disables usage. (default "+")
-  --reqlimitint int      interval for request limit i seconds (only used if maxrequests > 0) (default 86400)
-  --reqlimitlog string   path to request limit log file (only written if maxrequests > 0)
-  --timeout int          timeout for all requests (seconds) (default 60)
-  --vodroot string       VoD root directory (default "./vod")
-  --writemissingrepdata  Write representation metadata only if missing (does not override existing)
-  --writerepdata         (Re)generate and write representation metadata, overwriting any existing files
+  --c2pa                     Experimental: enable C2PA live media signing (the c2pa_vsi URL option). Signs every clear audio and video init segment at startup
+  --c2pacert string          C2PA claim-signing certificate chain (PEM), with --c2pa. Default: a generated test certificate
+  --c2pakey string           C2PA claim-signing private key (PEM), with --c2pa
+  --certpath string          path to TLS certificate file (for HTTPS). Use domains instead if possible
+  --cfg string               path to a JSON config file
+  --domains string           One or more DNS domains (comma-separated) for auto certificate from Let's Encrypt
+  --drmcfgfile string        DRM config file path
+  --host string              full scheme://host used in MPD Location/BaseURL. If empty, auto-detected from the request (honors X-Forwarded-Proto)
+  --keypath string           path to TLS private key file (for HTTPS). Use domains instead if possible.
+  --livewindow int           default live window (seconds) (default 300)
+  --logformat string         log format [text, json, pretty, discard] (default "text")
+  --loglevel string          log level [DEBUG, INFO, WARN, ERROR] (default "INFO")
+  --maxrequests int          max nr of request per IP address per 24 hours
+  --playurl string           URL template to play mpd. %s will be replaced by MPD URL (default "https://reference.dashif.org/dash.js/nightly/samples/dash-if-reference-player/index.html?mpd=%s&autoLoad=true&muted=true")
+  --port int                 HTTP port (default 8888)
+  --repdataroot string       Representation metadata root directory. "+" copies vodroot value. "-" disables usage. (default "+")
+  --reqlimitint int          interval for request limit i seconds (only used if maxrequests > 0) (default 86400)
+  --reqlimitlog string       path to request limit log file (only written if maxrequests > 0)
+  --timeoutS int             timeout for all requests (seconds) (default 60)
+  --vodroot string           VoD root directory (default "./vod")
+  --whitelistblocks string   comma-separated list of CIDR blocks that are not rate limited
+  --writemissingrepdata      Write representation metadata only if missing or outdated
+  --writerepdata             (Re)generate and overwrite all representation metadata
 ```
 
 ### Quicker load by using metadata files
@@ -171,11 +181,25 @@ The possibility to generate and read extra representation metadata files has
 therefore been added. For representation `repX`, the corresponding metadata file
 is `repX_data.json.gz`. As the file extensions indicates, these files are gzipped
 JSON files. To generate such files, turn on `writerepdata` (always (re)generates and
-overwrites the files) or `writemissingrepdata` (writes only the files that are missing,
-leaving existing ones untouched).
+overwrites the files) or `writemissingrepdata` (writes only the files that are missing
+or outdated, leaving current ones untouched).
 The root directory for such files is by default the same as the VoD root directory,
 meaning that the metadata files will be in the same directories as the corresponding
 MPDs. However, it is possible to use another path, by specifying `repdataroot`.
+
+Each file has a format version. When a livesim2 release derives more data from the
+segments, it raises the version, and files with an older version are ignored. The
+representation is then scanned at every start, with the log message
+`RepData cache is stale, regenerating`, until its file is rewritten. `writemissingrepdata`
+rewrites such files, and can stay on, since it writes nothing when all files are current.
+The files do not record which segments they were made from, so after changing the
+segments of an asset, regenerate its files once with `writerepdata`.
+
+The current format is version 2, which adds the SAP grid of video representations that
+`ssras_` derives the `SegmentSequenceProperties@cadence` from. Files written by livesim2 v1.14.0
+or earlier have version 1, or no version at all, so they are scanned again at every start until
+they are rewritten. livesim2 v1.14.0 still reads version 2 files. The files in
+[livesim-content][livesim-content] are version 2 from its v2.0.0 release.
 
 Once the server has started, it is possible to find out information about the server and
 the assets using the root HTTP endpoint
@@ -214,7 +238,8 @@ The following restrictions apply to the VoD manifest to be used with livesim2
 
 * live-profile (separate segments)
 * one Period with all representations of "same" duration
-* no BaseURL elements
+* no BaseURL elements, except a relative AdaptationSet BaseURL to another asset, such as `../testpic_2s/`,
+  which then provides the segments of that AdaptationSet (`testpic_6s/mixeddur.mpd` in livesim-content)
 * no Location elements
 * initialization and media attributes in SegmentTemplate on AdaptationSet level
 
@@ -226,7 +251,7 @@ the 1970 Epoch start, and makes it possible to test time-dependent requests in a
 
 ## Get Started
 
-Install Go 1.27 or later.
+Install Go 1.27.3 or later.
 
 Then run
 
@@ -272,9 +297,11 @@ and set the `port` to 443.`
 ## Content
 
 The content must be a DASH VoD asset in `isoff-live` format
-(individual segment files) with either `SegmentTimeline with $Time$` or
-`SegmentTemplate with $Number$`. The video segments duration must have an
-exact average duration so that the total duration is the number of segments
+(individual segment files) with `SegmentTemplate with $Number$`, or
+`SegmentTimeline` with `$Time$` or `$Number$` (as made by e.g. Shaka
+Packager). With `$Number$`, the segments are numbered from `startNumber`.
+The video segments duration must have an exact average duration so that
+the total duration is the number of segments
 time that average. The total duration must be an integral number of milliseconds.
 For example, an asset with alternating segment duration sof 8s and 4s, is fine
 as long as there are an equal number of each leading so that the avererage duration is
@@ -305,8 +332,10 @@ such representation data from a file. The generation of such data is controlled 
 
 If such files are detected at startup, they will be used instead of scanning the files,
 unless the `writerepdata` parameter is set, which forces a re-scan and overwrites the
-files. Use `writemissingrepdata` instead to generate only the files that are missing
-without overwriting (and still use any existing files).
+files. Use `writemissingrepdata` instead to generate only the files that are missing or
+outdated (and still use the current ones). See
+[Quicker load by using metadata files](#quicker-load-by-using-metadata-files) for the format
+versions.
 
 ### Bundled test streams with the livesim2 server
 
@@ -355,21 +384,30 @@ There are two test assets included for these cases
 
 ### livesim-content at Github
 
-In the repo [livesim-content][livesim-content], the content that was used for the
-[livesim1 online][1-online] service is being gathered to make it easy to reproduce
-the same use cases.
-
-All content and features are not yet (2023-08-08) in place, but should be so before end
-of October 2023.
-
-To download and use that content, run
+The repo [livesim-content][livesim-content] has the content of the
+[livesim1 online][1-online] service, and more, so the same use cases can be reproduced.
+Each representation is stored as a zip archive in Git LFS, so install
+[git-lfs](https://git-lfs.com) first, then clone the repo and unpack the archives:
 
 ```sh
+git lfs install
 git clone https://github.com/Dash-Industry-Forum/livesim-content.git
+cd livesim-content
+./unpack_all.sh
 ```
 
 and then set `--vodroot` to the `livesim-content` top directory or include that in
-a bigger file tree.
+a bigger file tree. Its README describes how to fetch only some of the assets.
+
+livesim-content v2.0.0 (2026-10-22) has these changes:
+
+- Edit lists in testpic_2s and testpic_6s make video and audio start at time 0.
+- `testpic_2s/Manifest_avc3.mpd` is removed; use the `inbandps_1` URL option instead.
+- The representation data files are in format version 2.
+- A `contentgen` tool generates new test assets.
+
+When updating an older clone, unpack the zip files that changed again, overwriting the old
+files (`unzip -o`), since the representation data files describe the new segments.
 
 ### dashfetcher tool
 
@@ -401,7 +439,7 @@ That is an easy way to have variants with different representation combinations.
 
 #### Running dashfetcher
 
-`dashfetcher` was created to facilitate download of DASH assets with lots of small segment files. One particular such source was the CTA-WAVE test content. However, that content is now also available as zip-files, so it is more efficient to download an unzip these files instead of making individual downloads of the segments.
+`dashfetcher` was created to facilitate download of DASH assets with lots of small segment files. One particular such source was the CTA-WAVE test content. However, that content is also available as zip-files, so it is more efficient to download an unzip these files instead of making individual downloads of the segments.
 
 For example, the asset above is also
 available at `https://dash.akamaized.net/WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17/t3.zip`.
@@ -568,9 +606,8 @@ Enable it with the `sgai_` URL option, which schedules the breaks:
   wall-clock anchored, so all sessions share the schedule and a late joiner lands mid-break).
 - Options are appended with `;key=val`: `skipafter=<s>`, `nojump=<0|1|2>`, `clip=<0|1>`,
   `once=<0|1>`, `resolve=<s>` (earliest resolution offset), `ep=<path>` (ad endpoint),
-  `svta=<0|1>` (add SVTA2053 ad-creative signaling to the returned ad pod, see
-  [below](#svta2053-ad-creative-signaling)), `preroll=<dur>` (see below). For example
-  `sgai_p60:20;skipafter=5`.
+  `svta=<0|1|remote>` (add SVTA2053 ad-creative signaling to the returned ad pod, see
+  [below](#svta2053-ad-creative-signaling)). For example `sgai_p60:20;skipafter=5`.
 - Preroll: `preroll=<dur>` adds a Replace event of `<dur>` seconds with `presentationTime="0"`
   (the period start) and `id="0"` (ad request `?break=0&dur=<dur>`). Players that treat an event
   at time 0 as a preroll (e.g. Shaka Player) play it when playback starts, wherever in the live
@@ -670,6 +707,7 @@ Enable it with the `svta_` URL option, which uses the same break schedule gramma
   | `verif=<0\|1>` | add an ad-verification resource | 0 |
   | `pod=<0\|1>` | also signal the whole break as a pod (`podStart`/`podEnd`) | 0 |
   | `ts=<n>` | `EventStream@timescale` (a positive 32-bit integer) | 90000 |
+  | `remote=<0\|1\|404\|wrongtype>` | give the tracking as a `$remote.tracking` URL (see below) | 0 |
 
 For example `svta_p60:20;ads=2` signals two 10 s creatives every UTC minute. As for `sgai_`, the
 video track serves the generated **AD BREAK** countdown slate inside each window, so the signaled
@@ -700,6 +738,24 @@ express: `start` is included, which the callback events leave out because it wou
 event at the same instant as the impression, and so are the interaction events, which no callback
 event can express. It is opt-in because a player acting on both signalings would report each
 timeline point twice.
+
+### Remote tracking
+
+SVTA2053-1 §5.2.2.2 lets a Pod or Slot give its tracking as a URL instead of inline: a
+`$remote.tracking` key whose URL resolves to a `trackingEvent` envelope, which the player should
+fetch when the creative is about to play. `svta_…;remote=1` signals every creative (and the pod
+with `pod=1`) that way, and declares `features.remoteFields` in the envelope as Table 15
+requires; `sgai_…;svta=remote` does the same in the List MPD. The URLs point at livesim2's
+`/svta/tracking/<adId>` endpoint, which answers with the same tracking set as the inline form,
+so the beacons are the same. Every fetch is recorded in the session, so
+`/sgai/session_status?sid=<sessionId>` shows when the player resolved each creative relative to
+its impression.
+
+`remote=404` and `remote=wrongtype` make the resolution fail, with a 404 response or with a valid
+envelope of the wrong type (`verification`), to test the error handling of §5.2.2.2.2: the player
+should discard the field and fire no tracking for that creative. Shaka Player supports remote
+tracking from 5.3.0: it resolves each creative as it starts, and discards the field after a
+failure.
 
 ## SCTE-35 ad-avail signaling
 
@@ -771,6 +827,10 @@ unchanged. It also has its own `segmentation_upid`, so every Start and End is id
 when a break ends where the next one starts, its closing message and the next opening message have
 different ids, and a client does not drop the second as a repeat.
 
+With `cmd=insert;end=1`, the closing message is a `splice_insert()` with `out_of_network_indicator`
+0 and a `break_duration()` of 0 without `auto_return`, and its Event has duration 0. DVB A178-3
+(TS 103 752-3) requires the `break_duration()` in every `splice_insert()`.
+
 ### Seeing the break
 
 By default a `scte35_` stream also *shows* its avails: inside each break the video track serves the
@@ -803,6 +863,27 @@ schedule (the legacy presets count as their `p60` schedules, so `scte35_1` goes 
 or that SVTA2053 describes for measurement. Inband-only signaling (`mpd=off`, the default) also
 works with the multi-period options; MPD events do not, since the event stream lives in the first
 Period.
+
+## C2PA live media signing (experimental)
+
+livesim2 can sign live streams with [C2PA](https://c2pa.org) content credentials, so that a client
+can check that every segment comes from the signer of the stream.
+
+- Start the server with `--c2pa`. When it loads the assets, it signs the init segment of each clear
+  audio and video representation with a C2PA manifest, whose `c2pa.session-keys` assertion
+  announces a new Ed25519 session key for that representation.
+- Add `c2pa_vsi` to the URL, as in `/livesim2/c2pa_vsi/testpic_2s/Manifest.mpd`. The signed init
+  segments are served, and each media segment gets a C2PA Verifiable Segment Info (VSI) `emsg` box
+  (scheme `urn:c2pa:verifiable-segment-info`, value `fseg`) signed with the session key. The MPD
+  announces it with an `InbandEventStream`.
+- `--c2pacert` and `--c2pakey` give the claim-signing certificate chain and private key (PEM).
+  Without them, livesim2 creates a test CA and certificate at startup, which validators report as
+  untrusted.
+- The session keys are new at every start and differ between server instances, so serve a stream
+  from one instance, and fetch the init segment again after a restart.
+- `c2pa_vsi` cannot be combined with encryption (`drm_`, `eccp_`), chunked low-latency delivery
+  (`chunkdur_`, `ssras_`), generated time subtitles or `inbandps_1`, and needs a server started
+  with `--c2pa`. The `/urlgen/` page shows the C2PA settings only on such a server.
 
 ## DASH Content Steering
 
@@ -1176,6 +1257,10 @@ It is possible to sponsor the project for further development. See the
 ## License
 
 See [LICENSE.md](LICENSE.md).
+
+The gopher in the logo and favicon is adapted from the Go gopher, created by
+[Renée French](https://reneefrench.blogspot.com/) and licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 [1]: https://github.com/Dash-Industry-Forum/dash-live-source-simulator
 [1-online]: https://livesim.dashif.org

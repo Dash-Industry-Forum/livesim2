@@ -221,6 +221,8 @@ func (s *strConvAccErr) ParseLossItvls(key, val string) []LossItvls {
 	return itvls
 }
 
+// ParseQuery parses comma-separated key=value pairs. The value may be empty, but every
+// pair must have a non-empty key and exactly one "=".
 func (s *strConvAccErr) ParseQuery(key, val string) *Query {
 	if s.err != nil {
 		return nil
@@ -231,16 +233,13 @@ func (s *strConvAccErr) ParseQuery(key, val string) *Query {
 	pairs := strings.Split(val, ",")
 	parts := make([]string, 0, len(pairs))
 	for _, pair := range pairs {
-		kv := strings.Split(pair, "=")
-		switch len(kv) {
-		case 2:
-			q.parts[kv[0]] = append(q.parts[kv[0]], kv[1])
-			parts = append(parts, fmt.Sprintf("%s=%s", kv[0], kv[1]))
-		case 1:
-			parts = append(parts, fmt.Sprintf("%s=%s", kv[0], kv[1]))
-		default:
-			s.err = fmt.Errorf("key=%s, err=%s", key, "invalid query pair")
+		k, v, ok := strings.Cut(pair, "=")
+		if !ok || k == "" || strings.Contains(v, "=") {
+			s.err = fmt.Errorf("key=%s, err=%q is not a key=value pair", key, pair)
+			return nil
 		}
+		q.parts[k] = append(q.parts[k], v)
+		parts = append(parts, fmt.Sprintf("%s=%s", k, v))
 	}
 	q.raw = strings.Join(parts, "&")
 	return q

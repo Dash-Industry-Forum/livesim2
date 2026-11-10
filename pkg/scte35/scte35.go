@@ -91,7 +91,7 @@ type Cue struct {
 	// splice_insert() fields, unused for a time_signal.
 	EventID         uint32 // splice_event_id
 	OutOfNetwork    bool   // out_of_network_indicator: true when splicing into an ad
-	BreakDurPTS     uint64 // break_duration in 90kHz ticks, 0 for none
+	BreakDurPTS     uint64 // break_duration in 90kHz ticks, 0 on a return to the network
 	AutoReturn      bool   // break_duration.auto_return
 	SpliceImmediate bool   // splice_immediate_flag
 
@@ -113,11 +113,11 @@ func (c Cue) Binary() []byte {
 		cmd.SetEventID(c.EventID)
 		cmd.SetIsOut(c.OutOfNetwork)
 		cmd.SetSpliceImmediate(c.SpliceImmediate)
-		if c.BreakDurPTS != 0 {
-			cmd.SetHasDuration(true)
-			cmd.SetDuration(gots.PTS(c.BreakDurPTS))
-			cmd.SetIsAutoReturn(c.AutoReturn)
-		}
+		// DVB A178-3r2 Table 2 requires break_duration() (duration_flag = 1) in every
+		// splice_insert, with a duration of 0 or the break duration on a return.
+		cmd.SetHasDuration(true)
+		cmd.SetDuration(gots.PTS(c.BreakDurPTS))
+		cmd.SetIsAutoReturn(c.AutoReturn)
 		s.SetCommandInfo(cmd)
 	}
 	// Set the splice time on the section rather than on the command: gots derives
@@ -202,9 +202,7 @@ func (c Cue) XMLSignal() *m.SignalType {
 				SpliceTime: st,
 			}
 		}
-		if c.BreakDurPTS != 0 {
-			si.BreakDuration = m.NewBreakDuration(c.AutoReturn, c.BreakDurPTS)
-		}
+		si.BreakDuration = m.NewBreakDuration(c.AutoReturn, c.BreakDurPTS)
 		sis.SpliceInsert = si
 	}
 	sig := m.NewSignal()

@@ -127,6 +127,12 @@ func genLiveSegment(log *slog.Logger, vodFS fs.FS, a *asset, cfg *ResponseConfig
 			}
 			log.Debug("injected CTA-608 captions", "asset", a.AssetPath, "segment", segmentPart)
 		}
+		// In-band parameter sets come before any SEI, and before encryption, which keeps them in the clear.
+		if cfg.InbandPS && contentType == "video" && !meta.rep.PreEncrypted {
+			if err := addInbandParameterSets(seg, meta.rep); err != nil {
+				return so, err
+			}
+		}
 		outSeg.seg = seg
 		outSeg.data = nil
 	}
@@ -178,6 +184,25 @@ func CheckTimeValidity(availTimeS, nowS, timeShiftBufferDepthS, availabilityTime
 	return nil
 }
 
+// checkSegmentTime checks that a segment, or a part of one, that starts at startS and is
+// available at availTimeS can be served at nowS, all in seconds since the epoch. A stop_ event
+// has no segments that start at or after the stop time. Once the stop time has passed, the MPD
+// is static and describes the whole event, so its segments are not limited by the
+// time-shift buffer depth.
+func (rc *ResponseConfig) checkSegmentTime(startS, availTimeS, nowS float64) error {
+	tsbdS := float64(*rc.TimeShiftBufferDepthS)
+	if rc.StopTimeS != nil {
+		stopS := float64(*rc.StopTimeS)
+		if startS >= stopS {
+			return fmt.Errorf("segment after the stop time: %w", errNotFound)
+		}
+		if nowS > stopS {
+			tsbdS = max(tsbdS, nowS-float64(rc.StartTimeS))
+		}
+	}
+	return CheckTimeValidity(availTimeS, nowS, tsbdS, rc.getAvailabilityTimeOffsetS())
+}
+
 // segMeta provides meta data information about a segment.
 // For audio it may be a combination of several segments and sampleNrOffset may be non-zero.
 type segMeta struct {
@@ -216,9 +241,10 @@ func findSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseConfi
 	}
 
 	// Check interval validity
+	segStartS := float64(int(seg.StartTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
 	segAvailTimeS := float64(int(seg.EndTime)+wrapTime+mediaRef) / float64(rep.MediaTimescale)
 	nowS := float64(nowMS) * 0.001
-	err = CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
+	err = cfg.checkSegmentTime(segStartS, segAvailTimeS, nowS)
 	if err != nil {
 		return segMeta{}, err
 	}
@@ -284,9 +310,10 @@ func findRefSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseCo
 
 	// Check interval validity
 	mediaRef := uint64(cfg.StartTimeS) * uint64(refRep.MediaTimescale) // TODO. Add period offset
+	segStartS := float64(refStartTime+mediaRef) / float64(refRep.MediaTimescale)
 	segAvailTimeS := float64(refEndTime+mediaRef) / float64(refRep.MediaTimescale)
 	nowS := float64(nowMS) * 0.001
-	err := CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
+	err := cfg.checkSegmentTime(segStartS, segAvailTimeS, nowS)
 	if err != nil {
 		return segMeta{}, err
 	}
@@ -343,9 +370,10 @@ func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, n
 	mediaRef := uint64(cfg.StartTimeS) * uint64(rep.MediaTimescale) // TODO. Add period offset
 
 	// Check interval validity
+	segStartS := float64(segTime+mediaRef) / float64(rep.MediaTimescale)
 	segAvailTimeS := float64(seg.EndTime+wrapTime+mediaRef) / float64(rep.MediaTimescale)
 	nowS := float64(nowMS) * 0.001
-	err := CheckTimeValidity(segAvailTimeS, nowS, float64(*cfg.TimeShiftBufferDepthS), cfg.getAvailabilityTimeOffsetS())
+	err := cfg.checkSegmentTime(segStartS, segAvailTimeS, nowS)
 	if err != nil {
 		return segMeta{}, err
 	}
@@ -404,6 +432,11 @@ func matchInit(segmentPart string, cfg *ResponseConfig, drmCfg *drm.DrmConfig, a
 				im.init = rep.c2pa.init
 			}
 			if rep.encData == nil { // pre-encrypted or subtitle track
+				init, err := inbandInit(cfg, rep, im.init)
+				if err != nil {
+					return im, err
+				}
+				im.init = init
 				im.isInit = true
 				im.rep = rep
 				return im, nil
@@ -438,6 +471,11 @@ func matchInit(segmentPart string, cfg *ResponseConfig, drmCfg *drm.DrmConfig, a
 					im.init = sw.Bytes()
 				}
 			}
+			init, err := inbandInit(cfg, rep, im.init)
+			if err != nil {
+				return im, err
+			}
+			im.init = init
 			im.rep = rep
 			im.isInit = true
 			return im, nil
@@ -542,7 +580,7 @@ func updateSidx(seg *mp4.MediaSegment, meta segMeta) {
 func encryptFrags(log *slog.Logger, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
 	rp *RepData, frags []*mp4.Fragment) error {
 	enc, err := fragmentEncryptor(log, cfg, drmCfg, rp)
-	if err != nil {
+	if err != nil || enc == nil {
 		return err
 	}
 	for i, f := range frags {
@@ -558,12 +596,17 @@ func encryptFrags(log *slog.Logger, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
 // encryptor, in order. mp4ff makes a fresh per-sequence sample protector for it, which
 // keeps AV1 reference-frame state consistent across the fragments and safe under
 // concurrent requests (ipd itself is immutable and shared).
+// It returns nil for a track without encryption data, such as a subtitle track, whose
+// init segment matchInit serves in the clear.
 func fragmentEncryptor(log *slog.Logger, cfg *ResponseConfig, drmCfg *drm.DrmConfig,
 	rp *RepData) (*mp4.FragmentEncryptor, error) {
 	var ipd *mp4.InitProtectData
 	var key, kid, iv []byte
 	var scheme string
 	ed := rp.encData
+	if ed == nil {
+		return nil, nil
+	}
 	switch cfg.DRM {
 	case "eccp-cenc", "eccp-cbcs":
 		scheme = strings.TrimPrefix(cfg.DRM, "eccp-")
@@ -1016,10 +1059,10 @@ func checkPartialSegmentAvailability(cfg *ResponseConfig, meta segMeta, subNr, n
 		return fmt.Errorf("sub-number %d with @k=%d: %w", subNr, nrParts, errNotFound)
 	}
 	mediaRef := uint64(cfg.StartTimeS) * uint64(meta.timescale)
+	partStart := meta.newTime + mediaRef + uint64(subNr)*uint64(meta.newDur)/nrParts
 	partEnd := meta.newTime + mediaRef + uint64(subNr+1)*uint64(meta.newDur)/nrParts
-	availTimeS := float64(partEnd) / float64(meta.timescale)
-	return CheckTimeValidity(availTimeS, float64(nowMS)*0.001, float64(*cfg.TimeShiftBufferDepthS),
-		cfg.getAvailabilityTimeOffsetS())
+	return cfg.checkSegmentTime(float64(partStart)/float64(meta.timescale), float64(partEnd)/float64(meta.timescale),
+		float64(nowMS)*0.001)
 }
 
 func unixMS() int {
@@ -1039,6 +1082,17 @@ func createChunk(styp *mp4.StypBox, trackID, seqNr uint32) chunk {
 		frag: frag,
 		dur:  0,
 	}
+}
+
+// newTrunVersion returns the trun version of the fragments that livesim2 makes for a track whose
+// segments have trun version segVersion. CMAF uses version 0 with composition offsets only
+// together with an edit list, and version 1 without one. Version 1 is also what mp4ff's
+// CreateFragment and Fragment.Reset make.
+func newTrunVersion(hasEditList bool, segVersion byte) byte {
+	if segVersion == 0 && hasEditList {
+		return 0
+	}
+	return 1
 }
 
 // chunkSegment splits a segment into chunks of specified duration, and returns them as an iterator.
@@ -1094,6 +1148,7 @@ func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta,
 		first, last = *chunkIndex, *chunkIndex
 	}
 	trackID := init.Moov.Trak.Tkhd.TrackID
+	trunVersion := newTrunVersion(init.Moov.Trak.Edts != nil, seg.Fragments[0].Moof.Traf.Trun.Version)
 
 	return func(yield func(chunk, error) bool) {
 		var frag *mp4.Fragment
@@ -1108,6 +1163,7 @@ func chunkSegment(init *mp4.InitSegment, seg *mp4.MediaSegment, segMeta segMeta,
 				yield(chunk{}, fmt.Errorf("chunk %d: %w", k, err))
 				return
 			}
+			frag.Moof.Traf.Trun.Version = trunVersion
 			start := 0
 			if k > 0 {
 				start = ends[k-1]

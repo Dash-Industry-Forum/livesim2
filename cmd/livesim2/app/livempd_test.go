@@ -5,6 +5,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -123,6 +124,74 @@ func TestLiveMPDStart(t *testing.T) {
 			}
 		}
 		assert.Equal(t, 1, len(liveMPD.UTCTimings))
+	}
+}
+
+// TestLiveMPDFromSegmentTimelineNumber checks the live MPD formats made from a VoD asset with
+// SegmentTimeline and $Number$, which has 2 s segments, 90 kHz video, and 48 kHz audio.
+func TestLiveMPDFromSegmentTimelineNumber(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, t.TempDir(), false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+	asset, ok := am.findAsset("timeline_number_2s")
+	require.True(t, ok)
+	require.Equal(t, 8000, asset.LoopDurMS)
+	nowMS := 100_000
+	timescales := map[string]uint32{"video": 90_000, "audio": 48_000}
+	for _, mode := range []SegTimelineMode{SegTimelineModeNone, SegTimelineModeTime, SegTimelineModeNr} {
+		name := string(mode)
+		if mode == SegTimelineModeNone {
+			name = "number"
+		}
+		t.Run(name, func(t *testing.T) {
+			cfg := NewResponseConfig()
+			cfg.SegTimelineMode = mode
+			liveMPD, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, nowMS)
+			require.NoError(t, err)
+			require.Len(t, liveMPD.Periods[0].AdaptationSets, 2)
+			for _, as := range liveMPD.Periods[0].AdaptationSets {
+				st := as.SegmentTemplate
+				ts := timescales[string(as.ContentType)]
+				require.Equal(t, ts, st.GetTimescale(), as.ContentType)
+				switch mode {
+				case SegTimelineModeNone:
+					require.Nil(t, st.SegmentTimeline)
+					require.Equal(t, "$RepresentationID$/$Number$.m4s", st.Media)
+					require.NotNil(t, st.Duration)
+					require.Equal(t, 2*ts, *st.Duration, as.ContentType)
+				case SegTimelineModeTime:
+					require.NotNil(t, st.SegmentTimeline)
+					require.Equal(t, "$RepresentationID$/$Time$.m4s", st.Media)
+					require.Nil(t, st.StartNumber)
+				case SegTimelineModeNr:
+					require.NotNil(t, st.SegmentTimeline)
+					require.Equal(t, "$RepresentationID$/$Number$.m4s", st.Media)
+					require.NotNil(t, st.StartNumber)
+				}
+				if st.SegmentTimeline != nil {
+					// The timeline ends with the last segment available at nowMS. An audio
+					// segment ends at the first frame at or after the video segment end, so
+					// up to one AAC frame (1024 samples) later.
+					maxEnd := uint64(nowMS) * uint64(ts) / 1000
+					if as.ContentType == "audio" {
+						maxEnd += 1024
+					}
+					s0 := st.SegmentTimeline.S[0]
+					require.NotNil(t, s0.T)
+					var end uint64
+					tm := *s0.T
+					for _, s := range st.SegmentTimeline.S {
+						if s.T != nil {
+							tm = *s.T
+						}
+						tm += s.D * uint64(s.R+1)
+						end = tm
+					}
+					require.LessOrEqual(t, end, maxEnd, as.ContentType)
+					require.Greater(t, end, uint64(nowMS-2_100)*uint64(ts)/1000, as.ContentType)
+				}
+			}
+		})
 	}
 }
 
@@ -437,24 +506,25 @@ func TestPublishTime(t *testing.T) {
 		periodsPerHour         int
 		nowMS                  int
 		wantedPublishTime      string
+		wantedErr              string
 	}{
 		{
-			desc:                  "Timeline with $Time$ 1s after start. No segments",
+			desc:                  "Timeline with $Time$ at start. No segments => too early",
 			asset:                 "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
 			mpdName:               "stream.mpd",
 			segTimelineTime:       true,
 			availabilityStartTime: 0,
 			nowMS:                 0,
-			wantedPublishTime:     "1970-01-01T00:00:00Z",
+			wantedErr:             "too early by 2000ms",
 		},
 		{
-			desc:                  "Timeline with $Time$ 1s after start. No segments",
+			desc:                  "Timeline with $Time$ 1s after start. No segments => too early",
 			asset:                 "WAVE/vectors/cfhd_sets/12.5_25_50/t3/2022-10-17",
 			mpdName:               "stream.mpd",
 			segTimelineTime:       true,
 			availabilityStartTime: 1682341800,
 			nowMS:                 1682341801_000,
-			wantedPublishTime:     "2023-04-24T13:10:00Z",
+			wantedErr:             "too early by 1000ms",
 		},
 		{
 			desc:                   "Timeline with $Time$ 3s, ato=1.5, 1 1/4 segments available",
@@ -601,7 +671,11 @@ func TestPublishTime(t *testing.T) {
 			err := verifyAndFillConfig(cfg, tc.nowMS)
 			require.NoError(t, err)
 			liveMPD, err := LiveMPD(asset, tc.mpdName, cfg, nil, tc.nowMS)
-			assert.NoError(t, err)
+			if tc.wantedErr != "" {
+				require.EqualError(t, err, tc.wantedErr)
+				return
+			}
+			require.NoError(t, err)
 			assert.Equal(t, m.ConvertToDateTimeS(int64(tc.availabilityStartTime)), liveMPD.AvailabilityStartTime)
 			assert.Equal(t, m.DateTime(tc.wantedPublishTime), liveMPD.PublishTime)
 		})
@@ -1023,6 +1097,51 @@ func TestMultiPeriod(t *testing.T) {
 	}
 }
 
+// TestNewPeriodBeforeFirstSegment checks that, in the SegmentTimeline modes, a new Period is only
+// in the MPD once its first segments are complete, since a SegmentTimeline needs an S element.
+func TestNewPeriodBeforeFirstSegment(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	logger := slog.Default()
+	err := am.discoverAssets(logger)
+	require.NoError(t, err)
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	// The Period P16 starts at 960s, and its first 2s segments are complete at 962s.
+	cases := []struct {
+		desc          string
+		mode          SegTimelineMode
+		nowMS         int
+		wantedPeriods []string
+	}{
+		{"timelineTime, first segment not complete", SegTimelineModeTime, 961_000, []string{"P15"}},
+		{"timelineTime, first segment complete", SegTimelineModeTime, 963_000, []string{"P15", "P16"}},
+		{"timelineNumber, first segment not complete", SegTimelineModeNr, 961_000, []string{"P15"}},
+		{"timelineNumber, first segment complete", SegTimelineModeNr, 963_000, []string{"P15", "P16"}},
+		{"$Number$, first segment not complete", SegTimelineModeNone, 961_000, []string{"P15", "P16"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			cfg := NewResponseConfig()
+			cfg.PeriodsPerHour = new(60)
+			cfg.SegTimelineMode = tc.mode
+			liveMPD, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, tc.nowMS)
+			require.NoError(t, err)
+			ids := make([]string, 0, len(liveMPD.Periods))
+			for _, p := range liveMPD.Periods {
+				ids = append(ids, p.Id)
+				for _, as := range p.AdaptationSets {
+					if stl := as.SegmentTemplate.SegmentTimeline; stl != nil {
+						assert.NotEmpty(t, stl.S, "SegmentTimeline of %s AS %d", p.Id, *as.Id)
+					}
+				}
+			}
+			assert.Equal(t, tc.wantedPeriods, ids)
+		})
+	}
+}
+
 func TestRelStartStopTimeIntoLocation(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	am := newAssetMgr(vodFS, "", false, false)
@@ -1043,19 +1162,52 @@ func TestRelStartStopTimeIntoLocation(t *testing.T) {
 			wantedLocation: "http://localhost:8888/livesim2/start_980/mup_3/stop_1020/testpic_2s/Manifest.mpd",
 			host:           "http://localhost:8888",
 		},
+		{
+			url:            "/livesim2/startrel_-60/testpic_2s/Manifest.mpd",
+			nowMS:          1_000_000,
+			wantedLocation: "http://localhost:8888/livesim2/start_940/testpic_2s/Manifest.mpd",
+			host:           "http://localhost:8888",
+		},
+		{
+			url:            "/livesim2/startrel_-60/segtimeline_1/testpic_2s/Manifest.mpd",
+			nowMS:          1_000_000,
+			wantedLocation: "http://localhost:8888/livesim2/start_940/segtimeline_1/testpic_2s/Manifest.mpd",
+			host:           "http://localhost:8888",
+		},
 	}
 
-	for _, c := range cases {
-		cfg, err := processURLCfg(c.url, c.nowMS)
+	liveMPD := func(url, host string, nowMS int) *m.MPD {
+		t.Helper()
+		cfg, err := processURLCfg(url, nowMS)
 		require.NoError(t, err)
-		cfg.SetHost(c.host, nil)
+		cfg.SetHost(host, nil)
 		contentPart := cfg.URLContentPart()
 		asset, ok := am.findAsset(contentPart)
 		require.True(t, ok)
 		_, mpdName := path.Split(contentPart)
-		liveMPD, err := LiveMPD(asset, mpdName, cfg, nil, c.nowMS)
+		mpd, err := LiveMPD(asset, mpdName, cfg, nil, nowMS)
 		require.NoError(t, err)
-		require.Equal(t, c.wantedLocation, string(liveMPD.Location[0].Value), "the right location element is not inserted")
+		return mpd
+	}
+	for _, c := range cases {
+		relMPD := liveMPD(c.url, c.host, c.nowMS)
+		require.Equal(t, c.wantedLocation, string(relMPD.Location[0].Value), "the right location element is not inserted")
+
+		// The MPD at the Location is the same without the Location element, so it is a
+		// later version with a later publishTime (#391).
+		absMPD := liveMPD(strings.TrimPrefix(c.wantedLocation, c.host), c.host, c.nowMS)
+		require.Empty(t, absMPD.Location)
+		relS, err := relMPD.PublishTime.ConvertToSeconds()
+		require.NoError(t, err)
+		absS, err := absMPD.PublishTime.ConvertToSeconds()
+		require.NoError(t, err)
+		require.Greater(t, absS, relS, c.url)
+		relMPD.Location, relMPD.PublishTime = nil, absMPD.PublishTime
+		relXML, err := xml.Marshal(relMPD)
+		require.NoError(t, err)
+		absXML, err := xml.Marshal(absMPD)
+		require.NoError(t, err)
+		require.Equal(t, string(absXML), string(relXML), c.url)
 	}
 }
 
@@ -1636,7 +1788,7 @@ func TestUpdateSSRAdaptationSet(t *testing.T) {
 					if prevID, prevExists := tc.prevMap[*tc.as.Id]; prevExists {
 						prevIDPtr = &prevID
 					}
-					updateSSRAdaptationSet(tc.as, nextID, prevIDPtr, chunkDurSSRMap, &explicitChunkDurS)
+					updateSSRAdaptationSet(nil, tc.as, nextID, prevIDPtr, chunkDurSSRMap, &explicitChunkDurS)
 				}
 			}
 
@@ -1796,6 +1948,156 @@ func TestEditListOffsetMPD(t *testing.T) {
 		require.Greater(t, firstSegDur, uint64(90000), "Duration should be normal (not shortened) at later time")
 		require.Less(t, firstSegDur, uint64(100000), "Duration should be reasonable")
 	})
+}
+
+// TestLowLatencyMediaTimescale checks that low-latency $Number$ MPDs have the media timescale
+// in SegmentTemplate, and other MPDs the timescale of the VoD MPD (#390).
+func TestLowLatencyMediaTimescale(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+
+	cases := []struct {
+		asset, mpdName string
+		vodTimescale   uint32
+	}{
+		{"testpic_2s", "Manifest.mpd", 1},
+		{"testpic_2s_low_delay", "Manifest.mpd", 1000},
+		{"dolby-ac4/2997fps", "Living_Room_1080p_51_192k_2997fps.mpd", 1000},
+	}
+	for _, c := range cases {
+		a, ok := am.findAsset(c.asset)
+		require.True(t, ok)
+		for _, opts := range []string{"", "chunkdur_0.5/ato_1.5/", "ssras_2,1/chunkdurssr_2,0.5/"} {
+			if strings.HasPrefix(opts, "ssras") && c.asset != "testpic_2s_low_delay" {
+				continue
+			}
+			nowMS := 100_000
+			cfg, err := processURLCfg("/livesim2/"+opts+c.asset+"/"+c.mpdName, nowMS)
+			require.NoError(t, err)
+			mpd, err := LiveMPD(a, c.mpdName, cfg, nil, nowMS)
+			require.NoError(t, err)
+			for _, as := range mpd.Periods[0].AdaptationSets {
+				st := as.SegmentTemplate
+				rep := a.Reps[as.Representations[0].Id]
+				desc := fmt.Sprintf("%s %s%s", as.ContentType, opts, c.asset)
+				wantTimescale := c.vodTimescale
+				if opts != "" {
+					wantTimescale = uint32(rep.MediaTimescale)
+				}
+				require.Equal(t, wantTimescale, st.GetTimescale(), desc)
+				// The nominal segment duration is unchanged.
+				require.Equal(t, a.SegmentDurMS, int(*st.Duration)*1000/int(st.GetTimescale()), desc)
+			}
+		}
+	}
+}
+
+// TestEventStreamPublishTime checks that MPD@publishTime changes whenever the MPD EventStreams
+// do, as ad breaks and SCTE-35 cues enter and leave the MPD (#388).
+func TestEventStreamPublishTime(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	for _, opts := range []string{
+		"sgai_p60:20",
+		"svta_p60:20",
+		"scte35_p60:20@10;mpd=xml",
+		"scte35_30:10,90:10;mpd=bin",
+		"segtimeline_1/svta_p60:20",
+		"segtimelinenr_1/scte35_p60:20@10;mpd=bin",
+	} {
+		t.Run(opts, func(t *testing.T) {
+			var prevEvents string
+			var prevPublishS float64
+			nrChanges := 0
+			for nowS := 10; nowS < 200; nowS++ {
+				nowMS := nowS*1000 + 500
+				cfg, err := processURLCfg("/livesim2/"+opts+"/testpic_2s/Manifest.mpd", nowMS)
+				require.NoError(t, err)
+				mpd, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, nowMS)
+				require.NoError(t, err)
+				var events strings.Builder
+				for _, p := range mpd.Periods {
+					for _, es := range p.EventStreams {
+						out, err := xml.Marshal(es)
+						require.NoError(t, err)
+						events.Write(out)
+					}
+				}
+				publishS, err := mpd.PublishTime.ConvertToSeconds()
+				require.NoError(t, err)
+				require.LessOrEqual(t, publishS, float64(nowS), "publishTime after now at %ds", nowS)
+				if nowS > 10 && events.String() != prevEvents {
+					nrChanges++
+					require.Greater(t, publishS, prevPublishS, "EventStreams changed at %ds", nowS)
+				}
+				prevEvents, prevPublishS = events.String(), publishS
+			}
+			require.Positive(t, nrChanges, "no EventStream change to check")
+		})
+	}
+}
+
+// TestEditListOffsetOwnTimeline tests that an audio timeline that is not made from a video
+// reference, as in an audio-only MPD, also has presentation times as S@t (issue #385).
+func TestEditListOffsetOwnTimeline(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, t.TempDir(), false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+	asset, ok := am.findAsset("WAVE/av")
+	require.True(t, ok)
+	rep := asset.Reps["aac"]
+	require.Equal(t, int64(2048), rep.EditListOffset)
+
+	cfg := NewResponseConfig()
+	cfg.SegTimelineMode = SegTimelineModeTime
+	tsbd := m.Duration(60 * time.Second)
+	timeline := func(nowMS int, editListOffset int64) segEntries {
+		t.Helper()
+		rep.EditListOffset = editListOffset
+		defer func() { rep.EditListOffset = 2048 }()
+		se, err := asset.generateTimelineEntries("aac", calcWrapTimes(asset, cfg, nowMS, tsbd), 0, nil)
+		require.NoError(t, err)
+		return se
+	}
+
+	// At the start, the first segment starts at 0 and is shortened by the offset.
+	se := timeline(10_000, 2048)
+	require.Equal(t, uint64(0), *se.entries[0].T)
+	require.Equal(t, uint64(95232-2048), se.entries[0].D)
+	require.Equal(t, 0, se.entries[0].R)
+	require.Equal(t, uint64(95232), se.entries[1].D)
+
+	// Later, the whole timeline is shifted by the offset.
+	se = timeline(70_000, 2048)
+	noOffset := timeline(70_000, 0)
+	require.Equal(t, *noOffset.entries[0].T-2048, *se.entries[0].T)
+	require.Equal(t, noOffset.entries[0].D, se.entries[0].D)
+	require.Equal(t, noOffset.lastNr(), se.lastNr())
+}
+
+// TestReduceSAtPeriodBoundary tests that a segment that starts a little before a Period
+// boundary, as audio with an edit list does, is listed in the Period where it mostly plays (#385).
+func TestReduceSAtPeriodBoundary(t *testing.T) {
+	const timescale = 48000
+	pStart := uint64(60 * timescale)
+	entries := []*m.S{{T: new(pStart - 1024 - 2*96000), D: 96000, R: 5}}
+
+	first, firstNr := reduceS(entries, new(uint32(10)), timescale, 0, 60)
+	require.Len(t, first, 1)
+	require.Equal(t, pStart-1024-2*96000, *first[0].T)
+	require.Equal(t, 1, first[0].R)
+	require.Equal(t, uint32(10), *firstNr)
+
+	second, secondNr := reduceS(entries, new(uint32(10)), timescale, 60, 120)
+	require.Len(t, second, 1)
+	require.Equal(t, pStart-1024, *second[0].T)
+	require.Equal(t, 3, second[0].R)
+	require.Equal(t, uint32(12), *secondNr)
 }
 
 // TestEditListOffsetAvailabilityTime tests that editListOffset affects availability time calculations
@@ -3116,6 +3418,54 @@ func TestAdaptationSetIDs(t *testing.T) {
 					ids[string(as.ContentType)] = *as.Id
 				}
 				require.Equal(t, c.wantIDs, ids)
+			}
+		})
+	}
+}
+
+func TestSessionStartBeforeFirstSegment(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	logger := slog.Default()
+	err := am.discoverAssets(logger)
+	require.NoError(t, err)
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	// The session starts at 100s, and its first 2s segments are complete at 102s.
+	cases := []struct {
+		desc      string
+		mode      SegTimelineMode
+		atoS      float64
+		nowMS     int
+		wantedErr string
+	}{
+		{"timelineTime, first segment not complete", SegTimelineModeTime, 0, 101_000, "too early by 1000ms"},
+		{"timelineTime, first segment complete", SegTimelineModeTime, 0, 102_000, ""},
+		{"timelineNumber, first segment not complete", SegTimelineModeNr, 0, 101_000, "too early by 1000ms"},
+		{"timelineNumber, first segment complete", SegTimelineModeNr, 0, 102_000, ""},
+		{"timelineTime with ato, first segment not available", SegTimelineModeTime, 1.5, 100_400, "too early by 100ms"},
+		{"timelineTime with ato, first segment available", SegTimelineModeTime, 1.5, 100_500, ""},
+		{"$Number$, first segment not complete", SegTimelineModeNone, 0, 101_000, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			cfg := NewResponseConfig()
+			cfg.StartTimeS = 100
+			cfg.SegTimelineMode = tc.mode
+			cfg.AvailabilityTimeOffsetS = tc.atoS
+			liveMPD, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, tc.nowMS)
+			if tc.wantedErr != "" {
+				_, ok := errors.AsType[errTooEarly](err)
+				require.True(t, ok, "error %v", err)
+				require.EqualError(t, err, tc.wantedErr)
+				return
+			}
+			require.NoError(t, err)
+			for _, as := range liveMPD.Periods[0].AdaptationSets {
+				if stl := as.SegmentTemplate.SegmentTimeline; stl != nil {
+					assert.NotEmpty(t, stl.S, "SegmentTimeline of AS %d", *as.Id)
+				}
 			}
 		})
 	}

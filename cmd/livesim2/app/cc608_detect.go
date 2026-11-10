@@ -27,6 +27,11 @@ const CEA708AccessibilitySchemeIdUri = "urn:scte:dash:cc:cea-708:2015"
 var errCC608AlreadyCaptioned = errors.New(
 	"timecc608 rejected: the target already carries CEA-608/708 captions")
 
+// errCC608Unsupported is returned when a timecc608 request targets video whose codec
+// cannot carry the caption SEI: only AVC and HEVC can. It maps to HTTP 400.
+var errCC608Unsupported = errors.New(
+	"timecc608 rejected: only AVC and HEVC video can carry CTA-608 captions")
+
 // detectCC608InSegment reports whether a video segment's samples already carry
 // CEA-608 cc_data (user_data_registered_itu_t_t35 / GA94) SEI. It is used at
 // asset-scan time on the stored VoD segment (before any injection), so a positive
@@ -95,4 +100,24 @@ func cc608AlreadyCaptioned(a *asset, period *m.Period) bool {
 		}
 	}
 	return false
+}
+
+// checkCC608Codecs returns errCC608Unsupported if a video representation of the period
+// has a codec that cannot carry the caption SEI, such as AV1 or VVC.
+func checkCC608Codecs(a *asset, period *m.Period) error {
+	for _, as := range period.AdaptationSets {
+		if as.ContentType != "video" {
+			continue
+		}
+		for _, rep := range as.Representations {
+			rd, ok := a.Reps[rep.Id]
+			if !ok {
+				continue
+			}
+			if _, ok := cc608CodecFor(rd.Codecs); !ok {
+				return fmt.Errorf("%w: codec %s of representation %s", errCC608Unsupported, rd.Codecs, rep.Id)
+			}
+		}
+	}
+	return nil
 }

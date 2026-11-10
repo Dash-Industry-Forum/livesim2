@@ -89,7 +89,7 @@ func TestBuildAdListMPD(t *testing.T) {
 	host := "http://localhost:8899"
 	pod := []string{"ads/ad2/Manifest.mpd", "ads/ad0/manifest.mpd"}
 	durMS := map[string]int{"ad2": 5000, "ad0": 8000}
-	mpd := buildAdListMPD(host, pod, durMS, "29689640", false, "")
+	mpd := buildAdListMPD(host, pod, durMS, "29689640", "", "")
 
 	require.NotNil(t, mpd.Type)
 	assert.Equal(t, "list", *mpd.Type)
@@ -195,7 +195,7 @@ func TestBuildAdListMPDWithSVTA(t *testing.T) {
 	host := "http://localhost:8899"
 	pod := []string{"ads/ad2/Manifest.mpd", "ads/ad0/manifest.mpd"}
 	durMS := map[string]int{"ad2": 5000, "ad0": 8000}
-	mpd := buildAdListMPD(host, pod, durMS, "29689640", true, "alice")
+	mpd := buildAdListMPD(host, pod, durMS, "29689640", "1", "alice")
 
 	require.Len(t, mpd.Periods, 2)
 	p0 := mpd.Periods[0]
@@ -237,6 +237,22 @@ func TestBuildAdListMPDWithSVTA(t *testing.T) {
 		slot.Tracking[0].URLs[0])
 
 	// Without the flag there is only the callback EventStream.
-	plain := buildAdListMPD(host, pod, durMS, "29689640", false, "alice")
+	plain := buildAdListMPD(host, pod, durMS, "29689640", "", "alice")
 	assert.Len(t, plain.Periods[0].EventStreams, 1)
+
+	// With svta=remote the tracking is a $remote.tracking URL, which resolves to the same set.
+	remote := buildAdListMPD(host, pod, durMS, "29689640", "remote", "alice")
+	var renv svtaEnvelope
+	require.NoError(t, json.Unmarshal([]byte(remote.Periods[0].EventStreams[1].Events[0].Value), &renv))
+	require.NotNil(t, renv.Features)
+	assert.True(t, renv.Features.RemoteFields)
+	rslot := renv.Payload[0]
+	assert.Empty(t, rslot.Tracking, "the remote tracking replaces the inline one")
+	require.NotNil(t, rslot.Remote)
+	assert.Equal(t, "http://localhost:8899/svta/tracking/ad2?evId=29689640&sid=alice", rslot.Remote.Tracking)
+	s := &Server{Cfg: &ServerConfig{Host: host}, sgaiSessions: NewSgaiSessionMgr()}
+	code, got := resolveSVTARemote(t, s, rslot.Remote.Tracking)
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, "trackingEvent", got.Type)
+	assert.Equal(t, slot.Tracking, got.Payload)
 }

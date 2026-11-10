@@ -7,10 +7,12 @@ package app
 import (
 	"bytes"
 	"context"
+	"html"
 	"os"
 	"strings"
 	"testing"
 
+	m "github.com/Eyevinn/dash-mpd/mpd"
 	"github.com/stretchr/testify/require"
 )
 
@@ -129,4 +131,39 @@ func TestNotLoopable(t *testing.T) {
 	require.NoError(t, mpdsFragment(mpdsFromAssetInfo(aInfo.Assets[0])).Render(context.Background(), &buf))
 	require.Contains(t, buf.String(), `<option value="imsc1_img.mpd">imsc1_img.mpd (not loopable)</option>`)
 	require.Contains(t, buf.String(), `<option value="Manifest.mpd">Manifest.mpd</option>`)
+}
+
+// TestRepConflicts checks that a Representation that another MPD of the asset defines
+// differently is described, and that both pages flag the MPD.
+func TestRepConflicts(t *testing.T) {
+	loaded := &RepData{ID: "V300", InitURI: "V300/init.mp4", MediaURI: "V300/$Number$.m4s", Codecs: "avc1.64001e"}
+	as := &m.AdaptationSetType{}
+	as.SegmentTemplate = &m.SegmentTemplateType{Initialization: "$RepresentationID$/init.mp4", Media: "$RepresentationID$/$Number$.m4s"}
+	as.Codecs = "avc1.64001e"
+	rep := &m.RepresentationType{Id: "V300"}
+	require.Equal(t, "", repDiff(loaded, as, rep))
+
+	as.SegmentTemplate.Initialization = "$RepresentationID$/init_avc3.mp4"
+	rep.Codecs = "avc3.64001e"
+	diff := repDiff(loaded, as, rep)
+	require.Equal(t, "init V300/init_avc3.mp4, not V300/init.mp4, codecs avc3.64001e, not avc1.64001e", diff)
+
+	a := newAsset("testpic_2s")
+	a.mpdRepConflicts["Manifest_avc3.mpd"] = []string{"V300 (" + diff + ")"}
+	conflicts := a.repConflicts("Manifest_avc3.mpd")
+	require.Equal(t, "defined differently by another MPD of the asset: V300 ("+diff+")", conflicts)
+	require.Equal(t, "", a.repConflicts("Manifest.mpd"))
+
+	aInfo := assetsInfo{Host: "http://localhost:8888", PlayURL: "%s", Assets: []*assetInfo{{
+		Path: "testpic_2s",
+		MPDs: []mpdInfo{{Path: "Manifest.mpd"}, {Path: "Manifest_avc3.mpd", RepConflicts: conflicts, NotLoopable: "x"}},
+	}}}
+	var buf bytes.Buffer
+	require.NoError(t, assetsPage(aInfo, false).Render(context.Background(), &buf))
+	require.Equal(t, 1, strings.Count(buf.String(), "data-rep-conflict"))
+	require.Contains(t, buf.String(), "Representations "+html.EscapeString(conflicts))
+
+	buf.Reset()
+	require.NoError(t, mpdsFragment(mpdsFromAssetInfo(aInfo.Assets[0])).Render(context.Background(), &buf))
+	require.Contains(t, buf.String(), `>Manifest_avc3.mpd (not loopable, conflicting Representations)</option>`)
 }

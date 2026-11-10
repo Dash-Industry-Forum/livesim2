@@ -1,9 +1,9 @@
 .PHONY: all
 all: test check coverage build
 
-# templ version used to generate *_templ.go from *.templ. Keep in sync with the
-# github.com/a-h/templ require in go.mod.
-TEMPL_VERSION := v0.3.1020
+# templ version used to generate *_templ.go from *.templ, also by templ-check in CI
+# and pre-commit. Keep in sync with the github.com/a-h/templ require in go.mod.
+TEMPL_VERSION := v0.3.1100
 
 .PHONY: build
 build: templ livesim2 dashfetcher cmaf-ingest-receiver
@@ -18,6 +18,23 @@ templ:
 templ-check:
 	go run github.com/a-h/templ/cmd/templ@$(TEMPL_VERSION) generate
 	git diff --exit-code -- '*_templ.go'
+
+# The favicon and the social preview image are rendered from the SVGs in the
+# static directory, which the server embeds. The social preview is also the
+# repository's link preview, uploaded in the GitHub settings. Needs rsvg-convert
+# and ImageMagick.
+STATIC := cmd/livesim2/app/static
+
+.PHONY: images
+images: $(STATIC)/favicon.ico $(STATIC)/social-preview.png
+
+$(STATIC)/favicon.ico: $(STATIC)/favicon.svg
+	for s in 16 32 48; do rsvg-convert -w $$s -h $$s $< -o $@.$$s.png; done
+	magick $@.16.png $@.32.png $@.48.png $@
+	rm -f $@.16.png $@.32.png $@.48.png
+
+$(STATIC)/social-preview.png: $(STATIC)/livesim2-logo.svg
+	rsvg-convert -w 1200 $< | magick - -background '#0f172a' -gravity center -extent 1280x640 -strip $@
 
 .PHONY: prepare
 prepare:

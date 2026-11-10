@@ -33,6 +33,21 @@ func TestCreateSVTAConfig(t *testing.T) {
 				assert.False(t, c.ClickThrough)
 				assert.False(t, c.Verification)
 				assert.False(t, c.Pod)
+				assert.Empty(t, c.Remote, "inline tracking")
+			},
+		},
+		{
+			desc: "remote tracking",
+			val:  "30:15;remote=1",
+			check: func(t *testing.T, c *SVTAConfig) {
+				assert.Equal(t, svtaRemoteOK, c.Remote)
+			},
+		},
+		{
+			desc: "remote tracking that fails",
+			val:  "30:15;remote=1;remote=wrongtype",
+			check: func(t *testing.T, c *SVTAConfig) {
+				assert.Equal(t, svtaRemoteWrongType, c.Remote, "the last value wins")
 			},
 		},
 		{
@@ -59,6 +74,7 @@ func TestCreateSVTAConfig(t *testing.T) {
 		{desc: "ads too high", val: "30:15;ads=21", err: `svta ads "21": must be 1-20`},
 		{desc: "negative skip", val: "30:15;skip=-1", err: `svta skip "-1": must be >= 0`},
 		{desc: "bad click", val: "30:15;click=yes", err: `svta click "yes": must be 0 or 1`},
+		{desc: "bad remote", val: "30:15;remote=500", err: `svta remote "500": must be 0, 1, 404 or wrongtype`},
 		{desc: "zero timescale", val: "30:15;ts=0", err: `svta ts "0": must be a positive 32-bit integer`},
 		{desc: "negative timescale", val: "30:15;ts=-1", err: `svta ts "-1": must be a positive 32-bit integer`},
 		{desc: "timescale overflowing uint32", val: "30:15;ts=4294967296",

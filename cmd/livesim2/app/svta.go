@@ -49,6 +49,18 @@ const (
 	// verification resource. The script is served from the embedded static tree.
 	svtaVerificationVendor   = "livesim2.dashif.org-omid"
 	svtaVerificationResource = "/static/svta_verification.js"
+	// svtaRemoteTrackingPath is the endpoint that resolves $remote.tracking URLs.
+	svtaRemoteTrackingPath = "/svta/tracking/"
+	// svtaPodAdID is the creative id of the pod in beacon and $remote.tracking URLs.
+	svtaPodAdID = "svta-pod"
+)
+
+// The ways the $remote.tracking endpoint can answer, set by the svta remote= option. Only
+// svtaRemoteOK resolves; the others exercise the error handling of SVTA2053-1 §5.2.2.2.2.
+const (
+	svtaRemoteOK        = "1"         // the trackingEvent envelope
+	svtaRemote404       = "404"       // a 404 response: the fetch fails
+	svtaRemoteWrongType = "wrongtype" // a valid envelope of the wrong type (verification)
 )
 
 // SVTAConfig configures SVTA2053 ad-creative signaling for a live stream.
@@ -60,12 +72,13 @@ type SVTAConfig struct {
 	Verification bool   `json:"Verification,omitempty"` // add a verification resource
 	Pod          bool   `json:"Pod,omitempty"`          // also signal the break as a pod
 	Timescale    uint32 `json:"Timescale"`              // EventStream @timescale
+	Remote       string `json:"Remote,omitempty"`       // $remote.tracking answer, "" for inline tracking
 }
 
 // CreateSVTAConfig parses the value of an "svta" URL option.
 //
 // Grammar: ( <off>:<dur>[,<off>:<dur>...] | p<period>:<dur> )[;key=val;...]
-// keys: ads=<n>, skip=<s>, click=<0|1>, verif=<0|1>, pod=<0|1>, ts=<n>
+// keys: ads=<n>, skip=<s>, click=<0|1>, verif=<0|1>, pod=<0|1>, ts=<n>, remote=<0|1|404|wrongtype>
 //
 // Examples: 30:15;ads=2 => one 15s break 30s in, signaled as two 7.5s creatives.
 // p60:20 => a 20s creative at every start of a (UTC) minute, recurring forever.
@@ -118,6 +131,15 @@ func CreateSVTAConfig(val string) (*SVTAConfig, error) {
 				return nil, fmt.Errorf("svta ts %q: must be a positive 32-bit integer", v)
 			}
 			cfg.Timescale = n
+		case "remote":
+			switch v {
+			case "0":
+				cfg.Remote = ""
+			case svtaRemoteOK, svtaRemote404, svtaRemoteWrongType:
+				cfg.Remote = v
+			default:
+				return nil, fmt.Errorf("svta remote %q: must be 0, 1, 404 or wrongtype", v)
+			}
 		default:
 			return nil, fmt.Errorf("unknown svta param %q", key)
 		}
@@ -160,9 +182,21 @@ func (s *strConvAccErr) ParseSVTAConfig(key, val string) *SVTAConfig {
 // envelope: an envelope with a type ("slot" or "pod") and a payload array of objects whose
 // start/duration are in seconds relative to the carrying Event@presentationTime.
 type svtaEnvelope struct {
-	Version int        `json:"version"`
-	Type    string     `json:"type"`
-	Payload []svtaSlot `json:"payload"`
+	Version  int           `json:"version"`
+	Type     string        `json:"type"`
+	Payload  []svtaSlot    `json:"payload"`
+	Features *svtaFeatures `json:"features,omitempty"`
+}
+
+// svtaFeatures declares the features a payload uses (SVTA2053-1 §5.2.2.1 Table 15).
+type svtaFeatures struct {
+	RemoteFields bool `json:"remoteFields"`
+}
+
+// svtaRemote is the $remote object of a Pod or Slot (SVTA2053-1 §5.2.2.2): the URI of a
+// trackingEvent envelope that replaces the tracking field when the player resolves it.
+type svtaRemote struct {
+	Tracking string `json:"tracking"`
 }
 
 // svtaSlot is one entry of the payload array: a Slot (type "linear") in a "slot" envelope,
@@ -176,6 +210,7 @@ type svtaSlot struct {
 	Verifications []svtaVerification `json:"verifications,omitempty"`
 	SkipOffset    *float64           `json:"skipOffset,omitempty"`
 	ClickThrough  string             `json:"clickThrough,omitempty"`
+	Remote        *svtaRemote        `json:"$remote,omitempty"`
 }
 
 type svtaIdentifier struct {
@@ -247,8 +282,8 @@ func svtaBeaconURL(host, adID, event, breakID, sid string) string {
 }
 
 // svtaTrackingFor builds the tracking array for one creative: the timeline points first, then
-// the interaction events.
-func svtaTrackingFor(host, adID, breakID, sid string) []svtaTracking {
+// the interaction events, and with click the clickTracking event.
+func svtaTrackingFor(host, adID, breakID, sid string, click bool) []svtaTracking {
 	tr := make([]svtaTracking, 0, len(svtaTrackingPoints)+len(svtaInteractionEvents)+1)
 	for _, tp := range svtaTrackingPoints {
 		tr = append(tr, svtaTracking{
@@ -256,7 +291,47 @@ func svtaTrackingFor(host, adID, breakID, sid string) []svtaTracking {
 			URLs: []string{svtaBeaconURL(host, adID, tp.event, breakID, sid)},
 		})
 	}
-	return appendSVTAInteractionTracking(tr, host, adID, breakID, sid)
+	tr = appendSVTAInteractionTracking(tr, host, adID, breakID, sid)
+	if click {
+		tr = append(tr, svtaTracking{
+			Type: "clickTracking",
+			URLs: []string{svtaBeaconURL(host, adID, "clickTracking", breakID, sid)},
+		})
+	}
+	return tr
+}
+
+// svtaPodTracking builds the tracking array of a pod of durS seconds: podStart and podEnd.
+func svtaPodTracking(host, breakID, sid string, durS float64) []svtaTracking {
+	zero, end := 0.0, durS
+	return []svtaTracking{
+		{Type: "podStart", Offset: &zero, URLs: []string{svtaBeaconURL(host, svtaPodAdID, "podStart", breakID, sid)}},
+		{Type: "podEnd", Offset: &end, URLs: []string{svtaBeaconURL(host, svtaPodAdID, "podEnd", breakID, sid)}},
+	}
+}
+
+// svtaRemoteTrackingURL builds the $remote.tracking URL of a creative or, with adID
+// svtaPodAdID, of a pod. The endpoint builds the same tracking array as the inline form from
+// the URL alone, so the query carries what that needs: the session and break ids, click for
+// a creative's clickTracking, and dur for the podEnd offset. mode is the remote= answer.
+func svtaRemoteTrackingURL(host, adID, breakID, sid, mode string, click bool, durS float64) string {
+	q := url.Values{}
+	if sid != "" {
+		q.Set("sid", sid)
+	}
+	if breakID != "" {
+		q.Set("evId", breakID)
+	}
+	if click {
+		q.Set("click", "1")
+	}
+	if adID == svtaPodAdID {
+		q.Set("dur", strconv.FormatFloat(durS, 'f', -1, 64))
+	}
+	if mode != svtaRemoteOK {
+		q.Set("mode", mode)
+	}
+	return host + svtaRemoteTrackingPath + url.PathEscape(adID) + "?" + q.Encode()
 }
 
 // appendSVTAInteractionTracking adds the interaction events to a tracking array. Shared by the
@@ -316,7 +391,7 @@ func addSVTAAdCreativeEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, 
 		offsetTicks := uint64(b.offsetS) * uint64(ts)
 		totalTicks := uint64(b.durS) * uint64(ts)
 		if sc.Pod {
-			es.Events = append(es.Events, svtaPodEvent(cfg.Host, b, breakID, sid, offsetTicks, totalTicks, ts))
+			es.Events = append(es.Events, svtaPodEvent(cfg.Host, b, breakID, sid, sc.Remote, offsetTicks, totalTicks, ts))
 		}
 		for i := range sc.AdsPerBreak {
 			startTicks := totalTicks * uint64(i) / uint64(sc.AdsPerBreak)
@@ -332,7 +407,12 @@ func addSVTAAdCreativeEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, 
 					Scheme: svtaAdIDScheme,
 					Value:  svtaCreativeValue(b.id, slot),
 				}},
-				Tracking: svtaTrackingFor(cfg.Host, adID, breakID, sid),
+			}
+			if sc.Remote != "" {
+				s.Remote = &svtaRemote{Tracking: svtaRemoteTrackingURL(cfg.Host, adID, breakID, sid,
+					sc.Remote, sc.ClickThrough, durS)}
+			} else {
+				s.Tracking = svtaTrackingFor(cfg.Host, adID, breakID, sid, sc.ClickThrough)
 			}
 			if sc.SkipOffsetS != nil {
 				skip := float64(*sc.SkipOffsetS)
@@ -340,10 +420,6 @@ func addSVTAAdCreativeEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, 
 			}
 			if sc.ClickThrough {
 				s.ClickThrough = cfg.Host + "/"
-				s.Tracking = append(s.Tracking, svtaTracking{
-					Type: "clickTracking",
-					URLs: []string{svtaBeaconURL(cfg.Host, adID, "clickTracking", breakID, sid)},
-				})
 			}
 			if sc.Verification {
 				s.Verifications = []svtaVerification{{
@@ -364,17 +440,19 @@ func addSVTAAdCreativeEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, 
 }
 
 // svtaPodEvent builds the optional pod-level Event covering the full break, with podStart and
-// podEnd tracking. It complements (does not replace) the per-creative slot events.
-func svtaPodEvent(host string, b adBreakInst, breakID, sid string, offsetTicks, totalTicks uint64, ts uint32) *m.EventType {
+// podEnd tracking, inline or, with a remote mode, as $remote.tracking. It complements (does not
+// replace) the per-creative slot events.
+func svtaPodEvent(host string, b adBreakInst, breakID, sid, remote string, offsetTicks, totalTicks uint64,
+	ts uint32) *m.EventType {
 	durS := float64(totalTicks) / float64(ts)
-	zero, end := 0.0, durS
 	pod := svtaSlot{
 		Start:    0,
 		Duration: durS,
-		Tracking: []svtaTracking{
-			{Type: "podStart", Offset: &zero, URLs: []string{svtaBeaconURL(host, "svta-pod", "podStart", breakID, sid)}},
-			{Type: "podEnd", Offset: &end, URLs: []string{svtaBeaconURL(host, "svta-pod", "podEnd", breakID, sid)}},
-		},
+	}
+	if remote != "" {
+		pod.Remote = &svtaRemote{Tracking: svtaRemoteTrackingURL(host, svtaPodAdID, breakID, sid, remote, false, durS)}
+	} else {
+		pod.Tracking = svtaPodTracking(host, breakID, sid, durS)
 	}
 	return &m.EventType{
 		PresentationTime: offsetTicks,
@@ -388,12 +466,22 @@ func svtaPodEvent(host string, b adBreakInst, breakID, sid string, offsetTicks, 
 // encoder escapes it (&#34; for the quotes, &amp; for the query separators in the tracking
 // URLs), which any conformant parser decodes back to the JSON. HTML escaping is turned off so
 // that those separators stay plain "&" inside the JSON instead of becoming "\u0026".
+// An envelope with a $remote field declares features.remoteFields, as SVTA2053-1 Table 15
+// requires.
 func svtaPayload(envType string, slots ...svtaSlot) string {
 	env := svtaEnvelope{
 		Version: svtaPayloadVersion,
 		Type:    envType,
 		Payload: slots,
 	}
+	if slices.ContainsFunc(slots, func(s svtaSlot) bool { return s.Remote != nil }) {
+		env.Features = &svtaFeatures{RemoteFields: true}
+	}
+	return marshalSVTA(env)
+}
+
+// marshalSVTA marshals a carriage envelope without HTML escaping (see svtaPayload).
+func marshalSVTA(env any) string {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
@@ -416,22 +504,19 @@ func svtaPayload(envType string, slots ...svtaSlot) string {
 // interaction events, which a callback event cannot express at all.
 //
 // durMS is the creative duration; with an unknown (zero) duration the tracking points all
-// collapse to the start of the creative, exactly as for the callback events.
-func svtaListMPDEventStream(host, adID, breakID, sid string, durMS int, eventID uint64) *m.EventStreamType {
-	tracking := make([]svtaTracking, 0, len(svtaTrackingPoints)+len(svtaInteractionEvents))
-	for _, tp := range svtaTrackingPoints {
-		tracking = append(tracking, svtaTracking{
-			Type: tp.event,
-			URLs: []string{svtaBeaconURL(host, adID, tp.event, breakID, sid)},
-		})
-	}
-	tracking = appendSVTAInteractionTracking(tracking, host, adID, breakID, sid)
+// collapse to the start of the creative, exactly as for the callback events. With remote, the
+// tracking is a $remote.tracking URL instead.
+func svtaListMPDEventStream(host, adID, breakID, sid string, durMS int, eventID uint64, remote bool) *m.EventStreamType {
 	slot := svtaSlot{
 		Type:        "linear",
 		Start:       0,
 		Duration:    float64(durMS) / 1000,
 		Identifiers: []svtaIdentifier{{Scheme: svtaCatalogIDScheme, Value: adID}},
-		Tracking:    tracking,
+	}
+	if remote {
+		slot.Remote = &svtaRemote{Tracking: svtaRemoteTrackingURL(host, adID, breakID, sid, svtaRemoteOK, false, 0)}
+	} else {
+		slot.Tracking = svtaTrackingFor(host, adID, breakID, sid, false)
 	}
 	return &m.EventStreamType{
 		SchemeIdUri: SVTAAdCreativeScheme,
