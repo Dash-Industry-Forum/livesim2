@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- New `preroll=<dur>` setting on the `sgai_` option, e.g. `sgai_p60:20;preroll=10`, that adds a preroll
+  ReplacePresentation event with `presentationTime="0"` and `id="0"`, which Event's `duration` runs to the next whole
+  second after the live edge so the event is active wherever a viewer joins, while `ReplacePresentation@maxDuration`
+  matches the preroll duration (`dur=`).
+
 ### Fixed
 
 - Test-asset MPDs: `testpic_2s/Manifest_thumbs.mpd`, `testpic_2s/cea608.mpd` and `testpic_6s/Manifest.mpd` signal
@@ -93,8 +100,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   URL, `remote=404|wrongtype` makes its resolution fail, and `/sgai/session_status` shows each fetch.
 - `/assets` and urlgen flag MPDs that cannot be looped, since a Representation is more than a segment shorter than the
   loop, and MPDs that define a Representation differently from another MPD of the asset, which is also logged.
-- New `preroll=<dur>` setting on the `sgai_` option, e.g. `sgai_p60:20;preroll=10`, that adds a preroll
-  ReplacePresentation event with `presentationTime="0"` and `id="0"`.
 
 ### Changed
 
