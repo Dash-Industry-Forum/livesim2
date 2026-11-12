@@ -610,10 +610,9 @@ Enable it with the `sgai_` URL option, which schedules the breaks:
   [below](#svta2053-ad-creative-signaling)). For example `sgai_p60:20;skipafter=5`.
 - Preroll: `preroll=<dur>` option adds a Replace event with `presentationTime="0"` (the period start),
   `id="0"` and `maxDuration` of `<dur>` seconds (ad request `?break=0&dur=<dur>`). The event's
-  `duration` runs to the next whole second after the live edge (and is at least `<dur>`), so the
-  event is active wherever the viewer joins; it grows with each MPD, which gets a new
-  `publishTime`. Players that treat an event at time 0 as a preroll play it when playback starts,
-  wherever in the live timeline the viewer joins.
+  `duration` runs to 2100-01-01T00:00:00Z, so the event is active wherever and whenever the viewer
+  joins, and the MPD does not change because of it. Players that treat an event at time 0 as a
+  preroll play it when playback starts, wherever in the live timeline the viewer joins.
 
 The `/urlgen/` page and the [URL wiki page][urlparams] document the `sgai_` option and its
 parameters.

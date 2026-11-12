@@ -272,7 +272,7 @@ func TestAddSGAIReplaceEventsPreroll(t *testing.T) {
 	pre := es.Events[0]
 	assert.Equal(t, uint64(0), pre.PresentationTime)
 	require.NotNil(t, pre.Duration)
-	assert.Equal(t, uint64(10*90000), *pre.Duration)
+	assert.Equal(t, uint64(4102444800*90000), *pre.Duration) // AST = epoch: ends 2100-01-01
 	require.NotNil(t, pre.Id)
 	assert.Equal(t, uint64(0), *pre.Id)
 	rp := pre.ReplacePresentation
@@ -295,27 +295,27 @@ func TestAddSGAIReplaceEventsPreroll(t *testing.T) {
 	_, err := mpd.Write(&buf, "  ", true)
 	require.NoError(t, err)
 	xmlStr := buf.String()
-	assert.Contains(t, xmlStr, `<Event presentationTime="0" duration="900000" id="0">`)
+	assert.Contains(t, xmlStr, `<Event presentationTime="0" duration="369220032000000" id="0">`)
 	assert.Contains(t, xmlStr, `uri="https://example.com/sgai/ads?break=0&amp;dur=10"`)
 
-	// Once the live edge has passed the preroll, the Event runs to the next whole second after
-	// it, so that it is active where the viewer joins, while maxDuration and the ad request
-	// keep the preroll duration.
+	// The Event ends 2100-01-01 whenever the MPD is made, so that it is active wherever the
+	// viewer joins, while maxDuration and the ad request keep the preroll duration.
 	for _, tc := range []struct {
-		nowMS    int
-		wantEndS uint64
+		astS  int
+		nowMS int
 	}{
-		{nowMS: 9_999, wantEndS: 10},
-		{nowMS: 10_000, wantEndS: 11},
-		{nowMS: 75_500, wantEndS: 76},
+		{astS: 0, nowMS: 75_500},
+		{astS: 1_800_000_000, nowMS: 1_800_000_075_500},
+		{astS: 1_800_000_000, nowMS: 1_900_000_000_000},
 	} {
+		cfg.StartTimeS = tc.astS
 		period := &m.Period{Id: "P0"}
 		addSGAIReplaceEvents(&m.MPD{Periods: []*m.Period{period}}, period, cfg, tc.nowMS)
 		pre := period.EventStreams[0].Events[0]
 		require.Equal(t, uint64(0), *pre.Id)
 		assert.Equal(t, uint64(0), pre.PresentationTime)
-		assert.Equal(t, tc.wantEndS*90000, *pre.Duration, "nowMS=%d", tc.nowMS)
-		assert.Equal(t, uint64(10*90000), pre.ReplacePresentation.MaxDuration, "nowMS=%d", tc.nowMS)
+		assert.Equal(t, uint64(4102444800-tc.astS)*90000, *pre.Duration, "ast=%d nowMS=%d", tc.astS, tc.nowMS)
+		assert.Equal(t, uint64(10*90000), pre.ReplacePresentation.MaxDuration)
 		assert.Equal(t, "https://example.com/sgai/ads?break=0&dur=10", pre.ReplacePresentation.Uri)
 	}
 }

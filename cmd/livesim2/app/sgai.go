@@ -199,24 +199,10 @@ func sgaiAdURI(cfg *ResponseConfig, id uint64, durS int) string {
 	return uri
 }
 
-// sgaiPrerollEndS returns the end of the preroll Event in seconds from the availabilityStartTime:
-// the next whole second after the live edge at nowMS, so that the event is active wherever a
-// viewer joins, but never less than the preroll duration.
-func sgaiPrerollEndS(cfg *ResponseConfig, nowMS int) int64 {
-	liveEdgeS := (int64(nowMS) - int64(cfg.StartTimeS)*1000) / 1000
-	return max(int64(cfg.SGAI.PrerollS), liveEdgeS+1)
-}
-
-// sgaiPrerollChangeS returns the latest time (s since epoch), at or before nowMS, at which the
-// end of the preroll Event moved (each whole second once the live edge passes the preroll), or
-// the availabilityStartTime.
-func sgaiPrerollChangeS(cfg *ResponseConfig, nowMS int) int {
-	nowS := nowMS / 1000
-	if nowS < cfg.StartTimeS+cfg.SGAI.PrerollS {
-		return cfg.StartTimeS
-	}
-	return nowS
-}
+// sgaiPrerollEndEpochS is when the preroll Event ends: 2100-01-01T00:00:00Z in seconds since the
+// epoch, far enough ahead to keep the event active wherever and whenever a viewer joins. It does
+// not change with time, so the MPD needs no new publishTime for it.
+const sgaiPrerollEndEpochS = 4102444800
 
 // addSGAIReplaceEvents injects an Alternative-MPD Replace EventStream (one Event per break
 // occurrence at nowMS) into the first Period, the sibling Annex I RequestParam, and the
@@ -230,8 +216,8 @@ func sgaiPrerollChangeS(cfg *ResponseConfig, nowMS int) int {
 // With a preroll configured, an extra Event (id 0) is signaled at presentationTime 0, i.e. at
 // the period start. Players should treat an alternative-MPD event at time 0 as a
 // preroll and execute it when playback starts, wherever in the live timeline that is. So that
-// the event is active wherever the viewer joins, its duration runs past the live edge (see
-// sgaiPrerollEndS), while ReplacePresentation@maxDuration stays the preroll duration.
+// the event is active wherever the viewer joins, its duration runs to 2100-01-01 (see
+// sgaiPrerollEndEpochS), while ReplacePresentation@maxDuration stays the preroll duration.
 func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, nowMS int) {
 	if cfg.SGAI == nil {
 		return
@@ -257,7 +243,7 @@ func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, now
 	for _, b := range all {
 		evDurS := int64(b.durS)
 		if cfg.SGAI.PrerollS > 0 && b.id == sgaiPrerollID {
-			evDurS = sgaiPrerollEndS(cfg, nowMS)
+			evDurS = sgaiPrerollEndEpochS - int64(cfg.StartTimeS)
 		}
 		inner := &m.AlternativeMPDEventType{
 			Uri:                          sgaiAdURI(cfg, b.id, b.durS),
