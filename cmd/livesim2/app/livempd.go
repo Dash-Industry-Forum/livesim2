@@ -1202,6 +1202,9 @@ func eventStreamsChangeS(cfg *ResponseConfig, nowMS int) int {
 	}
 	if sc := cfg.SGAI; sc != nil {
 		last = max(last, sc.lastChangeS(nowMS, astS, sc.ResolveOffsetS, 0, nil))
+		if sc.PrerollS > 0 {
+			last = max(last, sgaiPrerollChangeS(cfg, nowMS))
+		}
 	}
 	if sc := cfg.SVTA; sc != nil {
 		last = max(last, sc.lastChangeS(nowMS, astS, svtaLookAheadS, lookBackS, nil))

@@ -297,6 +297,27 @@ func TestAddSGAIReplaceEventsPreroll(t *testing.T) {
 	xmlStr := buf.String()
 	assert.Contains(t, xmlStr, `<Event presentationTime="0" duration="900000" id="0">`)
 	assert.Contains(t, xmlStr, `uri="https://example.com/sgai/ads?break=0&amp;dur=10"`)
+
+	// Once the live edge has passed the preroll, the Event runs to the next whole second after
+	// it, so that it is active where the viewer joins, while maxDuration and the ad request
+	// keep the preroll duration.
+	for _, tc := range []struct {
+		nowMS    int
+		wantEndS uint64
+	}{
+		{nowMS: 9_999, wantEndS: 10},
+		{nowMS: 10_000, wantEndS: 11},
+		{nowMS: 75_500, wantEndS: 76},
+	} {
+		period := &m.Period{Id: "P0"}
+		addSGAIReplaceEvents(&m.MPD{Periods: []*m.Period{period}}, period, cfg, tc.nowMS)
+		pre := period.EventStreams[0].Events[0]
+		require.Equal(t, uint64(0), *pre.Id)
+		assert.Equal(t, uint64(0), pre.PresentationTime)
+		assert.Equal(t, tc.wantEndS*90000, *pre.Duration, "nowMS=%d", tc.nowMS)
+		assert.Equal(t, uint64(10*90000), pre.ReplacePresentation.MaxDuration, "nowMS=%d", tc.nowMS)
+		assert.Equal(t, "https://example.com/sgai/ads?break=0&dur=10", pre.ReplacePresentation.Uri)
+	}
 }
 
 func TestSGAIPrerollFromURL(t *testing.T) {

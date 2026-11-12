@@ -199,6 +199,25 @@ func sgaiAdURI(cfg *ResponseConfig, id uint64, durS int) string {
 	return uri
 }
 
+// sgaiPrerollEndS returns the end of the preroll Event in seconds from the availabilityStartTime:
+// the next whole second after the live edge at nowMS, so that the event is active wherever a
+// viewer joins, but never less than the preroll duration.
+func sgaiPrerollEndS(cfg *ResponseConfig, nowMS int) int64 {
+	liveEdgeS := (int64(nowMS) - int64(cfg.StartTimeS)*1000) / 1000
+	return max(int64(cfg.SGAI.PrerollS), liveEdgeS+1)
+}
+
+// sgaiPrerollChangeS returns the latest time (s since epoch), at or before nowMS, at which the
+// end of the preroll Event moved (each whole second once the live edge passes the preroll), or
+// the availabilityStartTime.
+func sgaiPrerollChangeS(cfg *ResponseConfig, nowMS int) int {
+	nowS := nowMS / 1000
+	if nowS < cfg.StartTimeS+cfg.SGAI.PrerollS {
+		return cfg.StartTimeS
+	}
+	return nowS
+}
+
 // addSGAIReplaceEvents injects an Alternative-MPD Replace EventStream (one Event per break
 // occurrence at nowMS) into the first Period, the sibling Annex I RequestParam, and the
 // MPD-level urlparam:2025 marker.
@@ -210,7 +229,9 @@ func sgaiAdURI(cfg *ResponseConfig, id uint64, durS int) string {
 //
 // With a preroll configured, an extra Event (id 0) is signaled at presentationTime 0, i.e. at
 // the period start. Players should treat an alternative-MPD event at time 0 as a
-// preroll and execute it when playback starts, wherever in the live timeline that is.
+// preroll and execute it when playback starts, wherever in the live timeline that is. So that
+// the event is active wherever the viewer joins, its duration runs past the live edge (see
+// sgaiPrerollEndS), while ReplacePresentation@maxDuration stays the preroll duration.
 func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, nowMS int) {
 	if cfg.SGAI == nil {
 		return
@@ -234,6 +255,10 @@ func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, now
 		all = append([]adBreakInst{{id: sgaiPrerollID, offsetS: 0, durS: cfg.SGAI.PrerollS}}, insts...)
 	}
 	for _, b := range all {
+		evDurS := int64(b.durS)
+		if cfg.SGAI.PrerollS > 0 && b.id == sgaiPrerollID {
+			evDurS = sgaiPrerollEndS(cfg, nowMS)
+		}
 		inner := &m.AlternativeMPDEventType{
 			Uri:                          sgaiAdURI(cfg, b.id, b.durS),
 			EarliestResolutionTimeOffset: new(uint64(cfg.SGAI.ResolveOffsetS) * uint64(ts)),
@@ -246,7 +271,7 @@ func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, now
 		}
 		es.Events = append(es.Events, &m.EventType{
 			PresentationTime: uint64(b.offsetS) * uint64(ts),
-			Duration:         new(uint64(b.durS) * uint64(ts)),
+			Duration:         new(uint64(evDurS) * uint64(ts)),
 			Id:               new(b.id),
 			ReplacePresentation: &m.AlternativeMPDReplaceEventType{
 				Clip:                    new(cfg.SGAI.Clip),
