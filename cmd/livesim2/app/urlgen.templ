@@ -367,6 +367,12 @@ templ urlgenPage(d urlGenData) {
 						<summary>Server-Guided Ad Insertion (SGAI, DASH Ed.6)...</summary>
 						<fieldset>
 							<legend>Personalized live ad replacement via Alternative-MPD Replace events</legend>
+							if d.SgaiDemoAvailable {
+								<p>
+									See it in action on the <a href={ d.Host + "/sgai/demo/" } target="_blank">SGAI demo page</a>:
+									one live stream in two players, each getting its own ad pod.
+								</p>
+							}
 							<label for="sgai">
 								Ad-break schedule and options
 								<input type="text" id="sgai" name="sgai" value={ d.Sgai } placeholder="30:15,90:15;skipafter=5"/>

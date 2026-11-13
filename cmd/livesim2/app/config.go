@@ -76,6 +76,9 @@ type ServerConfig struct {
 	// creates a test certificate at startup.
 	C2PACertPath string `json:"c2pacert"`
 	C2PAKeyPath  string `json:"c2pakey"`
+	// SgaiDemoDir is a directory with the SGAI demo page (index.html), served at /sgai/demo/.
+	// Empty means no demo page. The files are served from disk, not embedded.
+	SgaiDemoDir string `json:"sgaidemodir"`
 }
 
 var DefaultConfig = ServerConfig{
@@ -150,6 +153,8 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 	f.String("c2pacert", k.String("c2pacert"),
 		"C2PA claim-signing certificate chain (PEM), with --c2pa. Default: a generated test certificate")
 	f.String("c2pakey", k.String("c2pakey"), "C2PA claim-signing private key (PEM), with --c2pa")
+	f.String("sgaidemodir", k.String("sgaidemodir"),
+		"directory with the SGAI demo page (e.g. web/sgai-demo), served at /sgai/demo/. Empty: no demo page")
 
 	if err := f.Parse(args[1:]); err != nil {
 		return nil, fmt.Errorf("command line parse: %w", err)
@@ -241,6 +246,16 @@ func LoadConfig(args []string, cwd string) (*ServerConfig, error) {
 	_, err = makeAbsolutePath(k, "drmconfig", cwd)
 	if err != nil {
 		return nil, fmt.Errorf("make drmconfig absolute: %w", err)
+	}
+
+	sgaiDemoDir, err := makeAbsolutePath(k, "sgaidemodir", cwd)
+	if err != nil {
+		return nil, fmt.Errorf("make sgaidemodir absolute: %w", err)
+	}
+	if sgaiDemoDir != "" {
+		if _, err := os.Stat(path.Join(sgaiDemoDir, "index.html")); err != nil {
+			return nil, fmt.Errorf("sgaidemodir: %w", err)
+		}
 	}
 
 	// Unmarshal into cfg

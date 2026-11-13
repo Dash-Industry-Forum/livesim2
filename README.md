@@ -168,6 +168,7 @@ via the command line looks like:
   --repdataroot string       Representation metadata root directory. "+" copies vodroot value. "-" disables usage. (default "+")
   --reqlimitint int          interval for request limit i seconds (only used if maxrequests > 0) (default 86400)
   --reqlimitlog string       path to request limit log file (only written if maxrequests > 0)
+  --sgaidemodir string       directory with the SGAI demo page (e.g. web/sgai-demo), served at /sgai/demo/. Empty: no demo page
   --timeoutS int             timeout for all requests (seconds) (default 60)
   --vodroot string           VoD root directory (default "./vod")
   --whitelistblocks string   comma-separated list of CIDR blocks that are not rate limited
@@ -662,6 +663,15 @@ The selection follows these rules (see `selectPod` in `sgai_ads.go`):
   player skips the break and the viewer keeps the AD BREAK slate. A clean setup — interests that
   match some ads and a break duration that is a multiple of the ad length (e.g. `sgai_…:20` for
   the bundled 10 s ads, with `interests=travel,sailing`) — gives a gapless two-ad pod.
+
+### Demo page
+
+Started with `--sgaidemodir web/sgai-demo`, livesim2 serves a demo page at `/sgai/demo/`, and the
+landing page and the `/urlgen/` page link to it. The page plays one live stream in two Shaka Player
+instances with different interests, so the two get different ad pods at the same breaks, and shows
+each session's ad decisions and beacons below the videos. It uses `testrotate_2s` from livesim-content
+if the server has it, otherwise `testpic_2s`. The files are served from disk, so they can be changed
+without a new build.
 
 ### Monitoring
 

@@ -41,10 +41,11 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	aInfo := assetsInfo{
-		Host:    fh,
-		PlayURL: playURL,
-		Assets:  make([]*assetInfo, 0, len(assets)),
-		C2PA:    s.Cfg.C2PA,
+		Host:     fh,
+		PlayURL:  playURL,
+		Assets:   make([]*assetInfo, 0, len(assets)),
+		C2PA:     s.Cfg.C2PA,
+		SgaiDemo: s.Cfg.SgaiDemoDir != "",
 	}
 	for _, asset := range assets {
 		mpds := make([]mpdInfo, 0, len(asset.MPDs))
@@ -176,6 +177,7 @@ type urlGenData struct {
 	C2PA                        string // C2PA signing method of the c2pa_ option, "" for none
 	C2PAAvailable               bool   // the server runs with --c2pa, so the C2PA settings are shown
 	C2PAMethods                 []nameWithSelect
+	SgaiDemoAvailable           bool   // the server serves the SGAI demo page, so the SGAI section links to it
 	Drm                         string // empty means no DRM setup
 	UTCTiming                   string
 	Periods                     string   // number of periods per hour (1-60)
@@ -253,6 +255,7 @@ func (s *Server) createInitData(aInfo assetsInfo) (data urlGenData, err error) {
 	data.DRMs = drmsFromAssetInfo(nil, s.Cfg.DrmCfg, "")
 	data.C2PAAvailable = aInfo.C2PA
 	data.C2PAMethods = c2paMethodsWithSelect("")
+	data.SgaiDemoAvailable = aInfo.SgaiDemo
 	return data, nil
 }
 
@@ -618,6 +621,7 @@ func createURL(r *http.Request, aInfo assetsInfo, drmCfg *drm.DrmConfig) urlGenD
 	}
 
 	data.C2PAAvailable = aInfo.C2PA
+	data.SgaiDemoAvailable = aInfo.SgaiDemo
 	c2pa := q.Get("c2pa")
 	data.C2PAMethods = c2paMethodsWithSelect(c2pa)
 	if c2pa != "" {

@@ -267,33 +267,56 @@ func welcomePage(wi welcomeInfo) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\">/sgai/session_status</a> shows Server-Guided Ad Insertion (SGAI) ad decisions and impression beacons live per session</li><li><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\">/sgai/session_status</a> shows Server-Guided Ad Insertion (SGAI) ad decisions and impression beacons live per session</li>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var20 string
-		templ_7745c5c3_Var20, templ_7745c5c3_Err = templruntime.NewAttributeExpression(wi.Host + "/steering/session_status").ResolveURL(ctx)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 78, Col: 52}
+		if wi.SgaiDemo {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<li><a href=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var20 string
+			templ_7745c5c3_Var20, templ_7745c5c3_Err = templruntime.NewAttributeExpression(wi.Host + "/sgai/demo/").ResolveURL(ctx)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 79, Col: 40}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\">/sgai/demo</a> is an SGAI demo: one live stream in two players, each getting its own personalized ad pod</li>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\">/steering/session_status</a> shows DASH Content Steering live: per-CDN segment requests, current pathway priority, and client-message verification per session or group</li></ul><h4>Further information</h4><p>For more information about the project, see</p><ul><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2\" target=\"_blank\">livesim2 Github project</a></li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki\" target=\"_blank\">livesim2 Github Wiki</a></li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki/Preparing-Content-for-livesim2\" target=\"_blank\">Preparing Content for livesim2</a></li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters\" target=\"_blank\">wiki list of url parameters</a></li><li><a href=\"https://github.com/orgs/Dash-Industry-Forum/projects/7\" target=\"_blank\">Github project for planning new features</a></li><li><a href=\"https://dashif.slack.com\" target=\"_blank\">The livesim channel in the DASH-IF slack</a></li></ul><p>Version: ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<li><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var21 string
-		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(wi.Version)
+		templ_7745c5c3_Var21, templ_7745c5c3_Err = templruntime.NewAttributeExpression(wi.Host + "/steering/session_status").ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 93, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 84, Col: 52}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</p><p><small>The gopher in the logo and favicon is adapted from the Go gopher, created by <a href=\"https://reneefrench.blogspot.com/\" target=\"_blank\">Renée French</a> and licensed under <a href=\"https://creativecommons.org/licenses/by/4.0/\" target=\"_blank\">CC BY 4.0</a>.</small></p></main></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\">/steering/session_status</a> shows DASH Content Steering live: per-CDN segment requests, current pathway priority, and client-message verification per session or group</li></ul><h4>Further information</h4><p>For more information about the project, see</p><ul><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2\" target=\"_blank\">livesim2 Github project</a></li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki\" target=\"_blank\">livesim2 Github Wiki</a></li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki/Preparing-Content-for-livesim2\" target=\"_blank\">Preparing Content for livesim2</a></li><li><a href=\"https://github.com/Dash-Industry-Forum/livesim2/wiki/URL-Parameters\" target=\"_blank\">wiki list of url parameters</a></li><li><a href=\"https://github.com/orgs/Dash-Industry-Forum/projects/7\" target=\"_blank\">Github project for planning new features</a></li><li><a href=\"https://dashif.slack.com\" target=\"_blank\">The livesim channel in the DASH-IF slack</a></li></ul><p>Version: ")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var22 string
+		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(wi.Version)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/welcome.templ`, Line: 99, Col: 28}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</p><p><small>The gopher in the logo and favicon is adapted from the Go gopher, created by <a href=\"https://reneefrench.blogspot.com/\" target=\"_blank\">Renée French</a> and licensed under <a href=\"https://creativecommons.org/licenses/by/4.0/\" target=\"_blank\">CC BY 4.0</a>.</small></p></main></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
