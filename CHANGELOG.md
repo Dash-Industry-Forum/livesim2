@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `sgai_` setting `preroll=<dur>`: a preroll ad when a viewer joins (Annex G.23), e.g. `sgai_p60:20;preroll=10`
 
+### Changed
+
+- The SGAI ad-decisioning endpoint (`sgai_` default `ep`) is now `/sgai/ads.mpd`, so Shaka Player no longer sends a
+  `HEAD` request before every ad break. `/sgai/ads` still works.
+
 ### Fixed
 
 - Test-asset MPDs: `testpic_2s/Manifest_thumbs.mpd`, `testpic_2s/cea608.mpd` and `testpic_6s/Manifest.mpd` signal

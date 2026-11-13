@@ -32,7 +32,9 @@ const (
 	// frame-accurate timing).
 	sgaiEventTimescale = uint32(90000)
 
-	defaultSGAIAdEndpoint     = "/sgai/ads"
+	// defaultSGAIAdEndpoint has an .mpd extension so that players can tell the MIME type from
+	// the URL: shaka-player otherwise sends a HEAD request before every ad break to find it.
+	defaultSGAIAdEndpoint     = "/sgai/ads.mpd"
 	defaultSGAIResolveOffsetS = 60
 	// sgaiPrerollID is the Event@id (and @uri ?break=) of the preroll. The regular breaks
 	// are numbered from 1 (fixed: 1-based index, periodic: occurrence number + 1), so 0 is free.
@@ -138,7 +140,7 @@ func CreateSGAIConfig(val string) (*SGAIConfig, error) {
 			cfg.PrerollS = n
 		case "ep":
 			if !isCleanAbsPath(v) {
-				return nil, fmt.Errorf("sgai ep %q: must be a clean absolute path (e.g. /sgai/ads)", v)
+				return nil, fmt.Errorf("sgai ep %q: must be a clean absolute path (e.g. /sgai/ads.mpd)", v)
 			}
 			cfg.AdEndpoint = v
 		default:

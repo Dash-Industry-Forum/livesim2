@@ -6,12 +6,14 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"testing/fstest"
 
+	"github.com/Dash-Industry-Forum/livesim2/pkg/logging"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -188,6 +190,31 @@ func TestSgaiAdsHandlerRequiresPositiveDur(t *testing.T) {
 		s.sgaiAdsHandlerFunc(w, r)
 		assert.Equal(t, http.StatusBadRequest, w.Code, "dur query %q must be rejected", q)
 		assert.Equal(t, "no-store", w.Header().Get("Cache-Control"), "error must not be cached for %q", q)
+	}
+}
+
+// The ad decisioning answers on /sgai/ads.mpd (the default, whose extension tells players the
+// MIME type) and on /sgai/ads (kept for existing URLs), for GET and for HEAD.
+func TestSgaiAdsEndpointPaths(t *testing.T) {
+	cfg := ServerConfig{
+		VodRoot:   "testdata/assets",
+		LogFormat: logging.LogDiscard,
+	}
+	require.NoError(t, logging.InitSlog(cfg.LogLevel, cfg.LogFormat))
+	server, err := SetupServer(context.Background(), &cfg)
+	require.NoError(t, err)
+	ts := httptest.NewServer(server.Router)
+	defer ts.Close()
+
+	for _, path := range []string{"/sgai/ads.mpd", "/sgai/ads"} {
+		for _, method := range []string{http.MethodGet, http.MethodHead} {
+			resp, body := testFullRequest(t, ts, method, path+"?sessionId=t&interests=travel&dur=20&preview=1", nil)
+			require.Equal(t, http.StatusOK, resp.StatusCode, "%s %s", method, path)
+			assert.Equal(t, "application/dash+xml", resp.Header.Get("Content-Type"), "%s %s", method, path)
+			if method == http.MethodGet {
+				assert.Contains(t, string(body), "ImportedMPD", path)
+			}
+		}
 	}
 }
 

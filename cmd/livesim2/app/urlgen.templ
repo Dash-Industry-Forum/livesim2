@@ -374,7 +374,7 @@ templ urlgenPage(d urlGenData) {
 							<p>
 								The live stream is annotated with DASH 6th-edition <em>Alternative-MPD Replace</em>
 								events. At each break the player resolves an ad-decisioning endpoint
-								(default <code>/sgai/ads</code>), plays the returned ad pod (a List MPD), then
+								(default <code>/sgai/ads.mpd</code>), plays the returned ad pod (a List MPD), then
 								resumes the live stream. Grammar:
 								<pre>( &lt;off&gt;:&lt;dur&gt;[,&lt;off&gt;:&lt;dur&gt;...] | p&lt;period&gt;:&lt;dur&gt; )[;key=val;...]</pre>
 								where each <code>off:dur</code> is one break, both in <em>seconds</em>:
@@ -399,7 +399,7 @@ templ urlgenPage(d urlGenData) {
 									<it>resolve=&lt;s&gt;</it> &mdash; earliestResolutionTimeOffset: how many seconds before
 									the break the player may resolve the ad (default 60)
 								</li>
-								<li><it>ep=&lt;path&gt;</it> &mdash; ad-decisioning endpoint path (default /sgai/ads)</li>
+								<li><it>ep=&lt;path&gt;</it> &mdash; ad-decisioning endpoint path (default /sgai/ads.mpd)</li>
 								<li>
 									<it>svta=&lt;0|1|remote&gt;</it> &mdash; also describe every ad of the returned pod with
 									SVTA2053 ad-creative signaling in the List MPD, with <it>remote</it> as a
