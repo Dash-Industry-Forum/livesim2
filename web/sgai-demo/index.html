@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>livesim2 SGAI demo</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <style>
+    :root {
+      --bg: #1b1b1f; --panel: #111; --text: #eee; --muted: #aaa; --link: #9cf;
+      --border: #333;
+    }
+    /* Full-height column layout: the session monitors below the videos take whatever
+       height the window has left. */
+    html, body { height: 100%; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: var(--bg); color: var(--text);
+           display: flex; flex-direction: column; }
+    a { color: var(--link); }
+    header { padding: 10px 16px; background: var(--panel); }
+    header h1 { margin: 0; font-size: 18px; }
+    header p { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+    header details { margin-top: 4px; font-size: 13px; color: var(--muted); }
+    header details ol { margin: 4px 0; padding-left: 20px; }
+    #notice { color: #fc6; }
+    .row { display: flex; gap: 12px; padding: 12px; flex: 1; min-height: 0; }
+    .cell { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .who { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline;
+           font-size: 14px; margin: 0 2px 6px; }
+    .who .name { font-size: 16px; font-weight: 700; }
+    .who select { background: #222; color: var(--text); border: 1px solid #555; border-radius: 3px; }
+    .stage { position: relative; background: #000; aspect-ratio: 16/9; flex: none; }
+    video { width: 100%; height: 100%; display: block; background: #000; }
+    .banner {
+      position: absolute; top: 0; left: 0; right: 0; z-index: 5;
+      padding: 8px 12px; font-size: 18px; font-weight: 700;
+      color: #fff; text-shadow: 0 1px 2px #000; display: none;
+    }
+    .banner.on { display: block; }
+    /* A short black beat over the video while the player switches into or out of the ad
+       pod: the video element otherwise briefly shows the AD BREAK slate underneath. */
+    .cover { position: absolute; inset: 0; background: #000; display: none; z-index: 4; }
+    /* Player log along the bottom of the video, above the cover and the banner. */
+    .log { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; margin: 0;
+           height: 6.4em; overflow: auto; background: rgba(0, 0, 0, 0.62); color: #b6ffb6;
+           font: 700 13px/1.45 ui-monospace, Menlo, Consolas, monospace; padding: 6px 10px; }
+    .status { width: 100%; flex: 1; min-height: 240px; border: 1px solid var(--border);
+              border-radius: 4px; background: var(--bg); margin: 6px 0 0; box-sizing: border-box; }
+    /* Narrow windows: stack the two viewers; each monitor gets a fixed height. */
+    @media (max-width: 800px) {
+      html, body { height: auto; }
+      .row { flex-direction: column; }
+      .status { flex: none; height: 360px; }
+    }
+  </style>
+  <!-- Stock Shaka Player: it executes DASH Ed.6 Alternative-MPD events and resolves List MPDs. -->
+  <script src="https://cdn.jsdelivr.net/npm/shaka-player@5.3.1/dist/shaka-player.compiled.js"
+          integrity="sha384-rCtqhKWiAsE98tnixEE1tv2sV+Tr80v42cPMxDga9dsi+W0/S69gAueURRwzyJCp"
+          crossorigin="anonymous"></script>
+  <script src="sgai-demo.js" defer></script>
+</head>
+<body>
+  <header>
+    <h1>One live stream, personalized ads: DASH Ed.6 Server-Guided Ad Insertion</h1>
+    <p>
+      Both players load the <em>same</em> live stream. At every ad break each one asks livesim2 for
+      its own ad pod, chosen by the viewer's interests, so the two show different ads at the same time.
+      Breaks: <code id="breaks"></code> · main content: <code id="asset"></code> · player: Shaka Player
+      <span id="playerVersion"></span> ·
+      <a href="/" data-path="/">livesim2</a> · <a href="/urlgen/" data-path="/urlgen/">URL generator</a> ·
+      <a href="/sgai/session_status" data-path="/sgai/session_status">all sessions</a>
+    </p>
+    <details>
+      <summary>How it works</summary>
+      <ol>
+        <li>The live MPD has an Alternative-MPD Replace event for each break. Its URL points at
+          livesim2's ad decisioning, <code>/sgai/ads.mpd</code>.</li>
+        <li>Annex I URL parameters make the player copy <code>sessionId</code> and
+          <code>interests</code> from the MPD URL onto that request.</li>
+        <li>livesim2 answers with a List MPD: a pod of ads that match the interests, trimmed to the
+          break duration. Without a matching ad there is no pod, and the player keeps showing the
+          <em>AD BREAK</em> countdown slate that livesim2 puts in the main stream during each break.</li>
+        <li>The player plays the pod, sends impression and quartile beacons, and returns to the live
+          stream. The session monitors below show the decisions and beacons as livesim2 records them.</li>
+      </ol>
+      URL parameters: <code>?asset=</code> main content, <code>?breaks=</code> the <code>sgai_</code>
+      break schedule (default <code>p60:20</code>, a 20 s break at every full UTC minute),
+      <code>?i0=</code> and <code>?i1=</code> the viewers' interests.
+    </details>
+    <p id="notice" hidden></p>
+  </header>
+  <div class="row">
+    <div class="cell" id="viewer0">
+      <div class="who">
+        <span class="name"></span>
+        <label>interests <select class="interests"></select></label>
+        <a class="mpd" target="_blank">MPD</a>
+      </div>
+      <div class="stage">
+        <video autoplay muted playsinline></video>
+        <div class="cover"></div>
+        <div class="banner"></div>
+        <pre class="log"></pre>
+      </div>
+      <iframe class="status" title="session monitor"></iframe>
+    </div>
+    <div class="cell" id="viewer1">
+      <div class="who">
+        <span class="name"></span>
+        <label>interests <select class="interests"></select></label>
+        <a class="mpd" target="_blank">MPD</a>
+      </div>
+      <div class="stage">
+        <video autoplay muted playsinline></video>
+        <div class="cover"></div>
+        <div class="banner"></div>
+        <pre class="log"></pre>
+      </div>
+      <iframe class="status" title="session monitor"></iframe>
+    </div>
+  </div>
+</body>
+</html>

@@ -7,6 +7,7 @@ package app
 import (
 	"encoding/json"
 	"os"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -65,4 +66,17 @@ func TestEnv(t *testing.T) {
 	c.RepDataRoot = c.VodRoot
 	c.LogLevel = "warn"
 	assert.Equal(t, c, *cfg)
+}
+
+func TestSgaiDemoDir(t *testing.T) {
+	cwd := t.TempDir()
+	assert.NoError(t, os.Mkdir(path.Join(cwd, "demo"), 0o755))
+	assert.NoError(t, os.WriteFile(path.Join(cwd, "demo", "index.html"), []byte("<html></html>"), 0o644))
+	// A relative directory is resolved against the working directory.
+	cfg, err := LoadConfig([]string{"/path/livesim2", "--sgaidemodir", "demo"}, cwd)
+	assert.NoError(t, err)
+	assert.Equal(t, path.Join(cwd, "demo"), cfg.SgaiDemoDir)
+	// A directory without index.html is an error, so that a wrong path is noticed at startup.
+	_, err = LoadConfig([]string{"/path/livesim2", "--sgaidemodir", "missing"}, cwd)
+	assert.Error(t, err)
 }
