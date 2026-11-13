@@ -2,6 +2,7 @@
 
 ![Test](https://github.com/Dash-Industry-Forum/livesim2/workflows/Go/badge.svg)
 [![golangci-lint](https://github.com/Dash-Industry-Forum/livesim2/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/Dash-Industry-Forum/livesim2/actions/workflows/golangci-lint.yml)
+[![govulncheck](https://github.com/Dash-Industry-Forum/livesim2/actions/workflows/govulncheck.yml/badge.svg)](https://github.com/Dash-Industry-Forum/livesim2/actions/workflows/govulncheck.yml)
 [![GoDoc](https://godoc.org/github.com/Dash-Industry-Forum/livesim2?status.svg)](http://godoc.org/github.com/Dash-Industry-Forum/livesim2)
 
 `livesim2` is the second generation of the [DASH-IF live source simulator][1].
