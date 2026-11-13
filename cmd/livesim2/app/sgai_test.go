@@ -256,7 +256,7 @@ func TestAddSGAIReplaceEventsPreroll(t *testing.T) {
 		AdEndpoint:     "/sgai/ads",
 		ResolveOffsetS: 60,
 		Clip:           true,
-		ExecuteOnce:    true,
+		ExecuteOnce:    false,
 		PrerollS:       10,
 	}
 	period := &m.Period{Id: "P0"}
@@ -279,9 +279,12 @@ func TestAddSGAIReplaceEventsPreroll(t *testing.T) {
 	require.NotNil(t, rp)
 	assert.Equal(t, "https://example.com/sgai/ads?break=0&dur=10", rp.Uri)
 	assert.Equal(t, uint64(10*90000), rp.MaxDuration)
+	// The preroll is always executeOnce=true and clip=false, whatever the regular breaks use.
 	assert.True(t, rp.ExecuteOnce)
 	require.NotNil(t, rp.Clip)
-	assert.True(t, *rp.Clip)
+	assert.False(t, *rp.Clip)
+	assert.False(t, es.Events[1].ReplacePresentation.ExecuteOnce)
+	assert.True(t, *es.Events[1].ReplacePresentation.Clip)
 
 	assert.Equal(t, uint64(60*90000), es.Events[1].PresentationTime)
 	assert.Equal(t, uint64(2), *es.Events[1].Id)

@@ -218,6 +218,8 @@ const sgaiPrerollEndEpochS = 4102444800
 // preroll and execute it when playback starts, wherever in the live timeline that is. So that
 // the event is active wherever the viewer joins, its duration runs to 2100-01-01 (see
 // sgaiPrerollEndEpochS), while ReplacePresentation@maxDuration stays the preroll duration.
+// The preroll ReplacePresentation always has @clip=false and @executeOnce=true, regardless of
+// the clip/once options (which apply to the regular breaks only).
 func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, nowMS int) {
 	if cfg.SGAI == nil {
 		return
@@ -242,14 +244,17 @@ func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, now
 	}
 	for _, b := range all {
 		evDurS := int64(b.durS)
+		clip, executeOnce := cfg.SGAI.Clip, cfg.SGAI.ExecuteOnce
 		if cfg.SGAI.PrerollS > 0 && b.id == sgaiPrerollID {
 			evDurS = sgaiPrerollEndEpochS - int64(cfg.StartTimeS)
+			// The preroll must play in full, and only once, wherever the viewer joins.
+			clip, executeOnce = false, true
 		}
 		inner := &m.AlternativeMPDEventType{
 			Uri:                          sgaiAdURI(cfg, b.id, b.durS),
 			EarliestResolutionTimeOffset: new(uint64(cfg.SGAI.ResolveOffsetS) * uint64(ts)),
 			MaxDuration:                  uint64(b.durS) * uint64(ts),
-			ExecuteOnce:                  cfg.SGAI.ExecuteOnce,
+			ExecuteOnce:                  executeOnce,
 			NoJump:                       cfg.SGAI.NoJump,
 		}
 		if cfg.SGAI.SkipAfterS != nil {
@@ -260,7 +265,7 @@ func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, now
 			Duration:         new(uint64(evDurS) * uint64(ts)),
 			Id:               new(b.id),
 			ReplacePresentation: &m.AlternativeMPDReplaceEventType{
-				Clip:                    new(cfg.SGAI.Clip),
+				Clip:                    new(clip),
 				AlternativeMPDEventType: inner,
 			},
 		})

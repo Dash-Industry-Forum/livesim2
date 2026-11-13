@@ -613,6 +613,8 @@ Enable it with the `sgai_` URL option, which schedules the breaks:
   `duration` runs to 2100-01-01T00:00:00Z, so the event is active wherever and whenever the viewer
   joins, and the MPD does not change because of it. Players that treat an event at time 0 as a
   preroll play it when playback starts, wherever in the live timeline the viewer joins.
+  The preroll ReplacePresentation always has `clip="false"` and `executeOnce="true"`; the
+  `clip` and `once` options only apply to the regular breaks.
 
 The `/urlgen/` page and the [URL wiki page][urlparams] document the `sgai_` option and its
 parameters.

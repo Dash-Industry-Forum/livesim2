@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `preroll=<dur>` setting on the `sgai_` option, e.g. `sgai_p60:20;preroll=10`, that adds a preroll
   ReplacePresentation event with `presentationTime="0"` and `id="0"`, which Event's `duration` runs to
   2100-01-01T00:00:00Z so the event is active wherever a viewer joins, while
-  `ReplacePresentation@maxDuration` matches the preroll duration (`dur=`).
+  `ReplacePresentation@maxDuration` matches the preroll duration (`dur=`). The preroll
+  ReplacePresentation always has `@clip=false` and `@executeOnce=true`.
 
 ### Fixed
 
