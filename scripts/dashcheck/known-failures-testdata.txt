@@ -6,3 +6,6 @@
 
 # dashcheck: cannot pick segments when @availabilityTimeOffset is INF
 ADDR-SEGMENTS /livesim2/ato_inf/testpic_2s/Manifest\.mpd
+
+# dashcheck: MPD-LL-RESYNC-VALUE rejects the Resync @type 0 that DASH-IF recommends for CMAF chunks (tobbee/dashcheck#22)
+MPD-LL-RESYNC-VALUE /livesim2/.*chunkdur_.*
