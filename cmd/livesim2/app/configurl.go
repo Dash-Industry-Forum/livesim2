@@ -324,6 +324,20 @@ func (rc *ResponseConfig) getAvailabilityTimeOffsetS() float64 {
 	return rc.AvailabilityTimeOffsetS
 }
 
+// lowLatencyChunked reports whether the segments are offered in chunks before they are
+// complete, with @availabilityTimeComplete false and a finite @availabilityTimeOffset
+// (chunkdur_ together with ato_), as in the DASH-IF low-latency modes.
+func (rc *ResponseConfig) lowLatencyChunked() bool {
+	ato := rc.getAvailabilityTimeOffsetS()
+	return !rc.AvailabilityTimeCompleteFlag && ato > 0 && !math.IsInf(ato, +1)
+}
+
+// addsPeriods reports whether an option adds Periods to the MPD as time goes on.
+func (rc *ResponseConfig) addsPeriods() bool {
+	return rc.PeriodsPerHour != nil || rc.XlinkPeriodsPerHour != nil ||
+		rc.EtpPeriodsPerHour != nil || rc.InsertAdFlag
+}
+
 // getStartNr for MPD. Default value if not set is 1.
 func (rc *ResponseConfig) getStartNr() uint32 {
 	// Default startNr is 1 according to spec, but can be overridden by actual value set in cfg.
