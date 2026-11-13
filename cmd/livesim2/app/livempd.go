@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +23,12 @@ import (
 
 const (
 	ProfileAdvancedLinear = "urn:mpeg:dash:profile:advanced-linear:2025"
+	// ProfileLowLatency is the DASH-IF Low-Latency Service Offering (DASH-IF IOP part 9, 9.X.4.1).
+	ProfileLowLatency = "http://www.dashif.org/guidelines/low-latency-live-v5"
+	// MPDEventSchemeIDURI with @value MPDValidityExpirationValue signals MPD validity
+	// expiration events (ISO/IEC 23009-1 5.10.4.2).
+	MPDEventSchemeIDURI        = "urn:mpeg:dash:event:2012"
+	MPDValidityExpirationValue = "1"
 )
 
 func hasExtraSpaces(config string) bool {
@@ -32,12 +39,14 @@ func hasExtraSpaces(config string) bool {
 		strings.Contains(config, " ,") || strings.Contains(config, ", ")
 }
 
-// addAdvancedLinearProfileIfMissing adds the AdvancedLinear profile to the profiles string if it's not already present
-func addAdvancedLinearProfileIfMissing(profiles m.ListOfProfilesType) m.ListOfProfilesType {
-	if strings.Contains(string(profiles), ProfileAdvancedLinear) {
-		return profiles
+// addProfileIfMissing adds profile to the comma-separated profiles if it is not already there.
+func addProfileIfMissing(profiles m.ListOfProfilesType, profile string) m.ListOfProfilesType {
+	for p := range strings.SplitSeq(string(profiles), ",") {
+		if strings.TrimSpace(p) == profile {
+			return profiles
+		}
 	}
-	return profiles.AddProfile(ProfileAdvancedLinear)
+	return profiles.AddProfile(profile)
 }
 
 type wrapTimes struct {
@@ -166,7 +175,7 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 	}
 
 	if cfg.SSRFlag {
-		mpd.Profiles = addAdvancedLinearProfileIfMissing(mpd.Profiles)
+		mpd.Profiles = addProfileIfMissing(mpd.Profiles, ProfileAdvancedLinear)
 	}
 
 	if cfg.getAvailabilityTimeOffsetS() > 0 {
@@ -526,6 +535,15 @@ func LiveMPD(a *asset, mpdName string, cfg *ResponseConfig, drmCfg *drm.DrmConfi
 			return nil, fmt.Errorf("addCC608Accessibility: %w", err)
 		}
 	}
+	if cfg.lowLatencyChunked() {
+		// After the subtitles, which are chunked too, and before splitPeriod copies the Period.
+		if err = addLowLatencySignaling(a, period, cfg); err != nil {
+			return nil, fmt.Errorf("addLowLatencySignaling: %w", err)
+		}
+		if !afterStop {
+			mpd.Profiles = addProfileIfMissing(mpd.Profiles, ProfileLowLatency)
+		}
+	}
 	if cfg.PeriodsPerHour == nil {
 		if afterStop {
 			mpdDurS := *cfg.StopTimeS - cfg.StartTimeS
@@ -879,6 +897,129 @@ func createProducerReferenceTimes(startTimeS int, utcTiming *m.DescriptorType) [
 		prt.UTCTiming = &utcCopy
 	}
 	return []*m.ProducerReferenceTimeType{&prt}
+}
+
+// addLowLatencySignaling adds to each chunked Adaptation Set of period what the DASH-IF
+// low-latency modes recommend besides the availability signaling of setOffsetInAdaptationSet
+// (DASH-IF IOP part 9, 9.X.4.2 and 9.X.4.5):
+//
+//   - A Resync element with @type 0 and the longest chunk as @dT, saying that every chunk can
+//     be parsed on its own (9.X.6.2.8). Only the first chunk of a segment starts with an
+//     'styp', which the ISOBMFF marker needs, so @marker stays false.
+//   - @qualityRanking by @bandwidth, in Adaptation Sets with more than one Representation
+//     (9.X.4.5 item 7), unless the Representations have one already.
+//   - An InbandEventStream for MPD validity expiration events. They are needed for MPD
+//     updates that extend the timeline (ISO/IEC 23009-1 5.10.4.2), which livesim2 makes only
+//     with the options that add Periods. It writes no such events, so the stream is only
+//     declared without those options.
+//
+// Image Adaptation Sets are left out, since their segments are not ISOBMFF.
+func addLowLatencySignaling(a *asset, period *m.Period, cfg *ResponseConfig) error {
+	for _, as := range period.AdaptationSets {
+		if as.ContentType == "image" {
+			continue
+		}
+		if len(as.Resyncs) == 0 {
+			dT, err := resyncDT(a, as, cfg)
+			if err != nil {
+				return err
+			}
+			as.Resyncs = []*m.ResyncType{{Type: 0, DT: dT}}
+		}
+		setQualityRankings(as)
+		hasMPDEvents := slices.ContainsFunc(as.InbandEventStreams, func(es *m.EventStreamType) bool {
+			return es.SchemeIdUri == MPDEventSchemeIDURI
+		})
+		if !cfg.addsPeriods() && !hasMPDEvents {
+			as.InbandEventStreams = append(as.InbandEventStreams, &m.EventStreamType{
+				SchemeIdUri: MPDEventSchemeIDURI,
+				Value:       MPDValidityExpirationValue,
+			})
+		}
+	}
+	return nil
+}
+
+// resyncDT returns the @dT of the Resync element of a chunked Adaptation Set: its longest
+// chunk, in the @timescale of its SegmentTemplate. It is nil, which means unknown, if the
+// chunk duration of a Representation is not known.
+func resyncDT(a *asset, as *m.AdaptationSetType, cfg *ResponseConfig) (*uint32, error) {
+	if as.SegmentTemplate == nil {
+		return nil, nil
+	}
+	chunkDurS, err := adaptationSetChunkDurS(cfg, as.Id)
+	if err != nil {
+		return nil, err
+	}
+	if chunkDurS == nil || *chunkDurS <= 0 {
+		return nil, nil
+	}
+	segAsset := a
+	if target, ok := baseURLAssetPath(a.AssetPath, as); ok {
+		segAsset = a.baseURLAssets[target]
+	}
+	asTimescale := uint64(as.SegmentTemplate.GetTimescale())
+	var dT uint64
+	for _, rep := range as.Representations {
+		chunkDur, timescale, ok := segAsset.maxChunkDur(rep.Id, *chunkDurS)
+		if !ok {
+			return nil, nil
+		}
+		// Round up, since @dT is a maximum.
+		dT = max(dT, (chunkDur*asTimescale+timescale-1)/timescale)
+	}
+	if dT == 0 || dT > math.MaxUint32 {
+		return nil, nil
+	}
+	return new(uint32(dT)), nil
+}
+
+// maxChunkDur returns the longest chunk of the Representation repID, with chunks of
+// chunkDurS, and the timescale of that duration. A chunk of a media segment ends with the
+// first sample that reaches a multiple of the chunk duration (chunkSegment), so it is at
+// most the chunk duration rounded up to whole samples, if all samples have the same
+// duration, and at most a segment. ok is false if the samples have different durations.
+func (a *asset) maxChunkDur(repID string, chunkDurS float64) (dur, timescale uint64, ok bool) {
+	if rd, found := a.Reps[repID]; found {
+		if rd.ConstantSampleDuration == nil || *rd.ConstantSampleDuration == 0 {
+			return 0, 0, false
+		}
+		sampleDur := uint64(*rd.ConstantSampleDuration)
+		chunkDur := uint64(chunkDurS * float64(rd.MediaTimescale)) // As in prepareChunks
+		nrSamples := max((chunkDur+sampleDur-1)/sampleDur, 1)
+		return min(nrSamples*sampleDur, a.maxLiveSegDur(rd)), uint64(rd.MediaTimescale), true
+	}
+	prefix, _, _ := strings.Cut(repID, "-")
+	if _, isTimeSubs := timeSubsTrackByPrefix(prefix); isTimeSubs {
+		// As in genTimeSubsChunks. The segments follow those of the reference Representation.
+		chunkDurMS := uint64(math.Round(chunkDurS * SUBS_TIME_TIMESCALE))
+		maxSegDurMS := rep2SubsTime(a.refRep.maxSegDur(), a.refRep.MediaTimescale)
+		return min(chunkDurMS, maxSegDurMS), SUBS_TIME_TIMESCALE, chunkDurMS > 0
+	}
+	return 0, 0, false
+}
+
+// setQualityRankings gives the Representations of as a @qualityRanking by @bandwidth, 1 for
+// the highest, unless one of them has one already. Lower values mean higher quality
+// (ISO/IEC 23009-1 5.3.5.2). The ranking is relative to the other Representations of the
+// Adaptation Set, so a single Representation gets none.
+func setQualityRankings(as *m.AdaptationSetType) {
+	if len(as.Representations) < 2 {
+		return
+	}
+	bandwidths := make([]uint32, 0, len(as.Representations))
+	for _, rep := range as.Representations {
+		if rep.QualityRanking != nil {
+			return
+		}
+		bandwidths = append(bandwidths, rep.Bandwidth)
+	}
+	slices.Sort(bandwidths)
+	bandwidths = slices.Compact(bandwidths)
+	slices.Reverse(bandwidths)
+	for _, rep := range as.Representations {
+		rep.QualityRanking = new(uint32(slices.Index(bandwidths, rep.Bandwidth) + 1))
+	}
 }
 
 // firstUTCTiming returns the MPD's first UTCTiming descriptor, or nil if it has none.

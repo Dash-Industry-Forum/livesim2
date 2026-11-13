@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   e.g. `sgai_p60:20;preroll=10` or `sgai_preroll=10`
 - `--sgaidemodir` serves an SGAI demo page at `/sgai/demo/` (source in `web/sgai-demo/`): one live stream in two
   Shaka Player instances that get different personalized ad pods.
+- Low-latency MPDs (`chunkdur_` with `ato_`) signal the DASH-IF low-latency profile, a Resync element, an MPD validity
+  expiration InbandEventStream (not with `periods_`), and `@qualityRanking` in Adaptation Sets with several Representations.
 
 ### Changed
 
