@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Low-latency MPDs (`chunkdur_` with `ato_`) signal the DASH-IF low-latency profile, a Resync element, an MPD validity
+  expiration InbandEventStream (not with `periods_`), and `@qualityRanking` in Adaptation Sets with several Representations.
+
 ### Fixed
 
 - Test-asset MPDs: `testpic_2s/Manifest_thumbs.mpd`, `testpic_2s/cea608.mpd` and `testpic_6s/Manifest.mpd` signal

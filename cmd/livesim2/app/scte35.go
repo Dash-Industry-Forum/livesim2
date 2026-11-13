@@ -557,8 +557,7 @@ func verifyAdSignaling(cfg *ResponseConfig) error {
 	if len(active) == 0 {
 		return nil
 	}
-	multiPeriod := cfg.PeriodsPerHour != nil || cfg.XlinkPeriodsPerHour != nil ||
-		cfg.EtpPeriodsPerHour != nil || cfg.InsertAdFlag
+	multiPeriod := cfg.addsPeriods()
 	for _, a := range active {
 		// The ad-break EventStream lives in the first Period. splitPeriod clones that Period
 		// verbatim for every generated period, which would duplicate the events with

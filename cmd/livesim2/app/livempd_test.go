@@ -488,6 +488,174 @@ func TestLastAvailableSegment(t *testing.T) {
 	}
 }
 
+// TestLowLatencySignaling checks the DASH-IF low-latency signaling of chunked MPDs: the
+// profile, a Resync of @type 0 with the longest chunk as @dT, @qualityRanking by
+// @bandwidth where an AdaptationSet has more than one Representation, and the MPD validity
+// expiration InbandEventStream, which is left out with the options that add Periods, since
+// livesim2 writes no such events.
+func TestLowLatencySignaling(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+
+	cases := []struct {
+		desc           string
+		asset          string
+		chunkDurS      float64 // 0 for no chunks
+		periodsPerHour *int
+		stopS          *int
+		wantProfile    bool
+		wantInband     bool
+		wantDT         map[string]uint32 // by the first Representation of the AdaptationSet
+		wantRankings   map[string]uint32 // by Representation
+	}{
+		{
+			desc:        "0.5s chunks",
+			asset:       "testpic_2s",
+			chunkDurS:   0.5,
+			wantProfile: true,
+			wantInband:  true,
+			// 15 video frames of 3000, and 23.4 AAC frames of 1024 rounded up to 24
+			wantDT: map[string]uint32{"V300": 45000, "A48": 24576},
+		},
+		{
+			desc:        "1s chunks of 6s segments",
+			asset:       "testpic_6s",
+			chunkDurS:   1,
+			wantProfile: true,
+			wantInband:  true,
+			// 46.9 AAC frames rounded up to 47
+			wantDT: map[string]uint32{"V300": 90000, "A48": 48128},
+		},
+		{
+			desc:         "qualityRanking by bandwidth",
+			asset:        "testpic_2s_low_delay",
+			chunkDurS:    0.5,
+			wantProfile:  true,
+			wantInband:   true,
+			wantDT:       map[string]uint32{"1080": 7680, "LD_1080": 7680, "A48": 24576, "LD_A48": 24576},
+			wantRankings: map[string]uint32{"1080": 1, "720": 2, "360": 3, "LD_1080": 1, "LD_720": 2, "LD_360": 3},
+		},
+		{
+			desc:           "periods: no MPD validity expiration events",
+			asset:          "testpic_2s",
+			chunkDurS:      0.5,
+			periodsPerHour: new(60),
+			wantProfile:    true,
+			wantInband:     false,
+			wantDT:         map[string]uint32{"V300": 45000, "A48": 24576},
+		},
+		{
+			desc:        "stopped: static MPD without the profile",
+			asset:       "testpic_2s",
+			chunkDurS:   0.5,
+			stopS:       new(60),
+			wantProfile: false,
+			wantInband:  true,
+		},
+		{
+			desc:        "ato without chunks: no low-latency signaling",
+			asset:       "testpic_2s",
+			wantProfile: false,
+			wantInband:  false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			asset, ok := am.findAsset(tc.asset)
+			require.True(t, ok)
+			cfg := NewResponseConfig()
+			cfg.AvailabilityTimeOffsetS = 1.5
+			if tc.chunkDurS > 0 {
+				cfg.ChunkDurS = new(tc.chunkDurS)
+				cfg.AvailabilityTimeCompleteFlag = false
+				cfg.LatencyTargetMS = new(uint32(3500))
+			}
+			cfg.PeriodsPerHour = tc.periodsPerHour
+			cfg.StopTimeS = tc.stopS
+			mpd, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, 100_000)
+			require.NoError(t, err)
+			profiles := strings.Split(string(mpd.Profiles), ",")
+			assert.Equal(t, tc.wantProfile, slices.Contains(profiles, ProfileLowLatency), "profiles %s", mpd.Profiles)
+			for _, p := range mpd.Periods {
+				for _, as := range p.AdaptationSets {
+					inband := slices.ContainsFunc(as.InbandEventStreams, func(es *m.EventStreamType) bool {
+						return es.SchemeIdUri == MPDEventSchemeIDURI && es.Value == MPDValidityExpirationValue
+					})
+					assert.Equal(t, tc.wantInband, inband, "InbandEventStream of AdaptationSet %d", *as.Id)
+					if tc.chunkDurS == 0 {
+						assert.Empty(t, as.Resyncs)
+						for _, rep := range as.Representations {
+							assert.Nil(t, rep.QualityRanking)
+						}
+						continue
+					}
+					require.Len(t, as.Resyncs, 1)
+					rs := as.Resyncs[0]
+					assert.Equal(t, uint32(0), rs.Type)
+					assert.False(t, rs.Marker)
+					if want, ok := tc.wantDT[as.Representations[0].Id]; ok {
+						require.NotNil(t, rs.DT)
+						assert.Equal(t, want, *rs.DT, "Resync@dT of AdaptationSet %d", *as.Id)
+					}
+					for _, rep := range as.Representations {
+						if len(as.Representations) == 1 {
+							assert.Nil(t, rep.QualityRanking, "qualityRanking of single %s", rep.Id)
+							continue
+						}
+						require.NotNil(t, rep.QualityRanking)
+						if want, ok := tc.wantRankings[rep.Id]; ok {
+							assert.Equal(t, want, *rep.QualityRanking, "qualityRanking of %s", rep.Id)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestMaxChunkDurIsLongestChunk checks that the Resync@dT that maxChunkDur gives is the
+// longest chunk that chunkSegment makes of the live segments.
+func TestMaxChunkDurIsLongestChunk(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	logger := slog.Default()
+	require.NoError(t, am.discoverAssets(logger))
+
+	cases := []struct {
+		asset     string
+		rep       string
+		chunkDurS float64
+		firstNr   int
+	}{
+		{asset: "testpic_2s", rep: "V300", chunkDurS: 0.5, firstNr: 30},
+		{asset: "testpic_2s", rep: "A48", chunkDurS: 0.5, firstNr: 30},
+		{asset: "testpic_2s", rep: "A48", chunkDurS: 0.3, firstNr: 30},
+		{asset: "testpic_6s", rep: "A48", chunkDurS: 1, firstNr: 5},
+		{asset: "testpic_6s", rep: "V300", chunkDurS: 4, firstNr: 5},
+	}
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("%s/%s/%gs", tc.asset, tc.rep, tc.chunkDurS), func(t *testing.T) {
+			asset, ok := am.findAsset(tc.asset)
+			require.True(t, ok)
+			wantDur, _, ok := asset.maxChunkDur(tc.rep, tc.chunkDurS)
+			require.True(t, ok)
+			cfg := NewResponseConfig()
+			cfg.ChunkDurS = new(tc.chunkDurS)
+			var longest uint64
+			for nr := tc.firstNr; nr < tc.firstNr+8; nr++ {
+				_, chunks, err := prepareChunks(logger, vodFS, asset, cfg, nil, fmt.Sprintf("%s/%d.m4s", tc.rep, nr), 80_000, false, nil)
+				require.NoError(t, err)
+				for chk, err := range chunks {
+					require.NoError(t, err)
+					longest = max(longest, chk.dur)
+				}
+			}
+			assert.Equal(t, wantDur, longest)
+		})
+	}
+}
+
 func TestPublishTime(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	tmpDir := t.TempDir()

@@ -1020,17 +1020,24 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 // otherwise the chunkdur_ duration. It comes from the request, since the Representation
 // data is shared by all requests.
 func requestChunkDurS(cfg *ResponseConfig, rep *RepData) (*float64, error) {
-	if cfg.SSRFlag && rep.adaptationSetID != nil {
+	return adaptationSetChunkDurS(cfg, rep.adaptationSetID)
+}
+
+// adaptationSetChunkDurS returns the chunk duration of the Adaptation Set with id asID for
+// a request: the chunkdurssr_ duration if it is a low-delay Adaptation Set, and otherwise
+// the chunkdur_ duration.
+func adaptationSetChunkDurS(cfg *ResponseConfig, asID *uint32) (*float64, error) {
+	if cfg.SSRFlag && asID != nil {
 		nextMap, _, err := parseSSRAS(cfg.SSRAS)
 		if err != nil {
 			return nil, fmt.Errorf("parse SSRAS: %w", err)
 		}
-		if _, isLowDelay := nextMap[*rep.adaptationSetID]; isLowDelay {
+		if _, isLowDelay := nextMap[*asID]; isLowDelay {
 			chunkDurMap, err := parseChunkDurSSR(cfg.ChunkDurSSR)
 			if err != nil {
 				return nil, fmt.Errorf("parse ChunkDurSSR: %w", err)
 			}
-			if chunkDurS, ok := chunkDurMap[*rep.adaptationSetID]; ok {
+			if chunkDurS, ok := chunkDurMap[*asID]; ok {
 				return &chunkDurS, nil
 			}
 		}

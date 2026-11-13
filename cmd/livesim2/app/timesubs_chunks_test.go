@@ -83,8 +83,9 @@ func TestChunkedTimeSubsSegment(t *testing.T) {
 }
 
 // TestChunkedTimeSubsAvailability checks that the AdaptationSets of the generated
-// subtitles get the same availability signalling as the video and audio ones, so that a
-// low-latency client fetches them as early.
+// subtitles get the same availability and low-latency signalling as the video and audio
+// ones, so that a low-latency client fetches them as early. Their Resync@dT is the chunk
+// duration in their timescale of 1000.
 func TestChunkedTimeSubsAvailability(t *testing.T) {
 	vodFS := os.DirFS("testdata/assets")
 	am := newAssetMgr(vodFS, "", false, false)
@@ -118,9 +119,11 @@ func TestChunkedTimeSubsAvailability(t *testing.T) {
 // nolint:lll
 var chunkedSubEn = "" +
 	` <AdaptationSetType id="100" lang="en" contentType="text" segmentAlignment="true" mimeType="application/mp4" codecs="stpp">
+ <InbandEventStream schemeIdUri="urn:mpeg:dash:event:2012" value="1"></InbandEventStream>
  <ProducerReferenceTime id="0" type="encoder" wallClockTime="1970-01-01T00:00:00Z" presentationTime="0">
  <UTCTiming schemeIdUri="urn:mpeg:dash:utc:http-xsdate:2014" value="https://time.akamai.com/?iso&amp;ms"></UTCTiming>
  </ProducerReferenceTime>
+ <Resync type="0" dT="200" dImin="0" marker="false"></Resync>
  <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle"></Role>
  <SegmentTemplate media="$RepresentationID$/$Number$.m4s" initialization="$RepresentationID$/init.mp4" duration="2000" startNumber="0" timescale="1000" availabilityTimeOffset="1.8" availabilityTimeComplete="false"></SegmentTemplate>
  <Representation id="timestpp-en" bandwidth="80000" startWithSAP="1"></Representation>
