@@ -606,7 +606,8 @@ Enable it with the `sgai_` URL option, which schedules the breaks:
 - Periodic breaks: `sgai_p60:20` (a 20 s break at every full UTC minute, recurring forever;
   wall-clock anchored, so all sessions share the schedule and a late joiner lands mid-break).
 - Options are appended with `;key=val`: `skipafter=<s>`, `nojump=<0|1|2>`, `clip=<0|1>`,
-  `once=<0|1>`, `resolve=<s>` (earliest resolution offset), `ep=<path>` (ad endpoint),
+  `once=<0|1>`, `resolve=<s>` (earliest resolution offset), `ep=<path>` (ad endpoint, default
+  `/sgai/ads.mpd`),
   `svta=<0|1|remote>` (add SVTA2053 ad-creative signaling to the returned ad pod, see
   [below](#svta2053-ad-creative-signaling)). For example `sgai_p60:20;skipafter=5`.
 - Preroll: `preroll=<dur>` option adds a Replace event with a `presentationTime` at or before the
@@ -644,7 +645,9 @@ monitor and API.
 
 ### How the ad pod is selected
 
-The `/sgai/ads` endpoint returns a personalized **List MPD** that imports the chosen ads as a pod.
+The `/sgai/ads.mpd` endpoint returns a personalized **List MPD** that imports the chosen ads as a pod.
+Its `.mpd` extension lets players tell the MIME type from the URL; Shaka Player otherwise sends a
+`HEAD` request before every break to find it. The old path `/sgai/ads` still works.
 The selection follows these rules (see `selectPod` in `sgai_ads.go`):
 
 - Ads tagged with any requested interest come first (rotated per `sessionId` for variety),
@@ -656,7 +659,7 @@ The selection follows these rules (see `selectPod` in `sgai_ads.go`):
   be replaced") — a gapless mismatch is not padded.
 - If the break is **shorter** than a single ad, the lead ad is still returned and the player clamps
   playout to the event's `maxDuration`.
-- With **no `interests`**, or interests that match **no** creative, `/sgai/ads` answers `404`; the
+- With **no `interests`**, or interests that match **no** creative, `/sgai/ads.mpd` answers `404`; the
   player skips the break and the viewer keeps the AD BREAK slate. A clean setup — interests that
   match some ads and a break duration that is a multiple of the ad length (e.g. `sgai_…:20` for
   the bundled 10 s ads, with `interests=travel,sailing`) — gives a gapless two-ad pod.

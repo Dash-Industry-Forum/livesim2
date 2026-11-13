@@ -61,9 +61,13 @@ func (s *Server) Routes(ctx context.Context) error {
 	s.Router.Handle("/player/*", createReversePlayerProxy("/player", s.Cfg.PlayURL))
 	s.Router.MethodFunc("GET", "/patch/*", s.patchHandlerFunc)
 	// SGAI (Server-Guided Ad Insertion): ad-decisioning (List MPD) and beacon endpoints.
-	// HEAD is registered too: shaka probes a failed ad decision with HEAD retries.
-	s.Router.MethodFunc("GET", "/sgai/ads", s.sgaiAdsHandlerFunc)
-	s.Router.MethodFunc("HEAD", "/sgai/ads", s.sgaiAdsHandlerFunc)
+	// /sgai/ads.mpd is the default; /sgai/ads is kept for existing URLs and ep= settings.
+	// HEAD is registered too: shaka sends HEAD to find the MIME type of a URL without a
+	// known extension, such as /sgai/ads.
+	for _, path := range []string{"/sgai/ads.mpd", "/sgai/ads"} {
+		s.Router.MethodFunc("GET", path, s.sgaiAdsHandlerFunc)
+		s.Router.MethodFunc("HEAD", path, s.sgaiAdsHandlerFunc)
+	}
 	// Beacons may arrive as GET or POST (shaka fires tracking beacons as POST).
 	s.Router.MethodFunc("GET", "/sgai/beacon/*", s.sgaiBeaconHandlerFunc)
 	s.Router.MethodFunc("POST", "/sgai/beacon/*", s.sgaiBeaconHandlerFunc)

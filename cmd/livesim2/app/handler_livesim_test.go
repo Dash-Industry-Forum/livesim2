@@ -85,6 +85,15 @@ func TestParamToMPD(t *testing.T) {
 			},
 		},
 		{
+			desc:             "SGAI ad endpoint with .mpd extension",
+			mpd:              "testpic_2s/Manifest.mpd",
+			params:           "sgai_30:15/",
+			wantedStatusCode: http.StatusOK,
+			wantedInMPD: []string{
+				`/sgai/ads.mpd?break=1&amp;dur=15"`,
+			},
+		},
+		{
 			desc:             "SVTA2053 rejected together with sgai",
 			mpd:              "testpic_2s/Manifest.mpd",
 			params:           "svta_30:15/sgai_30:15/",

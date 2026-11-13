@@ -24,7 +24,7 @@ func (s *Server) urlGenHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	assets := make([]*asset, 0, len(s.assetMgr.assets))
 	for _, a := range s.assetMgr.assets {
 		// The SGAI ad creatives are VoD assets too, but they are pod material for the
-		// /sgai/ads decisioning — not looping live content to generate URLs for.
+		// /sgai/ads.mpd decisioning — not looping live content to generate URLs for.
 		if a.AssetPath == sgaiAdsBaseDir || strings.HasPrefix(a.AssetPath, sgaiAdsBaseDir+"/") {
 			continue
 		}
