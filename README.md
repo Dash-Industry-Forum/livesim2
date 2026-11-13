@@ -608,10 +608,11 @@ Enable it with the `sgai_` URL option, which schedules the breaks:
   `once=<0|1>`, `resolve=<s>` (earliest resolution offset), `ep=<path>` (ad endpoint),
   `svta=<0|1|remote>` (add SVTA2053 ad-creative signaling to the returned ad pod, see
   [below](#svta2053-ad-creative-signaling)). For example `sgai_p60:20;skipafter=5`.
-- Preroll: `preroll=<dur>` option adds a Replace event with `presentationTime="0"` (the period start),
+- Preroll: `preroll=<dur>` option adds a Replace event with a `presentationTime` at or before the
+  period start (livesim2 uses `presentationTime="0"`, i.e. the period start),
   `id="0"` and `maxDuration` of `<dur>` seconds (ad request `?break=0&dur=<dur>`). The event's
   `duration` runs to 2100-01-01T00:00:00Z, so the event is active wherever and whenever the viewer
-  joins, and the MPD does not change because of it. Players that treat an event at time 0 as a
+  joins, and the MPD does not change because of it. Players that treat an event starting at or before the period start as a
   preroll play it when playback starts, wherever in the live timeline the viewer joins.
   The preroll ReplacePresentation always has `clip="false"` and `executeOnce="true"`; the
   `clip` and `once` options only apply to the regular breaks.

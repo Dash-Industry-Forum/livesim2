@@ -62,7 +62,7 @@ type SGAIConfig struct {
 // Examples: 30:15;skipafter=5;nojump=2  => one 15s break 30s in, skippable after 5s,
 // not skippable by seeking, latest such event wins.
 // p60:20 => a 20s break at every start of a (UTC) minute, recurring forever.
-// p60:20;preroll=10 => as above, plus a 10s preroll break at presentationTime 0.
+// p60:20;preroll=10 => as above, plus a 10s preroll break starting at the period start.
 func CreateSGAIConfig(val string) (*SGAIConfig, error) {
 	if val == "" {
 		return nil, fmt.Errorf("empty sgai config")
@@ -213,9 +213,10 @@ const sgaiPrerollEndEpochS = 4102444800
 // startrel_0) the break lands a fixed number of seconds after the viewer joins. Periodic
 // configs instead anchor the breaks to the wall clock (see breakInstances).
 //
-// With a preroll configured, an extra Event (id 0) is signaled at presentationTime 0, i.e. at
-// the period start. Players should treat an alternative-MPD event at time 0 as a
-// preroll and execute it when playback starts, wherever in the live timeline that is. So that
+// With a preroll configured, an extra Event (id 0) is signaled with a presentationTime at or
+// before the period start (livesim2 uses 0, i.e. the period start). Players should treat an
+// alternative-MPD event that starts at or before the period start as a preroll and execute it
+// when playback starts, wherever in the live timeline that is. So that
 // the event is active wherever the viewer joins, its duration runs to 2100-01-01 (see
 // sgaiPrerollEndEpochS), while ReplacePresentation@maxDuration stays the preroll duration.
 // The preroll ReplacePresentation always has @clip=false and @executeOnce=true, regardless of
