@@ -673,6 +673,12 @@ each session's ad decisions and beacons below the videos. It uses `testrotate_2s
 if the server has it, otherwise `testpic_2s`. The files are served from disk, so they can be changed
 without a new build.
 
+The page counts against `--maxrequests`: its two players make about 200 requests a minute to
+`/livesim2` and `/vod`, so with `--maxrequests 10000` an open page uses up its IP's quota in under an
+hour. That IP then gets `429` on every stream until the limiter's interval (`--reqlimitint`, 24 h by
+default) restarts. For a screen that runs the demo for long, such as at an event, add its address to
+`--whitelistblocks`.
+
 ### Monitoring
 
 Each ad fires impression and quartile callback beacons to `/sgai/beacon` (carrying the session and
