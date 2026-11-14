@@ -13,14 +13,15 @@ import (
 )
 
 type welcomeInfo struct {
-	Host    string
-	Version string
+	Host     string
+	Version  string
+	SgaiDemo bool // the server serves the SGAI demo page (--sgaidemodir)
 }
 
 // indexHandlerFunc handles access to /.
 func (s *Server) indexHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
-	wi := welcomeInfo{Host: fullHost(s.Cfg.Host, r), Version: internal.Version()}
+	wi := welcomeInfo{Host: fullHost(s.Cfg.Host, r), Version: internal.Version(), SgaiDemo: s.Cfg.SgaiDemoDir != ""}
 	if err := welcomePage(wi).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}

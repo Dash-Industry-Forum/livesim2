@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -215,6 +216,38 @@ func TestSgaiAdsEndpointPaths(t *testing.T) {
 				assert.Contains(t, string(body), "ImportedMPD", path)
 			}
 		}
+	}
+}
+
+// With --sgaidemodir, the demo page is served at /sgai/demo/ with no-cache, and the landing
+// page and the URL generator link to it. Without it, there is neither page nor link.
+func TestSgaiDemoPage(t *testing.T) {
+	require.NoError(t, logging.InitSlog("", logging.LogDiscard))
+	for _, demoDir := range []string{"", "../../../web/sgai-demo"} {
+		cfg := ServerConfig{VodRoot: "testdata/assets", LogFormat: logging.LogDiscard, SgaiDemoDir: demoDir}
+		server, err := SetupServer(context.Background(), &cfg)
+		require.NoError(t, err)
+		ts := httptest.NewServer(server.Router)
+
+		_, index := testFullRequest(t, ts, http.MethodGet, "/", nil)
+		_, urlgen := testFullRequest(t, ts, http.MethodGet, "/urlgen/", nil)
+		resp, page := testFullRequest(t, ts, http.MethodGet, "/sgai/demo", nil) // redirected to /sgai/demo/
+		if demoDir == "" {
+			assert.NotContains(t, string(index), "/sgai/demo/")
+			assert.NotContains(t, string(urlgen), "/sgai/demo/")
+			assert.NotEqual(t, http.StatusOK, resp.StatusCode) // 405: only POST matches /* then
+			ts.Close()
+			continue
+		}
+		assert.Contains(t, string(index), "/sgai/demo/")
+		assert.Contains(t, string(urlgen), "/sgai/demo/")
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, "no-cache", resp.Header.Get("Cache-Control"))
+		assert.Contains(t, string(page), `<script src="sgai-demo.js"`)
+		resp, js := testFullRequest(t, ts, http.MethodGet, "/sgai/demo/sgai-demo.js", nil)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.True(t, strings.Contains(string(js), "/sgai/ads.mpd"), "the page uses the .mpd ad endpoint")
+		ts.Close()
 	}
 }
 

@@ -68,6 +68,11 @@ func (s *Server) Routes(ctx context.Context) error {
 		s.Router.MethodFunc("GET", path, s.sgaiAdsHandlerFunc)
 		s.Router.MethodFunc("HEAD", path, s.sgaiAdsHandlerFunc)
 	}
+	if s.Cfg.SgaiDemoDir != "" {
+		s.Router.MethodFunc("GET", sgaiDemoPath, redirect(sgaiDemoPath, sgaiDemoPath+"/"))
+		s.Router.MethodFunc("GET", sgaiDemoPath+"/*", s.sgaiDemoHandlerFunc)
+		s.Router.MethodFunc("HEAD", sgaiDemoPath+"/*", s.sgaiDemoHandlerFunc)
+	}
 	// Beacons may arrive as GET or POST (shaka fires tracking beacons as POST).
 	s.Router.MethodFunc("GET", "/sgai/beacon/*", s.sgaiBeaconHandlerFunc)
 	s.Router.MethodFunc("POST", "/sgai/beacon/*", s.sgaiBeaconHandlerFunc)
