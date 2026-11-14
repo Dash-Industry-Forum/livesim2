@@ -3,15 +3,28 @@
 // license that can be found in the LICENSE.md file.
 //
 // livesim2 SGAI demo: one live stream in two players, each getting its own personalized ad pod
-// at every break. Everything the page talks to is on the livesim2 server that serves it; ?ls=
-// points it at another livesim2 instead (livesim2 allows any origin).
+// at every break. Everything the page talks to is on the livesim2 server that serves it;
+// ?ls=<http(s) URL> points it at another livesim2 instead (livesim2 allows any origin).
 'use strict';
 
 (() => {
   const params = new URLSearchParams(location.search);
-  // The livesim2 base URL. It is always absolute: Shaka resolves a root-relative MPD URL wrongly
+  // httpOrigin returns the origin of an http(s) URL, or null for anything else.
+  const httpOrigin = (s) => {
+    try {
+      const u = new URL(s);
+      return u.protocol === 'http:' || u.protocol === 'https:' ? u.origin : null;
+    } catch (e) {
+      return null;
+    }
+  };
+  // The livesim2 base URL: the origin of ?ls=, or of this page. Only an http(s) origin is taken
+  // from ?ls=, since it goes into links and frame sources, where a javascript: URL would run
+  // script in this page. It is always absolute: Shaka resolves a root-relative MPD URL wrongly
   // when its path has a colon in it, as in sgai_p60:20.
-  const ls = params.get('ls') || location.origin;
+  const lsParam = params.get('ls');
+  const lsOrigin = lsParam ? httpOrigin(lsParam) : null;
+  const ls = lsOrigin || location.origin;
   // The sgai_ break schedule. Default: a 20 s break at every full UTC minute.
   const breaks = params.get('breaks') || 'p60:20';
   const periodic = breaks.startsWith('p');
@@ -139,7 +152,8 @@
       this.logEl = root.querySelector('.log');
       this.mpdLink = root.querySelector('.mpd');
       // A new session id per page load, so that visitors don't share session records.
-      this.sid = `${viewers[idx].name}-${Math.random().toString(36).slice(2, 6)}`;
+      const rnd = crypto.getRandomValues(new Uint32Array(1))[0];
+      this.sid = `${viewers[idx].name}-${rnd.toString(36).padStart(4, '0').slice(-4)}`;
       root.querySelector('.name').textContent = this.sid;
       root.querySelector('.status').src = `${ls}/sgai/session_status?sid=${encodeURIComponent(this.sid)}`;
 
@@ -295,6 +309,9 @@
   }
 
   async function main() {
+    if (lsParam && !lsOrigin) {
+      notice('Ignoring ?ls=, which is not an http(s) URL.');
+    }
     document.getElementById('breaks').textContent = breaks;
     for (const a of document.querySelectorAll('a[data-path]')) {
       a.href = ls + a.dataset.path;
