@@ -123,6 +123,16 @@ func TestCreateURLSGAI(t *testing.T) {
 			},
 		},
 		{
+			desc:      "periodic breaks with a preroll",
+			params:    map[string]string{"sgai": "p60:20;preroll=10"},
+			wantInURL: []string{"/livesim2/sgai_p60:20;preroll=10/testpic_2s/Manifest.mpd"},
+		},
+		{
+			desc:      "preroll only",
+			params:    map[string]string{"sgai": "preroll=10"},
+			wantInURL: []string{"/livesim2/sgai_preroll=10/testpic_2s/Manifest.mpd"},
+		},
+		{
 			desc:    "invalid break",
 			params:  map[string]string{"sgai": "bad"},
 			wantErr: "invalid sgai",

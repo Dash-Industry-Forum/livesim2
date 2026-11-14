@@ -347,11 +347,14 @@ func (a *AdBreaks) nextBreakWithin(wallMS int64, astS, withinS int) (int64, uint
 }
 
 // adBreaksFor returns the ad-break schedule in effect for a request, or nil when the stream
-// has no ad breaks. sgai_ and svta_ are mutually exclusive (see verifyAndFillConfig), so at
-// most one of them is set.
+// has no ad breaks, as with an sgai_ preroll alone. sgai_ and svta_ are mutually exclusive
+// (see verifyAndFillConfig), so at most one of them is set.
 func adBreaksFor(cfg *ResponseConfig) *AdBreaks {
 	switch {
 	case cfg.SGAI != nil:
+		if cfg.SGAI.empty() {
+			return nil
+		}
 		return &cfg.SGAI.AdBreaks
 	case cfg.SVTA != nil:
 		return &cfg.SVTA.AdBreaks

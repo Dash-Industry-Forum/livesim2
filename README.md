@@ -615,7 +615,8 @@ Enable it with the `sgai_` URL option, which schedules the breaks:
   runs to 2100-01-01T00:00:00Z (Annex G.23). Whenever a viewer joins, the playhead is inside the
   event, so the player executes it once when playback starts. The event is the same in every MPD
   update. The preroll always has `clip="false"` and `executeOnce="true"`; `clip` and `once` apply
-  only to the regular breaks.
+  only to the regular breaks. Add it to a break list, as in `sgai_p60:20;preroll=10`, or use it
+  alone, as in `sgai_preroll=10`, for a preroll and no other breaks.
 
 The `/urlgen/` page and the [URL wiki page][urlparams] document the `sgai_` option and its
 parameters.
