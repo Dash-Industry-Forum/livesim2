@@ -20,8 +20,7 @@
   };
   // The livesim2 base URL: the origin of ?ls=, or of this page. Only an http(s) origin is taken
   // from ?ls=, since it goes into links and frame sources, where a javascript: URL would run
-  // script in this page. It is always absolute: Shaka resolves a root-relative MPD URL wrongly
-  // when its path has a colon in it, as in sgai_p60:20.
+  // script in this page.
   const lsParam = params.get('ls');
   const lsOrigin = lsParam ? httpOrigin(lsParam) : null;
   const ls = lsOrigin || location.origin;
