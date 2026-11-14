@@ -67,6 +67,16 @@ func TestCreateSGAIConfig(t *testing.T) {
 			assert.True(t, c.SVTARemote)
 		}},
 		{name: "bad svta value", val: "30:15;svta=yes", ok: false},
+		{name: "preroll", val: "p60:20;preroll=10", ok: true, check: func(t *testing.T, c *SGAIConfig) {
+			assert.Equal(t, 10, c.PrerollS)
+		}},
+		{name: "preroll off by default", val: "30:15", ok: true, check: func(t *testing.T, c *SGAIConfig) {
+			assert.Equal(t, 0, c.PrerollS)
+		}},
+		{name: "preroll before first break", val: "10:15;preroll=10", ok: true},
+		{name: "preroll overlapping first break", val: "5:15;preroll=10", ok: false},
+		{name: "zero preroll", val: "30:15;preroll=0", ok: false},
+		{name: "bad preroll", val: "30:15;preroll=x", ok: false},
 		{name: "periodic dur >= period", val: "p20:20", ok: false},
 		{name: "periodic zero period", val: "p0:5", ok: false},
 		{name: "periodic zero dur", val: "p60:0", ok: false},
@@ -236,6 +246,88 @@ func TestAddSGAIReplaceEventsPeriodic(t *testing.T) {
 	// The execution-delta state references the first signaled occurrence.
 	require.Len(t, es.RequestParam, 1)
 	assert.Contains(t, es.RequestParam[0].QueryTemplate, "execution-delta#3$")
+}
+
+func TestAddSGAIReplaceEventsPreroll(t *testing.T) {
+	cfg := NewResponseConfig()
+	cfg.Host = "https://example.com"
+	cfg.SGAI = &SGAIConfig{
+		Periodic:       &AdBreakPeriodic{PeriodS: 60, DurationS: 20},
+		AdEndpoint:     "/sgai/ads",
+		ResolveOffsetS: 60,
+		Clip:           true,
+		ExecuteOnce:    false,
+		PrerollS:       10,
+	}
+	period := &m.Period{Id: "P0"}
+	mpd := &m.MPD{Periods: []*m.Period{period}}
+
+	// AST = epoch, so the occurrence of minute 0 (0-20s) starts inside the preroll and is
+	// dropped; minutes 1 and 2 (60s, 120s) are signaled after the preroll.
+	addSGAIReplaceEvents(mpd, period, cfg, 0)
+
+	require.Len(t, period.EventStreams, 1)
+	es := period.EventStreams[0]
+	require.Len(t, es.Events, 3)
+	pre := es.Events[0]
+	assert.Equal(t, uint64(0), pre.PresentationTime)
+	require.NotNil(t, pre.Duration)
+	assert.Equal(t, uint64(4102444800*90000), *pre.Duration) // AST = epoch: ends 2100-01-01
+	require.NotNil(t, pre.Id)
+	assert.Equal(t, uint64(0), *pre.Id)
+	rp := pre.ReplacePresentation
+	require.NotNil(t, rp)
+	assert.Equal(t, "https://example.com/sgai/ads?break=0&dur=10", rp.Uri)
+	assert.Equal(t, uint64(10*90000), rp.MaxDuration)
+	// The preroll is always executeOnce=true and clip=false, whatever the regular breaks use.
+	assert.True(t, rp.ExecuteOnce)
+	require.NotNil(t, rp.Clip)
+	assert.False(t, *rp.Clip)
+	assert.False(t, es.Events[1].ReplacePresentation.ExecuteOnce)
+	assert.True(t, *es.Events[1].ReplacePresentation.Clip)
+
+	assert.Equal(t, uint64(60*90000), es.Events[1].PresentationTime)
+	assert.Equal(t, uint64(2), *es.Events[1].Id)
+	assert.Equal(t, uint64(120*90000), es.Events[2].PresentationTime)
+
+	// The execution-delta state still references the first regular break.
+	require.Len(t, es.RequestParam, 1)
+	assert.Contains(t, es.RequestParam[0].QueryTemplate, "execution-delta#2$")
+
+	var buf bytes.Buffer
+	_, err := mpd.Write(&buf, "  ", true)
+	require.NoError(t, err)
+	xmlStr := buf.String()
+	assert.Contains(t, xmlStr, `<Event presentationTime="0" duration="369220032000000" id="0">`)
+	assert.Contains(t, xmlStr, `uri="https://example.com/sgai/ads?break=0&amp;dur=10"`)
+
+	// The Event ends 2100-01-01 whenever the MPD is made, so that it is active wherever the
+	// viewer joins, while maxDuration and the ad request keep the preroll duration.
+	for _, tc := range []struct {
+		astS  int
+		nowMS int
+	}{
+		{astS: 0, nowMS: 75_500},
+		{astS: 1_800_000_000, nowMS: 1_800_000_075_500},
+		{astS: 1_800_000_000, nowMS: 1_900_000_000_000},
+	} {
+		cfg.StartTimeS = tc.astS
+		period := &m.Period{Id: "P0"}
+		addSGAIReplaceEvents(&m.MPD{Periods: []*m.Period{period}}, period, cfg, tc.nowMS)
+		pre := period.EventStreams[0].Events[0]
+		require.Equal(t, uint64(0), *pre.Id)
+		assert.Equal(t, uint64(0), pre.PresentationTime)
+		assert.Equal(t, uint64(4102444800-tc.astS)*90000, *pre.Duration, "ast=%d nowMS=%d", tc.astS, tc.nowMS)
+		assert.Equal(t, uint64(10*90000), pre.ReplacePresentation.MaxDuration)
+		assert.Equal(t, "https://example.com/sgai/ads?break=0&dur=10", pre.ReplacePresentation.Uri)
+	}
+}
+
+func TestSGAIPrerollFromURL(t *testing.T) {
+	cfg, err := processURLCfg("/livesim2/sgai_30:15;preroll=10/asset/Manifest.mpd", 0)
+	require.NoError(t, err)
+	require.NotNil(t, cfg.SGAI)
+	assert.Equal(t, 10, cfg.SGAI.PrerollS)
 }
 
 func TestSGAIRejectedWithMultiPeriod(t *testing.T) {

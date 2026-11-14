@@ -405,6 +405,11 @@ templ urlgenPage(d urlGenData) {
 									SVTA2053 ad-creative signaling in the List MPD, with <it>remote</it> as a
 									<code>$remote.tracking</code> URL (default 0)
 								</li>
+								<li>
+									<it>preroll=&lt;dur&gt;</it> &mdash; also signal a preroll break of dur seconds: a Replace event (id 0)
+									with presentationTime at or before the period start and maxDuration dur, whose duration runs to
+									2100-01-01, played when playback starts (default: none)
+								</li>
 							</ul>
 							<p>
 								Example:

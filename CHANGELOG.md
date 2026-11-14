@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `sgai_` setting `preroll=<dur>`: a preroll ad when a viewer joins (Annex G.23), e.g. `sgai_p60:20;preroll=10`
+
 ### Fixed
 
 - Test-asset MPDs: `testpic_2s/Manifest_thumbs.mpd`, `testpic_2s/cea608.mpd` and `testpic_6s/Manifest.mpd` signal

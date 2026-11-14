@@ -2004,6 +2004,7 @@ func TestEventStreamPublishTime(t *testing.T) {
 
 	for _, opts := range []string{
 		"sgai_p60:20",
+		"sgai_p60:20;preroll=10",
 		"svta_p60:20",
 		"scte35_p60:20@10;mpd=xml",
 		"scte35_30:10,90:10;mpd=bin",
