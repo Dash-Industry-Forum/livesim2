@@ -6,9 +6,12 @@ package app
 
 import (
 	"bytes"
+	"log/slog"
+	"os"
 	"testing"
 
 	m "github.com/Eyevinn/dash-mpd/mpd"
+	"github.com/Eyevinn/dash-mpd/xml"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -75,7 +78,19 @@ func TestCreateSGAIConfig(t *testing.T) {
 		}},
 		{name: "preroll before first break", val: "10:15;preroll=10", ok: true},
 		{name: "preroll overlapping first break", val: "5:15;preroll=10", ok: false},
+		{name: "preroll only", val: "preroll=10", ok: true, check: func(t *testing.T, c *SGAIConfig) {
+			assert.Equal(t, 10, c.PrerollS)
+			assert.True(t, c.empty())
+		}},
+		{name: "preroll only with options", val: "preroll=10;skipafter=5", ok: true, check: func(t *testing.T, c *SGAIConfig) {
+			assert.Equal(t, 10, c.PrerollS)
+			require.NotNil(t, c.SkipAfterS)
+			assert.Equal(t, 5, *c.SkipAfterS)
+		}},
+		{name: "options without breaks or preroll", val: "skipafter=5", ok: false},
+		{name: "empty break list before preroll", val: ";preroll=10", ok: false},
 		{name: "zero preroll", val: "30:15;preroll=0", ok: false},
+		{name: "zero preroll only", val: "preroll=0", ok: false},
 		{name: "bad preroll", val: "30:15;preroll=x", ok: false},
 		{name: "periodic dur >= period", val: "p20:20", ok: false},
 		{name: "periodic zero period", val: "p0:5", ok: false},
@@ -328,6 +343,50 @@ func TestSGAIPrerollFromURL(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, cfg.SGAI)
 	assert.Equal(t, 10, cfg.SGAI.PrerollS)
+}
+
+// TestSGAIPrerollOnly checks a live MPD with a preroll and no other breaks: it has the one
+// preroll Event, the same in every MPD, and no slate schedule.
+func TestSGAIPrerollOnly(t *testing.T) {
+	vodFS := os.DirFS("testdata/assets")
+	am := newAssetMgr(vodFS, "", false, false)
+	require.NoError(t, am.discoverAssets(slog.Default()))
+	asset, ok := am.findAsset("testpic_2s")
+	require.True(t, ok)
+
+	var firstEvents []byte
+	var firstPublishS float64
+	for _, nowS := range []int{10, 75, 3600} {
+		nowMS := nowS*1000 + 500
+		cfg, err := processURLCfg("/livesim2/sgai_preroll=10/testpic_2s/Manifest.mpd", nowMS)
+		require.NoError(t, err)
+		assert.Nil(t, adBreaksFor(cfg), "no break windows to slate")
+		mpd, err := LiveMPD(asset, "Manifest.mpd", cfg, nil, nowMS)
+		require.NoError(t, err)
+		require.Len(t, mpd.Periods, 1)
+		require.Len(t, mpd.Periods[0].EventStreams, 1)
+		es := mpd.Periods[0].EventStreams[0]
+		require.Len(t, es.Events, 1)
+		ev := es.Events[0]
+		require.NotNil(t, ev.Id)
+		assert.Equal(t, sgaiPrerollID, *ev.Id)
+		assert.Equal(t, uint64(0), ev.PresentationTime)
+		require.NotNil(t, ev.ReplacePresentation)
+		assert.Equal(t, uint64(10*sgaiEventTimescale), ev.ReplacePresentation.MaxDuration)
+		require.Len(t, es.RequestParam, 1)
+		assert.Contains(t, es.RequestParam[0].QueryTemplate, "execution-delta#0$")
+
+		events, err := xml.Marshal(es)
+		require.NoError(t, err)
+		publishS, err := mpd.PublishTime.ConvertToSeconds()
+		require.NoError(t, err)
+		if firstEvents == nil {
+			firstEvents, firstPublishS = events, publishS
+			continue
+		}
+		assert.Equal(t, string(firstEvents), string(events), "preroll Event changed at %ds", nowS)
+		assert.Equal(t, firstPublishS, publishS, "publishTime changed at %ds", nowS)
+	}
 }
 
 func TestSGAIRejectedWithMultiPeriod(t *testing.T) {

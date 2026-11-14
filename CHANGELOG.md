@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `sgai_` setting `preroll=<dur>`: a preroll ad when a viewer joins (Annex G.23), e.g. `sgai_p60:20;preroll=10`
+- `sgai_` setting `preroll=<dur>`: a preroll ad when a viewer joins (Annex G.23), with other breaks or alone,
+  e.g. `sgai_p60:20;preroll=10` or `sgai_preroll=10`
 
 ### Changed
 

@@ -58,13 +58,15 @@ type SGAIConfig struct {
 // CreateSGAIConfig parses the value of an "sgai" URL option.
 //
 // Grammar: ( <off>:<dur>[,<off>:<dur>...] | p<period>:<dur> )[;key=val;...]
+// or, for a preroll without other breaks: preroll=<dur>[;key=val;...]
 // keys: skipafter=<s>, nojump=<0|1|2>, clip=<0|1>, once=<0|1>, resolve=<s>, ep=<path>,
 // svta=<0|1|remote>, preroll=<dur>
 //
 // Examples: 30:15;skipafter=5;nojump=2  => one 15s break 30s in, skippable after 5s,
 // not skippable by seeking, latest such event wins.
 // p60:20 => a 20s break at every start of a (UTC) minute, recurring forever.
-// p60:20;preroll=10 => as above, plus a 10s preroll break starting at the period start.
+// p60:20;preroll=10 => as above, plus a 10s preroll when the viewer joins.
+// preroll=10 => only the 10s preroll.
 func CreateSGAIConfig(val string) (*SGAIConfig, error) {
 	if val == "" {
 		return nil, fmt.Errorf("empty sgai config")
@@ -79,12 +81,17 @@ func CreateSGAIConfig(val string) (*SGAIConfig, error) {
 		ExecuteOnce:    true,
 	}
 	parts := strings.Split(val, ";")
-	ab, err := parseAdBreaks("sgai", parts[0])
-	if err != nil {
-		return nil, err
+	opts := parts
+	if !strings.Contains(parts[0], "=") {
+		// A break list comes first, unless the config is only options (a preroll alone).
+		ab, err := parseAdBreaks("sgai", parts[0])
+		if err != nil {
+			return nil, err
+		}
+		cfg.AdBreaks = ab
+		opts = parts[1:]
 	}
-	cfg.AdBreaks = ab
-	for _, kv := range parts[1:] {
+	for _, kv := range opts {
 		key, v, ok := strings.Cut(kv, "=")
 		if !ok {
 			return nil, fmt.Errorf("sgai param %q must be key=val", kv)
@@ -147,8 +154,8 @@ func CreateSGAIConfig(val string) (*SGAIConfig, error) {
 			return nil, fmt.Errorf("unknown sgai param %q", key)
 		}
 	}
-	if cfg.empty() {
-		return nil, fmt.Errorf("sgai config %q has no breaks", val)
+	if cfg.empty() && cfg.PrerollS == 0 {
+		return nil, fmt.Errorf("sgai config %q has no breaks and no preroll", val)
 	}
 	if cfg.PrerollS > 0 && len(cfg.Breaks) > 0 && cfg.Breaks[0].OffsetS < cfg.PrerollS {
 		return nil, fmt.Errorf("sgai config %q: first break overlaps the preroll", val)

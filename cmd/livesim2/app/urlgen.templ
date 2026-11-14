@@ -377,6 +377,7 @@ templ urlgenPage(d urlGenData) {
 								(default <code>/sgai/ads.mpd</code>), plays the returned ad pod (a List MPD), then
 								resumes the live stream. Grammar:
 								<pre>( &lt;off&gt;:&lt;dur&gt;[,&lt;off&gt;:&lt;dur&gt;...] | p&lt;period&gt;:&lt;dur&gt; )[;key=val;...]</pre>
+								or just <code>preroll=&lt;dur&gt;[;key=val;...]</code> to get a preroll alone,
 								where each <code>off:dur</code> is one break, both in <em>seconds</em>:
 							</p>
 							<ul>
@@ -408,14 +409,20 @@ templ urlgenPage(d urlGenData) {
 								<li>
 									<it>preroll=&lt;dur&gt;</it> &mdash; also signal a preroll break of dur seconds: a Replace event (id 0)
 									at the period start with maxDuration dur and a duration that runs to 2100-01-01, so that
-									it plays once when playback starts, wherever the viewer joins (default: none)
+									it plays once when playback starts, wherever the viewer joins. It can also be used alone,
+									without a break list (default: none)
 								</li>
 							</ul>
 							<p>
-								Example:
+								Examples:
 								<pre>30:15,90:15;skipafter=5;nojump=2</pre>
 								two 15&nbsp;s breaks (at 30&nbsp;s and 90&nbsp;s), skippable after 5&nbsp;s,
 								not skippable by seeking.
+								<pre>p60:20;preroll=10</pre>
+								a 10&nbsp;s preroll when the viewer joins, then a 20&nbsp;s break at every start of a
+								UTC minute.
+								<pre>preroll=10</pre>
+								only the 10&nbsp;s preroll, with no other breaks and no slate.
 								<br/>
 								During each break the underlying (clear AVC) video track serves a generated
 								<em>AD&nbsp;BREAK</em> slate with a per-second countdown to the end of the break &mdash;
