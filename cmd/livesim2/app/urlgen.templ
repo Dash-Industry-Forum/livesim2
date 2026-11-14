@@ -407,8 +407,8 @@ templ urlgenPage(d urlGenData) {
 								</li>
 								<li>
 									<it>preroll=&lt;dur&gt;</it> &mdash; also signal a preroll break of dur seconds: a Replace event (id 0)
-									with presentationTime at or before the period start and maxDuration dur, whose duration runs to
-									2100-01-01, played when playback starts (default: none)
+									at the period start with maxDuration dur and a duration that runs to 2100-01-01, so that
+									it plays once when playback starts, wherever the viewer joins (default: none)
 								</li>
 							</ul>
 							<p>
