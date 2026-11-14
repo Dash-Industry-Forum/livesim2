@@ -215,22 +215,23 @@ const sgaiPrerollEndEpochS = 4102444800
 // startrel_0) the break lands a fixed number of seconds after the viewer joins. Periodic
 // configs instead anchor the breaks to the wall clock (see breakInstances).
 //
-// With a preroll configured, an extra Event (id 0) is signaled with a presentationTime at or
-// before the period start (livesim2 uses 0, i.e. the period start). Players should treat an
-// alternative-MPD event that starts at or before the period start as a preroll and execute it
-// when playback starts, wherever in the live timeline that is. So that
-// the event is active wherever the viewer joins, its duration runs to 2100-01-01 (see
-// sgaiPrerollEndEpochS), while ReplacePresentation@maxDuration stays the preroll duration.
-// The preroll ReplacePresentation always has @clip=false and @executeOnce=true, regardless of
-// the clip/once options (which apply to the regular breaks only).
+// With a preroll configured, an extra Event (id 0) is signaled at presentationTime 0, the
+// period start, with a duration that runs to 2100-01-01 (see sgaiPrerollEndEpochS), while
+// ReplacePresentation@maxDuration is the preroll duration, as in Annex G.23. Whenever a viewer
+// joins, the playhead is inside the event, so the player executes it when playback starts.
+// The preroll ReplacePresentation always has @clip=false, so that it plays in full, and
+// @executeOnce=true, so that it plays only once, whatever the clip/once options (which apply
+// to the regular breaks only).
 func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, nowMS int) {
 	if cfg.SGAI == nil {
 		return
 	}
 	insts := cfg.SGAI.instances(nowMS, cfg.StartTimeS, cfg.SGAI.ResolveOffsetS, 0)
 	if pre := cfg.SGAI.PrerollS; pre > 0 {
-		// A periodic occurrence can land inside the preroll when the availabilityStartTime
-		// is aligned with the cycle; two Replace events must not cover the same time.
+		// A periodic occurrence can start within the first pre seconds when the
+		// availabilityStartTime is aligned with the cycle. A viewer who joins at the start
+		// (e.g. startrel_0) would then get the preroll and that break in a row, so it is
+		// dropped, as CreateSGAIConfig rejects a fixed first break that starts that early.
 		insts = slices.DeleteFunc(insts, func(b adBreakInst) bool { return b.offsetS < int64(pre) })
 	}
 	if len(insts) == 0 && cfg.SGAI.PrerollS == 0 {
