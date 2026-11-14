@@ -635,10 +635,23 @@ a title and interest keywords, e.g.:
 }
 ```
 
-Those two creatives are bundled under the test vodroot, so SGAI works out of the box. A viewer is
-identified and steered with two query parameters that are propagated to the ad request via Annex I:
-`sessionId` (personalization key) and `interests` (a comma-separated list). They can be added on
-the `/urlgen/` page or directly on the MPD URL, for example
+Those two creatives are bundled under the test vodroot, so SGAI works out of the box.
+[livesim-content][livesim-content] has five 10 s creatives in its `ads/` directory, and these are
+the ones livesim2.dashif.org serves:
+
+| Ad | Title | Interests |
+| -- | ----- | --------- |
+| `train_ad` | Train Journey | `travel` |
+| `namibia_ad` | Namibia | `travel` |
+| `namibia_safari_ad` | Namibia Safari | `travel`, `safari` |
+| `gotland_runt_ad` | Gotland Runt Sailing Race | `sailing`, `boats` |
+| `stockholm_sailing_ad` | Sailing in Stockholm | `sailing`, `boats` |
+
+`/api/sgai/ads` lists the catalog of a running server.
+
+A viewer is identified and steered with two query parameters that are propagated to the ad
+request via Annex I: `sessionId` (personalization key) and `interests` (a comma-separated list).
+They can be added on the `/urlgen/` page or directly on the MPD URL, for example
 `…/Manifest.mpd?sessionId=alice&interests=travel,sailing`. With no `sessionId`, ad decisions and
 impression beacons are still recorded but grouped under a single shared `anon` session in the
 monitor and API.
@@ -703,6 +716,30 @@ tracking events are typed instead, which adds two things the callback beacons ca
 Either way the beacon URL carries the creative's own catalog id, so a pod is reported per creative
 even though a player may model the whole pod as a single ad.
 
+### Player support
+
+Stock Shaka Player plays SGAI streams without patches. It executes the Replace events, resolves
+the List MPD, adds the Annex I query to the ad request and the beacons, and fires the callback
+beacons. Use 5.3.3 or later. These gaps remain in 5.3.5:
+
+- **Joining during a break.** Shaka starts the pod at the join offset, and ends it `maxDuration`
+  after the event start, whatever `@startWithOffset` and `@clip` say (ISO/IEC 23009-1:2026,
+  5.16.2.2.6 and Table 62). By default the pod should start from its beginning. A viewer who joins
+  a regular break late therefore misses the start of the first ad, and its `impression` beacon.
+  The preroll is hit hardest, since its event starts at the period start and has `clip="false"`.
+  A viewer who joins more than `<dur>` after the period start gets no preroll at all: Shaka makes
+  no ad request, yet reports `ad-started` and `ad-complete`. A viewer who joins earlier sees only
+  its end.
+- **A `HEAD` request** before the ad request, when the ad `@uri` has no known file extension, to
+  find its MIME type. The default endpoint `/sgai/ads.mpd` avoids it.
+- **One ad per pod.** Shaka plays the whole List MPD as one interstitial, so `ad-started` fires once
+  per break and there are no per-creative ad events. The beacons are still per creative.
+- **No Annex I state variables.** The `execution-delta` in the ad request's `RequestParam` becomes
+  an empty string, so `prta=` is always empty.
+
+dash.js does not execute Alternative-MPD events yet, so it keeps playing the main content and
+shows the AD BREAK slate.
+
 ## SVTA2053 ad creative signaling
 
 livesim2 can signal ad creatives with the SVTA's own scheme, **SVTA2053 Ad Creative Signaling**
@@ -746,11 +783,13 @@ livesim2's own `/sgai/beacon` endpoint, with the session and break ids baked in 
 these URLs verbatim, so nothing can add them later. Add `?sessionId=<id>` to the MPD URL to key
 the beacons to a viewer and watch the whole round trip live at
 `/sgai/session_status?sid=<sessionId>`. Shaka Player supports the scheme out of the box, which
-makes an end-to-end ad-measurement test possible without any SSAI stack. Use 5.2.10 or later:
-5.2.9 fixed the signaling of an ad pod being dropped after the first break, and 5.2.10 stopped an
-ad's first playout being reported as a `resume`. One gap remains at the time of writing — the last
-creative of a pod never reports `complete`
-([shaka-player#10545](https://github.com/shaka-project/shaka-player/issues/10545)).
+makes an end-to-end ad-measurement test possible without any SSAI stack. Use 5.3.3 or later.
+Earlier versions dropped the signaling of an ad pod after the first break (fixed in 5.2.9),
+reported an ad's first playout as a `resume` (fixed in 5.2.10), never reported `complete` for the
+last creative of a pod
+([shaka-player#10545](https://github.com/shaka-project/shaka-player/issues/10545), fixed in 5.2.11
+and 5.3.0), and ignored a pod Event whose slots are signaled separately, as with `pod=1` (fixed in
+5.3.3).
 
 The SGAI ad pods can carry the same signaling: `sgai_…;svta=1` adds an SVTA2053 `EventStream` to
 every ad Period of the returned List MPD, describing the creative that Period imports, with the
