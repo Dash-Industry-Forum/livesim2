@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The SGAI ad-decisioning endpoint (`sgai_` default `ep`) is now `/sgai/ads.mpd`, so Shaka Player no longer sends a
   `HEAD` request before every ad break. `/sgai/ads` still works.
+- Go 1.27.4 or later is required (`go.mod`), for its security fixes in cgo, the go command, the compiler, the linker
+  and `net/http`.
+- hi264 bumped to v0.12.3, which makes the AD BREAK slate about three times faster to generate; also mp4ff v0.63.0,
+  templ v0.3.1118, cbor v2.10.0, pflag v1.1.0 (`--help` shows boolean flags as `--flag[=true|false]`) and x/net v0.62.0.
 
 ### Fixed
 
