@@ -7,8 +7,8 @@ require (
 	github.com/Comcast/scte35-go v1.8.0
 	github.com/Eyevinn/dash-mpd v0.19.0
 	github.com/Eyevinn/go-608 v0.9.0
-	github.com/Eyevinn/hi264 v0.12.1
-	github.com/Eyevinn/mp4ff v0.61.0
+	github.com/Eyevinn/hi264 v0.12.3
+	github.com/Eyevinn/mp4ff v0.63.0
 	github.com/a-h/templ v0.3.1100
 	github.com/beevik/etree v1.8.1
 	github.com/caddyserver/certmagic v0.25.6
