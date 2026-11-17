@@ -1342,7 +1342,7 @@ func eventStreamsChangeS(cfg *ResponseConfig, nowMS int) int {
 		lookBackS = *cfg.TimeShiftBufferDepthS
 	}
 	if sc := cfg.SGAI; sc != nil {
-		last = max(last, sc.lastChangeS(nowMS, astS, sc.ResolveOffsetS, 0, nil))
+		last = max(last, sc.lastChangeS(nowMS, astS, sc.ResolveOffsetS, lookBackS, sgaiPrtaChangeS(astS)))
 	}
 	if sc := cfg.SVTA; sc != nil {
 		last = max(last, sc.lastChangeS(nowMS, astS, svtaLookAheadS, lookBackS, nil))

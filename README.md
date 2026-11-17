@@ -606,6 +606,8 @@ Enable it with the `sgai_` URL option, which schedules the breaks:
   comma-separated list `sgai_18:20,48:20,78:20` in time order, without overlaps.
 - Periodic breaks: `sgai_p60:20` (a 20 s break at every full UTC minute, recurring forever;
   wall-clock anchored, so all sessions share the schedule and a late joiner lands mid-break).
+  Breaks that ended stay in the MPD for one `timeShiftBufferDepth` (`tsbd_`), so a viewer who
+  seeks back into one can have it replaced as well.
 - Options are appended with `;key=val`: `skipafter=<s>`, `nojump=<0|1|2>`, `clip=<0|1>`,
   `once=<0|1>`, `resolve=<s>` (earliest resolution offset), `ep=<path>` (ad endpoint, default
   `/sgai/ads.mpd`),

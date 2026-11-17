@@ -6,6 +6,7 @@ package app
 
 import (
 	"bytes"
+	"fmt"
 	"log/slog"
 	"os"
 	"testing"
@@ -241,26 +242,76 @@ func TestAddSGAIReplaceEventsPeriodic(t *testing.T) {
 	period := &m.Period{Id: "P0"}
 	mpd := &m.MPD{Periods: []*m.Period{period}}
 
-	// now = 90s after epoch (AST = epoch): minute 1 (60-80s) is over, so events for
-	// minutes 2 and 3 (120s, 180s) are signaled within the 90+60+60 horizon.
+	// now = 90s after epoch (AST = epoch): minute 1 (60-80s) is over but still in the
+	// default 60s timeshift buffer, so it is signaled together with minutes 2 and 3 (120s,
+	// 180s) within the 90+60+60 horizon. Minute 0 (0-20s) has left the buffer.
 	addSGAIReplaceEvents(mpd, period, cfg, 90_000)
 
 	require.Len(t, period.EventStreams, 1)
 	es := period.EventStreams[0]
-	require.Len(t, es.Events, 2)
-	ev := es.Events[0]
+	require.Len(t, es.Events, 3)
+	assert.Equal(t, uint64(60*90000), es.Events[0].PresentationTime)
+	assert.Equal(t, uint64(2), *es.Events[0].Id)
+	ev := es.Events[1]
 	assert.Equal(t, uint64(120*90000), ev.PresentationTime)
 	require.NotNil(t, ev.Duration)
 	assert.Equal(t, uint64(20*90000), *ev.Duration)
 	require.NotNil(t, ev.Id)
 	assert.Equal(t, uint64(3), *ev.Id) // 120/60 + 1: occurrence number since the epoch
 	assert.Equal(t, "https://example.com/sgai/ads?break=3&dur=20", ev.ReplacePresentation.Uri)
-	assert.Equal(t, uint64(180*90000), es.Events[1].PresentationTime)
-	assert.Equal(t, uint64(4), *es.Events[1].Id)
+	assert.Equal(t, uint64(180*90000), es.Events[2].PresentationTime)
+	assert.Equal(t, uint64(4), *es.Events[2].Id)
 
-	// The execution-delta state references the first signaled occurrence.
+	// The execution-delta state references the next occurrence, not the past one.
 	require.Len(t, es.RequestParam, 1)
 	assert.Contains(t, es.RequestParam[0].QueryTemplate, "execution-delta#3$")
+
+	ids := func(nowMS int) []uint64 {
+		period := &m.Period{Id: "P0"}
+		addSGAIReplaceEvents(&m.MPD{Periods: []*m.Period{period}}, period, cfg, nowMS)
+		var out []uint64
+		for _, ev := range period.EventStreams[0].Events {
+			out = append(out, *ev.Id)
+		}
+		return out
+	}
+	// Minute 1 ended at 80s, and stays until it is one timeshift buffer behind now.
+	assert.Equal(t, []uint64{2, 3, 4, 5}, ids(139_500))
+	assert.Equal(t, []uint64{3, 4, 5}, ids(140_500))
+	// A shorter buffer drops it sooner, and without one only a break in progress is kept.
+	cfg.TimeShiftBufferDepthS = new(30)
+	assert.Equal(t, []uint64{3, 4}, ids(110_500))
+	cfg.TimeShiftBufferDepthS = nil
+	assert.Equal(t, []uint64{2, 3, 4}, ids(79_500))
+	assert.Equal(t, []uint64{3, 4}, ids(80_500))
+}
+
+// TestSGAIPrtaID checks that the execution-delta RequestParam follows the break a viewer at
+// the live edge executes next, with past breaks in the MPD.
+func TestSGAIPrtaID(t *testing.T) {
+	cfg := NewResponseConfig()
+	cfg.Host = "https://example.com"
+	cfg.SGAI = &SGAIConfig{
+		Breaks:     []AdBreak{{OffsetS: 30, DurationS: 15}, {OffsetS: 90, DurationS: 15}},
+		AdEndpoint: "/sgai/ads",
+	}
+	for _, tc := range []struct {
+		nowMS  int
+		wantID uint64
+	}{
+		{nowMS: 0, wantID: 1},
+		{nowMS: 44_999, wantID: 1},  // first break in progress
+		{nowMS: 45_000, wantID: 2},  // first break over
+		{nowMS: 104_999, wantID: 2}, // second break in progress
+		{nowMS: 200_000, wantID: 2}, // all over: the last one
+	} {
+		period := &m.Period{Id: "P0"}
+		addSGAIReplaceEvents(&m.MPD{Periods: []*m.Period{period}}, period, cfg, tc.nowMS)
+		es := period.EventStreams[0]
+		require.Len(t, es.Events, 2, "fixed breaks are all signaled")
+		assert.Contains(t, es.RequestParam[0].QueryTemplate,
+			fmt.Sprintf("execution-delta#%d$", tc.wantID), "nowMS=%d", tc.nowMS)
+	}
 }
 
 func TestAddSGAIReplaceEventsPreroll(t *testing.T) {

@@ -1080,14 +1080,14 @@ func urlgenPage(d urlGenData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 108, "\" placeholder=\"30:15,90:15;skipafter=5\"></label><p>The live stream is annotated with DASH 6th-edition <em>Alternative-MPD Replace</em> events. At each break the player resolves an ad-decisioning endpoint (default <code>/sgai/ads.mpd</code>), plays the returned ad pod (a List MPD), then resumes the live stream. Grammar:<pre>( &lt;off&gt;:&lt;dur&gt;[,&lt;off&gt;:&lt;dur&gt;...] | p&lt;period&gt;:&lt;dur&gt; )[;key=val;...]</pre>or just <code>preroll=&lt;dur&gt;[;key=val;...]</code> to get a preroll alone, where each <code>off:dur</code> is one break, both in <em>seconds</em>:</p><ul><li><it>off</it> &mdash; break start, seconds from the period (availabilityStartTime) start</li><li><it>dur</it> &mdash; break duration; also the maximum ad-pod duration (ads are trimmed to fit)</li><li><it>p&lt;period&gt;:&lt;dur&gt;</it> &mdash; recurring breaks instead: a break of <it>dur</it> at every wall-clock multiple of <it>period</it> (e.g. <code>p60:20</code> = 20&nbsp;s at every start of a UTC minute, forever). Anchored to the wall clock, not the session start, so all viewers share the schedule and a late joiner can land in the middle of a break.</li></ul><p>Optional <code>;key=val</code> settings after the break list:</p><ul><li><it>skipafter=&lt;s&gt;</it> &mdash; ads become skippable after s seconds (default: not skippable)</li><li><it>nojump=&lt;0|1|2&gt;</it> &mdash; restrict skipping the break by seeking (default 0)</li><li><it>clip=&lt;0|1&gt;</it> &mdash; clip the replaced main content (default 1)</li><li><it>once=&lt;0|1&gt;</it> &mdash; each event executes only once (default 1)</li><li><it>resolve=&lt;s&gt;</it> &mdash; earliestResolutionTimeOffset: how many seconds before the break the player may resolve the ad (default 60)</li><li><it>ep=&lt;path&gt;</it> &mdash; ad-decisioning endpoint path (default /sgai/ads.mpd)</li><li><it>svta=&lt;0|1|remote&gt;</it> &mdash; also describe every ad of the returned pod with SVTA2053 ad-creative signaling in the List MPD, with <it>remote</it> as a <code>$remote.tracking</code> URL (default 0)</li><li><it>preroll=&lt;dur&gt;</it> &mdash; also signal a preroll break of dur seconds: a Replace event (id 0) at the period start with maxDuration dur and a duration that runs to 2100-01-01, so that it plays once when playback starts, wherever the viewer joins. It can also be used alone, without a break list (default: none)</li></ul><p>Examples:<pre>30:15,90:15;skipafter=5;nojump=2</pre>two 15&nbsp;s breaks (at 30&nbsp;s and 90&nbsp;s), skippable after 5&nbsp;s, not skippable by seeking.<pre>p60:20;preroll=10</pre>a 10&nbsp;s preroll when the viewer joins, then a 20&nbsp;s break at every start of a UTC minute.<pre>preroll=10</pre>only the 10&nbsp;s preroll, with no other breaks and no slate.<br>During each break the underlying (clear AVC) video track serves a generated <em>AD&nbsp;BREAK</em> slate with a per-second countdown to the end of the break &mdash; the visible \"ad to be replaced\", i.e. the base ad. Players that execute the Replace event cover it with the personalized pod; others show the slate. Audio is untouched.<br><strong>An ad pod is only returned for an interest-steered request</strong>: with no <em>interests</em> (or interests that match no creative) the decisioning answers 404, the Replace event is skipped, and every player keeps the AD&nbsp;BREAK slate (the base ad). This is the default when neither sessionId nor interests are given.<br><em>Cannot be combined with the multi-period / xlink / insertad options.</em></p><label for=\"sgaiSessionId\">sessionId &mdash; personalization &amp; reporting key (keys the impression beacons; with interests, rotates the pod per session for variety). On its own it does not produce a pod. There is a single <em>sessionId</em> per viewer, shared with Content Steering &mdash; this field and the steering one are kept in sync. <input type=\"text\" id=\"sgaiSessionId\" name=\"sgaiSessionId\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 108, "\" placeholder=\"30:15,90:15;skipafter=5\"></label><p>The live stream is annotated with DASH 6th-edition <em>Alternative-MPD Replace</em> events. At each break the player resolves an ad-decisioning endpoint (default <code>/sgai/ads.mpd</code>), plays the returned ad pod (a List MPD), then resumes the live stream. Grammar:<pre>( &lt;off&gt;:&lt;dur&gt;[,&lt;off&gt;:&lt;dur&gt;...] | p&lt;period&gt;:&lt;dur&gt; )[;key=val;...]</pre>or just <code>preroll=&lt;dur&gt;[;key=val;...]</code> to get a preroll alone, where each <code>off:dur</code> is one break, both in <em>seconds</em>:</p><ul><li><it>off</it> &mdash; break start, seconds from the period (availabilityStartTime) start</li><li><it>dur</it> &mdash; break duration; also the maximum ad-pod duration (ads are trimmed to fit)</li><li><it>p&lt;period&gt;:&lt;dur&gt;</it> &mdash; recurring breaks instead: a break of <it>dur</it> at every wall-clock multiple of <it>period</it> (e.g. <code>p60:20</code> = 20&nbsp;s at every start of a UTC minute, forever). Anchored to the wall clock, not the session start, so all viewers share the schedule and a late joiner can land in the middle of a break. Breaks that ended stay in the MPD for one timeShiftBufferDepth, so a viewer who seeks back into one can have it replaced as well.</li></ul><p>Optional <code>;key=val</code> settings after the break list:</p><ul><li><it>skipafter=&lt;s&gt;</it> &mdash; ads become skippable after s seconds (default: not skippable)</li><li><it>nojump=&lt;0|1|2&gt;</it> &mdash; restrict skipping the break by seeking (default 0)</li><li><it>clip=&lt;0|1&gt;</it> &mdash; clip the replaced main content (default 1)</li><li><it>once=&lt;0|1&gt;</it> &mdash; each event executes only once (default 1)</li><li><it>resolve=&lt;s&gt;</it> &mdash; earliestResolutionTimeOffset: how many seconds before the break the player may resolve the ad (default 60)</li><li><it>ep=&lt;path&gt;</it> &mdash; ad-decisioning endpoint path (default /sgai/ads.mpd)</li><li><it>svta=&lt;0|1|remote&gt;</it> &mdash; also describe every ad of the returned pod with SVTA2053 ad-creative signaling in the List MPD, with <it>remote</it> as a <code>$remote.tracking</code> URL (default 0)</li><li><it>preroll=&lt;dur&gt;</it> &mdash; also signal a preroll break of dur seconds: a Replace event (id 0) at the period start with maxDuration dur and a duration that runs to 2100-01-01, so that it plays once when playback starts, wherever the viewer joins. It can also be used alone, without a break list (default: none)</li></ul><p>Examples:<pre>30:15,90:15;skipafter=5;nojump=2</pre>two 15&nbsp;s breaks (at 30&nbsp;s and 90&nbsp;s), skippable after 5&nbsp;s, not skippable by seeking.<pre>p60:20;preroll=10</pre>a 10&nbsp;s preroll when the viewer joins, then a 20&nbsp;s break at every start of a UTC minute.<pre>preroll=10</pre>only the 10&nbsp;s preroll, with no other breaks and no slate.<br>During each break the underlying (clear AVC) video track serves a generated <em>AD&nbsp;BREAK</em> slate with a per-second countdown to the end of the break &mdash; the visible \"ad to be replaced\", i.e. the base ad. Players that execute the Replace event cover it with the personalized pod; others show the slate. Audio is untouched.<br><strong>An ad pod is only returned for an interest-steered request</strong>: with no <em>interests</em> (or interests that match no creative) the decisioning answers 404, the Replace event is skipped, and every player keeps the AD&nbsp;BREAK slate (the base ad). This is the default when neither sessionId nor interests are given.<br><em>Cannot be combined with the multi-period / xlink / insertad options.</em></p><label for=\"sgaiSessionId\">sessionId &mdash; personalization &amp; reporting key (keys the impression beacons; with interests, rotates the pod per session for variety). On its own it does not produce a pod. There is a single <em>sessionId</em> per viewer, shared with Content Steering &mdash; this field and the steering one are kept in sync. <input type=\"text\" id=\"sgaiSessionId\" name=\"sgaiSessionId\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var56 string
 		templ_7745c5c3_Var56, templ_7745c5c3_Err = templruntime.NewAttributeExpression(d.SgaiSessionID).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 450, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 452, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var56)
 		if templ_7745c5c3_Err != nil {
@@ -1100,7 +1100,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var57 string
 		templ_7745c5c3_Var57, templ_7745c5c3_Err = templruntime.NewAttributeExpression(d.Host + "/api/sgai/ads").ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 458, Col: 96}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 460, Col: 96}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var57)
 		if templ_7745c5c3_Err != nil {
@@ -1113,7 +1113,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var58 string
 		templ_7745c5c3_Var58, templ_7745c5c3_Err = templruntime.NewAttributeExpression(d.SgaiInterests).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 459, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 461, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var58)
 		if templ_7745c5c3_Err != nil {
@@ -1126,7 +1126,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var59 string
 		templ_7745c5c3_Var59, templ_7745c5c3_Err = templruntime.NewAttributeExpression(d.Host + "/sgai/session_status").ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 467, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 469, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var59)
 		if templ_7745c5c3_Err != nil {
@@ -1139,7 +1139,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var60 string
 		templ_7745c5c3_Var60, templ_7745c5c3_Err = templruntime.NewAttributeExpression(d.Svta).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 477, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 479, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var60)
 		if templ_7745c5c3_Err != nil {
@@ -1152,7 +1152,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var61 string
 		templ_7745c5c3_Var61, templ_7745c5c3_Err = templruntime.NewAttributeExpression(d.Host + "/sgai/session_status").ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 530, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 532, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var61)
 		if templ_7745c5c3_Err != nil {
@@ -1165,7 +1165,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var62 string
 		templ_7745c5c3_Var62, templ_7745c5c3_Err = templruntime.NewAttributeExpression(d.Steer).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 543, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 545, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var62)
 		if templ_7745c5c3_Err != nil {
@@ -1178,7 +1178,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var63 string
 		templ_7745c5c3_Var63, templ_7745c5c3_Err = templruntime.NewAttributeExpression(d.SteerSessionID).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 576, Col: 93}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 578, Col: 93}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var63)
 		if templ_7745c5c3_Err != nil {
@@ -1191,7 +1191,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var64 string
 		templ_7745c5c3_Var64, templ_7745c5c3_Err = templruntime.NewAttributeExpression(d.SteerCSID).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 582, Col: 78}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 584, Col: 78}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var64)
 		if templ_7745c5c3_Err != nil {
@@ -1204,7 +1204,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var65 string
 		templ_7745c5c3_Var65, templ_7745c5c3_Err = templruntime.NewAttributeExpression(d.Host + "/steering/session_status").ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 587, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 589, Col: 53}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var65)
 		if templ_7745c5c3_Err != nil {
@@ -1217,7 +1217,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var66 string
 		templ_7745c5c3_Var66, templ_7745c5c3_Err = templruntime.NewAttributeExpression(d.StatusCodes).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 600, Col: 81}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 602, Col: 81}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var66)
 		if templ_7745c5c3_Err != nil {
@@ -1230,7 +1230,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var67 string
 		templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.JoinStringErrs("[{code:404,cycle:30,rsq:0,rep:video},{code:403,cycle:60,rsq:1}]")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 603, Col: 80}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 605, Col: 80}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var67))
 		if templ_7745c5c3_Err != nil {
@@ -1243,7 +1243,7 @@ func urlgenPage(d urlGenData) templ.Component {
 		var templ_7745c5c3_Var68 string
 		templ_7745c5c3_Var68, templ_7745c5c3_Err = templruntime.NewAttributeExpression(d.Traffic).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 616, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/livesim2/app/urlgen.templ`, Line: 618, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var68)
 		if templ_7745c5c3_Err != nil {
