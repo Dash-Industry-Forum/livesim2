@@ -9,18 +9,18 @@ require (
 	github.com/Eyevinn/go-608 v0.9.0
 	github.com/Eyevinn/hi264 v0.12.3
 	github.com/Eyevinn/mp4ff v0.63.0
-	github.com/a-h/templ v0.3.1100
+	github.com/a-h/templ v0.3.1118
 	github.com/beevik/etree v1.8.1
 	github.com/caddyserver/certmagic v0.25.6
 	github.com/danielgtaylor/huma/v2 v2.40.0
 	github.com/dusted-go/logging v1.3.0
-	github.com/fxamacker/cbor/v2 v2.9.6
+	github.com/fxamacker/cbor/v2 v2.10.0
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/google/go-cmp v0.7.0
 	github.com/knadh/koanf v1.5.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/richardwooding/c2pa v0.22.1
-	github.com/spf13/pflag v1.0.10
+	github.com/spf13/pflag v1.1.0
 	github.com/stretchr/testify v1.12.1
 	github.com/veraison/go-cose v1.3.0
 )
@@ -50,9 +50,9 @@ require (
 	go.uber.org/zap v1.28.0 // indirect
 	go.uber.org/zap/exp v0.3.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/crypto v0.58.0 // indirect
-	golang.org/x/net v0.61.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
+	golang.org/x/crypto v0.59.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 )
