@@ -394,6 +394,8 @@ templ urlgenPage(d urlGenData) {
 									every wall-clock multiple of <it>period</it> (e.g. <code>p60:20</code> = 20&nbsp;s at every
 									start of a UTC minute, forever). Anchored to the wall clock, not the session start, so
 									all viewers share the schedule and a late joiner can land in the middle of a break.
+									Breaks that ended stay in the MPD for one timeShiftBufferDepth, so a viewer who seeks
+									back into one can have it replaced as well.
 								</li>
 							</ul>
 							<p>Optional <code>;key=val</code> settings after the break list:</p>

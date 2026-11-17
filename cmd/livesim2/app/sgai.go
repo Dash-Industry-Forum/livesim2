@@ -220,7 +220,10 @@ const sgaiPrerollEndEpochS = 4102444800
 // Each Event@presentationTime is an absolute offset from the availabilityStartTime, so it is
 // stable across MPD refreshes. With a stream started at availabilityStartTime≈now (e.g.
 // startrel_0) the break lands a fixed number of seconds after the viewer joins. Periodic
-// configs instead anchor the breaks to the wall clock (see breakInstances).
+// configs instead anchor the breaks to the wall clock (see AdBreaks.instances), and keep the
+// breaks that ended less than one timeShiftBufferDepth ago, as svta_ and scte35_ do. A viewer
+// who seeks back into such a break can then have it replaced, and a viewer behind the live
+// edge still finds the break being played, which has ended at the wall clock.
 //
 // With a preroll configured, an extra Event (id 0) is signaled at presentationTime 0, the
 // period start, with a duration that runs to 2100-01-01 (see sgaiPrerollEndEpochS), while
@@ -233,7 +236,11 @@ func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, now
 	if cfg.SGAI == nil {
 		return
 	}
-	insts := cfg.SGAI.instances(nowMS, cfg.StartTimeS, cfg.SGAI.ResolveOffsetS, 0)
+	lookBackS := 0
+	if cfg.TimeShiftBufferDepthS != nil {
+		lookBackS = *cfg.TimeShiftBufferDepthS
+	}
+	insts := cfg.SGAI.instances(nowMS, cfg.StartTimeS, cfg.SGAI.ResolveOffsetS, lookBackS)
 	if pre := cfg.SGAI.PrerollS; pre > 0 {
 		// A periodic occurrence can start within the first pre seconds when the
 		// availabilityStartTime is aligned with the cycle. A viewer who joins at the start
@@ -282,11 +289,11 @@ func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, now
 		})
 	}
 	// Annex I: carry the main MPD URL query (e.g. the session id) onto the altmpd request
-	// and add the execution-delta state of the first signaled regular break (the preroll
-	// only when there is none).
+	// and add the execution-delta state of the break a viewer at the live edge executes next
+	// (the preroll only when there is no regular break).
 	prtaID := all[0].id
 	if len(insts) > 0 {
-		prtaID = insts[0].id
+		prtaID = sgaiPrtaID(insts, cfg.StartTimeS, nowMS)
 	}
 	es.RequestParam = []*m.ExtendedUrlInfoType{{
 		// prta first so the well-formed param is always present even when the MPD URL
@@ -300,4 +307,25 @@ func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, now
 	// MPD-level marker that Annex I (2025) URL parameters are used.
 	mpd.EssentialProperties = append(mpd.EssentialProperties,
 		m.NewDescriptor(UrlParam2025SchemeIdUri, "", ""))
+}
+
+// sgaiPrtaID returns the id of the break whose execution-delta the altmpd RequestParam asks
+// for: the first one in insts that has not ended at nowMS, or the last one when all have.
+// A RequestParam names a single event for the whole EventStream, so the ones kept for
+// seeking back (see addSGAIReplaceEvents) do not get their own.
+func sgaiPrtaID(insts []adBreakInst, astS, nowMS int) uint64 {
+	for _, b := range insts {
+		if (int64(astS)+b.offsetS+int64(b.durS))*1000 > int64(nowMS) {
+			return b.id
+		}
+	}
+	return insts[len(insts)-1].id
+}
+
+// sgaiPrtaChangeS returns the times, in seconds since the epoch, at which a break stops being
+// the one sgaiPrtaID picks, for AdBreaks.lastChangeS.
+func sgaiPrtaChangeS(astS int) func(adBreakInst) []int {
+	return func(b adBreakInst) []int {
+		return []int{astS + int(b.offsetS) + b.durS}
+	}
 }
