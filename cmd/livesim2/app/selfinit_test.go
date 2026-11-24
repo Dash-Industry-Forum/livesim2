@@ -33,7 +33,8 @@ func TestSelfInit(t *testing.T) {
 		{"encrypted segment", "eccp_cbcs/selfinit_V300/", "testpic_2s", "V300", "50.m4s", true},
 		{"chunked segment", "chunkdur_0.5/selfinit_V300/", "testpic_2s", "V300", "50.m4s", true},
 		{"Partial Segment", "ssras_2,1/chunkdurssr_2,0.5/selfinit_LD_360/", "testpic_2s_low_delay", "LD_360", "51_1.m4s", true},
-		{"Partial Segment of another Representation", "ssras_2,1/chunkdurssr_2,0.5/selfinit_LD_720/", "testpic_2s_low_delay", "LD_360", "51_1.m4s", false},
+		{"Partial Segment of another Representation",
+			"ssras_2,1/chunkdurssr_2,0.5/selfinit_LD_720/", "testpic_2s_low_delay", "LD_360", "51_1.m4s", false},
 	}
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {

@@ -148,7 +148,7 @@ type ResponseConfig struct {
 	SSRFlag                      bool                 `json:"SSRFlag,omitempty"`
 	SSRAS                        string               `json:"SSRAS,omitempty"`
 	ChunkDurSSR                  string               `json:"ChunkDurSSR,omitempty"`
-	SelfInitReps                 []string             `json:"SelfInitReps,omitempty"` // Representations whose segments start with the init segment
+	SelfInitReps                 []string             `json:"SelfInitReps,omitempty"` // Representations with self-initializing segments
 	SGAI                         *SGAIConfig          `json:"SGAI,omitempty"`
 	SVTA                         *SVTAConfig          `json:"SVTA,omitempty"`
 	Steer                        *SteeringConfig      `json:"Steer,omitempty"`
