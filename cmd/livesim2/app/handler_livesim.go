@@ -513,7 +513,7 @@ func findSegStartTime(a *asset, cfg *ResponseConfig, nr int, rep *RepData) (int,
 	nrAfterStart := nr - startNrInt
 	nrWraps := nrAfterStart / wrapLen
 	relNr := nrAfterStart - nrWraps*wrapLen
-	wrapDur := a.LoopDurMS * rep.MediaTimescale / 1000
+	wrapDur := a.loopDurTicks(rep.MediaTimescale)
 	wrapTime := nrWraps * wrapDur
 	seg := rep.Segments[relNr]
 	return wrapTime + int(seg.StartTime), nil

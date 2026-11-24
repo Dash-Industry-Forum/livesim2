@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test-asset MPDs: `testpic_2s/Manifest_thumbs.mpd`, `testpic_2s/cea608.mpd` and `testpic_6s/Manifest.mpd` signal
   DASH-IF IOP simple instead of the unknown profile `urn:com:dashif:dash264`, the thumbnail Adaptation Set has
   `segmentAlignment`, and `cea608.mpd` has the 8 s duration of its segments instead of 1 h.
+- Assets whose loop is not an integral number of milliseconds, as with 1001-based (NTSC) frame rates, e.g. 3584 frames
+  at 60000/1001 fps (59793.07 ms), are served instead of skipped with "cannot match loop duration". Their loops are
+  counted in media time, so `$Number$` and SegmentTimeline MPDs and the segments stay on the wall clock. Such an asset
+  is still skipped if its loop is not an integral number of ticks in the timescale of every representation.
 
 ## [1.15.3] - 2026-10-27
 
