@@ -484,6 +484,36 @@ func matchInit(segmentPart string, cfg *ResponseConfig, drmCfg *drm.DrmConfig, a
 	return im, nil
 }
 
+// selfInitPrefix returns the init segment to send in front of a segment or Partial Segment of
+// rep if selfinit_ lists rep, else nil. It is the init segment that a request for it returns
+// with the same URL options, e.g. encrypted with eccp_, so that a player can start decoding
+// the segment without requesting the init segment.
+func selfInitPrefix(cfg *ResponseConfig, drmCfg *drm.DrmConfig, a *asset, rep *RepData) ([]byte, error) {
+	if !cfg.isSelfInit(rep.ID) || rep.ContentType == "image" {
+		return nil, nil
+	}
+	im, err := matchInit(rep.InitURI, cfg, drmCfg, a)
+	if err != nil {
+		return nil, fmt.Errorf("selfinit: %w", err)
+	}
+	if !im.isInit || im.rep != rep {
+		return nil, fmt.Errorf("selfinit: no init segment for representation %s", rep.ID)
+	}
+	return im.init, nil
+}
+
+// writeSelfInitPrefix writes the init segment of rep if selfinit_ lists rep, see selfInitPrefix.
+func writeSelfInitPrefix(w http.ResponseWriter, cfg *ResponseConfig, drmCfg *drm.DrmConfig, a *asset, rep *RepData) error {
+	initPrefix, err := selfInitPrefix(cfg, drmCfg, a, rep)
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(initPrefix); err != nil {
+		return fmt.Errorf("write init segment: %w", err)
+	}
+	return nil
+}
+
 func writeLiveSegment(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConfig, drmCfg *drm.DrmConfig, vodFS fs.FS,
 	a *asset, segmentPart string, nowMS int, tt *template.Template, isLast bool) error {
 	log.Debug("writeLiveSegment", "segmentPart", segmentPart)
@@ -496,6 +526,10 @@ func writeLiveSegment(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConf
 		return fmt.Errorf("convertToLive: %w", err)
 	}
 	defer outSeg.bufs.release()
+	initPrefix, err := selfInitPrefix(cfg, drmCfg, a, outSeg.meta.rep)
+	if err != nil {
+		return err
+	}
 	if outSeg.seg != nil {
 		if cfg.DRM != "" {
 			frags := outSeg.seg.Fragments
@@ -510,16 +544,24 @@ func writeLiveSegment(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConf
 			if err != nil {
 				return fmt.Errorf("c2pa: %w", err)
 			}
-			w.Header().Set("Content-Length", strconv.Itoa(len(signed)))
+			w.Header().Set("Content-Length", strconv.Itoa(len(initPrefix)+len(signed)))
 			w.Header().Set("Content-Type", outSeg.meta.rep.SegmentType())
+			if _, err := w.Write(initPrefix); err != nil {
+				log.Error("write live segment response", "error", err)
+				return err
+			}
 			if _, err := w.Write(signed); err != nil {
 				log.Error("write live segment response", "error", err)
 				return err
 			}
 			return nil
 		}
-		w.Header().Set("Content-Length", strconv.FormatUint(outSeg.seg.Size(), 10))
+		w.Header().Set("Content-Length", strconv.FormatUint(uint64(len(initPrefix))+outSeg.seg.Size(), 10))
 		w.Header().Set("Content-Type", outSeg.meta.rep.SegmentType())
+		if _, err := w.Write(initPrefix); err != nil {
+			log.Error("write live segment response", "error", err)
+			return err
+		}
 		// Encode writes the sample data straight from the segment buffer, without copying it.
 		if err := outSeg.seg.Encode(w); err != nil {
 			log.Error("write live segment response", "error", err)
@@ -528,8 +570,12 @@ func writeLiveSegment(log *slog.Logger, w http.ResponseWriter, cfg *ResponseConf
 		return nil
 	}
 	data := outSeg.data
-	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.Header().Set("Content-Length", strconv.Itoa(len(initPrefix)+len(data)))
 	w.Header().Set("Content-Type", outSeg.meta.rep.SegmentType())
+	if _, err := w.Write(initPrefix); err != nil {
+		log.Error("write live segment response", "error", err)
+		return err
+	}
 	if _, err := w.Write(data); err != nil {
 		log.Error("write live segment response", "error", err)
 		return err
@@ -899,6 +945,9 @@ func writeChunkedSegment(ctx context.Context, log *slog.Logger, w http.ResponseW
 		return nil
 	}
 	rep := so.meta.rep
+	if err := writeSelfInitPrefix(w, cfg, drmCfg, a, rep); err != nil {
+		return err
+	}
 
 	newTimeInt, err := uint64ToInt(so.meta.newTime)
 	if err != nil {
@@ -997,6 +1046,9 @@ func writeSubSegment(ctx context.Context, log *slog.Logger, w http.ResponseWrite
 	}
 	if isImage(segmentPart) {
 		return nil
+	}
+	if err := writeSelfInitPrefix(w, cfg, drmCfg, a, so.meta.rep); err != nil {
+		return err
 	}
 
 	// Only the requested chunk is made.

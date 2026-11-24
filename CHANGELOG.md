@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Shaka Player instances that get different personalized ad pods.
 - Low-latency MPDs (`chunkdur_` with `ato_`) signal the DASH-IF low-latency profile, a Resync element, an MPD validity
   expiration InbandEventStream (not with `periods_`), and `@qualityRanking` in Adaptation Sets with several Representations.
+- `selfinit_<repID>[,<repID>...]`: segments and Partial Segments of the listed Representations start with their init
+  segment (as served with the same URL options), so that a player can start decoding without requesting it, e.g. for
+  fast tune-in at a Partial Segment of a low-delay bootstrap Representation.
 
 ### Changed
 

@@ -148,6 +148,7 @@ type ResponseConfig struct {
 	SSRFlag                      bool                 `json:"SSRFlag,omitempty"`
 	SSRAS                        string               `json:"SSRAS,omitempty"`
 	ChunkDurSSR                  string               `json:"ChunkDurSSR,omitempty"`
+	SelfInitReps                 []string             `json:"SelfInitReps,omitempty"` // Representations whose segments start with the init segment
 	SGAI                         *SGAIConfig          `json:"SGAI,omitempty"`
 	SVTA                         *SVTAConfig          `json:"SVTA,omitempty"`
 	Steer                        *SteeringConfig      `json:"Steer,omitempty"`
@@ -504,6 +505,11 @@ cfgLoop:
 			cfg.SSRFlag = true
 		case "chunkdurssr":
 			cfg.ChunkDurSSR = val
+		case "selfinit": // selfinit_<repID>[,<repID>...]: segments of these Representations start with the init segment
+			cfg.SelfInitReps = strings.Split(val, ",")
+			if slices.Contains(cfg.SelfInitReps, "") {
+				sc.err = fmt.Errorf("selfinit: %q must be a comma-separated list of Representation ids", val)
+			}
 		case "sgai": // Ed.6 Alternative-MPD Replace ad breaks: <off>:<dur>[,...][;k=v...]
 			cfg.SGAI = sc.ParseSGAIConfig(key, val)
 		case "svta": // SVTA2053 ad creative signaling: <off>:<dur>[,...][;k=v...]
@@ -654,4 +660,9 @@ func (c *ResponseConfig) SetHost(cfgValue string, r *http.Request) {
 
 func ms2S(ms int) int {
 	return int(math.Round(float64(ms) * 0.001))
+}
+
+// isSelfInit reports whether the segments of the Representation repID start with its init segment.
+func (c *ResponseConfig) isSelfInit(repID string) bool {
+	return slices.Contains(c.SelfInitReps, repID)
 }
