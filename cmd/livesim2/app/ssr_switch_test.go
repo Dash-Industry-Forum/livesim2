@@ -65,8 +65,10 @@ func TestSwitchGrid(t *testing.T) {
 		{"switch frames every 16", []Segment{seg(0, []uint64{0}, []uint64{16, 32, 48}), seg(64, []uint64{0}, []uint64{16, 32, 48})}, 16},
 		{"sync and switch frames alternate", []Segment{seg(0, []uint64{0, 32}, []uint64{16, 48})}, 16},
 		{"no switch frames", []Segment{seg(0, []uint64{0, 32}, nil)}, 0},
-		{"one segment lacks every other switch frame", []Segment{seg(0, []uint64{0}, []uint64{16, 32, 48}), seg(64, []uint64{0}, []uint64{32})}, 32},
-		{"switch frames off the grid in one segment", []Segment{seg(0, []uint64{0}, []uint64{16, 32, 48}), seg(64, []uint64{0}, []uint64{16, 40})}, 0},
+		{"one segment lacks every other switch frame",
+			[]Segment{seg(0, []uint64{0}, []uint64{16, 32, 48}), seg(64, []uint64{0}, []uint64{32})}, 32},
+		{"switch frames off the grid in one segment",
+			[]Segment{seg(0, []uint64{0}, []uint64{16, 32, 48}), seg(64, []uint64{0}, []uint64{16, 40})}, 0},
 		{"no sync sample at the start", []Segment{seg(0, nil, []uint64{16, 32, 48})}, 0},
 	}
 	for _, c := range cases {
