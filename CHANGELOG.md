@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test-asset MPDs: `testpic_2s/Manifest_thumbs.mpd`, `testpic_2s/cea608.mpd` and `testpic_6s/Manifest.mpd` signal
   DASH-IF IOP simple instead of the unknown profile `urn:com:dashif:dash264`, the thumbnail Adaptation Set has
   `segmentAlignment`, and `cea608.mpd` has the 8 s duration of its segments instead of 1 h.
+- `ssras_` with a mutual pair of Adaptation Sets, such as `ssras_0,1;1,0`: the adaptation-set-switching
+  SupplementalProperty lists the other Adaptation Set once (`value="1"`) instead of twice (`value="1,1"`).
 
 ## [1.15.3] - 2026-10-27
 

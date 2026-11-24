@@ -1914,6 +1914,21 @@ func TestUpdateSSRAdaptationSet(t *testing.T) {
 			expectStartWithSAP:         true,
 		},
 		{
+			desc: "mutual pair lists the other adaptation set once",
+			as: &m.AdaptationSetType{
+				Id:          new(uint32(1)),
+				ContentType: "video",
+			},
+			nextMap:                    map[uint32]uint32{1: 2, 2: 1},
+			prevMap:                    map[uint32]uint32{1: 2, 2: 1},
+			expectEssentialProperty:    true,
+			expectedSSRValue:           "2",
+			expectSupplementalProperty: true,
+			expectedSwitchingValue:     "2",
+			expectSegmentSequenceProps: true,
+			expectStartWithSAP:         true,
+		},
+		{
 			desc: "video adaptation set with existing properties",
 			as: func() *m.AdaptationSetType {
 				as := &m.AdaptationSetType{
