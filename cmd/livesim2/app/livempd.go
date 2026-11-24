@@ -67,12 +67,10 @@ func calcWrapTimes(a *asset, cfg *ResponseConfig, nowMS int, tsbd m.Duration) wr
 	if wt.startTimeMS < startTimeMS {
 		wt.startTimeMS = startTimeMS
 	}
-	wt.startWraps = (wt.startTimeMS - startTimeMS) / a.LoopDurMS
-	wt.startWrapMS = wt.startWraps*a.LoopDurMS + startTimeMS
+	wt.startWraps, wt.startWrapMS = a.loopStart(wt.startTimeMS, startTimeMS)
 	wt.startRelMS = wt.startTimeMS - wt.startWrapMS
 
-	wt.nowWraps = (nowMS - startTimeMS) / a.LoopDurMS
-	wt.nowWrapMS = wt.nowWraps*a.LoopDurMS + startTimeMS
+	wt.nowWraps, wt.nowWrapMS = a.loopStart(nowMS, startTimeMS)
 	wt.nowRelMS = nowMS - wt.nowWrapMS
 
 	return wt

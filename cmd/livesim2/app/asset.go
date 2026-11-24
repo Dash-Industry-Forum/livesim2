@@ -15,6 +15,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"math"
+	"math/big"
 	"net/url"
 	"os"
 	"path"
@@ -897,6 +898,45 @@ func (a *asset) setReferenceRep() error {
 	return fmt.Errorf("no video or audio representation found")
 }
 
+// loopIsIntegralMS reports whether the loop duration is an integral number of milliseconds,
+// so that LoopDurMS is exact.
+func (a *asset) loopIsIntegralMS() bool {
+	return a.refRep == nil || 1000*a.refRep.duration()%a.refRep.MediaTimescale == 0
+}
+
+// loopDurTicks returns the loop duration in timescale. It is exact if the loop is an integral
+// number of milliseconds, or an integral number of ticks in timescale, which consolidateAsset
+// checks for every representation of an asset whose loop is not.
+func (a *asset) loopDurTicks(timescale int) int {
+	if a.refRep == nil {
+		return a.LoopDurMS * timescale / 1000
+	}
+	return a.refRep.duration() * timescale / a.refRep.MediaTimescale
+}
+
+// loopStart returns the number of loops completed at timeMS, counted from startMS, and the
+// start of the current loop in milliseconds. If the loop is not an integral number of
+// milliseconds, the loops are counted in media time and the start is rounded up, so that
+// the time into the loop is never ahead of the media time.
+func (a *asset) loopStart(timeMS, startMS int) (loops, loopStartMS int) {
+	elapsedMS := timeMS - startMS
+	if a.loopIsIntegralMS() {
+		loops = elapsedMS / a.LoopDurMS
+		return loops, loops*a.LoopDurMS + startMS
+	}
+	// loops = elapsedMS * timescale / (1000 * duration), truncated toward zero as above.
+	// The product can overflow int64 for large timescales, so use big integers.
+	timescale := big.NewInt(int64(a.refRep.MediaTimescale))
+	loopDurMSTimesTimescale := big.NewInt(1000 * int64(a.refRep.duration()))
+	n := new(big.Int).Quo(new(big.Int).Mul(big.NewInt(int64(elapsedMS)), timescale), loopDurMSTimesTimescale)
+	// loopStartMS = ceil(loops * 1000 * duration / timescale)
+	startOffsetMS, rem := new(big.Int).QuoRem(new(big.Int).Mul(n, loopDurMSTimesTimescale), timescale, new(big.Int))
+	if rem.Sign() > 0 {
+		startOffsetMS.Add(startOffsetMS, big.NewInt(1))
+	}
+	return int(n.Int64()), int(startOffsetMS.Int64()) + startMS
+}
+
 // consolidateAsset sets up reference track and loop duration if possible
 func (a *asset) consolidateAsset(logger *slog.Logger) error {
 	logger = logger.With("assetPath", a.AssetPath)
@@ -906,9 +946,18 @@ func (a *asset) consolidateAsset(logger *slog.Logger) error {
 	}
 	refRep := a.refRep
 	a.LoopDurMS = 1000 * refRep.duration() / refRep.MediaTimescale
-	if a.LoopDurMS*refRep.MediaTimescale != 1000*refRep.duration() {
-		// This is not an integral number of milliseconds, so we should drop this asset
-		return fmt.Errorf("cannot match loop duration %d for asset %s rep %s", a.LoopDurMS, a.AssetPath, refRep.ID)
+	if !a.loopIsIntegralMS() {
+		// The loop is not an integral number of milliseconds, as with 1001-based (NTSC) frame rates.
+		// The loops are then counted in media time (see loopDurTicks and loopStart), which needs the
+		// loop to be an integral number of ticks in the timescale of every representation.
+		for _, rep := range a.Reps {
+			if refRep.duration()*rep.MediaTimescale%refRep.MediaTimescale != 0 {
+				return fmt.Errorf("cannot match loop duration %d/%d s of rep %s in timescale %d of rep %s",
+					refRep.duration(), refRep.MediaTimescale, refRep.ID, rep.MediaTimescale, rep.ID)
+			}
+		}
+		logger.Info("Loop duration is not an integral number of ms", "loopDurMS",
+			float64(refRep.duration())*1000/float64(refRep.MediaTimescale))
 	}
 	badPreEncrypted := false
 	for _, rep := range a.Reps {

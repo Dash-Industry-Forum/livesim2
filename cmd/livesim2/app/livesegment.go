@@ -223,7 +223,7 @@ type segMeta struct {
 // For now, period and PTO are both zero, but the startTime may be non-zero.
 func findSegMetaFromTime(a *asset, rep *RepData, time uint64, cfg *ResponseConfig, nowMS int) (segMeta, error) {
 	mediaRef := cfg.StartTimeS * rep.MediaTimescale // TODO. Add period + PTO
-	wrapDur := a.LoopDurMS * rep.MediaTimescale / 1000
+	wrapDur := a.loopDurTicks(rep.MediaTimescale)
 	timeInt, err := uint64ToInt(time)
 	if err != nil {
 		return segMeta{}, fmt.Errorf("time value out of range: %w", err)
@@ -337,7 +337,7 @@ func calcSegmentAvailabilityTime(a *asset, rep *RepData, nr uint32, cfg *Respons
 	nrAfterStart := int(nr) - int(startNr)
 	nrWraps := nrAfterStart / wrapLen
 	relNr := nrAfterStart - nrWraps*wrapLen
-	wrapDur := a.LoopDurMS * rep.MediaTimescale / 1000
+	wrapDur := a.loopDurTicks(rep.MediaTimescale)
 	wrapTime := nrWraps * wrapDur
 	seg := rep.Segments[relNr]
 	mediaRef := cfg.StartTimeS * rep.MediaTimescale // TODO. Add period offset
@@ -363,7 +363,7 @@ func findSegMetaFromNr(a *asset, rep *RepData, nr uint32, cfg *ResponseConfig, n
 	nrDiffSinceStart := nr - startNr
 	nrWraps := nrDiffSinceStart / wrapLen
 	relNr := nrDiffSinceStart - nrWraps*wrapLen
-	wrapDur := uint64(a.LoopDurMS) * uint64(rep.MediaTimescale) / 1000
+	wrapDur := uint64(a.loopDurTicks(rep.MediaTimescale))
 	wrapTime := uint64(nrWraps) * wrapDur
 	seg := rep.Segments[relNr]
 	segTime := wrapTime + seg.StartTime
