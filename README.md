@@ -44,6 +44,13 @@ HEVC) of the init segment are added in front of the slices of each IDR or IRAP p
 them. Since all MPDs of an asset share its Representations, this replaces separate avc3 copies of the
 content. It works with encryption, but not with pre-encrypted assets or `c2pa_vsi`.
 
+With `/selfinit_<repID>[,<repID>...]`, every segment and Partial Segment of the listed
+Representations starts with the Representation's init segment, as a request for the init segment
+returns it with the same URL options (e.g. encrypted with `eccp_`). A player can then start decoding
+at any segment of these Representations without requesting the init segment first, e.g. at a
+Partial Segment of a low-delay bootstrap Representation for fast tune-in with `ssras_`. The MPD is
+not changed, so the init segment stays available for players that request it.
+
 `<lang>` is a three-letter ISO 639-2 code, since it ends up in the SCTE 214-1 descriptor
 value — `<Accessibility schemeIdUri="urn:scte:dash:cc:cea-608:2015" value="CC1=eng"/>` —
 whose scheme is defined in those terms. That is a different language form from DASH's
