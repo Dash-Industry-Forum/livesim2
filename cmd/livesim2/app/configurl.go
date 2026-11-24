@@ -91,6 +91,9 @@ const (
 	UrlParamSchemeIdUri               = "urn:mpeg:dash:urlparam:2014"
 	SsrSchemeIdUri                    = "urn:mpeg:dash:ssr:2023"
 	AdaptationSetSwitchingSchemeIdUri = "urn:mpeg:dash:adaptation-set-switching:2016"
+	// SAPTypeAV1SwitchFrame is the SegmentSequenceProperties@sapType signalled for Partial
+	// Segments that start with an AV1 switch frame (S-frame).
+	SAPTypeAV1SwitchFrame = 7
 	// CEA608AccessibilitySchemeIdUri is the Accessibility descriptor scheme for in-band
 	// CTA-608 (CEA-608) captions, attached to the video AdaptationSet (value e.g. "CC1=eng").
 	CEA608AccessibilitySchemeIdUri = "urn:scte:dash:cc:cea-608:2015"

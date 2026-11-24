@@ -602,11 +602,22 @@ func updateSSRAdaptationSet(a *asset, as *m.AdaptationSetType, nextID uint32, pr
 	if as.ContentType == "video" {
 		// Add SegmentSequenceProperties to signal Low-Delay, if the content allows any.
 		// dash.js uses cadence 1 and sapType 1 as the L3D bootstrap configuration.
-		if cadence, ok := ssrCadence(a, as, *explicitChunkDurS); ok {
+		sapCadence, sapOK := ssrCadence(a, as, *explicitChunkDurS, func(rd *RepData) uint64 { return rd.SAPGrid })
+		if sapOK {
 			as.SegmentSequenceProperties = []*m.SegmentSequencePropertiesType{{
 				SapType: 1,
-				Cadence: cadence,
+				Cadence: sapCadence,
 			}}
+		}
+		// Partial Segments that start with an AV1 switch frame, if more of them do than with a sync sample.
+		if *explicitChunkDurS != nil && (!sapOK || sapCadence > 1) {
+			switchCadence, ok := ssrCadence(a, as, *explicitChunkDurS, func(rd *RepData) uint64 { return rd.SwitchGrid })
+			if ok && (!sapOK || switchCadence < sapCadence) {
+				as.SegmentSequenceProperties = append(as.SegmentSequenceProperties, &m.SegmentSequencePropertiesType{
+					SapType: SAPTypeAV1SwitchFrame,
+					Cadence: switchCadence,
+				})
+			}
 		}
 
 		// AdaptationSet@startWithSAP = 1
@@ -625,8 +636,9 @@ func updateSSRAdaptationSet(a *asset, as *m.AdaptationSetType, nextID uint32, pr
 // multiple of the SAP grid P of the Representation, so the cadence is P/gcd(P, c). Without
 // chunks, each Segment Sequence is a single segment, which starts with a SAP. ok is false if
 // only the first Partial Segment of each Segment Sequence is known to start with a SAP, which
-// @startWithSAP already says.
-func ssrCadence(a *asset, as *m.AdaptationSetType, chunkDurS *float64) (cadence uint32, ok bool) {
+// @startWithSAP already says. grid returns P of a Representation: its SAPGrid, or its
+// SwitchGrid for the Partial Segments that start with a sync sample or an AV1 switch frame.
+func ssrCadence(a *asset, as *m.AdaptationSetType, chunkDurS *float64, grid func(*RepData) uint64) (cadence uint32, ok bool) {
 	if chunkDurS == nil {
 		return 1, true
 	}
@@ -644,10 +656,11 @@ func ssrCadence(a *asset, as *m.AdaptationSetType, chunkDurS *float64) (cadence 
 			continue // One Partial Segment per Segment Sequence
 		}
 		chunkDur := uint64(*chunkDurS * float64(rd.MediaTimescale)) // as the chunks are made
-		if rd.SAPGrid == 0 || chunkDur == 0 {
+		p := grid(rd)
+		if p == 0 || chunkDur == 0 {
 			return 0, false
 		}
-		repCadence := rd.SAPGrid / gcd(rd.SAPGrid, chunkDur)
+		repCadence := p / gcd(p, chunkDur)
 		c = c / gcd(c, repCadence) * repCadence
 		if c >= *k {
 			return 0, false

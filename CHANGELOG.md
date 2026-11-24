@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Shaka Player instances that get different personalized ad pods.
 - Low-latency MPDs (`chunkdur_` with `ato_`) signal the DASH-IF low-latency profile, a Resync element, an MPD validity
   expiration InbandEventStream (not with `periods_`), and `@qualityRanking` in Adaptation Sets with several Representations.
+- `ssras_` signals AV1 switch frames (S-frames): if the Partial Segments of a low-delay AV1 Adaptation Set start with a
+  switch frame more often than with a sync sample, `SegmentSequenceProperties` gets an entry with `@sapType="7"` and the
+  cadence derived from the content, next to the `@sapType="1"` entry, if any. The representation data format is now
+  version 3 (adds the switch frame grid); version 2 files are only scanned again for AV1 video.
 
 ### Changed
 

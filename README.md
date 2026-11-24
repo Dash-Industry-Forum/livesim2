@@ -197,11 +197,15 @@ rewrites such files, and can stay on, since it writes nothing when all files are
 The files do not record which segments they were made from, so after changing the
 segments of an asset, regenerate its files once with `writerepdata`.
 
-The current format is version 2, which adds the SAP grid of video representations that
-`ssras_` derives the `SegmentSequenceProperties@cadence` from. Files written by livesim2 v1.14.0
-or earlier have version 1, or no version at all, so they are scanned again at every start until
-they are rewritten. livesim2 v1.14.0 still reads version 2 files. The files in
-[livesim-content][livesim-content] are version 2 from its v2.0.0 release.
+The current format is version 3. Version 2 adds the SAP grid of video representations that
+`ssras_` derives the `SegmentSequenceProperties@cadence` from. Version 3 adds the grid of sync
+samples and AV1 switch frames, from which `ssras_` derives `SegmentSequenceProperties` with
+`@sapType="7"` for Partial Segments that start with an AV1 switch frame (S-frame). Since only AV1
+video has that grid, version 2 files of other representations stay valid; version 2 files of
+AV1 video are scanned again. Files written by livesim2 v1.14.0 or earlier have version 1, or no
+version at all, so they are scanned again at every start until they are rewritten. livesim2
+v1.14.0 still reads version 2 and 3 files. The files in [livesim-content][livesim-content] are
+version 2 from its v2.0.0 release.
 
 Once the server has started, it is possible to find out information about the server and
 the assets using the root HTTP endpoint

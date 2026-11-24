@@ -25,6 +25,7 @@ import (
 
 	"github.com/Dash-Industry-Forum/livesim2/internal"
 	m "github.com/Eyevinn/dash-mpd/mpd"
+	"github.com/Eyevinn/mp4ff/av1"
 	"github.com/Eyevinn/mp4ff/bits"
 	"github.com/Eyevinn/mp4ff/mp4"
 )
@@ -336,9 +337,11 @@ func (am *assetMgr) loadRep(logger *slog.Logger, assetPath string, as *m.Adaptat
 	}
 	if rp.ContentType == "video" {
 		rp.SAPGrid = sapGrid(rp.Segments)
+		rp.SwitchGrid = switchGrid(rp.Segments)
 	}
 	for i := range rp.Segments {
 		rp.Segments[i].syncOffsets = nil
+		rp.Segments[i].switchOffsets = nil
 	}
 	commonSampleDur := -1
 segLoop:
@@ -428,7 +431,7 @@ func (rp *RepData) loadFromJSON(logger *slog.Logger, vodFS fs.FS, repDataDir, as
 	if err := json.Unmarshal(data, &loaded); err != nil {
 		return true, err
 	}
-	if loaded.Version < currentRepDataVersion {
+	if repDataIsStale(&loaded) {
 		logger.Info("RepData cache is stale, regenerating",
 			"path", repDataPath, "have", loaded.Version, "want", currentRepDataVersion)
 		return false, nil // triggers a full re-scan in loadRep
@@ -1069,7 +1072,18 @@ const (
 // stale <id>_data.json.gz files are regenerated instead of silently lacking the field.
 // v1 added HasCEA608 (caption detection, #321).
 // v2 added SAPGrid (SegmentSequenceProperties cadence).
-const currentRepDataVersion = 2
+// v3 added SwitchGrid (SegmentSequenceProperties of AV1 switch frames).
+const currentRepDataVersion = 3
+
+// repDataIsStale reports whether RepData read from a file lacks data that the current version
+// derives from the media. Version 3 only adds SwitchGrid, which only AV1 video has, so version 2
+// files of other representations stay valid and are not scanned again.
+func repDataIsStale(rd *RepData) bool {
+	if rd.Version >= currentRepDataVersion {
+		return false
+	}
+	return rd.Version < 2 || rd.isAV1()
+}
 
 // RepData provides information about a representation
 type RepData struct {
@@ -1086,9 +1100,10 @@ type RepData struct {
 	ConstantSampleDuration *uint32          `json:"constantSampleDuration,omitempty"` // Non-zero if all samples have the same duration
 	EditListOffset         int64            `json:"editListOffset,omitempty"`
 	PreEncrypted           bool             `json:"preEncrypted"`
-	HasCEA608              bool             `json:"hasCEA608,omitempty"` // Video samples already carry CEA-608 cc_data SEI (#321)
-	SAPGrid                uint64           `json:"sapGrid,omitempty"`   // Sync sample period of all segments, see sapGrid
-	adaptationSetID        *uint32          `json:"-"`                   // AdaptationSet@id in the VoD MPD, for the ssras_ options
+	HasCEA608              bool             `json:"hasCEA608,omitempty"`  // Video samples already carry CEA-608 cc_data SEI (#321)
+	SAPGrid                uint64           `json:"sapGrid,omitempty"`    // Sync sample period of all segments, see sapGrid
+	SwitchGrid             uint64           `json:"switchGrid,omitempty"` // Sync sample or AV1 switch frame period, see switchGrid
+	adaptationSetID        *uint32          `json:"-"`                    // AdaptationSet@id in the VoD MPD, for the ssras_ options
 	mediaRegexp            *regexp.Regexp   `json:"-"`
 	initSeg                *mp4.InitSegment `json:"-"`
 	initBytes              []byte           `json:"-"`
@@ -1395,9 +1410,87 @@ func (r *RepData) readMP4Segment(vodFS fs.FS, assetPath string, time uint64, nr 
 	if r.ContentType == "video" {
 		// Without the offsets, no SAPGrid is derived, which is safe.
 		seg.syncOffsets, _ = syncOffsets(s, r.initSeg.Moov.Mvex.Trex, t)
+		if r.isAV1() {
+			// Without the offsets, no SwitchGrid is derived, which is safe.
+			seg.switchOffsets, _ = switchOffsets(s, r.initSeg.Moov.Mvex.Trex, t, r.av1SequenceHeader())
+		}
 	}
 
 	return seg, nil
+}
+
+// isAV1 reports whether the representation is AV1 video.
+func (r *RepData) isAV1() bool {
+	return strings.HasPrefix(r.Codecs, "av01")
+}
+
+// av1SequenceHeader returns the Sequence Header in the av1C box of the init segment, or nil.
+// Samples that carry their own Sequence Header OBU use that one instead.
+func (r *RepData) av1SequenceHeader() *av1.SequenceHeader {
+	if r.initSeg == nil || r.initSeg.Moov == nil || r.initSeg.Moov.Trak == nil {
+		return nil
+	}
+	stsd := r.initSeg.Moov.Trak.Mdia.Minf.Stbl.Stsd
+	if stsd == nil || stsd.Av01 == nil || stsd.Av01.Av1C == nil {
+		return nil
+	}
+	sh, err := stsd.Av01.Av1C.SequenceHeader()
+	if err != nil {
+		return nil
+	}
+	return sh
+}
+
+// switchOffsets returns the decode times of the samples of a segment that start with an AV1
+// switch frame (S-frame), relative to the start of the segment. A player can switch to the
+// Representation at such a sample.
+func switchOffsets(seg *mp4.MediaSegment, trex *mp4.TrexBox, start uint64, sh *av1.SequenceHeader) ([]uint64, error) {
+	var offsets []uint64
+	for _, frag := range seg.Fragments {
+		samples, err := frag.GetFullSamples(trex)
+		if err != nil {
+			return nil, err
+		}
+		for _, s := range samples {
+			var isSwitch bool
+			isSwitch, sh, err = isAV1SwitchSample(s.Data, sh)
+			if err != nil {
+				return nil, err
+			}
+			if isSwitch {
+				offsets = append(offsets, s.DecodeTime-start)
+			}
+		}
+	}
+	return offsets, nil
+}
+
+// isAV1SwitchSample reports whether the first frame of an AV1 sample (a temporal unit) is a
+// switch frame. A Sequence Header OBU in the sample replaces sh, and the Sequence Header in
+// effect after the sample is returned.
+func isAV1SwitchSample(sample []byte, sh *av1.SequenceHeader) (bool, *av1.SequenceHeader, error) {
+	obus, err := av1.SplitOBUs(sample)
+	if err != nil {
+		return false, sh, err
+	}
+	for _, o := range obus {
+		switch o.Header.Type {
+		case av1.OBUSequenceHeader:
+			if parsed, err := av1.ParseSequenceHeader(o.Payload); err == nil {
+				sh = parsed
+			}
+		case av1.OBUFrame, av1.OBUFrameHeader:
+			if sh == nil {
+				return false, sh, fmt.Errorf("av1 sample without sequence header")
+			}
+			fi, err := av1.ParseFrameHeaderStart(o.Payload, sh)
+			if err != nil {
+				return false, sh, err
+			}
+			return !fi.ShowExistingFrame && fi.FrameType == av1.FrameTypeSwitch, sh, nil
+		}
+	}
+	return false, sh, nil
 }
 
 // syncOffsets returns the decode times of the sync samples of a segment, relative to its start.
@@ -1430,6 +1523,47 @@ func sapGrid(segs []Segment) uint64 {
 		}
 	}
 	return 0
+}
+
+// switchGrid returns the smallest period P such that every segment has a sync sample or an AV1
+// switch frame at each multiple of P from its start, or 0 if the segments have no switch frames
+// or there is no such P shorter than the segments.
+func switchGrid(segs []Segment) uint64 {
+	if len(segs) == 0 {
+		return 0
+	}
+	merged := make([]Segment, len(segs))
+	hasSwitch := false
+	for i, s := range segs {
+		hasSwitch = hasSwitch || len(s.switchOffsets) > 0
+		merged[i] = Segment{StartTime: s.StartTime, EndTime: s.EndTime,
+			syncOffsets: mergeOffsets(s.syncOffsets, s.switchOffsets)}
+	}
+	if !hasSwitch {
+		return 0
+	}
+	return sapGrid(merged)
+}
+
+// mergeOffsets merges two increasing lists of offsets into one.
+func mergeOffsets(a, b []uint64) []uint64 {
+	out := make([]uint64, 0, len(a)+len(b))
+	i, j := 0, 0
+	for i < len(a) || j < len(b) {
+		switch {
+		case j == len(b) || (i < len(a) && a[i] < b[j]):
+			out = append(out, a[i])
+			i++
+		case i == len(a) || b[j] < a[i]:
+			out = append(out, b[j])
+			j++
+		default: // equal
+			out = append(out, a[i])
+			i++
+			j++
+		}
+	}
+	return out
 }
 
 // sapGridHolds reports whether every segment has a sync sample at each multiple of p.
@@ -1488,6 +1622,7 @@ type Segment struct {
 	Nr              uint32   `json:"nr"`
 	CommonSampleDur uint32   `json:"-"`
 	syncOffsets     []uint64 // Sync sample offsets of video segments while the representation is read
+	switchOffsets   []uint64 // AV1 switch frame offsets of video segments while the representation is read
 }
 
 func (s Segment) dur() uint64 {
