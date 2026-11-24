@@ -586,11 +586,11 @@ func updateSSRAdaptationSet(a *asset, as *m.AdaptationSetType, nextID uint32, pr
 	}
 
 	// SupplementalProperty schemeIdUri="urn:mpeg:dash:adaptation-set-switching:2016"
-	var switchingValue string
-	if prevID != nil {
-		switchingValue = strconv.FormatUint(uint64(nextID), 10) + "," + strconv.FormatUint(uint64(*prevID), 10)
-	} else {
-		switchingValue = strconv.FormatUint(uint64(nextID), 10)
+	// lists each AdaptationSet to switch to once. In a mutual pair such as ssras_0,1;1,0,
+	// the next and the previous AdaptationSet are the same.
+	switchingValue := strconv.FormatUint(uint64(nextID), 10)
+	if prevID != nil && *prevID != nextID {
+		switchingValue += "," + strconv.FormatUint(uint64(*prevID), 10)
 	}
 	sp := m.NewDescriptor(AdaptationSetSwitchingSchemeIdUri, switchingValue, "")
 	as.SupplementalProperties = append(as.SupplementalProperties, sp)
