@@ -628,6 +628,10 @@ break was executed before). A state value names its break, and one `RequestParam
 breaks of the `EventStream`, so the ad endpoint takes the values of the requested break (`break=`).
 The [monitor](#monitoring) shows them with each ad decision.
 
+`sgai_` limits the `timeShiftBufferDepth` to 180 s; a larger `tsbd_` is reduced to it. A break may
+only leave the MPD once its end has left the timeshift buffer, and the ad request names every break
+in the MPD, so the limit keeps both short: with `sgai_p60:20` the MPD holds at most six breaks.
+
 The `/urlgen/` page and the [URL wiki page][urlparams] document the `sgai_` option and its
 parameters.
 

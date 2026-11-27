@@ -430,6 +430,26 @@ func TestSGAIPrerollOnly(t *testing.T) {
 	}
 }
 
+// TestSGAITimeShiftBufferLimit checks that sgai_ limits the timeShiftBufferDepth to
+// sgaiMaxTimeShiftBufferDepthS, whatever the order of the options, and leaves a shorter one.
+func TestSGAITimeShiftBufferLimit(t *testing.T) {
+	for _, tc := range []struct {
+		url  string
+		want int
+	}{
+		{"/livesim2/tsbd_600/sgai_p60:20/asset/Manifest.mpd", 180},
+		{"/livesim2/sgai_p60:20/tsbd_600/asset/Manifest.mpd", 180},
+		{"/livesim2/tsbd_120/sgai_p60:20/asset/Manifest.mpd", 120},
+		{"/livesim2/sgai_p60:20/asset/Manifest.mpd", defaultTimeShiftBufferDepthS},
+		{"/livesim2/tsbd_600/asset/Manifest.mpd", 600},
+	} {
+		cfg, err := processURLCfg(tc.url, 0)
+		require.NoError(t, err, tc.url)
+		require.NotNil(t, cfg.TimeShiftBufferDepthS, tc.url)
+		assert.Equal(t, tc.want, *cfg.TimeShiftBufferDepthS, tc.url)
+	}
+}
+
 func TestSGAIRejectedWithMultiPeriod(t *testing.T) {
 	// sgai must not be combined with periods/xlink/etp/insertad.
 	_, err := processURLCfg("/livesim2/sgai_30:15/periods_4/asset/Manifest.mpd", 0)

@@ -36,6 +36,12 @@ const (
 	// the URL: shaka-player otherwise sends a HEAD request before every ad break to find it.
 	defaultSGAIAdEndpoint     = "/sgai/ads.mpd"
 	defaultSGAIResolveOffsetS = 60
+	// sgaiMaxTimeShiftBufferDepthS is the largest timeShiftBufferDepth of an sgai_ stream; a
+	// larger tsbd_ is reduced to it. A break may leave the MPD only when its end has left the
+	// timeshift buffer (5.10.2.4), and the ad request names every break in the MPD (see
+	// sgaiStateQueryTemplate), so this keeps both the MPD and the ad request short: with
+	// p60:20 and the default resolve offset, at most six breaks.
+	sgaiMaxTimeShiftBufferDepthS = 180
 	// sgaiPrerollID is the Event@id (and @uri ?break=) of the preroll. The regular breaks
 	// are numbered from 1 (fixed: 1-based index, periodic: occurrence number + 1), so 0 is free.
 	sgaiPrerollID = uint64(0)
