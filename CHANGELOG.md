@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The SGAI ad-decisioning endpoint (`sgai_` default `ep`) is now `/sgai/ads.mpd`, so Shaka Player no longer sends a
   `HEAD` request before every ad break. `/sgai/ads` still works.
+- `sgai_` ad requests carry the Annex I state of every break (`prta_<id>`, `apda_<id>`, `count_<id>`) instead of `prta`
+  for one; the SGAI session status page and API show it. Beacons take only `sessionId`, `sid` and `break` from the query.
 - Go 1.27.4 or later is required (`go.mod`), for its security fixes in cgo, the go command, the compiler, the linker
   and `net/http`.
 - hi264 bumped to v0.12.3, which makes the AD BREAK slate about three times faster to generate; also mp4ff v0.63.0,
