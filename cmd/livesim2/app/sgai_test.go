@@ -6,7 +6,6 @@ package app
 
 import (
 	"bytes"
-	"fmt"
 	"log/slog"
 	"os"
 	"testing"
@@ -180,6 +179,9 @@ func TestAddSGAIReplaceEvents(t *testing.T) {
 	require.Len(t, es.RequestParam, 1)
 	assert.Equal(t, "altmpd", es.RequestParam[0].IncludeInRequests)
 	assert.True(t, es.RequestParam[0].UseMPDUrlQuery)
+	assert.Equal(t, "prta_1=$urn:mpeg:dash:state:execution-delta#1$"+
+		"&apda_1=$urn:mpeg:dash:state:expected-duration#1$"+
+		"&count_1=$urn:mpeg:dash:state:execution-count#1$&$querypart$", es.RequestParam[0].QueryTemplate)
 
 	require.Len(t, mpd.EssentialProperties, 1)
 	assert.Equal(t, UrlParam2025SchemeIdUri, string(mpd.EssentialProperties[0].SchemeIdUri))
@@ -262,17 +264,20 @@ func TestAddSGAIReplaceEventsPeriodic(t *testing.T) {
 	assert.Equal(t, uint64(180*90000), es.Events[2].PresentationTime)
 	assert.Equal(t, uint64(4), *es.Events[2].Id)
 
-	// The execution-delta state references the next occurrence, not the past one.
+	// The RequestParam asks for the state of every break, the past one too.
 	require.Len(t, es.RequestParam, 1)
-	assert.Contains(t, es.RequestParam[0].QueryTemplate, "execution-delta#3$")
+	assert.Equal(t, sgaiStateQueryTemplate([]uint64{2, 3, 4}), es.RequestParam[0].QueryTemplate)
 
 	ids := func(nowMS int) []uint64 {
 		period := &m.Period{Id: "P0"}
 		addSGAIReplaceEvents(&m.MPD{Periods: []*m.Period{period}}, period, cfg, nowMS)
+		es := period.EventStreams[0]
 		var out []uint64
-		for _, ev := range period.EventStreams[0].Events {
+		for _, ev := range es.Events {
 			out = append(out, *ev.Id)
 		}
+		require.Len(t, es.RequestParam, 1)
+		assert.Equal(t, sgaiStateQueryTemplate(out), es.RequestParam[0].QueryTemplate, "nowMS=%d", nowMS)
 		return out
 	}
 	// Minute 1 ended at 80s, and stays until it is one timeshift buffer behind now.
@@ -286,32 +291,17 @@ func TestAddSGAIReplaceEventsPeriodic(t *testing.T) {
 	assert.Equal(t, []uint64{3, 4}, ids(80_500))
 }
 
-// TestSGAIPrtaID checks that the execution-delta RequestParam follows the break a viewer at
-// the live edge executes next, with past breaks in the MPD.
-func TestSGAIPrtaID(t *testing.T) {
-	cfg := NewResponseConfig()
-	cfg.Host = "https://example.com"
-	cfg.SGAI = &SGAIConfig{
-		Breaks:     []AdBreak{{OffsetS: 30, DurationS: 15}, {OffsetS: 90, DurationS: 15}},
-		AdEndpoint: "/sgai/ads",
-	}
-	for _, tc := range []struct {
-		nowMS  int
-		wantID uint64
-	}{
-		{nowMS: 0, wantID: 1},
-		{nowMS: 44_999, wantID: 1},  // first break in progress
-		{nowMS: 45_000, wantID: 2},  // first break over
-		{nowMS: 104_999, wantID: 2}, // second break in progress
-		{nowMS: 200_000, wantID: 2}, // all over: the last one
-	} {
-		period := &m.Period{Id: "P0"}
-		addSGAIReplaceEvents(&m.MPD{Periods: []*m.Period{period}}, period, cfg, tc.nowMS)
-		es := period.EventStreams[0]
-		require.Len(t, es.Events, 2, "fixed breaks are all signaled")
-		assert.Contains(t, es.RequestParam[0].QueryTemplate,
-			fmt.Sprintf("execution-delta#%d$", tc.wantID), "nowMS=%d", tc.nowMS)
-	}
+// TestSGAIStateQueryTemplate checks the Annex I names and values of each break, and that the
+// main MPD URL query comes last.
+func TestSGAIStateQueryTemplate(t *testing.T) {
+	assert.Equal(t, "$querypart$", sgaiStateQueryTemplate(nil))
+	got := sgaiStateQueryTemplate([]uint64{0, 29916899})
+	assert.Equal(t, "prta_0=$urn:mpeg:dash:state:execution-delta#0$"+
+		"&apda_0=$urn:mpeg:dash:state:expected-duration#0$"+
+		"&count_0=$urn:mpeg:dash:state:execution-count#0$"+
+		"&prta_29916899=$urn:mpeg:dash:state:execution-delta#29916899$"+
+		"&apda_29916899=$urn:mpeg:dash:state:expected-duration#29916899$"+
+		"&count_29916899=$urn:mpeg:dash:state:execution-count#29916899$&$querypart$", got)
 }
 
 func TestAddSGAIReplaceEventsPreroll(t *testing.T) {
@@ -356,9 +346,9 @@ func TestAddSGAIReplaceEventsPreroll(t *testing.T) {
 	assert.Equal(t, uint64(2), *es.Events[1].Id)
 	assert.Equal(t, uint64(120*90000), es.Events[2].PresentationTime)
 
-	// The execution-delta state still references the first regular break.
+	// The RequestParam asks for the state of the preroll and of the regular breaks.
 	require.Len(t, es.RequestParam, 1)
-	assert.Contains(t, es.RequestParam[0].QueryTemplate, "execution-delta#2$")
+	assert.Equal(t, sgaiStateQueryTemplate([]uint64{0, 2, 3}), es.RequestParam[0].QueryTemplate)
 
 	var buf bytes.Buffer
 	_, err := mpd.Write(&buf, "  ", true)
@@ -425,7 +415,7 @@ func TestSGAIPrerollOnly(t *testing.T) {
 		require.NotNil(t, ev.ReplacePresentation)
 		assert.Equal(t, uint64(10*sgaiEventTimescale), ev.ReplacePresentation.MaxDuration)
 		require.Len(t, es.RequestParam, 1)
-		assert.Contains(t, es.RequestParam[0].QueryTemplate, "execution-delta#0$")
+		assert.Equal(t, sgaiStateQueryTemplate([]uint64{0}), es.RequestParam[0].QueryTemplate)
 
 		events, err := xml.Marshal(es)
 		require.NoError(t, err)
@@ -437,6 +427,26 @@ func TestSGAIPrerollOnly(t *testing.T) {
 		}
 		assert.Equal(t, string(firstEvents), string(events), "preroll Event changed at %ds", nowS)
 		assert.Equal(t, firstPublishS, publishS, "publishTime changed at %ds", nowS)
+	}
+}
+
+// TestSGAITimeShiftBufferLimit checks that sgai_ limits the timeShiftBufferDepth to
+// sgaiMaxTimeShiftBufferDepthS, whatever the order of the options, and leaves a shorter one.
+func TestSGAITimeShiftBufferLimit(t *testing.T) {
+	for _, tc := range []struct {
+		url  string
+		want int
+	}{
+		{"/livesim2/tsbd_600/sgai_p60:20/asset/Manifest.mpd", 180},
+		{"/livesim2/sgai_p60:20/tsbd_600/asset/Manifest.mpd", 180},
+		{"/livesim2/tsbd_120/sgai_p60:20/asset/Manifest.mpd", 120},
+		{"/livesim2/sgai_p60:20/asset/Manifest.mpd", defaultTimeShiftBufferDepthS},
+		{"/livesim2/tsbd_600/asset/Manifest.mpd", 600},
+	} {
+		cfg, err := processURLCfg(tc.url, 0)
+		require.NoError(t, err, tc.url)
+		require.NotNil(t, cfg.TimeShiftBufferDepthS, tc.url)
+		assert.Equal(t, tc.want, *cfg.TimeShiftBufferDepthS, tc.url)
 	}
 }
 

@@ -125,12 +125,12 @@ func TestBuildAdListMPD(t *testing.T) {
 	assert.Equal(t, "http://localhost:8899/sgai/beacon/ad2/complete", es.Events[4].Value)
 	assert.Equal(t, uint64(5000), es.Events[4].PresentationTime)
 
-	// Annex I: the callback EventStream carries a RequestParam that copies the List-MPD
-	// request query (session id, interests, break) onto each beacon (DASH Ed.6 §8.13.2.4).
+	// Annex I: the callback EventStream carries a RequestParam that picks the session and
+	// break ids from the List-MPD request query for each beacon (DASH Ed.6 §8.13.2.4).
 	require.Len(t, es.RequestParam, 1)
 	assert.Equal(t, "callback", es.RequestParam[0].IncludeInRequests)
 	assert.True(t, es.RequestParam[0].UseMPDUrlQuery)
-	assert.Equal(t, "$querypart$", es.RequestParam[0].QueryTemplate)
+	assert.Equal(t, "sessionId=$query:sessionId$&sid=$query:sid$&break=$query:break$", es.RequestParam[0].QueryTemplate)
 
 	// Serializes as a valid List MPD.
 	buf := bytes.NewBuffer(nil)

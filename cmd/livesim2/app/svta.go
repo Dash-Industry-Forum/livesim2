@@ -267,9 +267,9 @@ func isRepeatableBeaconEvent(event string) bool {
 }
 
 // svtaBeaconURL builds a tracking URL for one creative and event. Unlike the SGAI callback
-// beacons — where the Annex I RequestParam copies the List-MPD query onto each request — an
-// SVTA2053 tracking URL is fired verbatim by the player, so the session id and the break
-// (avail) id must be baked into the query for the beacon to be attributable.
+// beacons, where the Annex I RequestParam picks the session and break ids from the List-MPD
+// query, an SVTA2053 tracking URL is fired verbatim by the player, so the session id and the
+// break (avail) id must be baked into the query for the beacon to be attributable.
 func svtaBeaconURL(host, adID, event, breakID, sid string) string {
 	q := url.Values{}
 	if sid != "" {
@@ -494,8 +494,8 @@ func marshalSVTA(env any) string {
 
 // svtaListMPDEventStream builds the SVTA2053 EventStream for one ad Period of an SGAI List
 // MPD: a single Event describing the ad creative that Period imports. Unlike the callback
-// beacons — where the Annex I RequestParam copies the List-MPD query onto the request — these
-// URLs are fired verbatim by the player, so the session and break ids are baked in.
+// beacons, where the Annex I RequestParam picks the session and break ids from the List-MPD
+// query, these URLs are fired verbatim by the player, so the session and break ids are baked in.
 //
 // The tracking set is the same as for the main-timeline signaling, so a creative is reported
 // the same way whichever route it reached the viewer by. It is a superset of what the Period's

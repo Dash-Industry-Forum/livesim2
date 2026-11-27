@@ -185,6 +185,11 @@ func (s *Server) sgaiAdsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		interestsRaw = r.URL.Query().Get("interest")
 	}
 	interests := parseInterests(interestsRaw)
+	// breakID is the break/avail event id from the ReplacePresentation @uri, and st the
+	// Annex I state of that break that the player added (see sgaiStateQueryTemplate).
+	breakID := r.URL.Query().Get("break")
+	st := sgaiExecStateFromQuery(r.URL.Query(), breakID)
+	stateLog := slog.Group("state", "break", breakID, "prta", st.Prta, "apda", st.Apda, "count", st.Count)
 	// dur is the break duration in seconds (from the @uri); the pod is trimmed to fit it.
 	// It is required and must be positive: the ReplacePresentation @uri always carries a
 	// valid dur, so a missing/non-numeric/non-positive value is a malformed request. Without
@@ -212,7 +217,7 @@ func (s *Server) sgaiAdsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		// underlying break content (the AD BREAK countdown slate). Still recorded as a
 		// decision (with an empty pod) so the session monitor shows the break occurred.
 		if s.sgaiSessions != nil && r.URL.Query().Get("preview") != "1" {
-			s.sgaiSessions.RecordDecision(sid, interestsRaw, nil)
+			s.sgaiSessions.RecordDecision(sid, interestsRaw, nil, breakID, st)
 		}
 		breakDur := time.Duration(durS) * time.Second
 		breakEnd := time.Now().Add(breakDur)
@@ -221,7 +226,7 @@ func (s *Server) sgaiAdsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 			reason = fmt.Sprintf("no ads match interests %q: base ad break (AD BREAK slate kept)", interestsRaw)
 		}
 		log.Info("sgai ad decision", "sid", sid, "interests", interestsRaw, "pod", "(none)",
-			"reason", reason, "breakDurSec", durS, "breakEnd", breakEnd.Format("15:04:05.000"))
+			"reason", reason, "breakDurSec", durS, "breakEnd", breakEnd.Format("15:04:05.000"), stateLog)
 		w.Header().Set("Cache-Control", "no-store")
 		http.Error(w, reason, http.StatusNotFound)
 		return
@@ -235,16 +240,14 @@ func (s *Server) sgaiAdsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		durMS[e.ID] = e.DurationMS
 	}
 	host := fullHost(s.Cfg.Host, r)
-	// breakID is the break/avail event id from the ReplacePresentation @uri; carried onto the
-	// beacons for per-occurrence attribution (via the callback RequestParam, and optionally
-	// stamped as ?evId= — see sgaiBeaconURL).
-	breakID := r.URL.Query().Get("break")
 	// svta=1 or svta=remote (from the ReplacePresentation @uri) additionally describes every ad
 	// of the pod with SVTA2053 ad-creative signaling.
 	svta := r.URL.Query().Get("svta")
 	if svta != "1" && svta != "remote" {
 		svta = ""
 	}
+	// breakID is carried onto the beacons for per-occurrence attribution (via the callback
+	// RequestParam, and optionally stamped as ?evId= — see sgaiBeaconURL).
 	mpd := buildAdListMPD(host, pod, durMS, breakID, svta, sid)
 
 	buf := bytes.NewBuffer(make([]byte, 0, 1024))
@@ -257,7 +260,7 @@ func (s *Server) sgaiAdsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	// preview=1 is used by UI/tools to fetch the pod for display without it counting as a
 	// real ad decision in the session record.
 	if s.sgaiSessions != nil && r.URL.Query().Get("preview") != "1" {
-		s.sgaiSessions.RecordDecision(sid, interestsRaw, podIDs)
+		s.sgaiSessions.RecordDecision(sid, interestsRaw, podIDs, breakID, st)
 	}
 	breakDur := time.Duration(durS) * time.Second
 	totalAdDur := 0
@@ -266,7 +269,7 @@ func (s *Server) sgaiAdsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	}
 	breakEnd := time.Now().Add(breakDur)
 	log.Info("sgai ad decision", "sid", sid, "interests", interestsRaw, "pod", strings.Join(podIDs, ","),
-		"breakDurSec", durS, "podDurMs", totalAdDur, "breakEnd", breakEnd.Format("15:04:05.000"))
+		"breakDurSec", durS, "podDurMs", totalAdDur, "breakEnd", breakEnd.Format("15:04:05.000"), stateLog)
 	w.Header().Set("Content-Length", strconv.Itoa(size))
 	w.Header().Set("Content-Type", "application/dash+xml")
 	// The List MPD is a per-session, per-break ad decision — it must never be cached.
@@ -304,10 +307,10 @@ const sgaiTrackingTimescale = uint32(1000)
 // player that acts on both signalings reports each tracking point twice; that is why it is
 // opt-in (sgai_...;svta=1).
 //
-// The beacon URLs are session-less (common per ad); the session is propagated to each beacon
-// by the Annex I callback RequestParam below (useMPDUrlQuery copies the List-MPD request
-// query — which already carries sessionId/interests and break — onto the beacon, DASH Ed.6
-// Annex I + §8.13.2.4). The MPD-level urlparam:2025 EssentialProperty declares Annex I is used.
+// The beacon URLs are session-less (common per ad); the session and the break are propagated
+// to each beacon by the Annex I callback RequestParam below (useMPDUrlQuery with
+// sgaiBeaconQueryTemplate picks them from the List-MPD request query, DASH Ed.6 Annex I +
+// §8.13.2.4). The MPD-level urlparam:2025 EssentialProperty declares Annex I is used.
 func buildAdListMPD(host string, pod []string, durMS map[string]int, breakID, svta, sid string) *m.MPD {
 	mpd := m.NewMPD(m.LIST_TYPE)
 	mpd.Profiles = m.PROFILE_LIST
@@ -339,10 +342,10 @@ func buildAdListMPD(host string, pod []string, durMS map[string]int, breakID, sv
 				Value:            sgaiBeaconURL(host, adID, tp.event, breakID),
 			})
 		}
-		// Annex I: carry the List-MPD request query (session id, interests, break) onto each
+		// Annex I: carry the session and break ids of the List-MPD request query onto each
 		// callback beacon GET, so the common-path beacon stays attributable per viewer/break.
 		es.RequestParam = []*m.ExtendedUrlInfoType{{
-			QueryTemplate:     "$querypart$",
+			QueryTemplate:     sgaiBeaconQueryTemplate,
 			UseMPDUrlQuery:    true,
 			IncludeInRequests: "callback",
 		}}
@@ -378,6 +381,13 @@ func (s *Server) adDurationMS(mpdPath string) int {
 	}
 	return int(mpd.MediaPresentationDuration.Seconds() * 1000)
 }
+
+// sgaiBeaconQueryTemplate is the queryTemplate of the callback RequestParam of a List MPD. It
+// picks from the List-MPD request query what sgaiBeaconHandlerFunc reads: the session id
+// (sessionId, or its alias sid) and the break id. $querypart$ would copy the whole query,
+// also the interests and the Annex I state of every break (see sgaiStateQueryTemplate).
+// A parameter missing from the query is sent empty.
+const sgaiBeaconQueryTemplate = "sessionId=$query:sessionId$&sid=$query:sid$&break=$query:break$"
 
 // sgaiBeaconURL builds an impression/tracking beacon URL handled by sgaiBeaconHandlerFunc.
 // The path is common to every viewer of a given ad (no session id) so the List MPD stays
@@ -415,7 +425,7 @@ func pathUnescape(s string) string {
 // Path: /sgai/beacon/<adId>/<event> (common per ad — no session id in the path). The session
 // is read from the query (?sessionId=/?sid=), propagated onto the beacon by the Annex I
 // callback RequestParam in the List MPD. The break/avail event id is read from ?evId= with a
-// fallback to ?break= (the latter rides over via useMPDUrlQuery="$querypart$"). Returns 204.
+// fallback to ?break= (the latter rides over via sgaiBeaconQueryTemplate). Returns 204.
 func (s *Server) sgaiBeaconHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	log := logging.SubLoggerWithRequestID(slog.Default(), r)
 	adID, event := parseBeaconPath(r.URL.EscapedPath())

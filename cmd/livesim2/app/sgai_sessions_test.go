@@ -5,7 +5,10 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,7 +30,7 @@ func TestSgaiSessionRecordAndGet(t *testing.T) {
 	_, ok := m.Get("alice")
 	assert.False(t, ok, "unknown session")
 
-	m.RecordDecision("alice", "sports", []string{"ad1", "ad2", "ad0"})
+	m.RecordDecision("alice", "sports", []string{"ad1", "ad2", "ad0"}, "", SgaiExecState{})
 	adv(time.Second)
 	m.RecordBeacon("alice", "ad1", "impression", "sid=alice", "29689640")
 
@@ -125,17 +128,65 @@ func TestSgaiSessionDecisionDedup(t *testing.T) {
 	now, adv := fixedClock(time.Date(2026, 6, 16, 10, 0, 0, 0, time.UTC))
 	m.now = now
 
-	m.RecordDecision("alice", "", []string{"ad2", "ad0", "ad1"})
+	m.RecordDecision("alice", "", []string{"ad2", "ad0", "ad1"}, "", SgaiExecState{})
 	adv(2 * time.Second)
-	m.RecordDecision("alice", "", []string{"ad2", "ad0", "ad1"}) // re-resolution, same pod
+	m.RecordDecision("alice", "", []string{"ad2", "ad0", "ad1"}, "", SgaiExecState{}) // re-resolution, same pod
 	s, _ := m.Get("alice")
 	assert.Equal(t, 1, s.DecisionCnt, "repeated same-pod decision within window collapsed")
 
 	// A genuinely different pod is a new decision.
 	adv(1 * time.Second)
-	m.RecordDecision("alice", "", []string{"ad0", "ad1", "ad2"})
+	m.RecordDecision("alice", "", []string{"ad0", "ad1", "ad2"}, "", SgaiExecState{})
 	s, _ = m.Get("alice")
 	assert.Equal(t, 2, s.DecisionCnt)
+}
+
+// TestSgaiSessionDecisionExecState checks that the Annex I state is recorded with a decision,
+// and that a new execution of the same break (another count) is not collapsed with the first.
+func TestSgaiSessionDecisionExecState(t *testing.T) {
+	m := NewSgaiSessionMgr()
+	now, adv := fixedClock(time.Date(2026, 6, 16, 10, 0, 0, 0, time.UTC))
+	m.now = now
+	pod := []string{"ad0", "ad1"}
+
+	first := SgaiExecState{Prta: "7.23", Apda: "12.77", Count: "0"}
+	m.RecordDecision("alice", "", pod, "42", first)
+	adv(2 * time.Second)
+	// A re-resolution of the same execution, later in the break.
+	m.RecordDecision("alice", "", pod, "42", SgaiExecState{Prta: "9.23", Apda: "10.77", Count: "0"})
+	adv(2 * time.Second)
+	again := SgaiExecState{Prta: "0", Apda: "20", Count: "1"} // seek back to the break start
+	m.RecordDecision("alice", "", pod, "42", again)
+	adv(2 * time.Second)
+	next := SgaiExecState{Prta: "0", Apda: "20", Count: "0"}
+	m.RecordDecision("alice", "", pod, "43", next)
+
+	s, _ := m.Get("alice")
+	require.Equal(t, 3, s.DecisionCnt)
+	assert.Equal(t, "42", s.Events[0].EvID)
+	assert.Equal(t, first, s.Events[0].SgaiExecState)
+	assert.Equal(t, again, s.Events[1].SgaiExecState)
+	assert.Equal(t, "43", s.Events[2].EvID)
+	assert.Equal(t, next, s.Events[2].SgaiExecState)
+
+	data, err := json.Marshal(s.Events[0])
+	require.NoError(t, err)
+	assert.Contains(t, string(data), `"prta":"7.23","apda":"12.77","count":"0"`)
+}
+
+// TestSgaiExecStateFromQuery checks that the values of the requested break are taken from the
+// ones of all breaks.
+func TestSgaiExecStateFromQuery(t *testing.T) {
+	q, err := url.ParseQuery("break=3&dur=20&prta_2=0&apda_2=-1&count_2=1" +
+		"&prta_3=1.5&apda_3=18.5&count_3=" + strings.Repeat("9", 40) + "&prta_4=0&apda_4=-1&count_4=-1")
+	require.NoError(t, err)
+	st := sgaiExecStateFromQuery(q, "3")
+	assert.Equal(t, "1.5", st.Prta)
+	assert.Equal(t, "18.5", st.Apda)
+	assert.Len(t, st.Count, sgaiMaxStateLen, "a client value is truncated")
+	assert.Equal(t, SgaiExecState{Prta: "0", Apda: "-1", Count: "1"}, sgaiExecStateFromQuery(q, "2"))
+	assert.Equal(t, SgaiExecState{}, sgaiExecStateFromQuery(q, "5"), "no values for a break not named")
+	assert.Equal(t, SgaiExecState{}, sgaiExecStateFromQuery(q, ""), "no break")
 }
 
 func TestSgaiSessionEmptySidBecomesAnon(t *testing.T) {
@@ -164,7 +215,7 @@ func TestSgaiSessionTTLEviction(t *testing.T) {
 	now, adv := fixedClock(time.Date(2026, 6, 16, 10, 0, 0, 0, time.UTC))
 	m.now = now
 
-	m.RecordDecision("alice", "", []string{"ad0"})
+	m.RecordDecision("alice", "", []string{"ad0"}, "", SgaiExecState{})
 	adv(11 * time.Minute)
 	_, ok := m.Get("alice")
 	assert.False(t, ok, "expired session is dropped on Get")
@@ -177,11 +228,11 @@ func TestSgaiSessionMaxSessionsCap(t *testing.T) {
 	now, adv := fixedClock(time.Date(2026, 6, 16, 10, 0, 0, 0, time.UTC))
 	m.now = now
 
-	m.RecordDecision("a", "", []string{"ad0"}) // oldest
+	m.RecordDecision("a", "", []string{"ad0"}, "", SgaiExecState{}) // oldest
 	adv(time.Second)
-	m.RecordDecision("b", "", []string{"ad0"})
+	m.RecordDecision("b", "", []string{"ad0"}, "", SgaiExecState{})
 	adv(time.Second)
-	m.RecordDecision("c", "", []string{"ad0"}) // evicts "a"
+	m.RecordDecision("c", "", []string{"ad0"}, "", SgaiExecState{}) // evicts "a"
 
 	_, okA := m.Get("a")
 	_, okB := m.Get("b")
@@ -196,9 +247,9 @@ func TestSgaiSessionListOrderAndNoTimelines(t *testing.T) {
 	now, adv := fixedClock(time.Date(2026, 6, 16, 10, 0, 0, 0, time.UTC))
 	m.now = now
 
-	m.RecordDecision("alice", "", []string{"ad0"})
+	m.RecordDecision("alice", "", []string{"ad0"}, "", SgaiExecState{})
 	adv(time.Second)
-	m.RecordDecision("bob", "news", []string{"ad1"})
+	m.RecordDecision("bob", "news", []string{"ad1"}, "", SgaiExecState{})
 
 	list := m.List()
 	require.Len(t, list, 2)

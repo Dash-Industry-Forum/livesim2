@@ -33,6 +33,18 @@
     refresh();
   });
 
+  // The Annex I player state of the requested break that the player sent with the ad request.
+  const stateFields = [
+    ['prta', 'execution-delta: how late the execution of the break starts, in seconds'],
+    ['apda', 'expected-duration: the duration of the break left to play, in seconds (-1: unknown)'],
+    ['count', 'execution-count: how many times the break was executed before (-1: unknown)'],
+  ];
+  function playerState(e) {
+    const parts = stateFields.filter(([k]) => e[k])
+      .map(([k, title]) => '<span title="' + esc(title) + '">' + k + ' <code>' + esc(e[k]) + '</code></span>');
+    return parts.length ? '  ' + parts.join(' · ') : '';
+  }
+
   function renderSession(s) {
     document.getElementById('meta').innerHTML =
       'sid <b>' + esc(s.sid) + '</b>' +
@@ -48,6 +60,8 @@
       const detail = e.kind === 'decision'
         ? 'pod: <code>' + esc((e.pod||[]).join(' → ')) + '</code>'
           + (e.interests ? '  (interests ' + esc(e.interests) + ')' : '')
+          + (e.evId ? '  (break <code>' + esc(e.evId) + '</code>)' : '')
+          + playerState(e)
         : e.kind === 'remote'
         ? 'ad <code>' + esc(e.adId) + '</code> · $remote.' + esc(e.event) + ' fetched → '
           + (e.result === '1' ? 'resolved' : '<b>' + esc(e.result) + '</b>')
