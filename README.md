@@ -621,6 +621,13 @@ Enable it with the `sgai_` URL option, which schedules the breaks:
   only to the regular breaks. Add it to a break list, as in `sgai_p60:20;preroll=10`, or use it
   alone, as in `sgai_preroll=10`, for a preroll and no other breaks.
 
+The `EventStream` has a `RequestParam` that adds the Annex I player state of every break in it to the
+ad request: `prta_<id>` (execution-delta: how late the break starts, in seconds), `apda_<id>`
+(expected-duration: the seconds left to play) and `count_<id>` (execution-count: how many times the
+break was executed before). A state value names its break, and one `RequestParam` serves all the
+breaks of the `EventStream`, so the ad endpoint takes the values of the requested break (`break=`).
+The [monitor](#monitoring) shows them with each ad decision.
+
 The `/urlgen/` page and the [URL wiki page][urlparams] document the `sgai_` option and its
 parameters.
 
@@ -684,8 +691,9 @@ default) restarts. For a screen that runs the demo for long, such as at an event
 ### Monitoring
 
 Each ad fires impression and quartile callback beacons to `/sgai/beacon` (carrying the session and
-break id via Annex I). The per-session ad decisions and beacons are recorded and can be inspected
-live at `/sgai/session_status?sid=<sessionId>` or via the API at `/api/sgai/sessions[/{sid}]` and
+break id via Annex I). Each session's beacons and ad decisions are recorded, the decisions with their
+break id and the player state sent with the ad request. They can be inspected live at
+`/sgai/session_status?sid=<sessionId>` or via the API at `/api/sgai/sessions[/{sid}]` and
 `/api/sgai/ads` (the ad catalog). An identical beacon for the same ad, event and break occurrence
 is collapsed within a short window, so a player re-firing one is counted once — except for the
 interaction events below, which a viewer can legitimately trigger repeatedly.

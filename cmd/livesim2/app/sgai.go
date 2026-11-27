@@ -194,7 +194,7 @@ func (s *strConvAccErr) ParseSGAIConfig(key, val string) *SGAIConfig {
 }
 
 // sgaiAdURI builds the absolute ReplacePresentation@uri pointing at the ad-decisioning endpoint.
-// The client appends Annex I parameters (session id via useMPDUrlQuery and the execution-delta).
+// The client appends the Annex I parameters of sgaiStateQueryTemplate.
 func sgaiAdURI(cfg *ResponseConfig, id uint64, durS int) string {
 	uri := fmt.Sprintf("%s%s?break=%d&dur=%d", cfg.Host, cfg.SGAI.AdEndpoint, id, durS)
 	switch {
@@ -288,17 +288,14 @@ func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, now
 			},
 		})
 	}
-	// Annex I: carry the main MPD URL query (e.g. the session id) onto the altmpd request
-	// and add the execution-delta state of the break a viewer at the live edge executes next
-	// (the preroll only when there is no regular break).
-	prtaID := all[0].id
-	if len(insts) > 0 {
-		prtaID = sgaiPrtaID(insts, cfg.StartTimeS, nowMS)
+	// Annex I: add the player state of every break, and carry the main MPD URL query (e.g.
+	// the session id) onto the altmpd request.
+	ids := make([]uint64, 0, len(all))
+	for _, b := range all {
+		ids = append(ids, b.id)
 	}
 	es.RequestParam = []*m.ExtendedUrlInfoType{{
-		// prta first so the well-formed param is always present even when the MPD URL
-		// carries no query ($querypart$ then expands to empty rather than leaving a "&&").
-		QueryTemplate:     fmt.Sprintf("prta=$urn:mpeg:dash:state:execution-delta#%d$&$querypart$", prtaID),
+		QueryTemplate:     sgaiStateQueryTemplate(ids),
 		UseMPDUrlQuery:    true,
 		IncludeInRequests: "altmpd",
 	}}
@@ -309,23 +306,28 @@ func addSGAIReplaceEvents(mpd *m.MPD, period *m.Period, cfg *ResponseConfig, now
 		m.NewDescriptor(UrlParam2025SchemeIdUri, "", ""))
 }
 
-// sgaiPrtaID returns the id of the break whose execution-delta the altmpd RequestParam asks
-// for: the first one in insts that has not ended at nowMS, or the last one when all have.
-// A RequestParam names a single event for the whole EventStream, so the ones kept for
-// seeking back (see addSGAIReplaceEvents) do not get their own.
-func sgaiPrtaID(insts []adBreakInst, astS, nowMS int) uint64 {
-	for _, b := range insts {
-		if (int64(astS)+b.offsetS+int64(b.durS))*1000 > int64(nowMS) {
-			return b.id
-		}
+// sgaiStateQueryTemplate returns the RequestParam@queryTemplate of an EventStream whose breaks
+// have the Event@id values ids. For each break it asks the player for the Annex I.4 state
+// (Table I.5): how late its execution starts (prta_<id>), the duration left to play
+// (apda_<id>) and how many times it was executed before (count_<id>). The URL query of the
+// main MPD (e.g. the session id) follows.
+//
+// A state value names its event (#<id>), and the one RequestParam of an EventStream is used
+// for the requests of all its events, so the ad server takes the values of the requested
+// break (?break=) from the ones of all breaks. Naming only the next break would give a
+// request after a seek back the state of another break. So would a player that keeps the
+// RequestParam of the MPD where it first saw a break, since a break enters the MPD before
+// the previous one has ended. One EventStream per break would need a @value per break,
+// against the clustering of the events of one type in one EventStream (5.10.2.1).
+func sgaiStateQueryTemplate(ids []uint64) string {
+	const state = "urn:mpeg:dash:state:"
+	var sb strings.Builder
+	// The state values come first so that the query stays well-formed when the MPD URL has
+	// no query ($querypart$ then expands to empty rather than leaving a trailing "&&").
+	for _, id := range ids {
+		fmt.Fprintf(&sb, "prta_%[2]d=$%[1]sexecution-delta#%[2]d$&apda_%[2]d=$%[1]sexpected-duration#%[2]d$"+
+			"&count_%[2]d=$%[1]sexecution-count#%[2]d$&", state, id)
 	}
-	return insts[len(insts)-1].id
-}
-
-// sgaiPrtaChangeS returns the times, in seconds since the epoch, at which a break stops being
-// the one sgaiPrtaID picks, for AdBreaks.lastChangeS.
-func sgaiPrtaChangeS(astS int) func(adBreakInst) []int {
-	return func(b adBreakInst) []int {
-		return []int{astS + int(b.offsetS) + b.durS}
-	}
+	sb.WriteString("$querypart$")
+	return sb.String()
 }

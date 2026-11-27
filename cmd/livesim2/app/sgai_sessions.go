@@ -5,6 +5,7 @@
 package app
 
 import (
+	"net/url"
 	"slices"
 	"sync"
 	"time"
@@ -47,13 +48,43 @@ type SgaiEvent struct {
 	// Decision fields
 	Interests string   `json:"interests,omitempty" doc:"Interest steering value(s) used for this decision (comma-separated)"`
 	Pod       []string `json:"pod,omitempty" doc:"Ad pod returned (ad ids in order) for a decision"`
+	SgaiExecState
 	// Beacon fields
 	AdID  string `json:"adId,omitempty" doc:"Ad id the beacon was fired for"`
 	Event string `json:"event,omitempty" doc:"Beacon event type, e.g. impression"`
-	EvID  string `json:"evId,omitempty" doc:"Break/avail event id the beacon is attributed to, if any"`
+	EvID  string `json:"evId,omitempty" doc:"Break/avail event id the decision or beacon is for, if any"`
 	CMCD  string `json:"cmcd,omitempty" doc:"CMCD payload carried on the beacon, if any"`
 	// Remote fields (AdID, Event and EvID are shared with beacons)
 	Result string `json:"result,omitempty" doc:"Answer to an SVTA2053 $remote fetch: 1 (resolved), 404 or wrongtype"`
+}
+
+// SgaiExecState is the Annex I.4 player state of a break that a player sends with an ad
+// request (ISO/IEC 23009-1:2026, Table I.5), as the raw query values prta_<id>, apda_<id> and
+// count_<id> of the requested break (see sgaiStateQueryTemplate). A value is empty when the
+// player did not send it.
+type SgaiExecState struct {
+	Prta  string `json:"prta,omitempty" doc:"execution-delta: how late the execution of the break starts, in seconds"`
+	Apda  string `json:"apda,omitempty" doc:"expected-duration: the duration of the break left to play, in seconds, -1 if unknown"`
+	Count string `json:"count,omitempty" doc:"execution-count: how many times the break was executed before, -1 if unknown"`
+}
+
+// sgaiMaxStateLen bounds a stored SgaiExecState value, which comes from the client.
+const sgaiMaxStateLen = 32
+
+// sgaiExecStateFromQuery returns the Annex I.4 state values of the break breakID in an ad
+// request query.
+func sgaiExecStateFromQuery(q url.Values, breakID string) SgaiExecState {
+	if breakID == "" {
+		return SgaiExecState{}
+	}
+	get := func(key string) string {
+		v := q.Get(key)
+		if len(v) > sgaiMaxStateLen {
+			v = v[:sgaiMaxStateLen]
+		}
+		return v
+	}
+	return SgaiExecState{Prta: get("prta_" + breakID), Apda: get("apda_" + breakID), Count: get("count_" + breakID)}
 }
 
 // SgaiSession is the recorded state for one session id.
@@ -109,8 +140,9 @@ func (m *SgaiSessionMgr) appendEvent(s *SgaiSession, e SgaiEvent) {
 }
 
 // RecordDecision records an /sgai/ads ad decision (pod) for a session. interests is the raw
-// (possibly comma-separated) interest steering value used for the decision.
-func (m *SgaiSessionMgr) RecordDecision(sid, interests string, pod []string) {
+// (possibly comma-separated) interest steering value used for the decision, breakID the id
+// of the break (from ?break=, "" if absent) and st the player state sent with the request.
+func (m *SgaiSessionMgr) RecordDecision(sid, interests string, pod []string, breakID string, st SgaiExecState) {
 	if sid == "" {
 		sid = "anon"
 	}
@@ -122,13 +154,15 @@ func (m *SgaiSessionMgr) RecordDecision(sid, interests string, pod []string) {
 		s.Interests = interests
 	}
 	podCopy := append([]string(nil), pod...)
-	// Dedup a repeated decision for the same pod within the window (e.g. a player that
-	// re-resolves the alternative MPD on each manifest refresh).
-	if m.recentDuplicateDecision(s, podCopy, ts) {
+	// Dedup a repeated decision for the same pod and break within the window (e.g. a player
+	// that re-resolves the alternative MPD on each manifest refresh). A new execution of the
+	// break, such as after a seek back, has another execution count and is kept.
+	if m.recentDuplicateDecision(s, podCopy, breakID, st, ts) {
 		return
 	}
 	s.DecisionCnt++
-	m.appendEvent(s, SgaiEvent{Time: ts, Kind: SgaiEventDecision, Interests: interests, Pod: podCopy})
+	m.appendEvent(s, SgaiEvent{Time: ts, Kind: SgaiEventDecision, Interests: interests, Pod: podCopy,
+		SgaiExecState: st, EvID: breakID})
 	m.evictLocked(ts)
 }
 
@@ -189,14 +223,14 @@ func (m *SgaiSessionMgr) recentDuplicateBeacon(s *SgaiSession, adID, event, evID
 	return false
 }
 
-// recentDuplicateDecision reports whether a decision for the same pod was recorded for this
-// session within sgaiDedupWindow. Caller must hold mu.
-func (m *SgaiSessionMgr) recentDuplicateDecision(s *SgaiSession, pod []string, ts time.Time) bool {
+// recentDuplicateDecision reports whether a decision for the same pod, break and execution
+// count was recorded for this session within sgaiDedupWindow. Caller must hold mu.
+func (m *SgaiSessionMgr) recentDuplicateDecision(s *SgaiSession, pod []string, breakID string, st SgaiExecState, ts time.Time) bool {
 	for _, e := range slices.Backward(s.Events) {
 		if ts.Sub(e.Time) > sgaiDedupWindow {
 			return false
 		}
-		if e.Kind == SgaiEventDecision && samePod(e.Pod, pod) {
+		if e.Kind == SgaiEventDecision && samePod(e.Pod, pod) && e.EvID == breakID && e.Count == st.Count {
 			return true
 		}
 	}

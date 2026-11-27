@@ -185,6 +185,11 @@ func (s *Server) sgaiAdsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		interestsRaw = r.URL.Query().Get("interest")
 	}
 	interests := parseInterests(interestsRaw)
+	// breakID is the break/avail event id from the ReplacePresentation @uri, and st the
+	// Annex I state of that break that the player added (see sgaiStateQueryTemplate).
+	breakID := r.URL.Query().Get("break")
+	st := sgaiExecStateFromQuery(r.URL.Query(), breakID)
+	stateLog := slog.Group("state", "break", breakID, "prta", st.Prta, "apda", st.Apda, "count", st.Count)
 	// dur is the break duration in seconds (from the @uri); the pod is trimmed to fit it.
 	// It is required and must be positive: the ReplacePresentation @uri always carries a
 	// valid dur, so a missing/non-numeric/non-positive value is a malformed request. Without
@@ -212,7 +217,7 @@ func (s *Server) sgaiAdsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		// underlying break content (the AD BREAK countdown slate). Still recorded as a
 		// decision (with an empty pod) so the session monitor shows the break occurred.
 		if s.sgaiSessions != nil && r.URL.Query().Get("preview") != "1" {
-			s.sgaiSessions.RecordDecision(sid, interestsRaw, nil)
+			s.sgaiSessions.RecordDecision(sid, interestsRaw, nil, breakID, st)
 		}
 		breakDur := time.Duration(durS) * time.Second
 		breakEnd := time.Now().Add(breakDur)
@@ -221,7 +226,7 @@ func (s *Server) sgaiAdsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 			reason = fmt.Sprintf("no ads match interests %q: base ad break (AD BREAK slate kept)", interestsRaw)
 		}
 		log.Info("sgai ad decision", "sid", sid, "interests", interestsRaw, "pod", "(none)",
-			"reason", reason, "breakDurSec", durS, "breakEnd", breakEnd.Format("15:04:05.000"))
+			"reason", reason, "breakDurSec", durS, "breakEnd", breakEnd.Format("15:04:05.000"), stateLog)
 		w.Header().Set("Cache-Control", "no-store")
 		http.Error(w, reason, http.StatusNotFound)
 		return
@@ -235,16 +240,14 @@ func (s *Server) sgaiAdsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		durMS[e.ID] = e.DurationMS
 	}
 	host := fullHost(s.Cfg.Host, r)
-	// breakID is the break/avail event id from the ReplacePresentation @uri; carried onto the
-	// beacons for per-occurrence attribution (via the callback RequestParam, and optionally
-	// stamped as ?evId= — see sgaiBeaconURL).
-	breakID := r.URL.Query().Get("break")
 	// svta=1 or svta=remote (from the ReplacePresentation @uri) additionally describes every ad
 	// of the pod with SVTA2053 ad-creative signaling.
 	svta := r.URL.Query().Get("svta")
 	if svta != "1" && svta != "remote" {
 		svta = ""
 	}
+	// breakID is carried onto the beacons for per-occurrence attribution (via the callback
+	// RequestParam, and optionally stamped as ?evId= — see sgaiBeaconURL).
 	mpd := buildAdListMPD(host, pod, durMS, breakID, svta, sid)
 
 	buf := bytes.NewBuffer(make([]byte, 0, 1024))
@@ -257,7 +260,7 @@ func (s *Server) sgaiAdsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	// preview=1 is used by UI/tools to fetch the pod for display without it counting as a
 	// real ad decision in the session record.
 	if s.sgaiSessions != nil && r.URL.Query().Get("preview") != "1" {
-		s.sgaiSessions.RecordDecision(sid, interestsRaw, podIDs)
+		s.sgaiSessions.RecordDecision(sid, interestsRaw, podIDs, breakID, st)
 	}
 	breakDur := time.Duration(durS) * time.Second
 	totalAdDur := 0
@@ -266,7 +269,7 @@ func (s *Server) sgaiAdsHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	}
 	breakEnd := time.Now().Add(breakDur)
 	log.Info("sgai ad decision", "sid", sid, "interests", interestsRaw, "pod", strings.Join(podIDs, ","),
-		"breakDurSec", durS, "podDurMs", totalAdDur, "breakEnd", breakEnd.Format("15:04:05.000"))
+		"breakDurSec", durS, "podDurMs", totalAdDur, "breakEnd", breakEnd.Format("15:04:05.000"), stateLog)
 	w.Header().Set("Content-Length", strconv.Itoa(size))
 	w.Header().Set("Content-Type", "application/dash+xml")
 	// The List MPD is a per-session, per-break ad decision — it must never be cached.

@@ -204,7 +204,7 @@ type adBreakInst struct {
 // lookBackS seconds ago are dropped (so a break in progress is always kept, and a lookBackS of
 // one timeshift-buffer depth keeps the signaling for breaks still reachable by seeking).
 // The id is the occurrence number since the epoch, so it is stable across refreshes and unique
-// per break (it keys the sgai @uri ?break= and the execution-delta state).
+// per break (it keys the sgai @uri ?break= and the Annex I state).
 func (a *AdBreaks) instances(nowMS, astS, lookAheadS, lookBackS int) []adBreakInst {
 	if a.Periodic == nil {
 		out := make([]adBreakInst, 0, len(a.Breaks))
